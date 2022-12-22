@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>C11: sleep for vs yield - Notebook</title>
+  <meta name="renderer" content="webkit" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+<meta name="theme-color" content="#f8f5ec" />
+<meta name="msapplication-navbutton-color" content="#f8f5ec">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="#f8f5ec">
+
+
+<meta name="author" content="tianlong.xiang" /><meta name="description" content="翻看代码的时候，std::this_thread::yield() 猛的引入眼帘，C11里面的语法糖，用了不少，yield还是第一次看到，以前都没注意。
+" /><meta name="keywords" content="cpp, hkex, ocg, omd" />
+
+
+
+
+
+
+<meta name="generator" content="Hugo 0.108.0 with theme even" />
+
+
+<link rel="canonical" href="https://ttf248.github.io/post/2022/09-20-sleep_for_vs_yield/" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+
+
+
+<link href="/sass/main.min.9565d9fbd315eac78f27813f63aa3b0da6f4c9fa2e387dffc57b95f19672b1c2.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.staticfile.org/fancybox/3.1.20/jquery.fancybox.min.css" integrity="sha256-7TyXnr2YU040zfSP+rEcz29ggW4j56/ujTPwjMzyqFY=" crossorigin="anonymous">
+<link rel="stylesheet" href="/css/copy-code-button.css">
+<link rel="stylesheet" href="/css/infoq.css">
+
+
+<meta property="og:title" content="C11: sleep for vs yield" />
+<meta property="og:description" content="翻看代码的时候，std::this_thread::yield() 猛的引入眼帘，C11里面的语法糖，用了不少，yield还是第一次看到，以前都没注意。" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://ttf248.github.io/post/2022/09-20-sleep_for_vs_yield/" /><meta property="article:section" content="post" />
+<meta property="article:published_time" content="2022-09-20T20:54:51+08:00" />
+<meta property="article:modified_time" content="2022-09-20T21:48:40+08:00" />
+<meta itemprop="name" content="C11: sleep for vs yield">
+<meta itemprop="description" content="翻看代码的时候，std::this_thread::yield() 猛的引入眼帘，C11里面的语法糖，用了不少，yield还是第一次看到，以前都没注意。"><meta itemprop="datePublished" content="2022-09-20T20:54:51+08:00" />
+<meta itemprop="dateModified" content="2022-09-20T21:48:40+08:00" />
+<meta itemprop="wordCount" content="634">
+<meta itemprop="keywords" content="c&#43;&#43;," /><meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="C11: sleep for vs yield"/>
+<meta name="twitter:description" content="翻看代码的时候，std::this_thread::yield() 猛的引入眼帘，C11里面的语法糖，用了不少，yield还是第一次看到，以前都没注意。"/>
+
+<!--[if lte IE 9]>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/classlist/1.1.20170427/classList.min.js"></script>
+<![endif]-->
+
+<!--[if lt IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+<![endif]-->
+
+</head>
+<body>
+  <div id="mobile-navbar" class="mobile-navbar">
+  <div class="mobile-header-logo">
+    <a href="/" class="logo">Notebook</a>
+  </div>
+  <div class="mobile-navbar-icon">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</div>
+<nav id="mobile-menu" class="mobile-menu slideout-menu">
+  <ul class="mobile-menu-list">
+    <a href="/categories/">
+        <li class="mobile-menu-item">categories</li>
+      </a><a href="/tags/">
+        <li class="mobile-menu-item">tags</li>
+      </a><a href="/post/">
+        <li class="mobile-menu-item">archives</li>
+      </a>
+  </ul>
+
+  
+
+
+</nav>
+
+  <div class="container" id="mobile-panel">
+    <header id="header" class="header">
+        <div class="logo-wrapper">
+  <a href="/" class="logo">Notebook</a>
+</div>
+
+
+
+
+
+<nav class="site-navbar">
+  <ul id="menu" class="menu">
+    <li class="menu-item">
+        <a class="menu-item-link" href="/categories/">categories</a>
+      </li><li class="menu-item">
+        <a class="menu-item-link" href="/tags/">tags</a>
+      </li><li class="menu-item">
+        <a class="menu-item-link" href="/post/">archives</a>
+      </li>
+  </ul>
+</nav>
+
+    </header>
+
+    <main id="main" class="main">
+      <div class="content-wrapper">
+        <div id="content" class="content">
+          <article class="post">
+    
+    <header class="post-header">
+      <h1 class="post-title">C11: sleep for vs yield</h1>
+
+      <div class="post-meta">
+        <span class="post-time"> 2022-09-20 </span>
+        <div class="post-category">
+            <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA/"> 计算机 </a>
+            </div>
+        
+      </div>
+    </header>
+
+    <div class="post-toc" id="post-toc">
+  <h2 class="post-toc-title">文章目录</h2>
+  <div class="post-toc-content always-active">
+    <nav id="TableOfContents">
+  <ul>
+    <li>
+      <ul>
+        <li><a href="#文档">文档</a>
+          <ul>
+            <li><a href="#yield">yield</a></li>
+            <li><a href="#sleep_for">sleep_for</a></li>
+            <li><a href="#分析">分析</a></li>
+          </ul>
+        </li>
+        <li><a href="#参考">参考</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+  </div>
+</div>
+    <div class="post-content">
+      <p>翻看代码的时候，<code>std::this_thread::yield()</code> 猛的引入眼帘，<code>C11</code>里面的语法糖，用了不少，<code>yield</code>还是第一次看到，以前都没注意。</p>
+<p>没查手册，首先想到的是不是和异步变成相关，<code>yield</code>boost库的协程实现里面用到了这个单词，这里肯定和协程没关系，控制逻辑和普通线程相关。</p>
+<h2 id="文档">文档</h2>
+<h3 id="yield">yield</h3>
+<p>此函数的准确性为依赖于实现，特别是使用中的 OS 调度器机制和系统状态。例如，先进先出实时调度器（ Linux 的 SCHED_FIFO ）将悬挂当前线程并将它放到准备运行的同优先级线程的队列尾（而若无其他线程在同优先级，则 yield 无效果）</p>
+<h3 id="sleep_for">sleep_for</h3>
+<p>阻塞当前线程执行，至少经过指定的 sleep_duration
+此函数可能阻塞长于 sleep_duration ，因为调度或资源争议延迟
+标准库建议用稳定时钟度量时长。若实现用系统时间代替，则等待时间亦可能对时钟调节敏感</p>
+<h3 id="分析">分析</h3>
+<p>两个函数都是让当前线程不再占用线程，执行的效果按照平台情况而定？看到这里依旧有点云里雾里的，运行代码看看执行效果</p>
+<blockquote>
+<p>ThinkPad 笔记本（visual studio 社区版2022）、腾讯云S2标准服务器（gcc8.5）</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>运行平台</th>
+<th>函数</th>
+<th>第一次/us</th>
+<th>第二次/us</th>
+<th>第三次/us</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Windows</td>
+<td>sleep_for</td>
+<td>9872</td>
+<td>1884</td>
+<td>11302</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td>yield</td>
+<td>119</td>
+<td>100</td>
+<td>100</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>sleep_for</td>
+<td>171</td>
+<td>168</td>
+<td>167</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>yield</td>
+<td>101</td>
+<td>102</td>
+<td>101</td>
+</tr>
+</tbody>
+</table>
+<p>从运行结果不难理解，由于操作系统实现的不同，高精度的休眠时，<code>sleep_for</code>稳定性差异巨大，如果想要高精度的休眠，使用<code>yield</code>更加合适</p>
+<p>时间精度提升到<code>ms</code>时，两者差异并不明显</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;chrono&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;thread&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span> 
+</span></span><span class="line"><span class="cl"><span class="c1">// 建议其他线程运行一小段时间的“忙睡眠”
+</span></span></span><span class="line"><span class="cl"><span class="c1"></span><span class="kt">void</span> <span class="nf">little_sleep</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">microseconds</span> <span class="n">us</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">start</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">end</span> <span class="o">=</span> <span class="n">start</span> <span class="o">+</span> <span class="n">us</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">do</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">std</span><span class="o">::</span><span class="n">this_thread</span><span class="o">::</span><span class="n">yield</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span> <span class="k">while</span> <span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">end</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">start</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl">    <span class="n">little_sleep</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">microseconds</span><span class="p">(</span><span class="mi">100</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">this_thread</span><span class="o">::</span><span class="n">sleep_for</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">microseconds</span><span class="p">(</span><span class="mi">100</span><span class="p">));</span>
+</span></span><span class="line"><span class="cl"> 
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">elapsed</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;waited for &#34;</span>
+</span></span><span class="line"><span class="cl">              <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">duration_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">microseconds</span><span class="o">&gt;</span><span class="p">(</span><span class="n">elapsed</span><span class="p">).</span><span class="n">count</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">              <span class="o">&lt;&lt;</span> <span class="s">&#34; microseconds</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="参考">参考</h2>
+<ul>
+<li><a href="https://qingcms.gitee.io/cppreference/20210212/zh/cpp/header/thread.html">https://qingcms.gitee.io/cppreference/20210212/zh/cpp/header/thread.html</a></li>
+<li><a href="https://qingcms.gitee.io/cppreference/20210212/zh/cpp/thread/sleep_for.html">https://qingcms.gitee.io/cppreference/20210212/zh/cpp/thread/sleep_for.html</a></li>
+</ul>
+    </div>
+
+    <div class="post-copyright">
+  <p class="copyright-item">
+    <span class="item-title">文章作者</span>
+    <span class="item-content">tianlong.xiang</span>
+  </p>
+  <p class="copyright-item">
+    <span class="item-title">上次更新</span>
+    <span class="item-content">
+        2022-09-20
+        <a href="https://github.com/tianlong-xiang/blog-with-history/commit/fd533256d26a8c815ba755f3b6aed9ee97cb72dd" title="fix: 优化标题长度，md格式">(fd53325)</a>
+        | <a href="https://github.com/tianlong-xiang/blog-with-history/commits/hugo-even/content/post/2022/09-20-sleep_for_vs_yield/index.md" target="_blank">更新历史</a>
+    </span>
+  </p>
+  
+  <p class="copyright-item">
+    <span class="item-title">许可协议</span>
+    <span class="item-content"><a rel="license noopener" href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank">CC BY-NC-ND 4.0</a></span>
+  </p>
+</div>
+<footer class="post-footer">
+      <div class="post-tags">
+          <a href="/tags/c&#43;&#43;/">c&#43;&#43;</a>
+          </div>
+      <nav class="post-nav">
+        
+        <a class="next" href="/post/2022/09-20-mysql-linux%E9%87%8D%E7%BD%AE%E5%AF%86%E7%A0%81/">
+            <span class="next-text nav-default">Linux服务器，重置Mysql密码</span>
+            <span class="next-text nav-mobile">下一篇</span>
+            <i class="iconfont icon-right"></i>
+          </a>
+      </nav>
+    </footer>
+  </article>
+        </div>
+        <div id="gitalk-container"></div>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js" crossorigin="anonymous"></script>
+    <script type="text/javascript">
+      var gitalk = new Gitalk({
+        id: '2022-09-20 20:54:51 \u002b0800 \u002b0800',
+        title: 'C11: sleep for vs yield',
+        clientID: 'ed4eada2b26ec9a3c10a',
+        clientSecret: 'a12b1f1303b3ac3ed0b34b0b7882a4b514325832',
+        repo: 'tianlong-xiang.github.io',
+        owner: 'tianlong-xiang',
+        admin: ['tianlong-xiang'],
+        body: decodeURI(location.href)
+      });
+      gitalk.render('gitalk-container');
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="https://github.com/gitalk/gitalk">comments powered by gitalk.</a></noscript>
+
+  
+
+  
+
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="social-links">
+      <a href="mailto:tianlong.xiang@foxmail.com" class="iconfont icon-email" title="email"></a>
+      <a href="https://github.com/tianlong-xiang" class="iconfont icon-github" title="github"></a>
+  <a href="https://ttf248.github.io/index.xml" type="application/rss+xml" class="iconfont icon-rss" title="rss"></a>
+</div>
+
+<div class="copyright">
+  <span class="power-by">
+    由 <a class="hexo-link" href="https://gohugo.io">Hugo</a> 强力驱动
+  </span>
+  <span class="division">|</span>
+  <span class="theme-info">
+    主题 - 
+    <a class="theme-link" href="https://github.com/olOwOlo/hugo-theme-even">Even</a>
+  </span>
+
+  
+
+  <span class="copyright-year">
+    &copy; 
+    2019 - 
+    2022<span class="heart"><i class="iconfont icon-heart"></i></span><span>tianlong.xiang</span>
+  </span>
+</div>
+
+    </footer>
+
+    <div class="back-to-top" id="back-to-top">
+      <i class="iconfont icon-up"></i>
+    </div>
+  </div>
+  
+<script src="https://cdn.staticfile.org/jquery/3.2.1/jquery.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+<script src="https://cdn.staticfile.org/slideout/1.0.1/slideout.min.js" integrity="sha256-t+zJ/g8/KXIJMjSVQdnibt4dlaDxc9zXr/9oNPeWqdg=" crossorigin="anonymous"></script>
+<script src="https://cdn.staticfile.org/fancybox/3.1.20/jquery.fancybox.min.js" integrity="sha256-wzoq0P7w2qLzRcJsF319y6G9Oilk3nU5CZ8tnY9TjFI=" crossorigin="anonymous"></script>
+
+
+
+
+
+<script type="text/javascript" src="/js/main.min.58043ad1e288ab926efe1ea3c2bd7c8dd375a8204cc4552f969c2252babb6bd2.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-7LJQR7ZVKR"></script>
+<script>
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+	gtag('config', 'G-7LJQR7ZVKR', { 'anonymize_ip': true });
+}
+</script>
+
+
+
+
+
+<script src="/js/copy-code-button.js"></script>
+
+
+</body>
+</html>
