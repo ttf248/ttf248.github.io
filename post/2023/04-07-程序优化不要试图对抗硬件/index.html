@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>程序优化不要试图对抗硬件 - Notebook</title>
+  <meta name="renderer" content="webkit" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+<meta name="theme-color" content="#f8f5ec" />
+<meta name="msapplication-navbutton-color" content="#f8f5ec">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="#f8f5ec">
+
+
+<meta name="author" content="tianlong.xiang" /><meta name="description" content="one loop thread，耗时已经在微秒层面，更换服务器，从最多积压六万数据包，到几乎没有积压
+在单线程循环处理数据的场景中，CPU的性能取决于主频、缓存大小、指令集架构等因素。一般来说，主频越高、缓存越大、指令集架构越先进的CPU在单线程处理数据时性能越好
+" />
+
+
+
+
+
+
+<meta name="generator" content="Hugo 0.110.0 with theme even" />
+
+
+<link rel="canonical" href="https://ttf248.github.io/post/2023/04-07-%E7%A8%8B%E5%BA%8F%E4%BC%98%E5%8C%96%E4%B8%8D%E8%A6%81%E8%AF%95%E5%9B%BE%E5%AF%B9%E6%8A%97%E7%A1%AC%E4%BB%B6/" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+
+
+
+<link href="/sass/main.min.9565d9fbd315eac78f27813f63aa3b0da6f4c9fa2e387dffc57b95f19672b1c2.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.staticfile.org/fancybox/3.1.20/jquery.fancybox.min.css" integrity="sha256-7TyXnr2YU040zfSP+rEcz29ggW4j56/ujTPwjMzyqFY=" crossorigin="anonymous">
+<link rel="stylesheet" href="/css/copy-code-button.css">
+<link rel="stylesheet" href="/css/infoq.css">
+
+
+<meta property="og:title" content="程序优化不要试图对抗硬件" />
+<meta property="og:description" content="one loop thread，耗时已经在微秒层面，更换服务器，从最多积压六万数据包，到几乎没有积压
+在单线程循环处理数据的场景中，CPU的性能取决于主频、缓存大小、指令集架构等因素。一般来说，主频越高、缓存越大、指令集架构越先进的CPU在单线程处理数据时性能越好" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://ttf248.github.io/post/2023/04-07-%E7%A8%8B%E5%BA%8F%E4%BC%98%E5%8C%96%E4%B8%8D%E8%A6%81%E8%AF%95%E5%9B%BE%E5%AF%B9%E6%8A%97%E7%A1%AC%E4%BB%B6/" /><meta property="article:section" content="post" />
+<meta property="article:published_time" content="2023-04-07T16:30:15+08:00" />
+<meta property="article:modified_time" content="2023-04-07T16:50:05+08:00" />
+<meta itemprop="name" content="程序优化不要试图对抗硬件">
+<meta itemprop="description" content="one loop thread，耗时已经在微秒层面，更换服务器，从最多积压六万数据包，到几乎没有积压
+在单线程循环处理数据的场景中，CPU的性能取决于主频、缓存大小、指令集架构等因素。一般来说，主频越高、缓存越大、指令集架构越先进的CPU在单线程处理数据时性能越好"><meta itemprop="datePublished" content="2023-04-07T16:30:15+08:00" />
+<meta itemprop="dateModified" content="2023-04-07T16:50:05+08:00" />
+<meta itemprop="wordCount" content="1393">
+<meta itemprop="keywords" content="" /><meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="程序优化不要试图对抗硬件"/>
+<meta name="twitter:description" content="one loop thread，耗时已经在微秒层面，更换服务器，从最多积压六万数据包，到几乎没有积压
+在单线程循环处理数据的场景中，CPU的性能取决于主频、缓存大小、指令集架构等因素。一般来说，主频越高、缓存越大、指令集架构越先进的CPU在单线程处理数据时性能越好"/>
+
+<!--[if lte IE 9]>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/classlist/1.1.20170427/classList.min.js"></script>
+<![endif]-->
+
+<!--[if lt IE 9]>
+  <script src="https://cdn.jsdelivr.net/npm/html5shiv@3.7.3/dist/html5shiv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/respond.js@1.4.2/dest/respond.min.js"></script>
+<![endif]-->
+
+</head>
+<body>
+  <div id="mobile-navbar" class="mobile-navbar">
+  <div class="mobile-header-logo">
+    <a href="/" class="logo">Notebook</a>
+  </div>
+  <div class="mobile-navbar-icon">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</div>
+<nav id="mobile-menu" class="mobile-menu slideout-menu">
+  <ul class="mobile-menu-list">
+    <a href="/categories/">
+        <li class="mobile-menu-item">分类</li>
+      </a><a href="/tags/">
+        <li class="mobile-menu-item">标签</li>
+      </a><a href="/post/">
+        <li class="mobile-menu-item">归档</li>
+      </a>
+  </ul>
+
+  
+
+
+</nav>
+
+  <div class="container" id="mobile-panel">
+    <header id="header" class="header">
+        <div class="logo-wrapper">
+  <a href="/" class="logo">Notebook</a>
+</div>
+
+
+
+
+
+<nav class="site-navbar">
+  <ul id="menu" class="menu">
+    <li class="menu-item">
+        <a class="menu-item-link" href="/categories/">分类</a>
+      </li><li class="menu-item">
+        <a class="menu-item-link" href="/tags/">标签</a>
+      </li><li class="menu-item">
+        <a class="menu-item-link" href="/post/">归档</a>
+      </li>
+  </ul>
+</nav>
+
+    </header>
+
+    <main id="main" class="main">
+      <div class="content-wrapper">
+        <div id="content" class="content">
+          <article class="post">
+    
+    <header class="post-header">
+      <h1 class="post-title">程序优化不要试图对抗硬件</h1>
+
+      <div class="post-meta">
+        <span class="post-time"> 2023-04-07 </span>
+        <div class="post-category">
+            <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA/"> 计算机 </a>
+            </div>
+        
+      </div>
+    </header>
+
+    <div class="post-toc" id="post-toc">
+  <h2 class="post-toc-title">文章目录</h2>
+  <div class="post-toc-content always-active">
+    <nav id="TableOfContents">
+  <ul>
+    <li>
+      <ul>
+        <li><a href="#单线程">单线程</a></li>
+        <li><a href="#事件">事件</a></li>
+        <li><a href="#咨询-openai">咨询 OpenAI</a></li>
+        <li><a href="#硬件资料">硬件资料</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+  </div>
+</div>
+    <div class="post-content">
+      <p><code>one loop thread</code>，耗时已经在<strong>微秒</strong>层面，更换服务器，从最多积压六万数据包，到几乎没有积压</p>
+<p>在单线程循环处理数据的场景中，CPU的性能取决于主频、缓存大小、指令集架构等因素。一般来说，主频越高、缓存越大、指令集架构越先进的CPU在单线程处理数据时性能越好</p>
+<h2 id="单线程">单线程</h2>
+<p>性能提升，增加线程不是分必要的，梳理项目流程，确定耗时的点，单线程是否能满足需求，单线程考虑的东西更少，也不容易出问题。</p>
+<blockquote>
+<p>上来就和就说加线程，多少有点毛病</p>
+</blockquote>
+<h2 id="事件">事件</h2>
+<p>处理的都是<strong>行情数据，延迟敏感</strong></p>
+<p>吭哧吭哧加班一晚上，发布新的优化版本，本地剥离接口进行测试，速度也还行，tps：4.2万</p>
+<p>部署到服务器，tps骤降：2.1万，回家尝试台式机，tps：7.9万，开始怀疑组内服务虚拟机多少有点问题，首先怀疑主频导致的，家用台式机和服务器<code>CPU</code>，差异最大的地方就是主频</p>
+<p>测试服务器A</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">processor	: <span class="m">7</span>
+</span></span><span class="line"><span class="cl">vendor_id	: GenuineIntel
+</span></span><span class="line"><span class="cl">cpu family	: <span class="m">6</span>
+</span></span><span class="line"><span class="cl">model		: <span class="m">47</span>
+</span></span><span class="line"><span class="cl">model name	: Intel<span class="o">(</span>R<span class="o">)</span> Xeon<span class="o">(</span>R<span class="o">)</span> CPU E7- <span class="m">4807</span>  @ 1.87GHz
+</span></span><span class="line"><span class="cl">stepping	: <span class="m">2</span>
+</span></span><span class="line"><span class="cl">microcode	: 0x34
+</span></span><span class="line"><span class="cl">cpu MHz		: 1866.733
+</span></span><span class="line"><span class="cl">cache size	: <span class="m">18432</span> KB
+</span></span><span class="line"><span class="cl">physical id	: <span class="m">1</span>
+</span></span><span class="line"><span class="cl">siblings	: <span class="m">4</span>
+</span></span><span class="line"><span class="cl">core id		: <span class="m">3</span>
+</span></span><span class="line"><span class="cl">cpu cores	: <span class="m">4</span>
+</span></span><span class="line"><span class="cl">apicid		: <span class="m">7</span>
+</span></span><span class="line"><span class="cl">initial apicid	: <span class="m">7</span>
+</span></span><span class="line"><span class="cl">fpu		: yes
+</span></span><span class="line"><span class="cl">fpu_exception	: yes
+</span></span><span class="line"><span class="cl">cpuid level	: <span class="m">11</span>
+</span></span><span class="line"><span class="cl">wp		: yes
+</span></span><span class="line"><span class="cl">flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss ht syscall nx rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf pni pclmulqdq ssse3 cx16 sse4_1 sse4_2 popcnt aes hypervisor lahf_lm pti dtherm arat
+</span></span><span class="line"><span class="cl">bugs		: clflush_monitor cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit
+</span></span><span class="line"><span class="cl">bogomips	: 3733.46
+</span></span><span class="line"><span class="cl">clflush size	: <span class="m">64</span>
+</span></span><span class="line"><span class="cl">cache_alignment	: <span class="m">64</span>
+</span></span><span class="line"><span class="cl">address sizes	: <span class="m">40</span> bits physical, <span class="m">48</span> bits virtual
+</span></span><span class="line"><span class="cl">power management:
+</span></span></code></pre></div><p>测试服务器B</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">processor	: <span class="m">7</span>
+</span></span><span class="line"><span class="cl">vendor_id	: GenuineIntel
+</span></span><span class="line"><span class="cl">cpu family	: <span class="m">6</span>
+</span></span><span class="line"><span class="cl">model		: <span class="m">63</span>
+</span></span><span class="line"><span class="cl">model name	: Intel<span class="o">(</span>R<span class="o">)</span> Xeon<span class="o">(</span>R<span class="o">)</span> CPU E5-2640 v3 @ 2.60GHz
+</span></span><span class="line"><span class="cl">stepping	: <span class="m">2</span>
+</span></span><span class="line"><span class="cl">microcode	: 0x3c
+</span></span><span class="line"><span class="cl">cpu MHz		: 2599.998
+</span></span><span class="line"><span class="cl">cache size	: <span class="m">20480</span> KB
+</span></span><span class="line"><span class="cl">physical id	: <span class="m">14</span>
+</span></span><span class="line"><span class="cl">siblings	: <span class="m">1</span>
+</span></span><span class="line"><span class="cl">core id		: <span class="m">0</span>
+</span></span><span class="line"><span class="cl">cpu cores	: <span class="m">1</span>
+</span></span><span class="line"><span class="cl">apicid		: <span class="m">14</span>
+</span></span><span class="line"><span class="cl">initial apicid	: <span class="m">14</span>
+</span></span><span class="line"><span class="cl">fpu		: yes
+</span></span><span class="line"><span class="cl">fpu_exception	: yes
+</span></span><span class="line"><span class="cl">cpuid level	: <span class="m">15</span>
+</span></span><span class="line"><span class="cl">wp		: yes
+</span></span><span class="line"><span class="cl">flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cpuid_fault epb pti fsgsbase smep xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts
+</span></span><span class="line"><span class="cl">bugs		: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit
+</span></span><span class="line"><span class="cl">bogomips	: 5199.99
+</span></span><span class="line"><span class="cl">clflush size	: <span class="m">64</span>
+</span></span><span class="line"><span class="cl">cache_alignment	: <span class="m">64</span>
+</span></span><span class="line"><span class="cl">address sizes	: <span class="m">40</span> bits physical, <span class="m">48</span> bits virtual
+</span></span><span class="line"><span class="cl">power management:
+</span></span></code></pre></div><h2 id="咨询-openai">咨询 OpenAI</h2>
+<p>首先是核心数和主频方面，Intel(R) Xeon(R) CPU E7- 4807 @ 1.87GHz拥有6个物理核心和12个逻辑核心，主频为1.87GHz；而Intel(R) Xeon(R) CPU E5-2640 v3 @ 2.60GHz拥有8个物理核心和16个逻辑核心，主频为2.60GHz。因此，从核心数和主频方面来看，E5-2640 v3在单线程处理数据时应该比E7- 4807更具优势。</p>
+<p>其次是缓存大小方面，E7- 4807的缓存大小为12MB，而E5-2640 v3的缓存大小为20MB。因此，E5-2640 v3拥有更大的缓存空间，可以提高数据的访问速度和缓存命中率。</p>
+<p>最后是架构方面，E5-2640 v3采用了更先进的Haswell架构，而E7- 4807采用的是旧的Nehalem架构。Haswell架构相对于Nehalem架构在性能方面有所提升，这也可能对E5-2640 v3在单线程处理数据时的性能提升产生影响。</p>
+<p>因此，综合考虑，在单线程循环处理数据的场景中，E5-2640 v3应该比E7- 4807具有更好的性能。但是，具体的性能差异会受到多种因素的影响，包括数据处理的算法、内存带宽、系统负载等等，需要具体问题具体分析。</p>
+<h2 id="硬件资料">硬件资料</h2>
+<p><a href="https://www.cpubenchmark.net/compare/3786.2vs2365.2/%5BDual-CPU%5D-Intel-Xeon-E7%E2%80%934807-vs-%5BDual-CPU%5D-Intel-Xeon-E5-2640-v3">https://www.cpubenchmark.net/compare/3786.2vs2365.2/%5BDual-CPU%5D-Intel-Xeon-E7–4807-vs-%5BDual-CPU%5D-Intel-Xeon-E5-2640-v3</a></p>
+<table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Xeon E7-4807 (LGA1567)</th>
+<th>Xeon E5-2640 v3 (LGA2011-v3)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Price</td>
+<td>Search Online  $78 - BUY</td>
+<td></td>
+</tr>
+<tr>
+<td>Socket Type</td>
+<td>LGA1567</td>
+<td>LGA2011-v3</td>
+</tr>
+<tr>
+<td>CPU Class</td>
+<td>Server</td>
+<td>Server</td>
+</tr>
+<tr>
+<td>Clockspeed</td>
+<td>1.9 GHz</td>
+<td>2.6 GHz</td>
+</tr>
+<tr>
+<td>Turbo Speed</td>
+<td>Not Supported</td>
+<td>Up to 3.4 GHz</td>
+</tr>
+<tr>
+<td># of Physical Cores</td>
+<td>6 (Threads: 12)</td>
+<td>8 (Threads: 16)</td>
+</tr>
+<tr>
+<td>Cache</td>
+<td>NA2</td>
+<td>NA2</td>
+</tr>
+<tr>
+<td>Max TDP</td>
+<td>95W x 2</td>
+<td>90W x 2</td>
+</tr>
+<tr>
+<td>Yearly Running Cost</td>
+<td>$34.68</td>
+<td>$32.85</td>
+</tr>
+<tr>
+<td>Other</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>First Seen on Chart</td>
+<td>Q3 2020</td>
+<td>Q3 2014</td>
+</tr>
+<tr>
+<td># of Samples</td>
+<td>1</td>
+<td>46</td>
+</tr>
+<tr>
+<td>CPU Value</td>
+<td>69.1</td>
+<td>225.6</td>
+</tr>
+<tr>
+<td>Single Thread Rating</td>
+<td>721 (-59.2%)</td>
+<td>1767 (0.0%)</td>
+</tr>
+<tr>
+<td>CPU Mark</td>
+<td>6223 (-64.6%)</td>
+<td>17600 (0.0%)</td>
+</tr>
+</tbody>
+</table>
+    </div>
+
+    <div class="post-copyright">
+  <p class="copyright-item">
+    <span class="item-title">文章作者</span>
+    <span class="item-content">tianlong.xiang</span>
+  </p>
+  <p class="copyright-item">
+    <span class="item-title">上次更新</span>
+    <span class="item-content">
+        2023-04-07
+        <a href="https://github.com/ttf248/notebook/commit/c47bbec6eadaa382054f727c5245a8f067705bd3" title="feat: 程序优化不要试图对抗硬件">(c47bbec)</a>
+        | <a href="https://github.com/ttf248/notebook/commits/dev/content/post/2023/04-07-%e7%a8%8b%e5%ba%8f%e4%bc%98%e5%8c%96%e4%b8%8d%e8%a6%81%e8%af%95%e5%9b%be%e5%af%b9%e6%8a%97%e7%a1%ac%e4%bb%b6/index.md" target="_blank">更新历史</a>
+    </span>
+  </p>
+  
+  <p class="copyright-item">
+    <span class="item-title">许可协议</span>
+    <span class="item-content"><a rel="license noopener" href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank">CC BY-NC-ND 4.0</a></span>
+  </p>
+</div>
+<footer class="post-footer">
+      
+      <nav class="post-nav">
+        
+        <a class="next" href="/post/2023/03-26-prompt%E5%B7%A5%E7%A8%8B%E5%B8%88%E8%89%AF%E5%A5%BD%E7%9A%84ai%E4%BA%A4%E4%BA%92%E4%BD%93%E9%AA%8C/">
+            <span class="next-text nav-default">Prompt 工程师</span>
+            <span class="next-text nav-mobile">下一篇</span>
+            <i class="iconfont icon-right"></i>
+          </a>
+      </nav>
+    </footer>
+  </article>
+        </div>
+        
+
+  
+
+  
+
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="social-links">
+      <a href="mailto:tianlong.xiang@foxmail.com" class="iconfont icon-email" title="email"></a>
+      <a href="https://github.com/tianlong-xiang" class="iconfont icon-github" title="github"></a>
+  <a href="https://ttf248.github.io/index.xml" type="application/rss+xml" class="iconfont icon-rss" title="rss"></a>
+</div>
+
+<div class="copyright">
+  <span class="power-by">
+    由 <a class="hexo-link" href="https://gohugo.io">Hugo</a> 强力驱动
+  </span>
+  <span class="division">|</span>
+  <span class="theme-info">
+    主题 - 
+    <a class="theme-link" href="https://github.com/olOwOlo/hugo-theme-even">Even</a>
+  </span>
+
+  
+
+  <span class="copyright-year">
+    &copy; 
+    2019 - 
+    2023<span class="heart"><i class="iconfont icon-heart"></i></span><span>tianlong.xiang</span>
+  </span>
+</div>
+
+    </footer>
+
+    <div class="back-to-top" id="back-to-top">
+      <i class="iconfont icon-up"></i>
+    </div>
+  </div>
+  
+<script src="https://cdn.staticfile.org/jquery/3.2.1/jquery.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+<script src="https://cdn.staticfile.org/slideout/1.0.1/slideout.min.js" integrity="sha256-t+zJ/g8/KXIJMjSVQdnibt4dlaDxc9zXr/9oNPeWqdg=" crossorigin="anonymous"></script>
+<script src="https://cdn.staticfile.org/fancybox/3.1.20/jquery.fancybox.min.js" integrity="sha256-wzoq0P7w2qLzRcJsF319y6G9Oilk3nU5CZ8tnY9TjFI=" crossorigin="anonymous"></script>
+
+
+
+
+
+<script type="text/javascript" src="/js/main.min.58043ad1e288ab926efe1ea3c2bd7c8dd375a8204cc4552f969c2252babb6bd2.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-7LJQR7ZVKR"></script>
+<script>
+var doNotTrack = false;
+if (!doNotTrack) {
+	window.dataLayer = window.dataLayer || [];
+	function gtag(){dataLayer.push(arguments);}
+	gtag('js', new Date());
+	gtag('config', 'G-7LJQR7ZVKR', { 'anonymize_ip': true });
+}
+</script>
+
+
+
+
+
+<script src="/js/copy-code-button.js"></script>
+
+
+</body>
+</html>
