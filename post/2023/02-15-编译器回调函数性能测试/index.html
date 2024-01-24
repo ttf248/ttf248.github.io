@@ -49,13 +49,13 @@
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://ttf248.github.io/post/2023/02-15-%E7%BC%96%E8%AF%91%E5%99%A8%E5%9B%9E%E8%B0%83%E5%87%BD%E6%95%B0%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95/" /><meta property="article:section" content="post" />
 <meta property="article:published_time" content="2023-02-15T13:59:25+08:00" />
-<meta property="article:modified_time" content="2023-11-23T14:04:43+08:00" />
+<meta property="article:modified_time" content="2024-01-24T14:21:28+08:00" />
 <meta itemprop="name" content="编译器、回调函数、性能测试">
 <meta itemprop="description" content="去年设计了一个SDK，负责处理封装一些事件，对外提供一个类接口，服务初始化的时候，调用方实现对应的类，并将对象指针传给模块。
 接触过C11，好奇心害死猫，就想着这些接口都用lambda函数对象回调来实现会是什么结果，和纯虚函数的接口定义方法比较，更加灵活。
 疑问就出现了，两种不同的语法，从性能角度来说，哪个更快一些？不懂编译原理，弄段代码试试看。"><meta itemprop="datePublished" content="2023-02-15T13:59:25+08:00" />
-<meta itemprop="dateModified" content="2023-11-23T14:04:43+08:00" />
-<meta itemprop="wordCount" content="1061">
+<meta itemprop="dateModified" content="2024-01-24T14:21:28+08:00" />
+<meta itemprop="wordCount" content="1479">
 <meta itemprop="keywords" content="" /><meta name="twitter:card" content="summary"/>
 <meta name="twitter:title" content="编译器、回调函数、性能测试"/>
 <meta name="twitter:description" content="去年设计了一个SDK，负责处理封装一些事件，对外提供一个类接口，服务初始化的时候，调用方实现对应的类，并将对象指针传给模块。
@@ -273,7 +273,176 @@
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
 </span></span></code></pre></div><h2 id="后记">后记</h2>
 <p>查找资料的时候，翻到类似的代码片段 <a href="https://gist.githubusercontent.com/benloong/8050171/raw/fa577ec923b460862078b8b40233a42a1c619eeb/functionperformance.cpp">functionperformance.cpp</a></p>
-<p>这里多了两种模式，普通函数和仿函数，提供接口回调的方式和直接调用比较，性能损耗是数量级的差异，仿函数性能和函数接近，有时候仿函数的性能更优，编译原理这块算是知识盲区，猜测是由于访问的变量地址和函数挨着，有利于<code>CPU</code>处理</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;chrono&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;memory&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;functional&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp"></span>
+</span></span><span class="line"><span class="cl"><span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Base</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">	<span class="n">Base</span><span class="p">(){}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">virtual</span> <span class="o">~</span><span class="n">Base</span><span class="p">(){}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">virtual</span> <span class="kt">int</span> <span class="nf">func</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Derived</span> <span class="o">:</span> <span class="k">public</span> <span class="n">Base</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">	<span class="n">Derived</span><span class="p">(</span><span class="kt">int</span> <span class="n">base</span> <span class="o">=</span> <span class="mi">10</span><span class="p">)</span> <span class="o">:</span> <span class="n">base</span><span class="p">{</span><span class="n">base</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="o">~</span><span class="n">Derived</span><span class="p">(){}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="k">virtual</span> <span class="kt">int</span> <span class="nf">func</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="n">i</span><span class="o">*</span><span class="n">base</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="n">base</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Func</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="n">base</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="nf">operator</span><span class="p">()(</span><span class="kt">int</span> <span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="n">i</span><span class="o">*</span><span class="n">base</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="n">Func</span><span class="p">(</span><span class="kt">int</span> <span class="n">base</span><span class="p">)</span> <span class="o">:</span> <span class="n">base</span> <span class="p">{</span><span class="n">base</span><span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="k">const</span> <span class="kt">int</span> <span class="n">base</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">calculate</span><span class="p">(</span><span class="kt">int</span> <span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="n">base</span><span class="o">*</span><span class="n">i</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">	<span class="k">const</span> <span class="kt">int</span> <span class="n">num</span> <span class="o">=</span> <span class="mi">10000</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="n">Base</span> <span class="o">*</span><span class="n">p</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Derived</span><span class="p">{</span><span class="mi">10</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="k">auto</span> <span class="n">start</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">num</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="n">total</span> <span class="o">+=</span> <span class="n">p</span><span class="o">-&gt;</span><span class="n">func</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="k">auto</span> <span class="n">end</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="o">&lt;&lt;</span><span class="s">&#34;result: &#34;</span><span class="o">&lt;&lt;</span><span class="n">total</span><span class="o">&lt;&lt;</span><span class="s">&#34;</span><span class="se">\n</span><span class="s">virtual call elapsed: </span><span class="se">\t</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">duration_cast</span><span class="o">&lt;</span><span class="n">nanoseconds</span><span class="o">&gt;</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">).</span><span class="n">count</span><span class="p">()</span><span class="o">&lt;&lt;</span><span class="s">&#34; nanoseconds.</span><span class="se">\n</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="n">total</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="n">start</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">num</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="n">total</span> <span class="o">+=</span> <span class="n">calculate</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="n">end</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="o">&lt;&lt;</span><span class="s">&#34;result: &#34;</span><span class="o">&lt;&lt;</span><span class="n">total</span><span class="o">&lt;&lt;</span><span class="s">&#34;</span><span class="se">\n</span><span class="s">direct function call elapsed: </span><span class="se">\t</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">duration_cast</span><span class="o">&lt;</span><span class="n">nanoseconds</span><span class="o">&gt;</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">).</span><span class="n">count</span><span class="p">()</span><span class="o">&lt;&lt;</span><span class="s">&#34; nanoseconds.</span><span class="se">\n</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">	<span class="n">Func</span> <span class="n">functor</span><span class="p">{</span><span class="mi">10</span><span class="p">};</span>
+</span></span><span class="line"><span class="cl">	<span class="n">total</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="n">start</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">num</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="n">total</span> <span class="o">+=</span> <span class="n">functor</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="n">end</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="o">&lt;&lt;</span><span class="s">&#34;result: &#34;</span><span class="o">&lt;&lt;</span><span class="n">total</span><span class="o">&lt;&lt;</span><span class="s">&#34;</span><span class="se">\n</span><span class="s">functor call elapsed: </span><span class="se">\t</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">duration_cast</span><span class="o">&lt;</span><span class="n">nanoseconds</span><span class="o">&gt;</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">).</span><span class="n">count</span><span class="p">()</span><span class="o">&lt;&lt;</span><span class="s">&#34; nanoseconds.</span><span class="se">\n</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="kt">int</span> <span class="n">base</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="n">function</span><span class="o">&lt;</span><span class="kt">int</span><span class="p">(</span><span class="kt">int</span><span class="p">)</span><span class="o">&gt;</span> <span class="n">lambda</span> <span class="o">=</span> <span class="p">[</span><span class="n">base</span><span class="p">](</span><span class="kt">int</span> <span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="k">return</span> <span class="n">i</span><span class="o">*</span><span class="n">base</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="p">};</span>
+</span></span><span class="line"><span class="cl">	<span class="n">total</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="n">start</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">num</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">	<span class="p">{</span>
+</span></span><span class="line"><span class="cl">		<span class="n">total</span> <span class="o">+=</span> <span class="n">lambda</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">	<span class="p">}</span>
+</span></span><span class="line"><span class="cl">	<span class="n">end</span> <span class="o">=</span> <span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">	<span class="n">std</span><span class="o">::</span><span class="n">cout</span><span class="o">&lt;&lt;</span><span class="s">&#34;result: &#34;</span><span class="o">&lt;&lt;</span><span class="n">total</span><span class="o">&lt;&lt;</span><span class="s">&#34;</span><span class="se">\n</span><span class="s">lambda call elapsed: </span><span class="se">\t</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">duration_cast</span><span class="o">&lt;</span><span class="n">nanoseconds</span><span class="o">&gt;</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">).</span><span class="n">count</span><span class="p">()</span><span class="o">&lt;&lt;</span><span class="s">&#34; nanoseconds.</span><span class="se">\n</span><span class="s">&#34;</span><span class="o">&lt;&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">	<span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="cm">/*
+</span></span></span><span class="line"><span class="cl"><span class="cm">test on mac mini i7 2.7GHz
+</span></span></span><span class="line"><span class="cl"><span class="cm">clang++ -std=c++11 chronotest.cpp -O0
+</span></span></span><span class="line"><span class="cl"><span class="cm">output:
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">virtual call elapsed: 	43171 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">direct function call elapsed: 	31379 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">functor call elapsed: 	41497 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">lambda call elapsed: 	207416 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">===================================================
+</span></span></span><span class="line"><span class="cl"><span class="cm">clang++ -std=c++11 chronotest.cpp -O1
+</span></span></span><span class="line"><span class="cl"><span class="cm">output:
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">virtual call elapsed: 	26144 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">direct function call elapsed: 	22384 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">functor call elapsed: 	33477 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">lambda call elapsed: 	55799 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">===================================================
+</span></span></span><span class="line"><span class="cl"><span class="cm">clang++ -std=c++11 chronotest.cpp -O2
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">virtual call elapsed: 	22284 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">direct function call elapsed: 	36 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">functor call elapsed: 	30 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">lambda call elapsed: 	28292 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">===================================================
+</span></span></span><span class="line"><span class="cl"><span class="cm">clang++ -std=c++11 chronotest.cpp -O3
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">virtual call elapsed: 	18975 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">direct function call elapsed: 	29 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">functor call elapsed: 	30 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">lambda call elapsed: 	22542 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">===================================================
+</span></span></span><span class="line"><span class="cl"><span class="cm">clang++ -std=c++11 chronotest.cpp -O4
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">virtual call elapsed: 	22141 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">direct function call elapsed: 	30 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">functor call elapsed: 	30 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">
+</span></span></span><span class="line"><span class="cl"><span class="cm">result: 499950000
+</span></span></span><span class="line"><span class="cl"><span class="cm">lambda call elapsed: 	22584 nanoseconds.
+</span></span></span><span class="line"><span class="cl"><span class="cm">*/</span>
+</span></span></code></pre></div><p>这里多了两种模式，普通函数和仿函数，提供接口回调的方式和直接调用比较，性能损耗是数量级的差异，仿函数性能和函数接近，有时候仿函数的性能更优，编译原理这块算是知识盲区，猜测是由于访问的变量地址和函数挨着，有利于<code>CPU</code>处理</p>
 <p>附上 <code>wandbox</code> 运行结果</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">result: <span class="m">499950000</span>
 </span></span><span class="line"><span class="cl">virtual call elapsed: <span class="m">6143</span> nanoseconds.
@@ -297,8 +466,8 @@
   <p class="copyright-item">
     <span class="item-title">上次更新</span>
     <span class="item-content">
-        2023-11-23
-        <a href="https://github.com/ttf248/notebook/commit/a85c0e704e5c590e6b6993a56d101811a540585f" title="feat: 补充说明两个平台的作用">(a85c0e7)</a>
+        2024-01-24
+        <a href="https://github.com/ttf248/notebook/commit/065b9cfc22a96a5c98c657e4b6c3c8da7a0258fb" title="feat: CPP-Function-Call-Performance">(065b9cf)</a>
         | <a href="https://github.com/ttf248/notebook/commits/dev/content/post/2023/02-15-%e7%bc%96%e8%af%91%e5%99%a8%e3%80%81%e5%9b%9e%e8%b0%83%e5%87%bd%e6%95%b0%e3%80%81%e6%80%a7%e8%83%bd%e6%b5%8b%e8%af%95/index.md" target="_blank">更新历史</a>
     </span>
   </p>
