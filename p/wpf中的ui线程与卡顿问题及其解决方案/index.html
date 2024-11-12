@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.github.io/p/wpf%E4%B8%AD%E7%9A%84ui%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%8D%A1%E9%A1%BF%E9%97%AE%E9%A2%98%E5%8F%8A%E5%85%B6%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88/'>
 
-<link rel="stylesheet" href="/scss/style.min.692f9e478f111c404cea3a7efd953eebf9582704b1f65fef4d70157231d0477f.css"><meta property='og:title' content="WPF中的UI线程与卡顿问题及其解决方案">
+<link rel="stylesheet" href="/scss/style.min.eb046260116c89ed8fa32594b081a56b1269b91313562e51de6358019e283b61.css"><meta property='og:title' content="WPF中的UI线程与卡顿问题及其解决方案">
 <meta property='og:description' content="在开发桌面应用程序时，特别是在使用Windows Presentation Foundation (WPF)框架构建富客户端应用时，正确处理用户界面（UI）线程对于保证应用的流畅性和响应性至关重要。UI线程，又称为主线程，是负责处理窗口和控件事件、布局计算以及绘制界面的核心线程。任何与UI元素交互的操作都应当在UI线程上执行，这是WPF以及其他大多数GUI框架遵循的基本原则。\n">
 <meta property='og:url' content='https://ttf248.github.io/p/wpf%E4%B8%AD%E7%9A%84ui%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%8D%A1%E9%A1%BF%E9%97%AE%E9%A2%98%E5%8F%8A%E5%85%B6%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88/'>
 <meta property='og:site_name' content='向叔记事簿'>
@@ -231,7 +231,64 @@
     <article class="main-article">
     <header class="article-header">
 
-    <div class="article-details">
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
     
     <header class="article-category">
         
@@ -288,7 +345,6 @@
 
     
 </div>
-
 </header>
 
     <section class="article-content">
@@ -313,106 +369,52 @@
 </ul>
 <h2 id="案例">案例
 </h2><h3 id="使用dispatcherinvoke方法更新ui">使用<code>Dispatcher.Invoke</code>方法更新UI
-</h3><div class="highlight"><div class="chroma">
-<table class="lntable"><tr><td class="lntd">
-<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
-</span><span class="lnt"> 2
-</span><span class="lnt"> 3
-</span><span class="lnt"> 4
-</span><span class="lnt"> 5
-</span><span class="lnt"> 6
-</span><span class="lnt"> 7
-</span><span class="lnt"> 8
-</span><span class="lnt"> 9
-</span><span class="lnt">10
-</span><span class="lnt">11
-</span><span class="lnt">12
-</span><span class="lnt">13
-</span><span class="lnt">14
-</span><span class="lnt">15
-</span><span class="lnt">16
-</span><span class="lnt">17
-</span><span class="lnt">18
-</span><span class="lnt">19
-</span><span class="lnt">20
-</span><span class="lnt">21
-</span></code></pre></td>
-<td class="lntd">
-<pre tabindex="0" class="chroma"><code class="language-csharp" data-lang="csharp"><span class="line"><span class="cl"><span class="kd">private</span> <span class="k">void</span> <span class="n">Button_Click</span><span class="p">(</span><span class="kt">object</span> <span class="n">sender</span><span class="p">,</span> <span class="n">RoutedEventArgs</span> <span class="n">e</span><span class="p">)</span>
-</span></span><span class="line"><span class="cl"><span class="p">{</span>
-</span></span><span class="line"><span class="cl">    <span class="c1">// 假设这是一个耗时操作</span>
-</span></span><span class="line"><span class="cl">    <span class="n">Task</span><span class="p">.</span><span class="n">Run</span><span class="p">(()</span> <span class="p">=&gt;</span>
-</span></span><span class="line"><span class="cl">    <span class="p">{</span>
-</span></span><span class="line"><span class="cl">        <span class="kt">var</span> <span class="n">result</span> <span class="p">=</span> <span class="n">LongRunningOperation</span><span class="p">();</span> <span class="c1">// 这里是模拟一个耗时计算的方法</span>
-</span></span><span class="line"><span class="cl">        
-</span></span><span class="line"><span class="cl">        <span class="c1">// 当耗时操作完成后，在UI线程上更新UI</span>
-</span></span><span class="line"><span class="cl">        <span class="n">Application</span><span class="p">.</span><span class="n">Current</span><span class="p">.</span><span class="n">Dispatcher</span><span class="p">.</span><span class="n">Invoke</span><span class="p">(()</span> <span class="p">=&gt;</span>
-</span></span><span class="line"><span class="cl">        <span class="p">{</span>
-</span></span><span class="line"><span class="cl">            <span class="n">LabelStatus</span><span class="p">.</span><span class="n">Text</span> <span class="p">=</span> <span class="s">$&#34;计算结果: {result}&#34;</span><span class="p">;</span>
-</span></span><span class="line"><span class="cl">        <span class="p">});</span>
-</span></span><span class="line"><span class="cl">    <span class="p">});</span>
-</span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span><span class="line"><span class="cl">
-</span></span><span class="line"><span class="cl"><span class="kd">private</span> <span class="kt">string</span> <span class="n">LongRunningOperation</span><span class="p">()</span>
-</span></span><span class="line"><span class="cl"><span class="p">{</span>
-</span></span><span class="line"><span class="cl">    <span class="c1">// 模拟耗时操作</span>
-</span></span><span class="line"><span class="cl">    <span class="n">Thread</span><span class="p">.</span><span class="n">Sleep</span><span class="p">(</span><span class="m">5000</span><span class="p">);</span>
-</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="s">&#34;已完成&#34;</span><span class="p">;</span>
-</span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre></td></tr></table>
-</div>
-</div><h3 id="使用asyncawait关键字配合taskrun">使用<code>async/await</code>关键字配合<code>Task.Run</code>
-</h3><div class="highlight"><div class="chroma">
-<table class="lntable"><tr><td class="lntd">
-<pre tabindex="0" class="chroma"><code><span class="lnt"> 1
-</span><span class="lnt"> 2
-</span><span class="lnt"> 3
-</span><span class="lnt"> 4
-</span><span class="lnt"> 5
-</span><span class="lnt"> 6
-</span><span class="lnt"> 7
-</span><span class="lnt"> 8
-</span><span class="lnt"> 9
-</span><span class="lnt">10
-</span><span class="lnt">11
-</span><span class="lnt">12
-</span><span class="lnt">13
-</span><span class="lnt">14
-</span><span class="lnt">15
-</span><span class="lnt">16
-</span><span class="lnt">17
-</span><span class="lnt">18
-</span><span class="lnt">19
-</span><span class="lnt">20
-</span><span class="lnt">21
-</span><span class="lnt">22
-</span></code></pre></td>
-<td class="lntd">
-<pre tabindex="0" class="chroma"><code class="language-csharp" data-lang="csharp"><span class="line"><span class="cl"><span class="kd">private</span> <span class="kd">async</span> <span class="k">void</span> <span class="n">Button_ClickAsync</span><span class="p">(</span><span class="kt">object</span> <span class="n">sender</span><span class="p">,</span> <span class="n">RoutedEventArgs</span> <span class="n">e</span><span class="p">)</span>
-</span></span><span class="line"><span class="cl"><span class="p">{</span>
-</span></span><span class="line"><span class="cl">    <span class="n">Button</span> <span class="n">button</span> <span class="p">=</span> <span class="n">sender</span> <span class="k">as</span> <span class="n">Button</span><span class="p">;</span>
-</span></span><span class="line"><span class="cl">    <span class="n">button</span><span class="p">.</span><span class="n">IsEnabled</span> <span class="p">=</span> <span class="kc">false</span><span class="p">;</span> <span class="c1">// 防止用户重复点击</span>
-</span></span><span class="line"><span class="cl">
-</span></span><span class="line"><span class="cl">    <span class="k">try</span>
-</span></span><span class="line"><span class="cl">    <span class="p">{</span>
-</span></span><span class="line"><span class="cl">        <span class="c1">// 开启后台任务</span>
-</span></span><span class="line"><span class="cl">        <span class="kt">var</span> <span class="n">result</span> <span class="p">=</span> <span class="k">await</span> <span class="n">Task</span><span class="p">.</span><span class="n">Run</span><span class="p">(()</span> <span class="p">=&gt;</span> <span class="n">LongRunningOperation</span><span class="p">());</span>
-</span></span><span class="line"><span class="cl">
-</span></span><span class="line"><span class="cl">        <span class="c1">// 在后台任务完成后，自动切换回UI线程更新UI</span>
-</span></span><span class="line"><span class="cl">        <span class="n">LabelStatus</span><span class="p">.</span><span class="n">Text</span> <span class="p">=</span> <span class="s">$&#34;计算结果: {result}&#34;</span><span class="p">;</span>
-</span></span><span class="line"><span class="cl">    <span class="p">}</span>
-</span></span><span class="line"><span class="cl">    <span class="k">catch</span> <span class="p">(</span><span class="n">Exception</span> <span class="n">ex</span><span class="p">)</span>
-</span></span><span class="line"><span class="cl">    <span class="p">{</span>
-</span></span><span class="line"><span class="cl">        <span class="n">MessageBox</span><span class="p">.</span><span class="n">Show</span><span class="p">(</span><span class="s">$&#34;发生错误: {ex.Message}&#34;</span><span class="p">);</span>
-</span></span><span class="line"><span class="cl">    <span class="p">}</span>
-</span></span><span class="line"><span class="cl">    <span class="k">finally</span>
-</span></span><span class="line"><span class="cl">    <span class="p">{</span>
-</span></span><span class="line"><span class="cl">        <span class="n">button</span><span class="p">.</span><span class="n">IsEnabled</span> <span class="p">=</span> <span class="kc">true</span><span class="p">;</span> <span class="c1">// 重新启用按钮</span>
-</span></span><span class="line"><span class="cl">    <span class="p">}</span>
-</span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre></td></tr></table>
-</div>
-</div>
+</h3><pre><code class="language-csharp">private void Button_Click(object sender, RoutedEventArgs e)
+{
+    // 假设这是一个耗时操作
+    Task.Run(() =&gt;
+    {
+        var result = LongRunningOperation(); // 这里是模拟一个耗时计算的方法
+        
+        // 当耗时操作完成后，在UI线程上更新UI
+        Application.Current.Dispatcher.Invoke(() =&gt;
+        {
+            LabelStatus.Text = $&quot;计算结果: {result}&quot;;
+        });
+    });
+}
+
+private string LongRunningOperation()
+{
+    // 模拟耗时操作
+    Thread.Sleep(5000);
+    return &quot;已完成&quot;;
+}
+</code></pre>
+<h3 id="使用asyncawait关键字配合taskrun">使用<code>async/await</code>关键字配合<code>Task.Run</code>
+</h3><pre><code class="language-csharp">private async void Button_ClickAsync(object sender, RoutedEventArgs e)
+{
+    Button button = sender as Button;
+    button.IsEnabled = false; // 防止用户重复点击
+
+    try
+    {
+        // 开启后台任务
+        var result = await Task.Run(() =&gt; LongRunningOperation());
+
+        // 在后台任务完成后，自动切换回UI线程更新UI
+        LabelStatus.Text = $&quot;计算结果: {result}&quot;;
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($&quot;发生错误: {ex.Message}&quot;);
+    }
+    finally
+    {
+        button.IsEnabled = true; // 重新启用按钮
+    }
+}
+</code></pre>
 </section>
 
 
