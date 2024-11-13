@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="同样的业务代码，centos7 编译发布，运行正常，切换到 centos8 编译发布，程序发生崩溃。\n问题仅发生在 Release 模式，Debug 模式编译发布，程序都是正常的。\n第一次排查此类问题，组里断断续续，排查了三天，最终定位到问题。\n">
-<title>升级GCC版本导致的程序奔溃：代码不规范</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="在同一段业务代码的情况下，程序在 CentOS 7 环境下编译并运行正常，但当切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题只在 Release 模式下出现，Debug 模式则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。\n">
+<title>升级GCC版本导致程序崩溃：代码不规范的隐患</title>
 
-<link rel='canonical' href='https://ttf248.github.io/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%9A%84%E7%A8%8B%E5%BA%8F%E5%A5%94%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83/'>
+<link rel='canonical' href='https://ttf248.github.io/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83%E7%9A%84%E9%9A%90%E6%82%A3/'>
 
-<link rel="stylesheet" href="/scss/style.min.eb046260116c89ed8fa32594b081a56b1269b91313562e51de6358019e283b61.css"><meta property='og:title' content="升级GCC版本导致的程序奔溃：代码不规范">
-<meta property='og:description' content="同样的业务代码，centos7 编译发布，运行正常，切换到 centos8 编译发布，程序发生崩溃。\n问题仅发生在 Release 模式，Debug 模式编译发布，程序都是正常的。\n第一次排查此类问题，组里断断续续，排查了三天，最终定位到问题。\n">
-<meta property='og:url' content='https://ttf248.github.io/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%9A%84%E7%A8%8B%E5%BA%8F%E5%A5%94%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83/'>
+<link rel="stylesheet" href="/scss/style.min.eb046260116c89ed8fa32594b081a56b1269b91313562e51de6358019e283b61.css"><meta property='og:title' content="升级GCC版本导致程序崩溃：代码不规范的隐患">
+<meta property='og:description' content="在同一段业务代码的情况下，程序在 CentOS 7 环境下编译并运行正常，但当切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题只在 Release 模式下出现，Debug 模式则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。\n">
+<meta property='og:url' content='https://ttf248.github.io/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83%E7%9A%84%E9%9A%90%E6%82%A3/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:published_time' content='2024-03-10T23:19:06&#43;08:00'/><meta property='article:modified_time' content='2024-03-10T23:19:06&#43;08:00'/>
-<meta name="twitter:title" content="升级GCC版本导致的程序奔溃：代码不规范">
-<meta name="twitter:description" content="同样的业务代码，centos7 编译发布，运行正常，切换到 centos8 编译发布，程序发生崩溃。\n问题仅发生在 Release 模式，Debug 模式编译发布，程序都是正常的。\n第一次排查此类问题，组里断断续续，排查了三天，最终定位到问题。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='问题排查' /><meta property='article:published_time' content='2024-03-10T23:19:06&#43;08:00'/><meta property='article:modified_time' content='2024-03-10T23:19:06&#43;08:00'/>
+<meta name="twitter:title" content="升级GCC版本导致程序崩溃：代码不规范的隐患">
+<meta name="twitter:description" content="在同一段业务代码的情况下，程序在 CentOS 7 环境下编译并运行正常，但当切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题只在 Release 模式下出现，Debug 模式则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
   
@@ -243,11 +243,17 @@
         <div class="widget--toc">
             <nav id="TableOfContents">
   <ol>
-    <li><a href="#结论">结论</a></li>
-    <li><a href="#环境描述">环境描述</a></li>
-    <li><a href="#崩溃现场">崩溃现场</a></li>
-    <li><a href="#编译告警">编译告警</a></li>
-    <li><a href="#汇编代码">汇编代码</a></li>
+    <li>
+      <ol>
+        <li><a href="#问题定位">问题定位</a></li>
+        <li><a href="#环境说明">环境说明</a></li>
+        <li><a href="#崩溃现象">崩溃现象</a></li>
+        <li><a href="#代码示例">代码示例</a></li>
+        <li><a href="#编译警告">编译警告</a></li>
+        <li><a href="#汇编代码差异">汇编代码差异</a></li>
+        <li><a href="#结论">结论</a></li>
+      </ol>
+    </li>
   </ol>
 </nav>
         </div>
@@ -332,15 +338,13 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
     <div class="article-title-wrapper">
         <h2 class="article-title">
-            <a href="/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%9A%84%E7%A8%8B%E5%BA%8F%E5%A5%94%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83/">升级GCC版本导致的程序奔溃：代码不规范</a>
+            <a href="/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83%E7%9A%84%E9%9A%90%E6%82%A3/">升级GCC版本导致程序崩溃：代码不规范的隐患</a>
         </h2>
     
         
 
         
-        <h5 class="article-summary" style="display: none;"><p>同样的业务代码，centos7 编译发布，运行正常，切换到 centos8 编译发布，程序发生崩溃。</p>
-<p>问题仅发生在 Release 模式，Debug 模式编译发布，程序都是正常的。</p>
-<p>第一次排查此类问题，组里断断续续，排查了三天，最终定位到问题。</p></h5>
+        <h5 class="article-summary" style="display: none;"><p>在同一段业务代码的情况下，程序在 CentOS 7 环境下编译并运行正常，但当切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题只在 <strong>Release 模式</strong>下出现，<strong>Debug 模式</strong>则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。</p></h5>
         <script>
             document.addEventListener("DOMContentLoaded", function() {
                 if (typeof isHomepage !== 'undefined' && isHomepage === true) {
@@ -383,43 +387,43 @@ document.addEventListener("DOMContentLoaded", (event) => {
     <section class="article-content">
     
     
-    <p>同样的业务代码，centos7 编译发布，运行正常，切换到 centos8 编译发布，程序发生崩溃。</p>
-<p>问题仅发生在 Release 模式，Debug 模式编译发布，程序都是正常的。</p>
-<p>第一次排查此类问题，组里断断续续，排查了三天，最终定位到问题。</p>
-<h2 id="结论">结论
-</h2><p><strong>函数没有定义返回值，Release 模式下高版本gcc编译后有了更多的优化，导致了未知的执行逻辑，发生崩溃</strong>，GCC 的编译告警，记得处理，老项目不也建议全部屏蔽，屏蔽部分即可。</p>
-<h2 id="环境描述">环境描述
-</h2><p>centos7 gcc 版本</p>
-<pre><code class="language-shell">gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-39)
+    <p>在同一段业务代码的情况下，程序在 CentOS 7 环境下编译并运行正常，但当切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题只在 <strong>Release 模式</strong>下出现，<strong>Debug 模式</strong>则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。</p>
+<h3 id="问题定位">问题定位
+</h3><p>通过一番排查，问题的症结在于 <strong>函数缺少返回值</strong>。在 Release 模式下，GCC 新版本会进行更多的优化，这导致了原本没有显式返回值的函数在执行过程中出现了未知的逻辑，从而引发了崩溃。我们的结论是，<strong>编译器的警告不容忽视，尤其是在老项目中，部分警告可能被无视，但也应当避免屏蔽所有警告</strong>。</p>
+<h3 id="环境说明">环境说明
+</h3><ul>
+<li>
+<p><strong>CentOS 7 GCC版本：</strong></p>
+<pre><code class="language-bash">gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-39)
 Copyright © 2015 Free Software Foundation, Inc.
-本程序是自由软件；请参看源代码的版权声明。本软件没有任何担保；
-包括没有适销性和某一专用目的下的适用性担保。
 </code></pre>
-<p>centos8 gcc 版本</p>
-<pre><code class="language-shell">gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-21)
+</li>
+<li>
+<p><strong>CentOS 8 GCC版本：</strong></p>
+<pre><code class="language-bash">gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-21)
 Copyright (C) 2018 Free Software Foundation, Inc.
-This is free software; see the source for copying conditions.  There is NO
-warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 </code></pre>
-<h2 id="崩溃现场">崩溃现场
-</h2><p>此堆栈为问题定位以后，单独编写的测试代码，实际业务代码堆栈更加复杂。</p>
-<pre><code class="language-shell">[New LWP 1385902]
+</li>
+</ul>
+<h3 id="崩溃现象">崩溃现象
+</h3><p>我们在分析程序崩溃的堆栈时，看到的堆栈信息如下：</p>
+<pre><code class="language-bash">[New LWP 1385902]
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library &quot;/lib64/libthread_db.so.1&quot;.
-Core was generated by `./pstack_main'.
+Core was generated by `./pstack_main`.
 Program terminated with signal SIGSEGV, Segmentation fault.
 #0  0x00007ffe894b4420 in ?? ()
-Missing separate debuginfos, use: yum debuginfo-install glibc-2.28-251.el8.x86_64 libgcc-8.5.0-21.el8.x86_64 libstdc++-8.5.0-21.el8.x86_64
 (gdb) bt
 #0  0x00007ffe894b4420 in ?? ()
 #1  0x00000000004008e9 in main ()
 </code></pre>
-<p>看到这个堆栈，是不是没有什么头绪，崩溃的函数栈居然是个问号，下面是完整代码，你分析出来了问题吗？</p>
-<pre><code class="language-c++">#include &lt;iostream&gt;
+<p>这个堆栈看上去并不直观，崩溃函数的栈信息居然显示为一个 <code>??</code>，这让问题的排查变得更加复杂。</p>
+<h3 id="代码示例">代码示例
+</h3><p>为了更好地理解问题，下面是重现崩溃的最小代码示例：</p>
+<pre><code class="language-cpp">#include &lt;iostream&gt;
 #include &lt;map&gt;
 
-int test()
-{
+int test() {
     std::cout &lt;&lt; &quot;1&quot; &lt;&lt; std::endl;
 }
 
@@ -428,95 +432,28 @@ int main() {
     return 0;
 }
 </code></pre>
-<h2 id="编译告警">编译告警
-</h2><p>组内项目的基础 Cmake 脚本，屏蔽了很多告警信息，问题恰恰就是下面这个告警：
-<strong>函数没有定义返回值，Release 模式下高版本gcc编译后有了更多的优化，导致了未知的执行逻辑，发生崩溃</strong></p>
-<pre><code class="language-shell">[build] /root/pstack/main.cpp: In function ‘int test()’:
-[build] /root/pstack/main.cpp:7:1: warning: no return statement in function returning non-void [-Wreturn-type]
-[build]  }
-[build]  ^
-[build] [100%] Linking CXX executable pstack_main
-[build] [100%] Built target pstack_main
-[driver] Build completed: 00:00:00.554
-[build] Build finished with exit code 0
+<p>该代码中的 <code>test()</code> 函数显然没有显式返回一个值，而它的返回类型是 <code>int</code>。根据 C++ 规范，当一个函数声明为 <code>int</code> 类型时，必须有一个返回值，否则就可能导致未定义行为。</p>
+<h3 id="编译警告">编译警告
+</h3><p>在我们的项目中，CMake 脚本屏蔽了许多编译时警告，其中就包括了以下警告信息：</p>
+<pre><code class="language-shell">/root/pstack/main.cpp: In function ‘int test()’:
+/root/pstack/main.cpp:7:1: warning: no return statement in function returning non-void [-Wreturn-type]
 </code></pre>
-<h2 id="汇编代码">汇编代码
-</h2><p>仅供参考，没有具体的分析，可以很明显看到，高版本的 GCC 做了更多的优化，大幅减少了汇编的代码量。</p>
-<p>低版本 GCC-4.8.5 汇编代码：</p>
-<pre><code class="language-shell">.LC0:
-        .string &quot;1&quot;
-test():
-        pushq   %rbx
-        movl    $1, %edx
-        movl    $.LC0, %esi
-        movl    $std::cout, %edi
-        call    std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;&amp; std::__ostream_insert&lt;char, std::char_traits&lt;char&gt; &gt;(std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;&amp;, char const*, long)
-        movq    std::cout(%rip), %rax
-        movq    -24(%rax), %rax
-        movq    std::cout+240(%rax), %rbx
-        testq   %rbx, %rbx
-        je      .L7
-        cmpb    $0, 56(%rbx)
-        je      .L3
-        movzbl  67(%rbx), %eax
-.L4:
-        movsbl  %al, %esi
-        movl    $std::cout, %edi
-        call    std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;::put(char)
-        movq    %rax, %rdi
-        call    std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;::flush()
-        popq    %rbx
-        ret
-.L3:
-        movq    %rbx, %rdi
-        call    std::ctype&lt;char&gt;::_M_widen_init() const
-        movq    (%rbx), %rax
-        movl    $10, %esi
-        movq    %rbx, %rdi
-        call    *48(%rax)
-        jmp     .L4
-.L7:
-        call    std::__throw_bad_cast()
-main:
-        subq    $8, %rsp
-        call    test()
-        xorl    %eax, %eax
-        addq    $8, %rsp
-        ret
-_GLOBAL__sub_I_test():
-        subq    $8, %rsp
-        movl    $_ZStL8__ioinit, %edi
-        call    std::ios_base::Init::Init() [complete object constructor]
-        movl    $__dso_handle, %edx
-        movl    $_ZStL8__ioinit, %esi
-        movl    $_ZNSt8ios_base4InitD1Ev, %edi
-        addq    $8, %rsp
-        jmp     __cxa_atexit
-</code></pre>
-<p>高版本 GCC-8.5.0 汇编代码：</p>
-<pre><code class="language-shell">.LC0:
-        .string &quot;1&quot;
-test():
-        movl    $_ZSt4cout, %edi
-        subq    $8, %rsp
-        movl    $1, %edx
-        movl    $.LC0, %esi
-        call    std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;&amp; std::__ostream_insert&lt;char, std::char_traits&lt;char&gt; &gt;(std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;&amp;, char const*, long)
-        movl    $_ZSt4cout, %edi
-        call    std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;&amp; std::endl&lt;char, std::char_traits&lt;char&gt; &gt;(std::basic_ostream&lt;char, std::char_traits&lt;char&gt; &gt;&amp;)
-main:
-        subq    $8, %rsp
-        call    test()
-_GLOBAL__sub_I_test():
-        subq    $8, %rsp
-        movl    $_ZStL8__ioinit, %edi
-        call    std::ios_base::Init::Init() [complete object constructor]
-        movl    $__dso_handle, %edx
-        movl    $_ZStL8__ioinit, %esi
-        movl    $_ZNSt8ios_base4InitD1Ev, %edi
-        addq    $8, %rsp
-        jmp     __cxa_atexit
-</code></pre>
+<p>这一警告表明 <code>test()</code> 函数没有返回值，而这正是问题的根源。高版本的 GCC（如 8.5.0）在优化代码时可能会对这种未定义的行为做出不稳定的优化，从而导致程序崩溃。</p>
+<h3 id="汇编代码差异">汇编代码差异
+</h3><p>为了解释 GCC 编译器优化行为的差异，我们对比了不同版本 GCC 生成的汇编代码：</p>
+<ul>
+<li>
+<p><strong>GCC 4.8.5 生成的汇编代码：</strong></p>
+<p>汇编代码较为冗长，且包含了对标准输出流（如 <code>std::cout</code>）的处理逻辑。这表明编译器进行了更保守的优化，未对 <code>test()</code> 函数中缺失返回值的问题做过多优化，可能因此避免了崩溃。</p>
+</li>
+<li>
+<p><strong>GCC 8.5.0 生成的汇编代码：</strong></p>
+<p>新版本的 GCC 进行了更多的优化，减少了代码量。然而，这种优化可能使得缺少返回值的函数执行时行为不确定，从而导致程序崩溃。</p>
+</li>
+</ul>
+<h3 id="结论">结论
+</h3><p>通过这次问题排查，我们深刻认识到，在 C++ 中，<strong>函数返回值必须明确</strong>，特别是在函数声明为 <code>int</code> 时，必须提供一个返回值。对于使用较旧版本编译器的项目，升级到新版本的 GCC 时，可能会遇到更多的优化和更严格的警告机制。因此，我们建议在编译时 <strong>不要屏蔽所有警告</strong>，而是应该有选择性地处理它们，尤其是函数返回值、类型匹配等常见问题。</p>
+<p>最终，通过为 <code>test()</code> 函数添加一个返回值，问题得以解决，程序恢复了正常的运行。</p>
 </section>
 
 
@@ -527,6 +464,8 @@ _GLOBAL__sub_I_test():
             <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
         
             <a href="/tags/linux/">Linux</a>
+        
+            <a href="/tags/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/">问题排查</a>
         
     </section>
 
@@ -560,6 +499,19 @@ _GLOBAL__sub_I_test():
             
                 
 <article class="">
+    <a href="/p/linux%E5%90%8E%E7%AB%AF%E6%9C%8D%E5%8A%A1%E5%A4%84%E7%90%86%E5%A4%A7%E9%87%8F%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%95%B0%E6%8D%AE-%E6%95%88%E7%8E%87%E5%BE%88%E6%85%A2/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">linux后端服务处理大量字符串数据-效率很慢</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
     <a href="/p/c-%E7%BC%96%E7%A8%8B%E4%B8%AD%E7%9A%84%E9%99%B7%E9%98%B1%E9%94%99%E8%AF%AF%E4%BD%BF%E7%94%A8stdmap%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E8%AF%A6%E8%A7%A3/">
         
         
@@ -573,12 +525,12 @@ _GLOBAL__sub_I_test():
             
                 
 <article class="">
-    <a href="/p/c-%E5%87%BD%E6%95%B0%E8%B0%83%E7%94%A8%E8%80%97%E6%97%B6/">
+    <a href="/p/c-%E4%B8%ADlambd%E8%A1%A8%E8%BE%BE%E5%BC%8F%E5%8F%82%E6%95%B0%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F/">
         
         
 
         <div class="article-details">
-            <h2 class="article-title">C&#43;&#43;函数调用耗时</h2>
+            <h2 class="article-title">C&#43;&#43;中lambd表达式参数生命周期</h2>
         </div>
     </a>
 </article>
@@ -586,12 +538,12 @@ _GLOBAL__sub_I_test():
             
                 
 <article class="">
-    <a href="/p/linux%E7%B3%BB%E7%BB%9F%E8%B7%91%E5%88%86%E6%B5%8B%E8%AF%95/">
+    <a href="/p/vmware%E8%99%9A%E6%8B%9F%E6%9C%BAcpu%E8%B5%84%E6%BA%90%E5%8D%A0%E7%94%A8%E5%BC%82%E5%B8%B8/">
         
         
 
         <div class="article-details">
-            <h2 class="article-title">Linux系统跑分测试</h2>
+            <h2 class="article-title">vmware虚拟机cpu资源占用异常</h2>
         </div>
     </a>
 </article>
@@ -599,25 +551,12 @@ _GLOBAL__sub_I_test():
             
                 
 <article class="">
-    <a href="/p/c11-sleep-for-vs-yield/">
+    <a href="/p/pstack%E6%8E%92%E6%9F%A5%E8%BF%9B%E7%A8%8B%E5%81%87%E6%AD%BB/">
         
         
 
         <div class="article-details">
-            <h2 class="article-title">C11: sleep for vs yield</h2>
-        </div>
-    </a>
-</article>
-
-            
-                
-<article class="">
-    <a href="/p/%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%AD%A6%E4%B9%A0%E4%B8%80%E9%97%A8%E6%96%B0%E8%AF%AD%E8%A8%80/">
-        
-        
-
-        <div class="article-details">
-            <h2 class="article-title">为什么需要学习一门新语言</h2>
+            <h2 class="article-title">pstack排查进程假死</h2>
         </div>
     </a>
 </article>

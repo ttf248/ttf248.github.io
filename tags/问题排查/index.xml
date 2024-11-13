@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>问题排查 on 向叔记事簿</title>
+        <link>https://ttf248.github.io/tags/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/</link>
+        <description>Recent content in 问题排查 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Wed, 13 Nov 2024 19:42:59 +0800</lastBuildDate><atom:link href="https://ttf248.github.io/tags/%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>linux后端服务处理大量字符串数据-效率很慢</title>
+        <link>https://ttf248.github.io/p/linux%E5%90%8E%E7%AB%AF%E6%9C%8D%E5%8A%A1%E5%A4%84%E7%90%86%E5%A4%A7%E9%87%8F%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%95%B0%E6%8D%AE-%E6%95%88%E7%8E%87%E5%BE%88%E6%85%A2/</link>
+        <pubDate>Wed, 13 Nov 2024 19:42:59 +0800</pubDate>
+        
+        <guid>https://ttf248.github.io/p/linux%E5%90%8E%E7%AB%AF%E6%9C%8D%E5%8A%A1%E5%A4%84%E7%90%86%E5%A4%A7%E9%87%8F%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%95%B0%E6%8D%AE-%E6%95%88%E7%8E%87%E5%BE%88%E6%85%A2/</guid>
+        <description>&lt;p&gt;在C++开发的历史项目中，我们使用自定义协议进行通信，协议采用了二维数组的模式。在处理大量数据时，协议内部需要遍历数组并进行序列化操作以生成日志，由于效率较低，导致了系统在高负载下出现明显的卡顿，业务部门反馈系统卡顿。&lt;/p&gt;
+&lt;h2 id=&#34;问题定位&#34;&gt;问题定位
+&lt;/h2&gt;&lt;p&gt;在排查问题时，我们首先对系统进行了性能分析，发现系统在处理大量数据时，CPU 占用率明显增加，且系统响应时间变长。通过分析系统的日志，我们发现了大量的序列化操作，这些操作在处理二维数组时效率较低，导致了系统性能下降。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;pstack&lt;/code&gt;工具截取服务的线程信息，定位到日志线程大部分时间都在处理字符串的拼接。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;这里是今天的重点，不同的累加方式，效率差别巨大。历史代码中使用的是 &lt;code&gt;+&lt;/code&gt; 运算符，这种方式会频繁的创建临时对象，效率很低。你知道它效率很差，但你不知道它效率有多差的那种。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;demo-验证&#34;&gt;demo 验证
+&lt;/h2&gt;&lt;p&gt;基于项目代码，我们抽离业务逻辑，编写了一个简单的 demo，用于验证字符串拼接的效率问题。&lt;code&gt;windows&lt;/code&gt; 下的 &lt;code&gt;vs2022&lt;/code&gt; 编译器，&lt;code&gt;linux&lt;/code&gt; 下的 &lt;code&gt;gcc8.5&lt;/code&gt; 编译器，&lt;code&gt;Release&lt;/code&gt;模式下编译运行，对比效率。&lt;/p&gt;
+&lt;h3 id=&#34;关键点说明&#34;&gt;关键点说明
+&lt;/h3&gt;&lt;p&gt;项目使用的是方法四，在尚未拿到测试数据的时候，读者可以先思考一下，哪种方式效率最高？哪种方式效率最低？看到结果的时候，我还是很惊讶的。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;方法 1 (&lt;code&gt;+=&lt;/code&gt; 拼接)&lt;/strong&gt;：直接通过 &lt;code&gt;+=&lt;/code&gt; 将每个字段拼接到字符串中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 2 (&lt;code&gt;std::ostringstream&lt;/code&gt; 拼接)&lt;/strong&gt;：使用流（&lt;code&gt;std::ostringstream&lt;/code&gt;）来拼接每个字段，这种方法更高效，特别是对于大量数据拼接时。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 3（预分配内存的 &lt;code&gt;+=&lt;/code&gt; 拼接）&lt;/strong&gt;：通过 &lt;code&gt;reserve&lt;/code&gt; 提前为字符串分配足够的内存，减少了内存重新分配的开销，从而提升了性能。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 4 (&lt;code&gt;bodys = bodys + body + &amp;quot;\n&amp;quot;&lt;/code&gt;)&lt;/strong&gt;：每次拼接都创建一个新的临时字符串对象，这会导致性能下降，尤其是在大规模拼接时，因为每次拼接都会涉及一次新的内存分配和复制。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;参考结果，我们可以看到，项目刚好选中了效率最差的方式。&lt;/p&gt;
+&lt;p&gt;再进一步，我们来分析不同平台编译器的优化效率，微软的 &lt;code&gt;visual studio&lt;/code&gt; 一如既往的优秀，针对字符串的优化效率很高，而 &lt;code&gt;gcc&lt;/code&gt; 编译器在这方面的优化效率就差了一些。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;代码在不同的机器执行，两份数据没有直接的对比意义，可以分别对比不同拼接方法之间的差值。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;windows 平台下的 vs2022 编译器
+
+----------------------------------------
+Data Generation Time: 0.054 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.053 seconds.
++ ostringstream Data merging took: 0.054 seconds.
++ Pre-reserved Data merging took: 0.045 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 16.108 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;linux 平台下的 gcc8.5 编译器
+----------------------------------------
+Data Generation Time: 0.108 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.100 seconds.
++ ostringstream Data merging took: 0.083 seconds.
++ Pre-reserved Data merging took: 0.057 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 29.298 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;完整代码&#34;&gt;完整代码
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;string&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;random&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;sstream&amp;gt;
+#include &amp;lt;iomanip&amp;gt;
+
+typedef std::vector&amp;lt;std::string&amp;gt; DataRow;
+typedef std::vector&amp;lt;DataRow&amp;gt; DataGroup;
+
+struct ResponsePackage
+{
+    std::string ErrorInfo;
+    DataRow Head;
+    std::string ClientId;
+    std::string UUID;
+    std::string MsgID;
+    std::string SessionID;
+    std::string ExtraInfo1;
+    std::string ExtraInfo2;
+    DataGroup DataBody;
+};
+
+// Generate specified length of random string
+std::string generateRandomString(size_t length)
+{
+    const char charset[] = &amp;quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&amp;quot;;
+    const size_t max_index = sizeof(charset) - 1;
+    std::string random_string;
+    random_string.reserve(length);
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution&amp;lt;&amp;gt; distribution(0, max_index);
+
+    for (size_t i = 0; i &amp;lt; length; ++i)
+    {
+        random_string += charset[distribution(generator)];
+    }
+
+    return random_string;
+}
+
+void create_large_string()
+{
+    // Example request package with 50 fields
+    ResponsePackage requestPackage;
+
+    requestPackage.Head = {
+        &amp;quot;Field1&amp;quot;, &amp;quot;Field2&amp;quot;, &amp;quot;Field3&amp;quot;, &amp;quot;Field4&amp;quot;, &amp;quot;Field5&amp;quot;,
+        &amp;quot;Field6&amp;quot;, &amp;quot;Field7&amp;quot;, &amp;quot;Field8&amp;quot;, &amp;quot;Field9&amp;quot;, &amp;quot;Field10&amp;quot;,
+        &amp;quot;Field11&amp;quot;, &amp;quot;Field12&amp;quot;, &amp;quot;Field13&amp;quot;, &amp;quot;Field14&amp;quot;, &amp;quot;Field15&amp;quot;,
+        &amp;quot;Field16&amp;quot;, &amp;quot;Field17&amp;quot;, &amp;quot;Field18&amp;quot;, &amp;quot;Field19&amp;quot;, &amp;quot;Field20&amp;quot;,
+        &amp;quot;Field21&amp;quot;, &amp;quot;Field22&amp;quot;, &amp;quot;Field23&amp;quot;, &amp;quot;Field24&amp;quot;, &amp;quot;Field25&amp;quot;,
+        &amp;quot;Field26&amp;quot;, &amp;quot;Field27&amp;quot;, &amp;quot;Field28&amp;quot;, &amp;quot;Field29&amp;quot;, &amp;quot;Field30&amp;quot;,
+        &amp;quot;Field31&amp;quot;, &amp;quot;Field32&amp;quot;, &amp;quot;Field33&amp;quot;, &amp;quot;Field34&amp;quot;, &amp;quot;Field35&amp;quot;,
+        &amp;quot;Field36&amp;quot;, &amp;quot;Field37&amp;quot;, &amp;quot;Field38&amp;quot;, &amp;quot;Field39&amp;quot;, &amp;quot;Field40&amp;quot;,
+        &amp;quot;Field41&amp;quot;, &amp;quot;Field42&amp;quot;, &amp;quot;Field43&amp;quot;, &amp;quot;Field44&amp;quot;, &amp;quot;Field45&amp;quot;,
+        &amp;quot;Field46&amp;quot;, &amp;quot;Field47&amp;quot;, &amp;quot;Field48&amp;quot;, &amp;quot;Field49&amp;quot;, &amp;quot;Field50&amp;quot;
+    };
+
+    requestPackage.ClientId = &amp;quot;ClientID&amp;quot;;
+    requestPackage.UUID = &amp;quot;UUID&amp;quot;;
+    requestPackage.MsgID = &amp;quot;MsgID&amp;quot;;
+    requestPackage.SessionID = &amp;quot;SessionID&amp;quot;;
+    requestPackage.ExtraInfo1 = &amp;quot;ExtraInfo1&amp;quot;;
+    requestPackage.ExtraInfo2 = &amp;quot;ExtraInfo2&amp;quot;;
+
+    // Start timing for data generation
+    auto start_gen = std::chrono::high_resolution_clock::now();
+
+    // Generate 10,000 rows of data, each with 50 fields
+    for (size_t i = 0; i &amp;lt; 10000; ++i)
+    {
+        DataRow dataRow(50, &amp;quot;This is a test string&amp;quot;);
+        requestPackage.DataBody.push_back(dataRow);
+    }
+
+    // End timing for data generation
+    auto end_gen = std::chrono::high_resolution_clock::now();
+    std::chrono::duration&amp;lt;double&amp;gt; duration_gen = end_gen - start_gen;
+
+    // Display result generation time
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Generation Time: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_gen.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    // Data merging using different methods
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Performance:\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    {
+        // Method 1: Using &#39;+=&#39; string concatenation
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (+=) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 2: Using ostringstream
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::ostringstream bodys;
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::ostringstream body;
+            body &amp;lt;&amp;lt; &amp;quot;This is a test string&amp;quot;;
+            for (auto&amp;amp; item : vec)
+            {
+                body &amp;lt;&amp;lt; item &amp;lt;&amp;lt; &amp;quot; &amp;quot;;
+            }
+            bodys &amp;lt;&amp;lt; body.str() &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ ostringstream Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 3: Pre-allocated memory
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys;
+        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            body.reserve(50 * 20); // Pre-allocate memory for each row
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Pre-reserved Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 4: Using &#39;bodys = bodys + body + &amp;quot;\n&amp;quot;&#39;
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body = body + item + &amp;quot; &amp;quot;; // Note the use of &#39;body = body + item&#39;
+            }
+            bodys = bodys + body + &amp;quot;\n&amp;quot;; // Again, using &#39;bodys = bodys + body&#39;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (bodys = bodys + body + \&amp;quot;\\n\&amp;quot;) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Complete.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+}
+
+int main()
+{
+    try
+    {
+        create_large_string();
+    }
+    catch (const std::exception&amp;amp; e)
+    {
+        std::cerr &amp;lt;&amp;lt; &amp;quot;Caught exception: &amp;quot; &amp;lt;&amp;lt; e.what() &amp;lt;&amp;lt; std::endl;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\nProgram finished.\n&amp;quot;;
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
+        <title>升级GCC版本导致程序崩溃：代码不规范的隐患</title>
+        <link>https://ttf248.github.io/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83%E7%9A%84%E9%9A%90%E6%82%A3/</link>
+        <pubDate>Sun, 10 Mar 2024 23:19:06 +0800</pubDate>
+        
+        <guid>https://ttf248.github.io/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83%E7%9A%84%E9%9A%90%E6%82%A3/</guid>
+        <description>&lt;p&gt;在同一段业务代码的情况下，程序在 CentOS 7 环境下编译并运行正常，但当切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题只在 &lt;strong&gt;Release 模式&lt;/strong&gt;下出现，&lt;strong&gt;Debug 模式&lt;/strong&gt;则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。&lt;/p&gt;
+&lt;h3 id=&#34;问题定位&#34;&gt;问题定位
+&lt;/h3&gt;&lt;p&gt;通过一番排查，问题的症结在于 &lt;strong&gt;函数缺少返回值&lt;/strong&gt;。在 Release 模式下，GCC 新版本会进行更多的优化，这导致了原本没有显式返回值的函数在执行过程中出现了未知的逻辑，从而引发了崩溃。我们的结论是，&lt;strong&gt;编译器的警告不容忽视，尤其是在老项目中，部分警告可能被无视，但也应当避免屏蔽所有警告&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;环境说明&#34;&gt;环境说明
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CentOS 7 GCC版本：&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-39)
+Copyright © 2015 Free Software Foundation, Inc.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CentOS 8 GCC版本：&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-21)
+Copyright (C) 2018 Free Software Foundation, Inc.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;崩溃现象&#34;&gt;崩溃现象
+&lt;/h3&gt;&lt;p&gt;我们在分析程序崩溃的堆栈时，看到的堆栈信息如下：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;[New LWP 1385902]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library &amp;quot;/lib64/libthread_db.so.1&amp;quot;.
+Core was generated by `./pstack_main`.
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x00007ffe894b4420 in ?? ()
+(gdb) bt
+#0  0x00007ffe894b4420 in ?? ()
+#1  0x00000000004008e9 in main ()
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这个堆栈看上去并不直观，崩溃函数的栈信息居然显示为一个 &lt;code&gt;??&lt;/code&gt;，这让问题的排查变得更加复杂。&lt;/p&gt;
+&lt;h3 id=&#34;代码示例&#34;&gt;代码示例
+&lt;/h3&gt;&lt;p&gt;为了更好地理解问题，下面是重现崩溃的最小代码示例：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;map&amp;gt;
+
+int test() {
+    std::cout &amp;lt;&amp;lt; &amp;quot;1&amp;quot; &amp;lt;&amp;lt; std::endl;
+}
+
+int main() {
+    test();
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;该代码中的 &lt;code&gt;test()&lt;/code&gt; 函数显然没有显式返回一个值，而它的返回类型是 &lt;code&gt;int&lt;/code&gt;。根据 C++ 规范，当一个函数声明为 &lt;code&gt;int&lt;/code&gt; 类型时，必须有一个返回值，否则就可能导致未定义行为。&lt;/p&gt;
+&lt;h3 id=&#34;编译警告&#34;&gt;编译警告
+&lt;/h3&gt;&lt;p&gt;在我们的项目中，CMake 脚本屏蔽了许多编译时警告，其中就包括了以下警告信息：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;/root/pstack/main.cpp: In function ‘int test()’:
+/root/pstack/main.cpp:7:1: warning: no return statement in function returning non-void [-Wreturn-type]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这一警告表明 &lt;code&gt;test()&lt;/code&gt; 函数没有返回值，而这正是问题的根源。高版本的 GCC（如 8.5.0）在优化代码时可能会对这种未定义的行为做出不稳定的优化，从而导致程序崩溃。&lt;/p&gt;
+&lt;h3 id=&#34;汇编代码差异&#34;&gt;汇编代码差异
+&lt;/h3&gt;&lt;p&gt;为了解释 GCC 编译器优化行为的差异，我们对比了不同版本 GCC 生成的汇编代码：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;GCC 4.8.5 生成的汇编代码：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;汇编代码较为冗长，且包含了对标准输出流（如 &lt;code&gt;std::cout&lt;/code&gt;）的处理逻辑。这表明编译器进行了更保守的优化，未对 &lt;code&gt;test()&lt;/code&gt; 函数中缺失返回值的问题做过多优化，可能因此避免了崩溃。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;GCC 8.5.0 生成的汇编代码：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;新版本的 GCC 进行了更多的优化，减少了代码量。然而，这种优化可能使得缺少返回值的函数执行时行为不确定，从而导致程序崩溃。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;结论&#34;&gt;结论
+&lt;/h3&gt;&lt;p&gt;通过这次问题排查，我们深刻认识到，在 C++ 中，&lt;strong&gt;函数返回值必须明确&lt;/strong&gt;，特别是在函数声明为 &lt;code&gt;int&lt;/code&gt; 时，必须提供一个返回值。对于使用较旧版本编译器的项目，升级到新版本的 GCC 时，可能会遇到更多的优化和更严格的警告机制。因此，我们建议在编译时 &lt;strong&gt;不要屏蔽所有警告&lt;/strong&gt;，而是应该有选择性地处理它们，尤其是函数返回值、类型匹配等常见问题。&lt;/p&gt;
+&lt;p&gt;最终，通过为 &lt;code&gt;test()&lt;/code&gt; 函数添加一个返回值，问题得以解决，程序恢复了正常的运行。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>vmware虚拟机cpu资源占用异常</title>
+        <link>https://ttf248.github.io/p/vmware%E8%99%9A%E6%8B%9F%E6%9C%BAcpu%E8%B5%84%E6%BA%90%E5%8D%A0%E7%94%A8%E5%BC%82%E5%B8%B8/</link>
+        <pubDate>Sun, 10 Mar 2024 22:14:59 +0800</pubDate>
+        
+        <guid>https://ttf248.github.io/p/vmware%E8%99%9A%E6%8B%9F%E6%9C%BAcpu%E8%B5%84%E6%BA%90%E5%8D%A0%E7%94%A8%E5%BC%82%E5%B8%B8/</guid>
+        <description>&lt;p&gt;背景：本地机器部署 windows 版本的业务系统，cpu 资源占用 5% 左右。vmware安装的 centos8 中部署 linux 版本业务系统，资源占用异常。&lt;/p&gt;
+&lt;h2 id=&#34;问题描述&#34;&gt;问题描述
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;宿主机：win10 企业版&lt;/li&gt;
+&lt;li&gt;vmware：17.5&lt;/li&gt;
+&lt;li&gt;虚拟机：centos8&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;虚拟机资源分配为&lt;code&gt;4C8GB&lt;/code&gt;，启动业务系统。业务系统部署在虚拟机Linux系统中，虚拟机内部 top 命令观察系统资源占用，cpu 占用并不高，外层 windows 系统，任务管理器观察到的CPU资源占用很高，查看进程发现，vmware 进程占用CPU资源很高。&lt;/p&gt;
+&lt;p&gt;+&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+
+|         Windows           |
+|                           |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|   |      VMware        |  |
+|   |      Program       |  |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|                           |
++&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+&lt;/p&gt;
+&lt;h2 id=&#34;知识点&#34;&gt;知识点
+&lt;/h2&gt;&lt;p&gt;此问题的排查，并不顺利，由于导火索并不是业务系统本身，而是虚拟机本身的问题。如何将思路从常规的业务代码转移到系统负载，再从负载数据的异常，定位到软中断，最后来到关键点，什么东西会影响 Vmware 软中断的工作效率？本文将先科普各个知识点，最后给出解决方案。&lt;/p&gt;
+&lt;h3 id=&#34;hyper-v&#34;&gt;hyper-v
+&lt;/h3&gt;&lt;p&gt;Windows操作系统的虚拟化技术经历了一次重大变革。在微软首次发布WSL时，启用Hyper-V服务会导致无法同时使用VMware虚拟机。直到后续版本，VMware才能与Hyper-V服务兼容。&lt;/p&gt;
+&lt;h3 id=&#34;系统负载&#34;&gt;系统负载
+&lt;/h3&gt;&lt;p&gt;在Linux系统中，&amp;ldquo;负载&amp;rdquo;（load）是指系统中正在运行或等待执行的进程的数量。负载通常由三个数字表示，分别是1分钟、5分钟和15分钟内运行队列中的平均进程数量。这些数字可以通过运行&amp;quot;uptime&amp;quot;命令或&amp;quot;top&amp;quot;命令来查看。&lt;/p&gt;
+&lt;p&gt;具体来说，这三个数字分别代表：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;1分钟负载&lt;/strong&gt;：系统在过去1分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;5分钟负载&lt;/strong&gt;：系统在过去5分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;15分钟负载&lt;/strong&gt;：系统在过去15分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;负载的含义是在系统中等待运行的进程数。如果这个数字高于系统的逻辑CPU数量，表明系统负载很高，意味着有许多进程正在等待处理器资源。这可能会导致系统变得缓慢或不响应，具体取决于负载的高低程度以及系统的配置和性能。&lt;/p&gt;
+&lt;p&gt;在理想情况下，负载应该保持在系统的逻辑CPU数量范围内，这样系统的性能就能够得到最优化。如果负载持续高于CPU数量，可能需要进一步分析系统中的进程，找出导致负载高的原因，并采取相应的措施来调整系统资源分配或优化进程的运行方式。&lt;/p&gt;
+&lt;h3 id=&#34;分析负载-mpstat&#34;&gt;分析负载 mpstat
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;mpstat&lt;/code&gt; 命令用于报告单个或多个处理器的多个信息，包括平均负载、CPU利用率、中断和上下文切换等。在 &lt;code&gt;sysstat&lt;/code&gt; 包中，&lt;code&gt;mpstat&lt;/code&gt; 是非常有用的工具，可以用来分析系统的负载情况。下面是使用 &lt;code&gt;mpstat&lt;/code&gt; 进行负载分析的步骤：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;安装 sysstat&lt;/strong&gt;：
+如果您的系统上没有安装 &lt;code&gt;sysstat&lt;/code&gt;，可以使用适合您系统的包管理工具进行安装。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;运行 mpstat&lt;/strong&gt;：
+使用 &lt;code&gt;mpstat&lt;/code&gt; 命令查看 CPU 的使用情况和负载。默认情况下，&lt;code&gt;mpstat&lt;/code&gt; 每秒钟显示一次 CPU 使用情况的平均值。您可以通过指定时间间隔来调整输出频率。例如，要以每秒钟一次的频率运行 &lt;code&gt;mpstat&lt;/code&gt;，可以使用以下命令：&lt;code&gt;mpstat -P ALL 2&lt;/code&gt;，&lt;code&gt;irq&lt;/code&gt; 表示占用资源占用&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;01:32:33 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+01:32:35 PM  all    0.00    0.00    0.26    0.00    3.73    0.26    0.00    0.00    0.00   95.76
+01:32:35 PM    0    0.00    0.00    0.51    0.00    3.57    0.00    0.00    0.00    0.00   95.92
+01:32:35 PM    1    0.00    0.00    0.00    0.00    3.59    0.51    0.00    0.00    0.00   95.90
+01:32:35 PM    2    0.00    0.00    0.00    0.00    4.15    0.00    0.00    0.00    0.00   95.85
+01:32:35 PM    3    0.00    0.00    0.52    0.00    3.61    0.52    0.00    0.00    0.00   95.36
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;分析输出&lt;/strong&gt;：
+&lt;code&gt;mpstat&lt;/code&gt; 的输出包括了每个 CPU 的利用率，以及系统的平均负载。特别关注平均负载以及每个 CPU 的利用率，可以帮助您了解系统的负载情况。如果负载较高，可以进一步分析是哪些进程导致的，以及是否存在性能瓶颈。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;结合其他工具&lt;/strong&gt;：
+除了 &lt;code&gt;mpstat&lt;/code&gt;，还可以使用 &lt;code&gt;sar&lt;/code&gt;、&lt;code&gt;pidstat&lt;/code&gt;、&lt;code&gt;iostat&lt;/code&gt; 等工具来综合分析系统性能。通过结合多种工具的输出，可以更全面地了解系统的负载情况，并找出性能问题的根源。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;中断&#34;&gt;中断
+&lt;/h3&gt;&lt;p&gt;此处不展开讲解内容太多，
+推荐: &lt;a class=&#34;link&#34; href=&#34;https://www.codedump.info/post/20200522-sgfap-softirq/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;《面向应用开发者的系统指南》CPU篇之软中断&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;频繁的触发软中断，也会体现在系统负载中。&lt;/p&gt;
+&lt;h2 id=&#34;问题排查&#34;&gt;问题排查
+&lt;/h2&gt;&lt;p&gt;考虑到仅从CPU角度分析无法定位问题，我们是否应该开始怀疑系统是否出现了异常？可能是Linux操作系统的负载过高，导致VMware占用了过多的CPU资源。通过使用&lt;code&gt;mpstat&lt;/code&gt;分析本地虚拟机，我们发现&lt;code&gt;irq&lt;/code&gt;占用异常，单核接近25%，而在正常情况下，启动业务进程空跑时，&lt;code&gt;irq&lt;/code&gt;占比应该约为5%。&lt;/p&gt;
+&lt;p&gt;在组内同事的开发环境中，他的CentOS 7部署在VMware上，资源占用显示正常。另一方面，在上海的开发环境中，虽然也是VMware，但我们无法直接观察宿主机的CPU资源情况。这时，我们面临着多个变量：VMware虚拟机、Linux操作系统和GCC版本。&lt;/p&gt;
+&lt;p&gt;转而分析测试环境，深圳的测试环境部署在物理机上，运行着低版本GCC编译的服务，而且在CentOS 8上运行。有趣的是，在深圳环境中，&lt;code&gt;irq&lt;/code&gt;占用都是正常的。&lt;/p&gt;
+&lt;p&gt;为了排查GCC版本引入的问题，我们将使用高版本GCC编译的程序部署到深圳环境进行测试，结果显示也都是正常的。&lt;/p&gt;
+&lt;p&gt;问题似乎变得更加明朗，我们开始怀疑操作系统是否存在问题。毕竟，CentOS 8已经不再受到官方支持。但即便重新部署了纯净的CentOS 7和CentOS 8，问题依然存在。&lt;/p&gt;
+&lt;p&gt;此时，我们开始怀疑唯一的不确定因素，即VMware虚拟机软件。突然间，灵光一现，我们想到了Hyper-V技术。是否之前启用了Hyper-V，但没有彻底关闭，从而导致了这个问题？毕竟，软中断也是通过虚拟机软件来实现的。不同的虚拟机虚拟技术是否存在BUG？这些问题值得深入思考和调查。&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论
+&lt;/h2&gt;&lt;p&gt;根据微软官方的手册，我们完全关闭了本机的Hyper-V服务后，发现VMware在宿主机上恢复了正常。至此，问题终于迎刃而解。正如一开始所述，这段经历曲折而艰辛，需要综合性的分析和判断。这也是我们首次排查问题，定位到了虚拟机这一层面。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor
+bcdedit /set hypervisorlaunchtype off
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>C&#43;&#43;编程中的陷阱：错误使用`std::map`导致程序崩溃详解</title>
+        <link>https://ttf248.github.io/p/c-%E7%BC%96%E7%A8%8B%E4%B8%AD%E7%9A%84%E9%99%B7%E9%98%B1%E9%94%99%E8%AF%AF%E4%BD%BF%E7%94%A8stdmap%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E8%AF%A6%E8%A7%A3/</link>
+        <pubDate>Sun, 10 Mar 2024 22:03:06 +0800</pubDate>
+        
+        <guid>https://ttf248.github.io/p/c-%E7%BC%96%E7%A8%8B%E4%B8%AD%E7%9A%84%E9%99%B7%E9%98%B1%E9%94%99%E8%AF%AF%E4%BD%BF%E7%94%A8stdmap%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E8%AF%A6%E8%A7%A3/</guid>
+        <description>&lt;p&gt;本文旨在揭示在C++编程中不正确使用&lt;code&gt;std::map&lt;/code&gt;容器可能导致程序崩溃，通过中括号操作符尝试访问不存在的键时，会自动添加一个空元素。我们将深入剖析这一误解，并通过实例代码展示其潜在风险。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;正文&#34;&gt;正文
+&lt;/h2&gt;&lt;p&gt;在C++标准库中，&lt;code&gt;std::map&lt;/code&gt;是一种关联容器，它按照键（key）的升序存储元素，并提供了高效的关键字查找功能。然而，新手开发者有时会因为对&lt;code&gt;std::map&lt;/code&gt;中括号操作符 &lt;code&gt;[]&lt;/code&gt; 的行为理解有误而陷入困境。实际上，当使用 &lt;code&gt;[]&lt;/code&gt; 访问一个不存在的键时，&lt;code&gt;std::map&lt;/code&gt; 会插入一个新的键值对，且默认构造函数将会用来初始化该键对应的值类型。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;map&amp;gt;
+
+int main() {
+    std::map&amp;lt;std::string, int&amp;gt; myMap;
+    
+    // 错误的用法：假设这里试图访问一个不存在的键并认为会得到0
+    std::cout &amp;lt;&amp;lt; &amp;quot;Value for &#39;nonexistent_key&#39;: &amp;quot; &amp;lt;&amp;lt; myMap[&amp;quot;nonexistent_key&amp;quot;] &amp;lt;&amp;lt; std::endl;
+
+    // 实际上，上述行代码创建了一个新的键值对，其中值被默认初始化为int的默认值（通常是0）
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;以上代码虽然没有直接导致程序崩溃，但这种隐式的插入行为在某些情况下可能导致意料之外的副作用，例如资源泄漏或不符合预期的状态变更。更糟糕的是，在多线程环境下并发访问未初始化的内存区域，甚至可能导致程序崩溃。&lt;/p&gt;
+&lt;p&gt;为了防止此类问题，推荐使用 &lt;code&gt;std::map::find()&lt;/code&gt; 或 &lt;code&gt;std::map::count()&lt;/code&gt; 方法来检查键是否存在，或者利用 &lt;code&gt;std::map::insert()&lt;/code&gt; 明确地插入元素：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;std::map&amp;lt;std::string, int&amp;gt; safeMap;
+if (safeMap.count(&amp;quot;nonexistent_key&amp;quot;) == 0) {
+    std::cout &amp;lt;&amp;lt; &amp;quot;Key does not exist.&amp;quot; &amp;lt;&amp;lt; std::endl;
+} else {
+    std::cout &amp;lt;&amp;lt; &amp;quot;Value for existing key: &amp;quot; &amp;lt;&amp;lt; safeMap[&amp;quot;nonexistent_key&amp;quot;] &amp;lt;&amp;lt; std::endl;
+}
+
+// 或者明确插入一个键值对，指定初始值
+safeMap.insert({ &amp;quot;new_key&amp;quot;, 0 });
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果 map 容器内部保存的对象为指针类型，自动插入元素的行为将保存一个未初始化的指针，调用到此指针的任何操作都将导致程序崩溃。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>pstack排查进程假死</title>
+        <link>https://ttf248.github.io/p/pstack%E6%8E%92%E6%9F%A5%E8%BF%9B%E7%A8%8B%E5%81%87%E6%AD%BB/</link>
+        <pubDate>Sat, 24 Feb 2024 23:55:59 +0800</pubDate>
+        
+        <guid>https://ttf248.github.io/p/pstack%E6%8E%92%E6%9F%A5%E8%BF%9B%E7%A8%8B%E5%81%87%E6%AD%BB/</guid>
+        <description>&lt;p&gt;在软件开发和运维中，经常会遇到进程假死的情况，这种情况会导致系统性能下降或者服务不可用。本文介绍如何使用 pstack 工具来排查进程假死问题，通过分析进程的堆栈信息，找出问题的原因并解决。&lt;/p&gt;
+&lt;p&gt;背景：风控系统子服务出现假死，导致风控服务不可用。由于缺乏服务可用性监控，无法及时发现进程假死的情况，导致系统不可用。&lt;/p&gt;
+&lt;h2 id=&#34;正文&#34;&gt;正文
+&lt;/h2&gt;&lt;p&gt;进程假死是指进程停止响应，但并没有退出的状态。这种情况可能由于多种原因引起，比如死锁、资源耗尽、异常等。为了解决这类问题，我们可以使用 pstack 工具来分析进程的堆栈信息，找出问题的根源。&lt;/p&gt;
+&lt;h2 id=&#34;步骤&#34;&gt;步骤
+&lt;/h2&gt;&lt;p&gt;pstack 是一个常用的工具，通常随着 gdb（GNU 调试器）一起提供。你可以通过以下命令安装它：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;sudo apt-get install gdb
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;获取进程ID：首先，我们需要获取假死进程的进程ID（PID）。可以使用 ps 命令来列出所有进程，并找到需要排查的进程ID。
+使用 pstack 工具分析进程堆栈，一旦获取到进程ID，就可以使用 pstack 工具来获取该进程的堆栈信息。运行以下命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;pstack &amp;lt;PID&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这将输出该进程的堆栈信息，显示出当前正在执行的函数调用序列。通过分析这些信息，可以发现进程停滞的位置，进而定位问题。&lt;/p&gt;
+&lt;p&gt;分析堆栈信息，通过查看堆栈信息，可以找到导致进程假死的原因。可能会发现一些死锁情况、无限循环或者其他异常情况。根据具体情况采取相应的措施，比如释放锁、修复代码逻辑等。&lt;/p&gt;
+&lt;h2 id=&#34;案例&#34;&gt;案例
+&lt;/h2&gt;&lt;p&gt;简单 demo，main 函数启动以后，新建子线程，实际执行函数进入死循环，导致程序无法正常结束，陷入假死的状态。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cmake_minimum_required(VERSION 3.0.0)
+project(pstack_main VERSION 0.1.0 LANGUAGES C CXX)
+
+include(CTest)
+enable_testing()
+
+# 查找线程库
+find_package(Threads REQUIRED)
+
+add_executable(pstack_main main.cpp)
+
+# 链接线程库
+target_link_libraries(pstack_main PRIVATE Threads::Threads)
+
+set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+include(CPack)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;thread&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+
+void infiniteLoop() {
+    while (true) {
+        // 主线程进入死循环
+    }
+}
+
+int main() {
+    std::thread thread(infiniteLoop); // 创建一个线程，执行死循环函数
+    thread.join(); // 等待线程结束
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;启动程序，执行 pstack 结果：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Thread 2 (Thread 0x7eff3619b700 (LWP 1315017)):
+#0  infiniteLoop () at /root/pstack/main.cpp:6
+#1  0x0000000000402ca9 in std::__invoke_impl&amp;lt;void, void (*)()&amp;gt; (__f=@0x2260eb8: 0x4029a6 &amp;lt;infiniteLoop()&amp;gt;) at /usr/include/c++/8/bits/invoke.h:60
+#2  0x0000000000402b02 in std::__invoke&amp;lt;void (*)()&amp;gt; (__fn=@0x2260eb8: 0x4029a6 &amp;lt;infiniteLoop()&amp;gt;) at /usr/include/c++/8/bits/invoke.h:95
+#3  0x0000000000403150 in std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt;::_M_invoke&amp;lt;0ul&amp;gt; (this=0x2260eb8) at /usr/include/c++/8/thread:244
+#4  0x0000000000403126 in std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt;::operator() (this=0x2260eb8) at /usr/include/c++/8/thread:253
+#5  0x000000000040310a in std::thread::_State_impl&amp;lt;std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt; &amp;gt;::_M_run (this=0x2260eb0) at /usr/include/c++/8/thread:196
+#6  0x00007eff36bceb23 in execute_native_thread_routine () from /lib64/libstdc++.so.6
+#7  0x00007eff36ea91ca in start_thread () from /lib64/libpthread.so.0
+#8  0x00007eff361d58d3 in clone () from /lib64/libc.so.6
+Thread 1 (Thread 0x7eff372e1740 (LWP 1315016)):
+#0  0x00007eff36eaa6cd in __pthread_timedjoin_ex () from /lib64/libpthread.so.0
+#1  0x00007eff36bceda7 in std::thread::join() () from /lib64/libstdc++.so.6
+#2  0x00000000004029d2 in main () at /root/pstack/main.cpp:13
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;可以看到，进程假死的原因是死循环，主线程进入死循环，子线程无法退出，导致进程假死。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
