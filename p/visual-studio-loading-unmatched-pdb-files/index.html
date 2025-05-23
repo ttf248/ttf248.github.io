@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="windows 下，使用 visual studio 调试程序时，如果 pdb 文件与可执行文件不匹配，visual studio 会提示“无法加载符号文件”。程序运行发生崩溃，落地 dump 文件，如果是不匹配的 pdb 文件，visual studio 也无法顺利的进入崩溃现场。\n">
+<title>visual studio 加载“不配套”的 pdb 文件</title>
+
+<link rel='canonical' href='https://ttf248.life/p/visual-studio-loading-unmatched-pdb-files/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="visual studio 加载“不配套”的 pdb 文件">
+<meta property='og:description' content="windows 下，使用 visual studio 调试程序时，如果 pdb 文件与可执行文件不匹配，visual studio 会提示“无法加载符号文件”。程序运行发生崩溃，落地 dump 文件，如果是不匹配的 pdb 文件，visual studio 也无法顺利的进入崩溃现场。\n">
+<meta property='og:url' content='https://ttf248.life/p/visual-studio-loading-unmatched-pdb-files/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='visual studio' /><meta property='article:tag' content='pdb' /><meta property='article:tag' content='调试' /><meta property='article:tag' content='问题排查' /><meta property='article:published_time' content='2025-01-23T20:04:33&#43;08:00'/><meta property='article:modified_time' content='2025-05-24T01:17:11&#43;08:00'/>
+<meta name="twitter:title" content="visual studio 加载“不配套”的 pdb 文件">
+<meta name="twitter:description" content="windows 下，使用 visual studio 调试程序时，如果 pdb 文件与可执行文件不匹配，visual studio 会提示“无法加载符号文件”。程序运行发生崩溃，落地 dump 文件，如果是不匹配的 pdb 文件，visual studio 也无法顺利的进入崩溃现场。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">向叔记事簿</a></h1>
+            <h2 class="site-description">拾光记事，岁月有痕</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>首页</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#什么是-pdb-文件">什么是 pdb 文件</a></li>
+    <li><a href="#windbg-调试">WinDbg 调试</a></li>
+    <li><a href="#visual-studio-加载不匹配的-pdb-文件">visual studio 加载不匹配的 pdb 文件</a></li>
+    <li><a href="#使用-chkmatch">使用 chkmatch</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/computer/" >
+                计算机
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/visual-studio-loading-unmatched-pdb-files/">visual studio 加载“不配套”的 pdb 文件</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>windows 下，使用 visual studio 调试程序时，如果 pdb 文件与可执行文件不匹配，visual studio 会提示“无法加载符号文件”。程序运行发生崩溃，落地 dump 文件，如果是不匹配的 pdb 文件，visual studio 也无法顺利的进入崩溃现场。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2025年01月23日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约4分钟，共806字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>windows 下，使用 visual studio 调试程序时，如果 pdb 文件与可执行文件不匹配，visual studio 会提示“无法加载符号文件”。程序运行发生崩溃，落地 dump 文件，如果是不匹配的 pdb 文件，visual studio 也无法顺利的进入崩溃现场。</p>
+<h2 id="什么是-pdb-文件">什么是 pdb 文件
+</h2><p>PDB 文件是微软的一种调试信息文件，用于调试程序。PDB 文件包含了程序的符号表、源代码文件名、行号等信息。在程序编译时，可以生成 PDB 文件，用于调试程序。</p>
+<h2 id="windbg-调试">WinDbg 调试
+</h2><p>WinDbg 是微软的一款调试工具，可以用于调试 windows 程序。WinDbg 可以加载不匹配的 pdb 文件，但是需要手动加载。<code>.reload /f /i</code> 命令可以强制加载不匹配的 pdb 文件。</p>
+<p>但是 WinDbg 使用起来不如 visual studio 方便，所以我们希望 visual studio 也能加载不匹配的 pdb 文件。</p>
+<h2 id="visual-studio-加载不匹配的-pdb-文件">visual studio 加载不匹配的 pdb 文件
+</h2><p>源码现在一般都是通过 git 管理，完全能找到对应版本的代码，重新编译，生成对应的 pdb 文件。为什么无法加载呢？主要是一些元数据无法匹配。</p>
+<p>有个小工具，可以修改元数据，基于 exe 文件信息，生成一个新的 pdb 文件，使得 visual studio 能够加载。</p>
+<p>chkmatch 下载地址：<a class="link" href="https://www.debuginfo.com/tools/chkmatch.html"  target="_blank" rel="noopener"
+    >https://www.debuginfo.com/tools/chkmatch.html</a></p>
+<p>站点缓存地址：<a class="link" href="chkmatch.zip" >chkmatch.zip</a></p>
+<pre><code class="language-shell">ChkMatch utility can be used to check whether an executable and debug information file match. It can also be used to enforce matching between an executable and debug information file, if they are compatible.
+
+For more information about debug information matching and related issues, see this article.
+
+Supported debug information formats: DBG, PDB 2.0, PDB 7.0.
+
+chkmatch [-c ExeFile DebugInfoFile ] |
+         [-m ExeFile DebugInfoFile]
+-c
+Check matching between the executable and the debug information file.
+-m
+Make the executable and the debug information file match.
+ExeFile
+The name of the executable file.
+DebugInfoFile
+The name of the debug information file.
+</code></pre>
+<h2 id="使用-chkmatch">使用 chkmatch
+</h2><p>先执行检查操作，分析不匹配的原因，提示签名不匹配。</p>
+<pre><code class="language-shell">C:\Users\tianlong.xiang\Downloads\chkmatch&gt;ChkMatch.exe -c &quot;D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe&quot; E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+ChkMatch - version 1.0
+Copyright (C) 2004 Oleg Starodumov
+http://www.debuginfo.com/
+
+
+Executable: D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe
+Debug info file: E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+
+Executable:
+TimeDateStamp: c26d9be3
+Debug info: 2 ( CodeView )
+TimeStamp: f86b0a4f  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 122  RVA: 001cdc44  FileOffset: 001cbe44
+CodeView format: RSDS
+Signature: {428c9b95-39a3-4a8d-a8e5-7be453684757}  Age: 1
+PdbFile: D:\stock_UAT\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\obj\Release\YinTrade.Main.pdb
+Debug info: 16 ( Unknown )
+TimeStamp: 00000000  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 0  RVA: 00000000  FileOffset: 00000000
+
+Debug information file:
+Format: PDB 7.00
+Signature: {06fae08e-c0a2-4f3d-9c7c-dfc684445dd1}  Age: 1
+
+Result: Unmatched (reason: Signature mismatch)
+</code></pre>
+<p>然后执行修改操作，使得 pdb 文件与 exe 文件匹配。</p>
+<pre><code class="language-shell">C:\Users\tianlong.xiang\Downloads\chkmatch&gt;ChkMatch.exe -m &quot;D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe&quot; E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+ChkMatch - version 1.0
+Copyright (C) 2004 Oleg Starodumov
+http://www.debuginfo.com/
+
+
+Executable: D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe
+Debug info file: E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+
+Executable:
+TimeDateStamp: c26d9be3
+Debug info: 2 ( CodeView )
+TimeStamp: f86b0a4f  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 122  RVA: 001cdc44  FileOffset: 001cbe44
+CodeView format: RSDS
+Signature: {428c9b95-39a3-4a8d-a8e5-7be453684757}  Age: 1
+PdbFile: D:\stock_UAT\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\obj\Release\YinTrade.Main.pdb
+Debug info: 16 ( Unknown )
+TimeStamp: 00000000  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 0  RVA: 00000000  FileOffset: 00000000
+
+Debug information file:
+Format: PDB 7.00
+Signature: {06fae08e-c0a2-4f3d-9c7c-dfc684445dd1}  Age: 1
+
+Writing to the debug information file...
+Result: Success.
+</code></pre>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://stackoverflow.com/questions/38147487/forcing-to-load-unmatched-symbols-in-visual-studio-2015-debugger"  target="_blank" rel="noopener"
+    >forcing-to-load-unmatched-symbols-in-visual-studio-2015-debugger</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/visual-studio/">visual studio</a>
+        
+            <a href="/tags/pdb/">pdb</a>
+        
+            <a href="/tags/debugging/">调试</a>
+        
+            <a href="/tags/troubleshooting/">问题排查</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 2025年05月24日 01:17
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+        renderMathInElement(document.body, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/p/protobuf-zero-value-traps/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Protobuf零值陷阱：当默认值成为业务逻辑的隐形杀手</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/p/backend-service-tcp-communication-troubleshooting/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">后台服务TCP通讯异常排查</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/p/using-atop-to-monitor-linux-system-metrics-installation-configuration-and-usage-guide/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">用atop工具监控Linux系统指标：安装、配置与使用全攻略</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/p/linux-backend-slow-string-processing/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">linux后端服务处理大量字符串数据-效率很慢</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/p/win11-logitech-g431-headphone-driver-installation/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Win11 Logitech G431 耳机驱动安装</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.29.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
