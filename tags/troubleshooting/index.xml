@@ -1,0 +1,1211 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>问题排查 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/troubleshooting/</link>
+        <description>Recent content in 问题排查 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language><atom:link href="https://ttf248.life/tags/troubleshooting/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Protobuf零值陷阱：当默认值成为业务逻辑的隐形杀手</title>
+        <link>https://ttf248.life/p/protobuf%E9%9B%B6%E5%80%BC%E9%99%B7%E9%98%B1%E5%BD%93%E9%BB%98%E8%AE%A4%E5%80%BC%E6%88%90%E4%B8%BA%E4%B8%9A%E5%8A%A1%E9%80%BB%E8%BE%91%E7%9A%84%E9%9A%90%E5%BD%A2%E6%9D%80%E6%89%8B/</link>
+        <pubDate>Thu, 20 Feb 2025 15:26:51 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/protobuf%E9%9B%B6%E5%80%BC%E9%99%B7%E9%98%B1%E5%BD%93%E9%BB%98%E8%AE%A4%E5%80%BC%E6%88%90%E4%B8%BA%E4%B8%9A%E5%8A%A1%E9%80%BB%E8%BE%91%E7%9A%84%E9%9A%90%E5%BD%A2%E6%9D%80%E6%89%8B/</guid>
+        <description>&lt;p&gt;美股有三个交易时段，分别是：盘前、盘中、盘后；接口推送数据还是数值增量的逻辑（尽可能的节约带宽），仅在第一次发送全量，第二次开始所有字段都是增量推送逻辑。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;为什么不用最优方案？牵扯到不同项目组，有些都已经上线多年。我方属于新对接，所以只能尽量兼容。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;一系列问题&#34;&gt;一系列问题
+&lt;/h2&gt;&lt;p&gt;单从摘要上看，可能还觉得没什么问题，问题带入组内的系统架构，带出来一系列问题。刚处理上一个问题，又遇到了新的问题，这个问题是由于之前的问题引起的。&lt;/p&gt;
+&lt;h3 id=&#34;无法识别交易时段&#34;&gt;无法识别交易时段
+&lt;/h3&gt;&lt;p&gt;已知盘中阶段定义为在 &lt;code&gt;protobuf&lt;/code&gt; 中定义为 0，但是在收到数据的时候由于是增量推送，业务方无法有效识别这个&lt;code&gt;零&lt;/code&gt;是默认值，还是真实的业务值。&lt;/p&gt;
+&lt;p&gt;通俗理解：每次收到 0，无法判断这个 0 是新行情设置的值，还是 protobuf 的默认值&lt;/p&gt;
+&lt;h3 id=&#34;引入-optional&#34;&gt;引入 optional
+&lt;/h3&gt;&lt;p&gt;Since protobuf release 3.15, proto3 supports using the optional keyword (just as in proto2) to give a scalar field presence information&lt;/p&gt;
+&lt;p&gt;组内的通讯协议是基于 &lt;code&gt;protobuf&lt;/code&gt; 的，但是由于历史原因，选择的版本比较老，并没支持 &lt;code&gt;optional&lt;/code&gt; 关键字。懂的都理解，由于从底层开始引入 &lt;code&gt;protobuf&lt;/code&gt;，项目底层通过静态库的方式发布，导致整个编译链路都需要升级，这个成本是非常高的。&lt;/p&gt;
+&lt;h3 id=&#34;gcc-版本问题&#34;&gt;gcc 版本问题
+&lt;/h3&gt;&lt;p&gt;好不容易想了方案，底层发布两个不同的版本，尽可能的控制 &lt;code&gt;protobuf&lt;/code&gt; 新版本的编译依赖传播。但是在编译的时候，发现 &lt;code&gt;gcc&lt;/code&gt; 版本太低，不支持 &lt;code&gt;protobuf&lt;/code&gt; 的新特性。&lt;/p&gt;
+&lt;p&gt;组内常用的服务器类型：centos7、centos8。centos7 默认的 &lt;code&gt;gcc&lt;/code&gt; 版本是 4.8，centos8 默认的 &lt;code&gt;gcc&lt;/code&gt; 版本是 8.3。由于 &lt;code&gt;protobuf&lt;/code&gt; 的新特性需要 &lt;code&gt;gcc&lt;/code&gt; 版本在 7.4 以上，所以 centos7 无法支持。&lt;/p&gt;
+&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82461&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Bug 82461 - [7 Regression] Temporary required for brace-initializing (non-literal-type) member variable&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;最后折腾一圈，相关服务的部署、编译服务器都挪到 centos8 上，解决了这个问题。&lt;/p&gt;
+&lt;h2 id=&#34;合理的枚举&#34;&gt;合理的枚举
+&lt;/h2&gt;&lt;p&gt;回顾整个问题，其实有一个更简单、高效的解决方案：调整枚举的定义，从 1 开始编号，而不是从 0 开始。这样就能有效区分默认值和业务值，避免上述一系列麻烦。&lt;/p&gt;
+&lt;h3 id=&#34;为什么从-1-开始更合理&#34;&gt;为什么从 1 开始更合理？
+&lt;/h3&gt;&lt;p&gt;在 &lt;code&gt;protobuf&lt;/code&gt; 中，枚举类型的默认值固定为 0。如果我们将有意义的业务值定义为 0（比如“盘中”），在增量推送时，业务方无法判断收到的 0 是业务值还是未设置的默认值。而如果将枚举从 1 开始定义，0 可以保留为一个无意义的默认值或“未知”状态，问题迎刃而解。&lt;/p&gt;
+&lt;p&gt;建议的实践：&lt;/p&gt;
+&lt;p&gt;在设计 protobuf 枚举时，始终将 0 定义为无意义的默认值（如 &lt;code&gt;UNKNOWN&lt;/code&gt; 或 &lt;code&gt;RESERVED&lt;/code&gt;）。
+将实际业务值从 1 开始分配，确保与默认值 0 区分开。&lt;/p&gt;
+&lt;p&gt;通过这一小调整，我们不仅解决了交易时段识别的问题，还为未来的协议设计提供了一个宝贵的经验教训。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>后台服务TCP通讯异常排查</title>
+        <link>https://ttf248.life/p/%E5%90%8E%E5%8F%B0%E6%9C%8D%E5%8A%A1tcp%E9%80%9A%E8%AE%AF%E5%BC%82%E5%B8%B8%E6%8E%92%E6%9F%A5/</link>
+        <pubDate>Fri, 14 Feb 2025 22:54:13 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/%E5%90%8E%E5%8F%B0%E6%9C%8D%E5%8A%A1tcp%E9%80%9A%E8%AE%AF%E5%BC%82%E5%B8%B8%E6%8E%92%E6%9F%A5/</guid>
+        <description>&lt;p&gt;业务模型：后台服务借助 TCP 与集团的行情网关建立连接。每次连接时，需先行发送一个授权请求，随后持续发送心跳包以维持连接状态。
+然而，某一天，收到了服务断开连接的告警信息。通过仔细排查日志后发现，后台服务一直在持续发送心跳包，但对方却毫无回应，可连接却始终未断开。&lt;/p&gt;
+&lt;h2 id=&#34;现场简述&#34;&gt;现场简述
+&lt;/h2&gt;&lt;p&gt;原本正在公司加班推进项目进度，工作群里突然弹出告警信息。乍一看，我还以为是老毛病，大概率是网络超时致使心跳发送失败，进而导致服务断开连接。可在仔细排查日志后，却发现实际情况并非如此。后台已发送了授权登录消息，然而一直未收到应答，与此同时，心跳包仍在持续不断地发送，对方却始终未回复任何心跳数据。经过对日志的深入分析，暴露出了以下几个关键问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;授权消息无应答：极有可能是对方系统正在重启，使得授权消息未能得到及时处理。&lt;/li&gt;
+&lt;li&gt;未成功授权却发送心跳数据：经排查，发现这是程序逻辑上的漏洞。心跳发送函数的判断逻辑存在缺陷，仅仅校验了连接状态，却遗漏了对授权状态的校验。&lt;/li&gt;
+&lt;li&gt;服务未断开连接：若服务能够断开连接，便可以触发重连机制，从而重新发送授权消息。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;目前，还剩下最后一个亟待解决的问题——为何服务没有断开连接。这一问题的解决需要开展更为深入细致的排查工作。&lt;/p&gt;
+&lt;h2 id=&#34;分析网络数据包&#34;&gt;分析网络数据包
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;tcpdump&lt;/code&gt; 是一个非常强大的网络抓包工具，可以用来捕获网络数据包。通过分析网络数据包，我们可以更加直观地了解网络通信的细节。在这里，我们可以使用 &lt;code&gt;tcpdump&lt;/code&gt; 来捕获网络数据包，以便进一步分析。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/%E5%90%8E%E5%8F%B0%E6%9C%8D%E5%8A%A1tcp%E9%80%9A%E8%AE%AF%E5%BC%82%E5%B8%B8%E6%8E%92%E6%9F%A5/20250220151952.png&#34;
+	width=&#34;1126&#34;
+	height=&#34;202&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;tcpdump&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;557&#34;
+		data-flex-basis=&#34;1337px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;分析图中的数据，我可以看到心跳一直在正常发送，对方服务器并没有回复任何数据，但是给了 &lt;code&gt;ACK&lt;/code&gt;，这就导致连接不会主动断开了。&lt;/p&gt;
+&lt;h2 id=&#34;常见标志位说明&#34;&gt;常见标志位说明
+&lt;/h2&gt;&lt;p&gt;在 TCP 协议中，&lt;code&gt;PSH&lt;/code&gt;（Push）和 &lt;code&gt;ACK&lt;/code&gt;（Acknowledgment）是两个重要的标志位，分别用于控制数据传输和流量确认。它们的作用如下：&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;1-pshpush-flag&#34;&gt;&lt;strong&gt;1. PSH（Push Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;功能&lt;/strong&gt;：&lt;br&gt;
+&lt;code&gt;PSH&lt;/code&gt; 标志位的作用是&lt;strong&gt;请求接收方立即将缓冲区中的数据推送给上层应用&lt;/strong&gt;（而不是等待缓冲区填满）。这意味着一旦收到带有 &lt;code&gt;PSH&lt;/code&gt; 标志的数据段，接收方会尽可能快地处理并传递给应用程序，而非暂存于操作系统缓冲区中。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;典型场景&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/HTTPS 请求&lt;/strong&gt;：客户端发送请求时（如 &lt;code&gt;GET /index.html&lt;/code&gt;）会设置 &lt;code&gt;PSH&lt;/code&gt;，希望服务器立即响应。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSH 协议&lt;/strong&gt;：每次键盘输入都会触发 &lt;code&gt;PSH&lt;/code&gt;，确保输入字符实时传输。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实时通信&lt;/strong&gt;：视频流、在线游戏等低延迟场景可能使用 &lt;code&gt;PSH&lt;/code&gt; 减少延迟。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;注意&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;PSH&lt;/code&gt; 并非强制要求，接收方可以选择忽略该标志位（但仍需正常处理数据）。&lt;/li&gt;
+&lt;li&gt;发送方可能不设置 &lt;code&gt;PSH&lt;/code&gt;，此时接收方会根据自身缓冲策略决定何时推送数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;2-ackacknowledgment-flag&#34;&gt;&lt;strong&gt;2. ACK（Acknowledgment Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;功能&lt;/strong&gt;：&lt;br&gt;
+&lt;code&gt;ACK&lt;/code&gt; 标志位表示&lt;strong&gt;确认已正确接收前序数据段&lt;/strong&gt;。每个 &lt;code&gt;ACK&lt;/code&gt; 包含一个确认号（&lt;code&gt;Acknowledgment Number&lt;/code&gt;），表示期望接收的下一个字节序号。它是 TCP 可靠传输的核心机制。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;工作原理&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;发送方发送数据段时，会携带期望接收方的 &lt;code&gt;ACK&lt;/code&gt; 值（例如 &lt;code&gt;ACK = 序列号 + 数据长度&lt;/code&gt;）。&lt;/li&gt;
+&lt;li&gt;接收方收到数据后，会生成一个 &lt;code&gt;ACK&lt;/code&gt; 报文段，确认已接收的数据序号。&lt;/li&gt;
+&lt;li&gt;发送方只有在收到对应的 &lt;code&gt;ACK&lt;/code&gt; 后，才会重传未被确认的数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;示例&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;若发送方发送了序号为 &lt;code&gt;100~199&lt;/code&gt; 的数据段，则期望接收方的 &lt;code&gt;ACK&lt;/code&gt; 应为 &lt;code&gt;200&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;若接收方未收到 &lt;code&gt;100~199&lt;/code&gt; 中的某些数据，会通过 &lt;code&gt;ACK=150&lt;/code&gt; 告知发送方重传。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;3-psh-和-ack-的组合&#34;&gt;&lt;strong&gt;3. PSH 和 ACK 的组合&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;在 TCP 报文中，&lt;code&gt;PSH&lt;/code&gt; 和 &lt;code&gt;ACK&lt;/code&gt; 可以同时出现，常见于以下场景：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;HTTP 请求响应&lt;/strong&gt;：&lt;br&gt;
+客户端发送 &lt;code&gt;POST&lt;/code&gt; 请求时（含数据），会设置 &lt;code&gt;PSH&lt;/code&gt; 和 &lt;code&gt;ACK&lt;/code&gt;（确认之前的响应）。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-plaintext&#34;&gt;Client → Server: SYN, ACK=1 → 建立连接
+Client → Server: PSH, ACK=1, 数据 → 发送请求数据
+Server → Client: PSH, ACK=数据长度+1 → 返回响应
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;SSH 握手后传输命令&lt;/strong&gt;：&lt;br&gt;
+客户端输入命令后，发送带有 &lt;code&gt;PSH&lt;/code&gt; 和 &lt;code&gt;ACK&lt;/code&gt; 的数据段，确保命令立即传输并被服务器处理。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;4-其他标志位的关联&#34;&gt;&lt;strong&gt;4. 其他标志位的关联&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;标志位&lt;/th&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;简要说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;SYN&lt;/td&gt;
+&lt;td&gt;同步&lt;/td&gt;
+&lt;td&gt;初始化连接（三次握手）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;FIN&lt;/td&gt;
+&lt;td&gt;结束&lt;/td&gt;
+&lt;td&gt;优雅关闭连接&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RST&lt;/td&gt;
+&lt;td&gt;复位&lt;/td&gt;
+&lt;td&gt;强制终止连接（异常情况）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;URG&lt;/td&gt;
+&lt;td&gt;紧急&lt;/td&gt;
+&lt;td&gt;标记紧急指针（极少使用）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;总结&#34;&gt;&lt;strong&gt;总结&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;PSH&lt;/strong&gt; 关注的是&lt;strong&gt;数据尽快到达应用层&lt;/strong&gt;，降低延迟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ACK&lt;/strong&gt; 关注的是&lt;strong&gt;数据的可靠传输&lt;/strong&gt;，避免丢包或乱序。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;两者协同工作，平衡了 TCP 协议的效率和可靠性。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>用atop工具监控Linux系统指标：安装、配置与使用全攻略</title>
+        <link>https://ttf248.life/p/%E7%94%A8atop%E5%B7%A5%E5%85%B7%E7%9B%91%E6%8E%A7linux%E7%B3%BB%E7%BB%9F%E6%8C%87%E6%A0%87%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AE%E4%B8%8E%E4%BD%BF%E7%94%A8%E5%85%A8%E6%94%BB%E7%95%A5/</link>
+        <pubDate>Thu, 06 Feb 2025 22:48:55 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/%E7%94%A8atop%E5%B7%A5%E5%85%B7%E7%9B%91%E6%8E%A7linux%E7%B3%BB%E7%BB%9F%E6%8C%87%E6%A0%87%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AE%E4%B8%8E%E4%BD%BF%E7%94%A8%E5%85%A8%E6%94%BB%E7%95%A5/</guid>
+        <description>&lt;p&gt;在Linux系统运维过程中，实时且全面地监控系统资源与进程状态至关重要。atop工具作为一款强大的监控利器，能够帮助我们轻松实现这一目标。本文将详细介绍如何在Linux实例中安装、配置和使用atop监控工具。&lt;/p&gt;
+&lt;!--more--&gt;
+&lt;h2 id=&#34;一atop工具介绍&#34;&gt;一、atop工具介绍
+&lt;/h2&gt;&lt;p&gt;atop是专门用于监控Linux系统资源与进程的工具，它能记录系统和进程的活动，并报告所有进程的运行情况。该工具采集的数据覆盖CPU、内存、磁盘、网络等资源使用情况以及进程状态，还可将数据以日志文件形式保存到磁盘。对于每个进程，我们能获取到CPU使用率、内存增长、磁盘使用率、优先级、用户名、状态及退出码等关键信息。此外，通过atop配置文件，我们可以自定义日志采集频率、日志文件存储路径和轮转策略等参数。&lt;/p&gt;
+&lt;h2 id=&#34;二安装atop工具&#34;&gt;二、安装atop工具
+&lt;/h2&gt;&lt;p&gt;不同的Linux发行版安装atop的方式略有不同，下面以常见的操作系统为例进行介绍：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Alibaba Cloud Linux 3/2、CentOS 7/8、Fedora、Rocky Linux 9&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;执行安装命令：&lt;code&gt;sudo yum install -y atop&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动atop服务：&lt;code&gt;sudo systemctl start atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Ubuntu / Debian&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;更新软件源列表：&lt;code&gt;sudo apt update&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;执行安装命令：&lt;code&gt;sudo apt install -y atop&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动atop服务：&lt;code&gt;sudo systemctl start atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CentOS Stream 9&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;下载并安装：&lt;code&gt;sudo wget https://www.atoptool.nl/download/atop-2.11.0-1.el9.x86_64.rpm &amp;amp;&amp;amp; sudo rpm -i atop-2.11.0-1.el9.x86_64.rpm&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动atop服务：&lt;code&gt;sudo systemctl start atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;openSUSE&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;执行安装命令：&lt;code&gt;sudo zypper install -y atop atop-daemon&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动atop服务：&lt;code&gt;sudo systemctl start atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;如果上述列举的操作系统未包含您使用的发行版，可以访问atop官方网站获取安装信息。&lt;/p&gt;
+&lt;h2 id=&#34;三配置监控周期及日志保留时间&#34;&gt;三、配置监控周期及日志保留时间
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;配置文件位置&lt;/strong&gt;：在Alibaba Cloud Linux 3/2、CentOS 7/8和Fedora系统中，atop的配置文件是&lt;code&gt;/etc/sysconfig/atop&lt;/code&gt;；在Ubuntu、Debian和openSUSE系统中，配置文件是&lt;code&gt;/etc/default/atop&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;默认配置参数说明&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;LOGOPTS&lt;/code&gt;：用于控制日志文件记录选项，默认为空。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LOGINTERVAL&lt;/code&gt;：监控周期，默认600秒。如果要采集历史日志追踪问题，建议根据实际需求调整该频率。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LOGGENERATIONS&lt;/code&gt;：日志保留时间，默认28天。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LOGPATH&lt;/code&gt;：日志文件存储路径，默认&lt;code&gt;/var/log/atop&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;配置步骤&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;执行命令打开配置文件：
+&lt;ul&gt;
+&lt;li&gt;在Alibaba Cloud Linux 3/2 、CentOS 7/8、Fedora系统中：&lt;code&gt;sudo vim /etc/sysconfig/atop&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;在Ubuntu、Debian、openSUSE、CentOS Stream 9、Rocky Linux 9系统中：&lt;code&gt;sudo vim /etc/default/atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;按&lt;code&gt;i&lt;/code&gt;进入编辑模式，根据需求调整配置参数。例如，将监控周期修改为30秒，日志保留时间设定为7天，日志路径维持默认：&lt;/li&gt;
+&lt;li&gt;按&lt;code&gt;Esc&lt;/code&gt;键，输入&lt;code&gt;:wq&lt;/code&gt;，保存并退出编辑。&lt;/li&gt;
+&lt;li&gt;重启atop服务使配置生效：&lt;code&gt;sudo systemctl restart atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;LOGOPTS=&amp;quot;&amp;quot;
+LOGINTERVAL=30
+LOGGENERATIONS=7
+LOGPATH=/var/log/atop 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;四使用atop工具&#34;&gt;四、使用atop工具
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;常用命令介绍&lt;/strong&gt;：在交互命令模式下，有以下常用命令：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;g&lt;/code&gt;：切换回默认的综合输出视图。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;c&lt;/code&gt;：显示进程列完整命令行。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;m&lt;/code&gt;：按照进程内存使用率进行降序筛选。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;d&lt;/code&gt;：按照进程磁盘使用率进行降序筛选。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;a&lt;/code&gt;：按照进程资源综合使用率进行降序筛选。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;n&lt;/code&gt;：按照进程网络使用率进行降序筛选。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;t&lt;/code&gt;：跳转到下一个监控采集点。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;T&lt;/code&gt;：跳转到上一个监控采集点。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;b&lt;/code&gt;：指定时间点，格式为&lt;code&gt;YYYYMMDDhhmm&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;资源监控字段含义介绍&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;ATOP&lt;/strong&gt;：主机名、信息采样日期和时间点。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;PRC&lt;/strong&gt;：进程整体运行情况，包括内核态和用户态运行时间、进程总数、不同状态进程数等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CPU&lt;/strong&gt;：CPU整体使用情况，各字段数字相加结果为&lt;code&gt;N*100%&lt;/code&gt;（N为CPU核数），包含内核态、用户态、中断、空闲、等待磁盘IO等时间比例。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CPL&lt;/strong&gt;：CPU负载情况，如过去1分钟、5分钟和15分钟内运行队列中的平均进程数量、上下文切换次数、中断发生次数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;MEM&lt;/strong&gt;：内存使用情况，包括物理内存总量、空闲内存、页缓存内存、文件缓存内存、内核占用内存等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SWP&lt;/strong&gt;：交换空间使用情况，包含交换区总量和空闲交换空间大小。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;PAG&lt;/strong&gt;：虚拟内存分页情况，如换入和换出内存页数。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;DSK&lt;/strong&gt;：磁盘使用情况，每个磁盘设备对应一列，显示设备标识、繁忙状态时间比例、读写请求数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;NET&lt;/strong&gt;：网络状况，展示传输层TCP和UDP、IP层以及各活动网口的接收和发送包大小。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;查看实时系统指标&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;每5秒查看一次系统指标：&lt;code&gt;atop 5&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看当前时间之后5分钟内（共30次，间隔10秒）的系统指标：&lt;code&gt;atop -M 10 30&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看当前时间之后10分钟（10次，间隔60秒）的系统指标，并将结果写入文件：&lt;code&gt;atop -M 60 10 &amp;gt; /log/atop.mem&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;查看历史指标日志&lt;/strong&gt;：atop启动后，采集记录默认存放在&lt;code&gt;/var/log/atop&lt;/code&gt;目录下。查看时需注意指定日期的日志文件必须存在，否则会报错。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;查看当天历史指标日志：&lt;code&gt;atop -r&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看昨天历史指标日志：&lt;code&gt;atop -r y&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看指定日期内的历史指标日志，如2024年11月06日：&lt;code&gt;atop -r 20241106&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看指定日期内自指定时间起的历史指标日志，如2024年11月06日14:00起：&lt;code&gt;atop -r 20241106 -b 14:00&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看指定日期内指定时间段的历史指标日志，如2024年11月5日00:04至00:08：&lt;code&gt;atop -r 20241105 -b 00:04 -e 00:08&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;查看系统活动报告&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;查看当前系统在1分钟内（12次，间隔5秒）的CPU利用率报告：&lt;code&gt;atopsar -c 5 12&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看当天指定时间段的内存指标报告，如18:00至18:01：&lt;code&gt;atopsar -m -b 18:00 -e 18:01&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;查看指定日期内指定时间段的内存指标报告，如2024年11月5日18:00至18:01：&lt;code&gt;atopsar -m -r 20241105 -b 18:00 -e 18:01&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;五其他操作&#34;&gt;五、其他操作
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;配置天级别日志轮转策略&lt;/strong&gt;：如果希望每天生成一个atop指标日志文件，可以执行以下操作：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;（可选）根据需求调整监控周期、日志保留时间及日志存储路径。&lt;/li&gt;
+&lt;li&gt;执行命令设置每日日志轮转相关服务开机启动并启动服务：&lt;code&gt;sudo systemctl enable --now atop atopacct atop-rotate.timer&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;如果业务对日志处理有更复杂的需求，还可以结合logrotate或自定义脚本实现日志管理。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;加载可选的netatop内核模块&lt;/strong&gt;：如果需要监测网络使用率，可以安装netatop模块（atop中该模块未默认安装）。以Alibaba Cloud Linux 3系统为例：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;安装内核开发包及编译所需软件环境：&lt;code&gt;sudo yum install -y kernel-devel dkms elfutils-libelf-devel&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;下载最新版本netatop源码至指定目录：&lt;code&gt;cd /usr/src/ &amp;amp;&amp;amp; sudo wget https://www.atoptool.nl/download/netatop-3.2.2.tar.gz --no-check-certificate&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;解压源码并进入源码目录：&lt;code&gt;sudo tar -zxvf netatop-3.2.2.tar.gz &amp;amp;&amp;amp; cd netatop-3.2.2&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;基于源码构建并安装模块和守护程序：&lt;code&gt;sudo make &amp;amp;&amp;amp; sudo make install&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;启动netatop服务：&lt;code&gt;sudo systemctl start netatop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;atop工具功能强大且使用灵活，通过合理安装、配置和使用它，我们能够更好地了解Linux系统的运行状况，及时发现并解决潜在问题。希望本文能帮助大家在Linux系统监控方面更上一层楼。&lt;/p&gt;
+&lt;h2 id=&#34;六参考链接&#34;&gt;六、参考链接
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.atoptool.nl/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;atop官方网站&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://help.aliyun.com/zh/ecs/use-cases/use-the-atop-tool-to-monitor-linux-system-metrics#99e53d0198euu&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;安装、配置并使用atop监控工具&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>visual studio 加载“不配套”的 pdb 文件</title>
+        <link>https://ttf248.life/p/visual-studio-%E5%8A%A0%E8%BD%BD%E4%B8%8D%E9%85%8D%E5%A5%97%E7%9A%84-pdb-%E6%96%87%E4%BB%B6/</link>
+        <pubDate>Thu, 23 Jan 2025 20:04:33 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/visual-studio-%E5%8A%A0%E8%BD%BD%E4%B8%8D%E9%85%8D%E5%A5%97%E7%9A%84-pdb-%E6%96%87%E4%BB%B6/</guid>
+        <description>&lt;p&gt;windows 下，使用 visual studio 调试程序时，如果 pdb 文件与可执行文件不匹配，visual studio 会提示“无法加载符号文件”。程序运行发生崩溃，落地 dump 文件，如果是不匹配的 pdb 文件，visual studio 也无法顺利的进入崩溃现场。&lt;/p&gt;
+&lt;h2 id=&#34;什么是-pdb-文件&#34;&gt;什么是 pdb 文件
+&lt;/h2&gt;&lt;p&gt;PDB 文件是微软的一种调试信息文件，用于调试程序。PDB 文件包含了程序的符号表、源代码文件名、行号等信息。在程序编译时，可以生成 PDB 文件，用于调试程序。&lt;/p&gt;
+&lt;h2 id=&#34;windbg-调试&#34;&gt;WinDbg 调试
+&lt;/h2&gt;&lt;p&gt;WinDbg 是微软的一款调试工具，可以用于调试 windows 程序。WinDbg 可以加载不匹配的 pdb 文件，但是需要手动加载。&lt;code&gt;.reload /f /i&lt;/code&gt; 命令可以强制加载不匹配的 pdb 文件。&lt;/p&gt;
+&lt;p&gt;但是 WinDbg 使用起来不如 visual studio 方便，所以我们希望 visual studio 也能加载不匹配的 pdb 文件。&lt;/p&gt;
+&lt;h2 id=&#34;visual-studio-加载不匹配的-pdb-文件&#34;&gt;visual studio 加载不匹配的 pdb 文件
+&lt;/h2&gt;&lt;p&gt;源码现在一般都是通过 git 管理，完全能找到对应版本的代码，重新编译，生成对应的 pdb 文件。为什么无法加载呢？主要是一些元数据无法匹配。&lt;/p&gt;
+&lt;p&gt;有个小工具，可以修改元数据，基于 exe 文件信息，生成一个新的 pdb 文件，使得 visual studio 能够加载。&lt;/p&gt;
+&lt;p&gt;chkmatch 下载地址：&lt;a class=&#34;link&#34; href=&#34;https://www.debuginfo.com/tools/chkmatch.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://www.debuginfo.com/tools/chkmatch.html&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;站点缓存地址：&lt;a class=&#34;link&#34; href=&#34;chkmatch.zip&#34; &gt;chkmatch.zip&lt;/a&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;ChkMatch utility can be used to check whether an executable and debug information file match. It can also be used to enforce matching between an executable and debug information file, if they are compatible.
+
+For more information about debug information matching and related issues, see this article.
+
+Supported debug information formats: DBG, PDB 2.0, PDB 7.0.
+
+chkmatch [-c ExeFile DebugInfoFile ] |
+         [-m ExeFile DebugInfoFile]
+-c
+Check matching between the executable and the debug information file.
+-m
+Make the executable and the debug information file match.
+ExeFile
+The name of the executable file.
+DebugInfoFile
+The name of the debug information file.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;使用-chkmatch&#34;&gt;使用 chkmatch
+&lt;/h2&gt;&lt;p&gt;先执行检查操作，分析不匹配的原因，提示签名不匹配。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;C:\Users\tianlong.xiang\Downloads\chkmatch&amp;gt;ChkMatch.exe -c &amp;quot;D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe&amp;quot; E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+ChkMatch - version 1.0
+Copyright (C) 2004 Oleg Starodumov
+http://www.debuginfo.com/
+
+
+Executable: D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe
+Debug info file: E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+
+Executable:
+TimeDateStamp: c26d9be3
+Debug info: 2 ( CodeView )
+TimeStamp: f86b0a4f  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 122  RVA: 001cdc44  FileOffset: 001cbe44
+CodeView format: RSDS
+Signature: {428c9b95-39a3-4a8d-a8e5-7be453684757}  Age: 1
+PdbFile: D:\stock_UAT\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\obj\Release\YinTrade.Main.pdb
+Debug info: 16 ( Unknown )
+TimeStamp: 00000000  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 0  RVA: 00000000  FileOffset: 00000000
+
+Debug information file:
+Format: PDB 7.00
+Signature: {06fae08e-c0a2-4f3d-9c7c-dfc684445dd1}  Age: 1
+
+Result: Unmatched (reason: Signature mismatch)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;然后执行修改操作，使得 pdb 文件与 exe 文件匹配。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;C:\Users\tianlong.xiang\Downloads\chkmatch&amp;gt;ChkMatch.exe -m &amp;quot;D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe&amp;quot; E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+ChkMatch - version 1.0
+Copyright (C) 2004 Oleg Starodumov
+http://www.debuginfo.com/
+
+
+Executable: D:\Program Files\Rolan\trade\UAT_YinStrade\YinTrade.Main.exe
+Debug info file: E:\YinTech\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\bin\Release\YinTrade.Main.pdb
+
+Executable:
+TimeDateStamp: c26d9be3
+Debug info: 2 ( CodeView )
+TimeStamp: f86b0a4f  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 122  RVA: 001cdc44  FileOffset: 001cbe44
+CodeView format: RSDS
+Signature: {428c9b95-39a3-4a8d-a8e5-7be453684757}  Age: 1
+PdbFile: D:\stock_UAT\ykcz_securities_trading_client\Sec_Trade\YinTrade.Main\obj\Release\YinTrade.Main.pdb
+Debug info: 16 ( Unknown )
+TimeStamp: 00000000  Characteristics: 0  MajorVer: 0  MinorVer: 0
+Size: 0  RVA: 00000000  FileOffset: 00000000
+
+Debug information file:
+Format: PDB 7.00
+Signature: {06fae08e-c0a2-4f3d-9c7c-dfc684445dd1}  Age: 1
+
+Writing to the debug information file...
+Result: Success.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://stackoverflow.com/questions/38147487/forcing-to-load-unmatched-symbols-in-visual-studio-2015-debugger&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;forcing-to-load-unmatched-symbols-in-visual-studio-2015-debugger&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>linux后端服务处理大量字符串数据-效率很慢</title>
+        <link>https://ttf248.life/p/linux%E5%90%8E%E7%AB%AF%E6%9C%8D%E5%8A%A1%E5%A4%84%E7%90%86%E5%A4%A7%E9%87%8F%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%95%B0%E6%8D%AE-%E6%95%88%E7%8E%87%E5%BE%88%E6%85%A2/</link>
+        <pubDate>Wed, 13 Nov 2024 19:42:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/linux%E5%90%8E%E7%AB%AF%E6%9C%8D%E5%8A%A1%E5%A4%84%E7%90%86%E5%A4%A7%E9%87%8F%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%95%B0%E6%8D%AE-%E6%95%88%E7%8E%87%E5%BE%88%E6%85%A2/</guid>
+        <description>&lt;p&gt;在C++开发的历史项目中，我们使用自定义协议进行通信，协议采用了二维数组的模式。在处理大量数据时，协议内部需要遍历数组并进行序列化操作以生成日志，由于效率较低，导致了系统在高负载下出现明显的卡顿，业务部门反馈系统卡顿。&lt;/p&gt;
+&lt;h2 id=&#34;问题定位&#34;&gt;问题定位
+&lt;/h2&gt;&lt;p&gt;在排查问题时，我们首先对系统进行了性能分析，发现系统在处理大量数据时，CPU 占用率明显增加，且系统响应时间变长。通过分析系统的日志，我们发现了大量的序列化操作，这些操作在处理二维数组时效率较低，导致了系统性能下降。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;pstack&lt;/code&gt;工具截取服务的线程信息，定位到日志线程大部分时间都在处理字符串的拼接。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;这里是今天的重点，不同的累加方式，效率差别巨大。历史代码中使用的是 &lt;code&gt;+&lt;/code&gt; 运算符，这种方式会频繁的创建临时对象，效率很低。你知道它效率很差，但你不知道它效率有多差的那种。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;demo-验证&#34;&gt;demo 验证
+&lt;/h2&gt;&lt;p&gt;基于项目代码，我们抽离业务逻辑，编写了一个简单的 demo，用于验证字符串拼接的效率问题。&lt;code&gt;windows&lt;/code&gt; 下的 &lt;code&gt;vs2022&lt;/code&gt; 编译器，&lt;code&gt;linux&lt;/code&gt; 下的 &lt;code&gt;gcc8.5&lt;/code&gt; 编译器，&lt;code&gt;Release&lt;/code&gt;模式下编译运行，对比效率。&lt;/p&gt;
+&lt;h3 id=&#34;关键点说明&#34;&gt;关键点说明
+&lt;/h3&gt;&lt;p&gt;项目使用的是方法四，在尚未拿到测试数据的时候，读者可以先思考一下，哪种方式效率最高？哪种方式效率最低？看到结果的时候，我还是很惊讶的。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;方法 1 (&lt;code&gt;+=&lt;/code&gt; 拼接)&lt;/strong&gt;：直接通过 &lt;code&gt;+=&lt;/code&gt; 将每个字段拼接到字符串中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 2 (&lt;code&gt;std::ostringstream&lt;/code&gt; 拼接)&lt;/strong&gt;：使用流（&lt;code&gt;std::ostringstream&lt;/code&gt;）来拼接每个字段，这种方法更高效，特别是对于大量数据拼接时。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 3（预分配内存的 &lt;code&gt;+=&lt;/code&gt; 拼接）&lt;/strong&gt;：通过 &lt;code&gt;reserve&lt;/code&gt; 提前为字符串分配足够的内存，减少了内存重新分配的开销，从而提升了性能。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 4 (&lt;code&gt;bodys = bodys + body + &amp;quot;\n&amp;quot;&lt;/code&gt;)&lt;/strong&gt;：每次拼接都创建一个新的临时字符串对象，这会导致性能下降，尤其是在大规模拼接时，因为每次拼接都会涉及一次新的内存分配和复制。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;参考结果，我们可以看到，项目刚好选中了效率最差的方式。&lt;/p&gt;
+&lt;p&gt;再进一步，我们来分析不同平台编译器的优化效率，微软的 &lt;code&gt;visual studio&lt;/code&gt; 一如既往的优秀，针对字符串的优化效率很高，而 &lt;code&gt;gcc&lt;/code&gt; 编译器在这方面的优化效率就差了一些。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;代码在不同的机器执行，两份数据没有直接的对比意义，可以分别对比不同拼接方法之间的差值。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;windows 平台下的 vs2022 编译器
+
+----------------------------------------
+Data Generation Time: 0.054 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.053 seconds.
++ ostringstream Data merging took: 0.054 seconds.
++ Pre-reserved Data merging took: 0.045 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 16.108 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;linux 平台下的 gcc8.5 编译器
+----------------------------------------
+Data Generation Time: 0.108 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.100 seconds.
++ ostringstream Data merging took: 0.083 seconds.
++ Pre-reserved Data merging took: 0.057 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 29.298 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;完整代码&#34;&gt;完整代码
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;string&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;random&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;sstream&amp;gt;
+#include &amp;lt;iomanip&amp;gt;
+
+typedef std::vector&amp;lt;std::string&amp;gt; DataRow;
+typedef std::vector&amp;lt;DataRow&amp;gt; DataGroup;
+
+struct ResponsePackage
+{
+    std::string ErrorInfo;
+    DataRow Head;
+    std::string ClientId;
+    std::string UUID;
+    std::string MsgID;
+    std::string SessionID;
+    std::string ExtraInfo1;
+    std::string ExtraInfo2;
+    DataGroup DataBody;
+};
+
+// Generate specified length of random string
+std::string generateRandomString(size_t length)
+{
+    const char charset[] = &amp;quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&amp;quot;;
+    const size_t max_index = sizeof(charset) - 1;
+    std::string random_string;
+    random_string.reserve(length);
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution&amp;lt;&amp;gt; distribution(0, max_index);
+
+    for (size_t i = 0; i &amp;lt; length; ++i)
+    {
+        random_string += charset[distribution(generator)];
+    }
+
+    return random_string;
+}
+
+void create_large_string()
+{
+    // Example request package with 50 fields
+    ResponsePackage requestPackage;
+
+    requestPackage.Head = {
+        &amp;quot;Field1&amp;quot;, &amp;quot;Field2&amp;quot;, &amp;quot;Field3&amp;quot;, &amp;quot;Field4&amp;quot;, &amp;quot;Field5&amp;quot;,
+        &amp;quot;Field6&amp;quot;, &amp;quot;Field7&amp;quot;, &amp;quot;Field8&amp;quot;, &amp;quot;Field9&amp;quot;, &amp;quot;Field10&amp;quot;,
+        &amp;quot;Field11&amp;quot;, &amp;quot;Field12&amp;quot;, &amp;quot;Field13&amp;quot;, &amp;quot;Field14&amp;quot;, &amp;quot;Field15&amp;quot;,
+        &amp;quot;Field16&amp;quot;, &amp;quot;Field17&amp;quot;, &amp;quot;Field18&amp;quot;, &amp;quot;Field19&amp;quot;, &amp;quot;Field20&amp;quot;,
+        &amp;quot;Field21&amp;quot;, &amp;quot;Field22&amp;quot;, &amp;quot;Field23&amp;quot;, &amp;quot;Field24&amp;quot;, &amp;quot;Field25&amp;quot;,
+        &amp;quot;Field26&amp;quot;, &amp;quot;Field27&amp;quot;, &amp;quot;Field28&amp;quot;, &amp;quot;Field29&amp;quot;, &amp;quot;Field30&amp;quot;,
+        &amp;quot;Field31&amp;quot;, &amp;quot;Field32&amp;quot;, &amp;quot;Field33&amp;quot;, &amp;quot;Field34&amp;quot;, &amp;quot;Field35&amp;quot;,
+        &amp;quot;Field36&amp;quot;, &amp;quot;Field37&amp;quot;, &amp;quot;Field38&amp;quot;, &amp;quot;Field39&amp;quot;, &amp;quot;Field40&amp;quot;,
+        &amp;quot;Field41&amp;quot;, &amp;quot;Field42&amp;quot;, &amp;quot;Field43&amp;quot;, &amp;quot;Field44&amp;quot;, &amp;quot;Field45&amp;quot;,
+        &amp;quot;Field46&amp;quot;, &amp;quot;Field47&amp;quot;, &amp;quot;Field48&amp;quot;, &amp;quot;Field49&amp;quot;, &amp;quot;Field50&amp;quot;
+    };
+
+    requestPackage.ClientId = &amp;quot;ClientID&amp;quot;;
+    requestPackage.UUID = &amp;quot;UUID&amp;quot;;
+    requestPackage.MsgID = &amp;quot;MsgID&amp;quot;;
+    requestPackage.SessionID = &amp;quot;SessionID&amp;quot;;
+    requestPackage.ExtraInfo1 = &amp;quot;ExtraInfo1&amp;quot;;
+    requestPackage.ExtraInfo2 = &amp;quot;ExtraInfo2&amp;quot;;
+
+    // Start timing for data generation
+    auto start_gen = std::chrono::high_resolution_clock::now();
+
+    // Generate 10,000 rows of data, each with 50 fields
+    for (size_t i = 0; i &amp;lt; 10000; ++i)
+    {
+        DataRow dataRow(50, &amp;quot;This is a test string&amp;quot;);
+        requestPackage.DataBody.push_back(dataRow);
+    }
+
+    // End timing for data generation
+    auto end_gen = std::chrono::high_resolution_clock::now();
+    std::chrono::duration&amp;lt;double&amp;gt; duration_gen = end_gen - start_gen;
+
+    // Display result generation time
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Generation Time: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_gen.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    // Data merging using different methods
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Performance:\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    {
+        // Method 1: Using &#39;+=&#39; string concatenation
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (+=) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 2: Using ostringstream
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::ostringstream bodys;
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::ostringstream body;
+            body &amp;lt;&amp;lt; &amp;quot;This is a test string&amp;quot;;
+            for (auto&amp;amp; item : vec)
+            {
+                body &amp;lt;&amp;lt; item &amp;lt;&amp;lt; &amp;quot; &amp;quot;;
+            }
+            bodys &amp;lt;&amp;lt; body.str() &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ ostringstream Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 3: Pre-allocated memory
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys;
+        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            body.reserve(50 * 20); // Pre-allocate memory for each row
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Pre-reserved Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 4: Using &#39;bodys = bodys + body + &amp;quot;\n&amp;quot;&#39;
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body = body + item + &amp;quot; &amp;quot;; // Note the use of &#39;body = body + item&#39;
+            }
+            bodys = bodys + body + &amp;quot;\n&amp;quot;; // Again, using &#39;bodys = bodys + body&#39;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (bodys = bodys + body + \&amp;quot;\\n\&amp;quot;) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Complete.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+}
+
+int main()
+{
+    try
+    {
+        create_large_string();
+    }
+    catch (const std::exception&amp;amp; e)
+    {
+        std::cerr &amp;lt;&amp;lt; &amp;quot;Caught exception: &amp;quot; &amp;lt;&amp;lt; e.what() &amp;lt;&amp;lt; std::endl;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\nProgram finished.\n&amp;quot;;
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
+        <title>Win11 Logitech G431 耳机驱动安装</title>
+        <link>https://ttf248.life/p/win11-logitech-g431-%E8%80%B3%E6%9C%BA%E9%A9%B1%E5%8A%A8%E5%AE%89%E8%A3%85/</link>
+        <pubDate>Wed, 05 Jun 2024 07:20:17 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/win11-logitech-g431-%E8%80%B3%E6%9C%BA%E9%A9%B1%E5%8A%A8%E5%AE%89%E8%A3%85/</guid>
+        <description>&lt;p&gt;书接上回，回来发现 Ghub 有更新，有点小开心，客服说的问题驱动无法正常加载的问题能搞定了，结果折腾一圈，重装卸载，还是不能正常使用。&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景
+&lt;/h2&gt;&lt;p&gt;继续联系客服咨询处理处理方案，结果被告知，能有工程师远程协助，但是工程师的上班时间和我自己的上班时间一模一样，无奈下只能放弃，翻看上次排查问题留下的资料，准备尝试手动安装驱动。&lt;/p&gt;
+&lt;h2 id=&#34;获取驱动安装包&#34;&gt;获取驱动安装包
+&lt;/h2&gt;&lt;p&gt;罗技官方并没有单独提供设备的驱动安装包，我如何才能拿到驱动文件呢？&lt;/p&gt;
+&lt;p&gt;配合上次重装系统留下的系统镜像安装包，我们可以在本地虚拟机中重装一次系统，再纯净的系统中，我们单独部署一份Ghub，将耳机设备介入到虚拟机中，找到驱动的路径，拷贝出来即可。&lt;/p&gt;
+&lt;p&gt;相关的路径：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;C:\ProgramData\LGHUB&lt;/li&gt;
+&lt;li&gt;C:\Windows\System32\DriverStore\FileRepository\logi_audio.inf_amd64_010b035044e24be4&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;设备管理器&#34;&gt;设备管理器
+&lt;/h2&gt;&lt;p&gt;重点是第二个路径怎么找到的，我们先简单梳理一波 Win11 系统如何手动管理驱动文件。这块内容，&lt;strong&gt;通过控制变量法来识别的，通过不断的插拔设备，在虚拟机里面分析设备管理器中的设备信息，识别到耳机合计有三个驱动需要处理&lt;/strong&gt;。其中有两个驱动是系统自带的，只有一个是罗技提供的。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-%E8%80%B3%E6%9C%BA%E9%A9%B1%E5%8A%A8%E5%AE%89%E8%A3%85/20240605073331.png&#34;
+	width=&#34;433&#34;
+	height=&#34;904&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;驱动管理器&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;47&#34;
+		data-flex-basis=&#34;114px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;上图中的第二个驱动，是由罗技提供的，我们分析设备现在的驱动程序，再虚拟机里面翻找所有的驱动路径，当然你首先需要找到 logi 开头的文件，然后进行文件的对比，你就能定位到驱动的文件件，拷贝整个文件夹，你就拿到了驱动安装包&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-%E8%80%B3%E6%9C%BA%E9%A9%B1%E5%8A%A8%E5%AE%89%E8%A3%85/20240605073933.png&#34;
+	width=&#34;946&#34;
+	height=&#34;645&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;驱动安装包&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;146&#34;
+		data-flex-basis=&#34;352px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;安装驱动&#34;&gt;安装驱动
+&lt;/h2&gt;&lt;p&gt;还在在设备管理器的界面，点击：更新驱动，点击：浏览我的电脑查找驱动，进入到如下界面：&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-%E8%80%B3%E6%9C%BA%E9%A9%B1%E5%8A%A8%E5%AE%89%E8%A3%85/20240605074130.png&#34;
+	width=&#34;528&#34;
+	height=&#34;381&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;驱动安装&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;138&#34;
+		data-flex-basis=&#34;332px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;当然你打开的时候，只能看到一个驱动，那就是普通的USB驱动，选择从磁盘安装，路径就是我们前面拷贝出来的文件夹，安装以后，选择的下拉清单中，就能多出来罗技特有的驱动，将设备驱动切换到新安装的驱动即可。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-%E8%80%B3%E6%9C%BA%E9%A9%B1%E5%8A%A8%E5%AE%89%E8%A3%85/20240605074208.png&#34;
+	width=&#34;593&#34;
+	height=&#34;423&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;磁盘安装&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;140&#34;
+		data-flex-basis=&#34;336px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;人体学设备驱动&#34;&gt;人体学设备驱动
+&lt;/h2&gt;&lt;p&gt;这块的驱动文件都是系统提供的，你只需要检查设备的驱动前面是否存在感叹号，如果存在感叹号，进入驱动选择界面，随意切换一个其他类型的驱动，然后再改回来即可恢复正常&lt;/p&gt;
+&lt;h2 id=&#34;完工&#34;&gt;完工
+&lt;/h2&gt;&lt;p&gt;耳机麦克风的音量恢复正常，熟悉的耳返功能也回来了。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-%E8%80%B3%E6%9C%BA%E9%A9%B1%E5%8A%A8%E5%AE%89%E8%A3%85/20240605074823.png&#34;
+	width=&#34;485&#34;
+	height=&#34;739&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;侧音&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;65&#34;
+		data-flex-basis=&#34;157px&#34;
+	
+&gt;&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>新安装的千兆入户光纤，为何测速仅达百兆？</title>
+        <link>https://ttf248.life/p/%E6%96%B0%E5%AE%89%E8%A3%85%E7%9A%84%E5%8D%83%E5%85%86%E5%85%A5%E6%88%B7%E5%85%89%E7%BA%A4%E4%B8%BA%E4%BD%95%E6%B5%8B%E9%80%9F%E4%BB%85%E8%BE%BE%E7%99%BE%E5%85%86/</link>
+        <pubDate>Mon, 18 Mar 2024 00:29:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/%E6%96%B0%E5%AE%89%E8%A3%85%E7%9A%84%E5%8D%83%E5%85%86%E5%85%A5%E6%88%B7%E5%85%89%E7%BA%A4%E4%B8%BA%E4%BD%95%E6%B5%8B%E9%80%9F%E4%BB%85%E8%BE%BE%E7%99%BE%E5%85%86/</guid>
+        <description>&lt;p&gt;想要家里的网络快如闪电？关键在于了解网线的选择、光猫和路由器的配置，还有那些不起眼的小细节。这篇博客将带你轻松了解如何用六类网线打造千兆网络，以及如何通过简单的设备检查和配置，确保你的网络速度不受束缚。让我们一起探索，让家里的网速飞起来！&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/%E6%96%B0%E5%AE%89%E8%A3%85%E7%9A%84%E5%8D%83%E5%85%86%E5%85%A5%E6%88%B7%E5%85%89%E7%BA%A4%E4%B8%BA%E4%BD%95%E6%B5%8B%E9%80%9F%E4%BB%85%E8%BE%BE%E7%99%BE%E5%85%86/image.png&#34;
+	width=&#34;1001&#34;
+	height=&#34;590&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;手动修复&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;169&#34;
+		data-flex-basis=&#34;407px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;第一章深入剖析网络传输介质&#34;&gt;第一章：深入剖析网络传输介质
+&lt;/h2&gt;&lt;p&gt;当我们谈论实现千兆网络接入时，承载信息高速传输的载体——网线起着至关重要的作用。下面将对五类、六类和七类网线进行详细的解读：&lt;/p&gt;
+&lt;h3 id=&#34;1-五类网线cat5&#34;&gt;1. &lt;strong&gt;五类网线（CAT5）&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;五类网线，也称为CAT5，是较早普及的一种双绞线类型，每对线芯通过精密的螺旋结构设计来减少串扰。它主要适用于10/100Mbps的快速以太网，最大传输频率约100MHz，虽然在过去曾广泛应用，但对于当前追求千兆乃至更高速度的需求而言，五类网线由于物理限制无法满足要求。&lt;/p&gt;
+&lt;h3 id=&#34;2-六类网线cat6&#34;&gt;2. &lt;strong&gt;六类网线（CAT6）&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;随着技术发展，六类网线应运而生。相比五类网线，六类线材采用了更严格的制造标准和更先进的结构设计，显著提高了抗干扰能力和传输效率，可支持高达1Gbps的传输速率，并且在理想条件下，传输距离可以达到100米，这恰好符合千兆网络的接入需求。&lt;/p&gt;
+&lt;h3 id=&#34;3-七类网线cat7&#34;&gt;3. &lt;strong&gt;七类网线（CAT7）&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;七类网线则代表着当前双绞线技术的尖端水准。它不仅在传输速率上有飞跃式提升，理论上可支持最高10Gbps的超高速率，而且在设计上加入了完整的屏蔽系统，包括每个线对之间的屏蔽以及整体外层的屏蔽，从而极大地降低了外部电磁干扰和近端串扰，保障了数据传输的稳定性与准确性。不过，七类网线主要用于未来的万兆以太网或者特定的高要求场景。&lt;/p&gt;
+&lt;p&gt;在搭建千兆家庭网络环境中，为了充分释放千兆光纤的潜力，选用六类网线是最为经济且高效的选择。同时，确保所有连接线材的质量合格，并严格按照标准接线方式操作，也是确保网络性能的重要环节。&lt;/p&gt;
+&lt;h2 id=&#34;第二章深挖网络中枢设备光猫路由器lan口带宽的影响&#34;&gt;第二章：深挖网络中枢设备——光猫、路由器LAN口带宽的影响
+&lt;/h2&gt;&lt;h3 id=&#34;光猫及其lan口带宽的重要性&#34;&gt;光猫及其LAN口带宽的重要性
+&lt;/h3&gt;&lt;p&gt;光猫，全称光纤调制解调器，是家庭宽带接入的核心设备，它的功能在于将光纤中的光信号转化为数字信号，供家庭网络设备使用。对于千兆光纤用户来说，光猫是否支持千兆传输显得尤为重要。如果光猫的WAN口只支持百兆，那么即使入户光纤速率再高，也会因为这个瓶颈而被限制在百兆以内。同样地，光猫的LAN口也需要具备千兆输出能力，否则连接在其上的路由器或其他设备，无法获取到真正的千兆速率。&lt;/p&gt;
+&lt;h3 id=&#34;路由器lan口带宽的作用&#34;&gt;路由器LAN口带宽的作用
+&lt;/h3&gt;&lt;p&gt;路由器的LAN口负责将接收到的数据分发到各个终端设备。当路由器的LAN口仅为百兆时，即便其他设备配置再好，也只能实现百兆速率的局域网通信。因此，在构建千兆家庭网络时，确保路由器的WAN口能够接收千兆数据，并且LAN口也能提供千兆级别的数据输出能力，这样才能使家中所有的智能设备享受到高速网络带来的流畅体验。&lt;/p&gt;
+&lt;p&gt;此外，需要注意的是，部分老旧或低端路由器可能存在LAN口速率自动协商机制，这意味着即使路由器本身支持千兆，也可能因线路、设备兼容性等原因降级为百兆模式。因此，正确配置路由器参数，启用强制千兆模式，并配合千兆交换机或直连设备，是实现全千兆网络的关键步骤之一。&lt;/p&gt;
+&lt;p&gt;在升级为千兆光纤后，务必检查并更换为千兆光猫和千兆路由器，确保所有设备接口均达到千兆级别。&lt;/p&gt;
+&lt;h2 id=&#34;第三章潜藏之谜一根断裂的子线如何影响千兆网络速度&#34;&gt;第三章：潜藏之谜——一根断裂的子线如何影响千兆网络速度
+&lt;/h2&gt;&lt;h3 id=&#34;子线故障与网络性能下降&#34;&gt;子线故障与网络性能下降
+&lt;/h3&gt;&lt;p&gt;在测速期间网络始终保持连接，没有出现明显的断网状况。由于是新入户部署的宽带，弱电箱里面很杂乱，时不时还在调整光猫的走线，电源接口插排的位置，偶发性出现过测速达到千兆。&lt;/p&gt;
+&lt;p&gt;依据前面的资料，我们已经分析排查了网线型号、光猫 lan 口速度，最终发现罪魁祸首竟是网线内部的一根棕色子线断裂。&lt;/p&gt;
+&lt;p&gt;断裂的原因：师傅来安装水晶头的时候，这根网线用力稍微猛了一点，导致一根子线断了一半，没有彻底断开，后续重新调整光猫位置的时候，不断的移动位置，导致彻底断裂。&lt;/p&gt;
+&lt;h3 id=&#34;六类网线八根线的功能解析&#34;&gt;六类网线八根线的功能解析
+&lt;/h3&gt;&lt;p&gt;六类网线遵循TIA/EIA-568-B标准，包含八根双绞线，颜色编码如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;白橙 / 橙&lt;/li&gt;
+&lt;li&gt;白绿 / 绿&lt;/li&gt;
+&lt;li&gt;白蓝 / 蓝&lt;/li&gt;
+&lt;li&gt;白棕 / 棕&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;在千兆以太网（1000BASE-T）的标准下，这八根线中有四对线同时工作，具体分工如下：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;白橙与橙这对线（1&amp;amp;2），用于发送数据（Tx+/-）；&lt;/li&gt;
+&lt;li&gt;白绿与绿这对线（3&amp;amp;6），用于接收数据（Rx+/-）；&lt;/li&gt;
+&lt;li&gt;白蓝与蓝这对线（4&amp;amp;5）以及白棕与棕这对线（7&amp;amp;8），在千兆以太网中原本并非主用，但在某些高级应用（例如，部分PoE供电或未来的技术扩展）中可能会启用。而在传统的百兆网络中，确实只需要使用1、2、3、6这四根线即可。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;断裂子线对网络速度的影响&#34;&gt;断裂子线对网络速度的影响
+&lt;/h3&gt;&lt;p&gt;在上述情况下，倘若一根褐色的子线（即棕线或棕白线）断裂，理论上在千兆网络环境下确实会造成速度下降，因为千兆网络需要所有四对线同时进行双向传输以实现满速。但是，由于家庭网络设备往往存在自动协商功能，当检测到线缆出现问题时，会退回到能够正常工作的较低速率模式，也就是百兆模式，这就解释了为何即使有一根子线断裂，网络还能保持连接并工作在百兆速度上。&lt;/p&gt;
+&lt;p&gt;简言之，尽管一根棕色子线断裂不影响百兆网络的基本运行，但在千兆网络环境下，它却足以成为限制网络速度的关键因素。直至进行深入诊断和修复，才能真正发挥千兆光纤的全部潜能。这也提醒我们在遇到类似情况时，不应忽视任何潜在的网络基础设施问题，即使是看似不影响基本连接的小故障，也可能成为高速网络体验的隐形障碍。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>WPF中的UI线程与卡顿问题及其解决方案</title>
+        <link>https://ttf248.life/p/wpf%E4%B8%AD%E7%9A%84ui%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%8D%A1%E9%A1%BF%E9%97%AE%E9%A2%98%E5%8F%8A%E5%85%B6%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88/</link>
+        <pubDate>Tue, 12 Mar 2024 07:12:21 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/wpf%E4%B8%AD%E7%9A%84ui%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%8D%A1%E9%A1%BF%E9%97%AE%E9%A2%98%E5%8F%8A%E5%85%B6%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88/</guid>
+        <description>&lt;p&gt;在开发桌面应用程序时，特别是在使用Windows Presentation Foundation (WPF)框架构建富客户端应用时，正确处理用户界面（UI）线程对于保证应用的流畅性和响应性至关重要。UI线程，又称为主线程，是负责处理窗口和控件事件、布局计算以及绘制界面的核心线程。任何与UI元素交互的操作都应当在UI线程上执行，这是WPF以及其他大多数GUI框架遵循的基本原则。&lt;/p&gt;
+&lt;h2 id=&#34;什么是ui线程&#34;&gt;什么是UI线程？
+&lt;/h2&gt;&lt;p&gt;UI线程在WPF应用启动时由操作系统创建，并初始化应用程序主窗口。它是应用程序中唯一能够直接访问和修改UI组件的状态的线程。这意味着诸如按钮点击、文本框输入、窗口尺寸变化等所有用户交互产生的事件都在这个线程上下文中处理。同时，WPF的依赖属性系统、数据绑定机制以及布局逻辑也都在UI线程上同步执行。&lt;/p&gt;
+&lt;h2 id=&#34;卡顿现象及其原因&#34;&gt;卡顿现象及其原因
+&lt;/h2&gt;&lt;p&gt;当UI线程被长时间占用或阻塞时，例如执行耗时的计算、大量数据加载、数据库查询或其他I/O密集型任务时，会导致UI线程无法及时响应用户的交互请求，进而表现为界面无响应（Freeze），也就是我们常说的“卡顿”。这种情况下，用户会明显感觉到应用的延迟和不流畅，严重时甚至会出现“Application Not Responding”（ANR）警告。&lt;/p&gt;
+&lt;h2 id=&#34;ui线程的两条基本规则&#34;&gt;UI线程的两条基本规则
+&lt;/h2&gt;&lt;p&gt;为了避免上述情况的发生，WPF开发者应遵循以下两条关键规则：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;不要在UI线程上执行耗时操作&lt;/strong&gt;：任何可能导致UI线程挂起的操作都应尽可能地移至后台线程执行，以确保UI线程能及时响应用户的输入和渲染屏幕的变化。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不要在非UI线程直接更新UI元素&lt;/strong&gt;：由于WPF的安全机制设计，只有UI线程有权对UI元素进行修改。试图从其他线程直接更改UI状态将会抛出异常。因此，即使在后台线程完成了计算或数据准备，也需要通过适当的跨线程通信机制将结果显示到UI上。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;解决方案异步编程与线程安全更新&#34;&gt;解决方案：异步编程与线程安全更新
+&lt;/h2&gt;&lt;p&gt;为了在保持UI流畅的同时又能执行耗时任务，WPF提供了多种异步编程模型和工具来协助开发者实现这一目标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Dispatcher对象&lt;/strong&gt;：WPF的Dispatcher类允许你将工作项安排到UI线程的任务队列中执行。你可以使用&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;或&lt;code&gt;Dispatcher.BeginInvoke&lt;/code&gt;方法从后台线程安全地更新UI。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;async/await关键字&lt;/strong&gt;：利用C#语言的异步特性，可以编写异步方法并在其中使用&lt;code&gt;await&lt;/code&gt;关键字等待后台任务完成，完成后自动回到UI线程执行后续的UI更新代码。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;案例&#34;&gt;案例
+&lt;/h2&gt;&lt;h3 id=&#34;使用dispatcherinvoke方法更新ui&#34;&gt;使用&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;方法更新UI
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-csharp&#34;&gt;private void Button_Click(object sender, RoutedEventArgs e)
+{
+    // 假设这是一个耗时操作
+    Task.Run(() =&amp;gt;
+    {
+        var result = LongRunningOperation(); // 这里是模拟一个耗时计算的方法
+        
+        // 当耗时操作完成后，在UI线程上更新UI
+        Application.Current.Dispatcher.Invoke(() =&amp;gt;
+        {
+            LabelStatus.Text = $&amp;quot;计算结果: {result}&amp;quot;;
+        });
+    });
+}
+
+private string LongRunningOperation()
+{
+    // 模拟耗时操作
+    Thread.Sleep(5000);
+    return &amp;quot;已完成&amp;quot;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;使用asyncawait关键字配合taskrun&#34;&gt;使用&lt;code&gt;async/await&lt;/code&gt;关键字配合&lt;code&gt;Task.Run&lt;/code&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-csharp&#34;&gt;private async void Button_ClickAsync(object sender, RoutedEventArgs e)
+{
+    Button button = sender as Button;
+    button.IsEnabled = false; // 防止用户重复点击
+
+    try
+    {
+        // 开启后台任务
+        var result = await Task.Run(() =&amp;gt; LongRunningOperation());
+
+        // 在后台任务完成后，自动切换回UI线程更新UI
+        LabelStatus.Text = $&amp;quot;计算结果: {result}&amp;quot;;
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($&amp;quot;发生错误: {ex.Message}&amp;quot;);
+    }
+    finally
+    {
+        button.IsEnabled = true; // 重新启用按钮
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
+        <title>升级GCC版本导致程序崩溃：代码不规范的隐患</title>
+        <link>https://ttf248.life/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83%E7%9A%84%E9%9A%90%E6%82%A3/</link>
+        <pubDate>Sun, 10 Mar 2024 23:19:06 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/%E5%8D%87%E7%BA%A7gcc%E7%89%88%E6%9C%AC%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E4%BB%A3%E7%A0%81%E4%B8%8D%E8%A7%84%E8%8C%83%E7%9A%84%E9%9A%90%E6%82%A3/</guid>
+        <description>&lt;p&gt;在同一段业务代码的情况下，程序在 CentOS 7 环境下编译并运行正常，但当切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题只在 &lt;strong&gt;Release 模式&lt;/strong&gt;下出现，&lt;strong&gt;Debug 模式&lt;/strong&gt;则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。&lt;/p&gt;
+&lt;h3 id=&#34;问题定位&#34;&gt;问题定位
+&lt;/h3&gt;&lt;p&gt;通过一番排查，问题的症结在于 &lt;strong&gt;函数缺少返回值&lt;/strong&gt;。在 Release 模式下，GCC 新版本会进行更多的优化，这导致了原本没有显式返回值的函数在执行过程中出现了未知的逻辑，从而引发了崩溃。我们的结论是，&lt;strong&gt;编译器的警告不容忽视，尤其是在老项目中，部分警告可能被无视，但也应当避免屏蔽所有警告&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;环境说明&#34;&gt;环境说明
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CentOS 7 GCC版本：&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-39)
+Copyright © 2015 Free Software Foundation, Inc.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CentOS 8 GCC版本：&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-21)
+Copyright (C) 2018 Free Software Foundation, Inc.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;崩溃现象&#34;&gt;崩溃现象
+&lt;/h3&gt;&lt;p&gt;我们在分析程序崩溃的堆栈时，看到的堆栈信息如下：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;[New LWP 1385902]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library &amp;quot;/lib64/libthread_db.so.1&amp;quot;.
+Core was generated by `./pstack_main`.
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x00007ffe894b4420 in ?? ()
+(gdb) bt
+#0  0x00007ffe894b4420 in ?? ()
+#1  0x00000000004008e9 in main ()
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这个堆栈看上去并不直观，崩溃函数的栈信息居然显示为一个 &lt;code&gt;??&lt;/code&gt;，这让问题的排查变得更加复杂。&lt;/p&gt;
+&lt;h3 id=&#34;代码示例&#34;&gt;代码示例
+&lt;/h3&gt;&lt;p&gt;为了更好地理解问题，下面是重现崩溃的最小代码示例：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;map&amp;gt;
+
+int test() {
+    std::cout &amp;lt;&amp;lt; &amp;quot;1&amp;quot; &amp;lt;&amp;lt; std::endl;
+}
+
+int main() {
+    test();
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;该代码中的 &lt;code&gt;test()&lt;/code&gt; 函数显然没有显式返回一个值，而它的返回类型是 &lt;code&gt;int&lt;/code&gt;。根据 C++ 规范，当一个函数声明为 &lt;code&gt;int&lt;/code&gt; 类型时，必须有一个返回值，否则就可能导致未定义行为。&lt;/p&gt;
+&lt;h3 id=&#34;编译警告&#34;&gt;编译警告
+&lt;/h3&gt;&lt;p&gt;在我们的项目中，CMake 脚本屏蔽了许多编译时警告，其中就包括了以下警告信息：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;/root/pstack/main.cpp: In function ‘int test()’:
+/root/pstack/main.cpp:7:1: warning: no return statement in function returning non-void [-Wreturn-type]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这一警告表明 &lt;code&gt;test()&lt;/code&gt; 函数没有返回值，而这正是问题的根源。高版本的 GCC（如 8.5.0）在优化代码时可能会对这种未定义的行为做出不稳定的优化，从而导致程序崩溃。&lt;/p&gt;
+&lt;h3 id=&#34;汇编代码差异&#34;&gt;汇编代码差异
+&lt;/h3&gt;&lt;p&gt;为了解释 GCC 编译器优化行为的差异，我们对比了不同版本 GCC 生成的汇编代码：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;GCC 4.8.5 生成的汇编代码：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;汇编代码较为冗长，且包含了对标准输出流（如 &lt;code&gt;std::cout&lt;/code&gt;）的处理逻辑。这表明编译器进行了更保守的优化，未对 &lt;code&gt;test()&lt;/code&gt; 函数中缺失返回值的问题做过多优化，可能因此避免了崩溃。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;GCC 8.5.0 生成的汇编代码：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;新版本的 GCC 进行了更多的优化，减少了代码量。然而，这种优化可能使得缺少返回值的函数执行时行为不确定，从而导致程序崩溃。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;结论&#34;&gt;结论
+&lt;/h3&gt;&lt;p&gt;通过这次问题排查，我们深刻认识到，在 C++ 中，&lt;strong&gt;函数返回值必须明确&lt;/strong&gt;，特别是在函数声明为 &lt;code&gt;int&lt;/code&gt; 时，必须提供一个返回值。对于使用较旧版本编译器的项目，升级到新版本的 GCC 时，可能会遇到更多的优化和更严格的警告机制。因此，我们建议在编译时 &lt;strong&gt;不要屏蔽所有警告&lt;/strong&gt;，而是应该有选择性地处理它们，尤其是函数返回值、类型匹配等常见问题。&lt;/p&gt;
+&lt;p&gt;最终，通过为 &lt;code&gt;test()&lt;/code&gt; 函数添加一个返回值，问题得以解决，程序恢复了正常的运行。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>vmware虚拟机cpu资源占用异常</title>
+        <link>https://ttf248.life/p/vmware%E8%99%9A%E6%8B%9F%E6%9C%BAcpu%E8%B5%84%E6%BA%90%E5%8D%A0%E7%94%A8%E5%BC%82%E5%B8%B8/</link>
+        <pubDate>Sun, 10 Mar 2024 22:14:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/vmware%E8%99%9A%E6%8B%9F%E6%9C%BAcpu%E8%B5%84%E6%BA%90%E5%8D%A0%E7%94%A8%E5%BC%82%E5%B8%B8/</guid>
+        <description>&lt;p&gt;背景：本地机器部署 windows 版本的业务系统，cpu 资源占用 5% 左右。vmware安装的 centos8 中部署 linux 版本业务系统，资源占用异常。&lt;/p&gt;
+&lt;h2 id=&#34;问题描述&#34;&gt;问题描述
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;宿主机：win10 企业版&lt;/li&gt;
+&lt;li&gt;vmware：17.5&lt;/li&gt;
+&lt;li&gt;虚拟机：centos8&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;虚拟机资源分配为&lt;code&gt;4C8GB&lt;/code&gt;，启动业务系统。业务系统部署在虚拟机Linux系统中，虚拟机内部 top 命令观察系统资源占用，cpu 占用并不高，外层 windows 系统，任务管理器观察到的CPU资源占用很高，查看进程发现，vmware 进程占用CPU资源很高。&lt;/p&gt;
+&lt;p&gt;+&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+
+|         Windows           |
+|                           |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|   |      VMware        |  |
+|   |      Program       |  |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|                           |
++&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+&lt;/p&gt;
+&lt;h2 id=&#34;知识点&#34;&gt;知识点
+&lt;/h2&gt;&lt;p&gt;此问题的排查，并不顺利，由于导火索并不是业务系统本身，而是虚拟机本身的问题。如何将思路从常规的业务代码转移到系统负载，再从负载数据的异常，定位到软中断，最后来到关键点，什么东西会影响 Vmware 软中断的工作效率？本文将先科普各个知识点，最后给出解决方案。&lt;/p&gt;
+&lt;h3 id=&#34;hyper-v&#34;&gt;hyper-v
+&lt;/h3&gt;&lt;p&gt;Windows操作系统的虚拟化技术经历了一次重大变革。在微软首次发布WSL时，启用Hyper-V服务会导致无法同时使用VMware虚拟机。直到后续版本，VMware才能与Hyper-V服务兼容。&lt;/p&gt;
+&lt;h3 id=&#34;系统负载&#34;&gt;系统负载
+&lt;/h3&gt;&lt;p&gt;在Linux系统中，&amp;ldquo;负载&amp;rdquo;（load）是指系统中正在运行或等待执行的进程的数量。负载通常由三个数字表示，分别是1分钟、5分钟和15分钟内运行队列中的平均进程数量。这些数字可以通过运行&amp;quot;uptime&amp;quot;命令或&amp;quot;top&amp;quot;命令来查看。&lt;/p&gt;
+&lt;p&gt;具体来说，这三个数字分别代表：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;1分钟负载&lt;/strong&gt;：系统在过去1分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;5分钟负载&lt;/strong&gt;：系统在过去5分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;15分钟负载&lt;/strong&gt;：系统在过去15分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;负载的含义是在系统中等待运行的进程数。如果这个数字高于系统的逻辑CPU数量，表明系统负载很高，意味着有许多进程正在等待处理器资源。这可能会导致系统变得缓慢或不响应，具体取决于负载的高低程度以及系统的配置和性能。&lt;/p&gt;
+&lt;p&gt;在理想情况下，负载应该保持在系统的逻辑CPU数量范围内，这样系统的性能就能够得到最优化。如果负载持续高于CPU数量，可能需要进一步分析系统中的进程，找出导致负载高的原因，并采取相应的措施来调整系统资源分配或优化进程的运行方式。&lt;/p&gt;
+&lt;h3 id=&#34;分析负载-mpstat&#34;&gt;分析负载 mpstat
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;mpstat&lt;/code&gt; 命令用于报告单个或多个处理器的多个信息，包括平均负载、CPU利用率、中断和上下文切换等。在 &lt;code&gt;sysstat&lt;/code&gt; 包中，&lt;code&gt;mpstat&lt;/code&gt; 是非常有用的工具，可以用来分析系统的负载情况。下面是使用 &lt;code&gt;mpstat&lt;/code&gt; 进行负载分析的步骤：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;安装 sysstat&lt;/strong&gt;：
+如果您的系统上没有安装 &lt;code&gt;sysstat&lt;/code&gt;，可以使用适合您系统的包管理工具进行安装。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;运行 mpstat&lt;/strong&gt;：
+使用 &lt;code&gt;mpstat&lt;/code&gt; 命令查看 CPU 的使用情况和负载。默认情况下，&lt;code&gt;mpstat&lt;/code&gt; 每秒钟显示一次 CPU 使用情况的平均值。您可以通过指定时间间隔来调整输出频率。例如，要以每秒钟一次的频率运行 &lt;code&gt;mpstat&lt;/code&gt;，可以使用以下命令：&lt;code&gt;mpstat -P ALL 2&lt;/code&gt;，&lt;code&gt;irq&lt;/code&gt; 表示占用资源占用&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;01:32:33 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+01:32:35 PM  all    0.00    0.00    0.26    0.00    3.73    0.26    0.00    0.00    0.00   95.76
+01:32:35 PM    0    0.00    0.00    0.51    0.00    3.57    0.00    0.00    0.00    0.00   95.92
+01:32:35 PM    1    0.00    0.00    0.00    0.00    3.59    0.51    0.00    0.00    0.00   95.90
+01:32:35 PM    2    0.00    0.00    0.00    0.00    4.15    0.00    0.00    0.00    0.00   95.85
+01:32:35 PM    3    0.00    0.00    0.52    0.00    3.61    0.52    0.00    0.00    0.00   95.36
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;分析输出&lt;/strong&gt;：
+&lt;code&gt;mpstat&lt;/code&gt; 的输出包括了每个 CPU 的利用率，以及系统的平均负载。特别关注平均负载以及每个 CPU 的利用率，可以帮助您了解系统的负载情况。如果负载较高，可以进一步分析是哪些进程导致的，以及是否存在性能瓶颈。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;结合其他工具&lt;/strong&gt;：
+除了 &lt;code&gt;mpstat&lt;/code&gt;，还可以使用 &lt;code&gt;sar&lt;/code&gt;、&lt;code&gt;pidstat&lt;/code&gt;、&lt;code&gt;iostat&lt;/code&gt; 等工具来综合分析系统性能。通过结合多种工具的输出，可以更全面地了解系统的负载情况，并找出性能问题的根源。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;中断&#34;&gt;中断
+&lt;/h3&gt;&lt;p&gt;此处不展开讲解内容太多，
+推荐: &lt;a class=&#34;link&#34; href=&#34;https://www.codedump.info/post/20200522-sgfap-softirq/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;《面向应用开发者的系统指南》CPU篇之软中断&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;频繁的触发软中断，也会体现在系统负载中。&lt;/p&gt;
+&lt;h2 id=&#34;问题排查&#34;&gt;问题排查
+&lt;/h2&gt;&lt;p&gt;考虑到仅从CPU角度分析无法定位问题，我们是否应该开始怀疑系统是否出现了异常？可能是Linux操作系统的负载过高，导致VMware占用了过多的CPU资源。通过使用&lt;code&gt;mpstat&lt;/code&gt;分析本地虚拟机，我们发现&lt;code&gt;irq&lt;/code&gt;占用异常，单核接近25%，而在正常情况下，启动业务进程空跑时，&lt;code&gt;irq&lt;/code&gt;占比应该约为5%。&lt;/p&gt;
+&lt;p&gt;在组内同事的开发环境中，他的CentOS 7部署在VMware上，资源占用显示正常。另一方面，在上海的开发环境中，虽然也是VMware，但我们无法直接观察宿主机的CPU资源情况。这时，我们面临着多个变量：VMware虚拟机、Linux操作系统和GCC版本。&lt;/p&gt;
+&lt;p&gt;转而分析测试环境，深圳的测试环境部署在物理机上，运行着低版本GCC编译的服务，而且在CentOS 8上运行。有趣的是，在深圳环境中，&lt;code&gt;irq&lt;/code&gt;占用都是正常的。&lt;/p&gt;
+&lt;p&gt;为了排查GCC版本引入的问题，我们将使用高版本GCC编译的程序部署到深圳环境进行测试，结果显示也都是正常的。&lt;/p&gt;
+&lt;p&gt;问题似乎变得更加明朗，我们开始怀疑操作系统是否存在问题。毕竟，CentOS 8已经不再受到官方支持。但即便重新部署了纯净的CentOS 7和CentOS 8，问题依然存在。&lt;/p&gt;
+&lt;p&gt;此时，我们开始怀疑唯一的不确定因素，即VMware虚拟机软件。突然间，灵光一现，我们想到了Hyper-V技术。是否之前启用了Hyper-V，但没有彻底关闭，从而导致了这个问题？毕竟，软中断也是通过虚拟机软件来实现的。不同的虚拟机虚拟技术是否存在BUG？这些问题值得深入思考和调查。&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论
+&lt;/h2&gt;&lt;p&gt;根据微软官方的手册，我们完全关闭了本机的Hyper-V服务后，发现VMware在宿主机上恢复了正常。至此，问题终于迎刃而解。正如一开始所述，这段经历曲折而艰辛，需要综合性的分析和判断。这也是我们首次排查问题，定位到了虚拟机这一层面。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor
+bcdedit /set hypervisorlaunchtype off
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>C&#43;&#43;编程中的陷阱：错误使用`std::map`导致程序崩溃详解</title>
+        <link>https://ttf248.life/p/c-%E7%BC%96%E7%A8%8B%E4%B8%AD%E7%9A%84%E9%99%B7%E9%98%B1%E9%94%99%E8%AF%AF%E4%BD%BF%E7%94%A8stdmap%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E8%AF%A6%E8%A7%A3/</link>
+        <pubDate>Sun, 10 Mar 2024 22:03:06 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/c-%E7%BC%96%E7%A8%8B%E4%B8%AD%E7%9A%84%E9%99%B7%E9%98%B1%E9%94%99%E8%AF%AF%E4%BD%BF%E7%94%A8stdmap%E5%AF%BC%E8%87%B4%E7%A8%8B%E5%BA%8F%E5%B4%A9%E6%BA%83%E8%AF%A6%E8%A7%A3/</guid>
+        <description>&lt;p&gt;本文旨在揭示在C++编程中不正确使用&lt;code&gt;std::map&lt;/code&gt;容器可能导致程序崩溃，通过中括号操作符尝试访问不存在的键时，会自动添加一个空元素。我们将深入剖析这一误解，并通过实例代码展示其潜在风险。&lt;/p&gt;
+&lt;p&gt;存储简单值不会有什么问题，但如果存储的是指针，那么就会有问题。因为指针是一个地址，如果没有初始化，那么这个地址是不确定的，这样就会导致程序崩溃。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;正文&#34;&gt;正文
+&lt;/h2&gt;&lt;p&gt;在C++标准库中，&lt;code&gt;std::map&lt;/code&gt;是一种关联容器，它按照键（key）的升序存储元素，并提供了高效的关键字查找功能。然而，新手开发者有时会因为对&lt;code&gt;std::map&lt;/code&gt;中括号操作符 &lt;code&gt;[]&lt;/code&gt; 的行为理解有误而陷入困境。实际上，当使用 &lt;code&gt;[]&lt;/code&gt; 访问一个不存在的键时，&lt;code&gt;std::map&lt;/code&gt; 会插入一个新的键值对，且默认构造函数将会用来初始化该键对应的值类型。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;map&amp;gt;
+
+int main() {
+    std::map&amp;lt;std::string, int&amp;gt; myMap;
+    
+    // 错误的用法：假设这里试图访问一个不存在的键并认为会得到0
+    std::cout &amp;lt;&amp;lt; &amp;quot;Value for &#39;nonexistent_key&#39;: &amp;quot; &amp;lt;&amp;lt; myMap[&amp;quot;nonexistent_key&amp;quot;] &amp;lt;&amp;lt; std::endl;
+
+    // 实际上，上述行代码创建了一个新的键值对，其中值被默认初始化为int的默认值（通常是0）
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;以上代码虽然没有直接导致程序崩溃，但这种隐式的插入行为在某些情况下可能导致意料之外的副作用，例如资源泄漏或不符合预期的状态变更。更糟糕的是，在多线程环境下并发访问未初始化的内存区域，甚至可能导致程序崩溃。&lt;/p&gt;
+&lt;p&gt;为了防止此类问题，推荐使用 &lt;code&gt;std::map::find()&lt;/code&gt; 或 &lt;code&gt;std::map::count()&lt;/code&gt; 方法来检查键是否存在，或者利用 &lt;code&gt;std::map::insert()&lt;/code&gt; 明确地插入元素：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;std::map&amp;lt;std::string, int&amp;gt; safeMap;
+if (safeMap.count(&amp;quot;nonexistent_key&amp;quot;) == 0) {
+    std::cout &amp;lt;&amp;lt; &amp;quot;Key does not exist.&amp;quot; &amp;lt;&amp;lt; std::endl;
+} else {
+    std::cout &amp;lt;&amp;lt; &amp;quot;Value for existing key: &amp;quot; &amp;lt;&amp;lt; safeMap[&amp;quot;nonexistent_key&amp;quot;] &amp;lt;&amp;lt; std::endl;
+}
+
+// 或者明确插入一个键值对，指定初始值
+safeMap.insert({ &amp;quot;new_key&amp;quot;, 0 });
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果 map 容器内部保存的对象为指针类型，自动插入元素的行为将保存一个未初始化的指针，调用到此指针的任何操作都将导致程序崩溃。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>pstack排查进程假死</title>
+        <link>https://ttf248.life/p/pstack%E6%8E%92%E6%9F%A5%E8%BF%9B%E7%A8%8B%E5%81%87%E6%AD%BB/</link>
+        <pubDate>Sat, 24 Feb 2024 23:55:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/pstack%E6%8E%92%E6%9F%A5%E8%BF%9B%E7%A8%8B%E5%81%87%E6%AD%BB/</guid>
+        <description>&lt;p&gt;在软件开发和运维中，经常会遇到进程假死的情况，这种情况会导致系统性能下降或者服务不可用。本文介绍如何使用 pstack 工具来排查进程假死问题，通过分析进程的堆栈信息，找出问题的原因并解决。&lt;/p&gt;
+&lt;p&gt;背景：风控系统子服务出现假死，导致风控服务不可用。由于缺乏服务可用性监控，无法及时发现进程假死的情况，导致系统不可用。&lt;/p&gt;
+&lt;h2 id=&#34;正文&#34;&gt;正文
+&lt;/h2&gt;&lt;p&gt;进程假死是指进程停止响应，但并没有退出的状态。这种情况可能由于多种原因引起，比如死锁、资源耗尽、异常等。为了解决这类问题，我们可以使用 pstack 工具来分析进程的堆栈信息，找出问题的根源。&lt;/p&gt;
+&lt;h2 id=&#34;步骤&#34;&gt;步骤
+&lt;/h2&gt;&lt;p&gt;pstack 是一个常用的工具，通常随着 gdb（GNU 调试器）一起提供。你可以通过以下命令安装它：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;sudo apt-get install gdb
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;获取进程ID：首先，我们需要获取假死进程的进程ID（PID）。可以使用 ps 命令来列出所有进程，并找到需要排查的进程ID。
+使用 pstack 工具分析进程堆栈，一旦获取到进程ID，就可以使用 pstack 工具来获取该进程的堆栈信息。运行以下命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;pstack &amp;lt;PID&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这将输出该进程的堆栈信息，显示出当前正在执行的函数调用序列。通过分析这些信息，可以发现进程停滞的位置，进而定位问题。&lt;/p&gt;
+&lt;p&gt;分析堆栈信息，通过查看堆栈信息，可以找到导致进程假死的原因。可能会发现一些死锁情况、无限循环或者其他异常情况。根据具体情况采取相应的措施，比如释放锁、修复代码逻辑等。&lt;/p&gt;
+&lt;h2 id=&#34;案例&#34;&gt;案例
+&lt;/h2&gt;&lt;p&gt;简单 demo，main 函数启动以后，新建子线程，实际执行函数进入死循环，导致程序无法正常结束，陷入假死的状态。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cmake_minimum_required(VERSION 3.0.0)
+project(pstack_main VERSION 0.1.0 LANGUAGES C CXX)
+
+include(CTest)
+enable_testing()
+
+# 查找线程库
+find_package(Threads REQUIRED)
+
+add_executable(pstack_main main.cpp)
+
+# 链接线程库
+target_link_libraries(pstack_main PRIVATE Threads::Threads)
+
+set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+include(CPack)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;thread&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+
+void infiniteLoop() {
+    while (true) {
+        // 主线程进入死循环
+    }
+}
+
+int main() {
+    std::thread thread(infiniteLoop); // 创建一个线程，执行死循环函数
+    thread.join(); // 等待线程结束
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;启动程序，执行 pstack 结果：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Thread 2 (Thread 0x7eff3619b700 (LWP 1315017)):
+#0  infiniteLoop () at /root/pstack/main.cpp:6
+#1  0x0000000000402ca9 in std::__invoke_impl&amp;lt;void, void (*)()&amp;gt; (__f=@0x2260eb8: 0x4029a6 &amp;lt;infiniteLoop()&amp;gt;) at /usr/include/c++/8/bits/invoke.h:60
+#2  0x0000000000402b02 in std::__invoke&amp;lt;void (*)()&amp;gt; (__fn=@0x2260eb8: 0x4029a6 &amp;lt;infiniteLoop()&amp;gt;) at /usr/include/c++/8/bits/invoke.h:95
+#3  0x0000000000403150 in std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt;::_M_invoke&amp;lt;0ul&amp;gt; (this=0x2260eb8) at /usr/include/c++/8/thread:244
+#4  0x0000000000403126 in std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt;::operator() (this=0x2260eb8) at /usr/include/c++/8/thread:253
+#5  0x000000000040310a in std::thread::_State_impl&amp;lt;std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt; &amp;gt;::_M_run (this=0x2260eb0) at /usr/include/c++/8/thread:196
+#6  0x00007eff36bceb23 in execute_native_thread_routine () from /lib64/libstdc++.so.6
+#7  0x00007eff36ea91ca in start_thread () from /lib64/libpthread.so.0
+#8  0x00007eff361d58d3 in clone () from /lib64/libc.so.6
+Thread 1 (Thread 0x7eff372e1740 (LWP 1315016)):
+#0  0x00007eff36eaa6cd in __pthread_timedjoin_ex () from /lib64/libpthread.so.0
+#1  0x00007eff36bceda7 in std::thread::join() () from /lib64/libstdc++.so.6
+#2  0x00000000004029d2 in main () at /root/pstack/main.cpp:13
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;可以看到，进程假死的原因是死循环，主线程进入死循环，子线程无法退出，导致进程假死。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
