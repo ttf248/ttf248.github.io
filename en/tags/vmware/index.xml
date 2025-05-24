@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Vmware on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/vmware/</link>
+        <description>Recent content in Vmware on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Sun, 25 May 2025 02:57:45 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/vmware/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>VMware virtual machine CPU resource usage anomaly</title>
+        <link>https://ttf248.life/en/p/vmware-virtual-machine-cpu-resource-usage-anomaly/</link>
+        <pubDate>Sun, 10 Mar 2024 22:14:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/vmware-virtual-machine-cpu-resource-usage-anomaly/</guid>
+        <description>&lt;p&gt;The background is that the locally deployed Windows version of the business system occupies about 5% of CPU resources. The Linux version of the business system deployed in VMware-installed CentOS8 has abnormal resource occupancy.&lt;/p&gt;
+&lt;h2 id=&#34;problem-description&#34;&gt;Problem description
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;Host machine: Windows 10 Enterprise Edition&lt;/li&gt;
+&lt;li&gt;vmware：17.5&lt;/li&gt;
+&lt;li&gt;Virtual machine: CentOS 8&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Virtual machine resources are allocated as &lt;code&gt;4C8GB&lt;/code&gt;, and the business system is started. The business system is deployed in a virtual machine Linux environment. Inside the virtual machine, the top command observes system resource usage, and CPU utilization is not high. However, in the outer Windows system, Task Manager shows very high CPU resource utilization. Checking processes reveals that the VMware process consumes a lot of CPU resources.&lt;/p&gt;
+&lt;p&gt;+&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+
+|         Windows           |
+|                           |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|   |      VMware        |  |
+|   |      Program       |  |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|                           |
++&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+&lt;/p&gt;
+&lt;h2 id=&#34;key-points&#34;&gt;Key points
+&lt;/h2&gt;&lt;p&gt;Troubleshooting this issue has not been smooth, as the root cause wasn&amp;rsquo;t in the business system itself but rather a problem with the virtual machine. How to shift focus from routine business code to system load, then from anomalies in load data to soft interrupts, and finally pinpoint the key factor: what could affect the efficiency of VMware soft interrupts? This article will first explain the relevant knowledge points and then provide a solution.&lt;/p&gt;
+&lt;h3 id=&#34;hyper-v&#34;&gt;hyper-v
+&lt;/h3&gt;&lt;p&gt;Virtualization technology for Windows operating systems has undergone a significant change. When Microsoft first released WSL, enabling the Hyper-V service would prevent the simultaneous use of VMware virtual machines. It wasn&amp;rsquo;t until subsequent versions that VMware became compatible with the Hyper-V service.&lt;/p&gt;
+&lt;h3 id=&#34;system-load&#34;&gt;System load
+&lt;/h3&gt;&lt;p&gt;In a Linux system, &amp;ldquo;load&amp;rdquo; refers to the number of processes that are running or waiting to be executed in the system. Load is typically represented by three numbers, which represent the average number of processes in the run queue over 1 minute, 5 minutes, and 15 minutes. These numbers can be viewed by running the &amp;ldquo;uptime&amp;rdquo; command or the &amp;ldquo;top&amp;rdquo; command.&lt;/p&gt;
+&lt;p&gt;Specifically, these three numbers represent:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Average number of processes in the run queue over the past 1 minute&lt;/li&gt;
+&lt;li&gt;Average number of processes in the run queue over the past 5 minutes&lt;/li&gt;
+&lt;li&gt;Average number of processes in the run queue over the past 15 minutes&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The meaning of load is the number of processes waiting to run in the system. If this number exceeds the logical CPU count of the system, it indicates a high system load, meaning that many processes are waiting for processor resources. This can lead to the system becoming slow or unresponsive, depending on the degree of the load and the system&amp;rsquo;s configuration and performance.&lt;/p&gt;
+&lt;p&gt;Ideally, the load should be maintained within the logical CPU count of the system to optimize performance. If the load consistently exceeds the number of CPUs, further analysis of processes in the system may be necessary to identify the cause of the high load and take appropriate measures to adjust system resource allocation or optimize process execution methods.&lt;/p&gt;
+&lt;h3 id=&#34;analyzing-load-with-mpstat&#34;&gt;Analyzing load with mpstat
+&lt;/h3&gt;&lt;p&gt;The &lt;code&gt;mpstat&lt;/code&gt; command is used to report multiple pieces of information for single or multiple processors, including average load, CPU utilization, interrupts, and context switching. As a useful tool in the &lt;code&gt;sysstat&lt;/code&gt; package, &lt;code&gt;mpstat&lt;/code&gt; can be used to analyze system load conditions. The following are the steps for using &lt;code&gt;mpstat&lt;/code&gt; to perform load analysis:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Installing sysstat
+If &lt;code&gt;sysstat&lt;/code&gt; is not installed on your system, you can use a package management tool suitable for your system to install it&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Run mpstat
+Use the &lt;code&gt;mpstat&lt;/code&gt; command to view CPU usage and load. By default, &lt;code&gt;mpstat&lt;/code&gt; displays the average CPU usage every second. You can adjust the output frequency by specifying a time interval. For example, to run &lt;code&gt;mpstat&lt;/code&gt; once per second, you can use the following command: &lt;code&gt;mpstat -P ALL 2&lt;/code&gt;, where &lt;code&gt;irq&lt;/code&gt; indicates resource occupancy.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;01:32:33 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+01:32:35 PM  all    0.00    0.00    0.26    0.00    3.73    0.26    0.00    0.00    0.00   95.76
+01:32:35 PM    0    0.00    0.00    0.51    0.00    3.57    0.00    0.00    0.00    0.00   95.92
+01:32:35 PM    1    0.00    0.00    0.00    0.00    3.59    0.51    0.00    0.00    0.00   95.90
+01:32:35 PM    2    0.00    0.00    0.00    0.00    4.15    0.00    0.00    0.00    0.00   95.85
+01:32:35 PM    3    0.00    0.00    0.52    0.00    3.61    0.52    0.00    0.00    0.00   95.36
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Analysis output
+The output of &lt;code&gt;mpstat&lt;/code&gt; includes the utilization rate for each CPU and the system&amp;rsquo;s average load. Paying particular attention to the average load and the utilization rate of each CPU can help you understand the system’s load situation. If the load is high, further analysis can identify which processes are causing it and whether there are any performance bottlenecks.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Combining with other tools
+In addition to &lt;code&gt;mpstat&lt;/code&gt;, tools such as &lt;code&gt;sar&lt;/code&gt;, &lt;code&gt;pidstat&lt;/code&gt;, and &lt;code&gt;iostat&lt;/code&gt; can also be used for comprehensive system performance analysis. By combining the output of multiple tools, you can gain a more complete understanding of system load and identify the root causes of performance issues.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;interruption&#34;&gt;Interruption
+&lt;/h3&gt;&lt;p&gt;I won&amp;rsquo;t elaborate on the content here
+Recommended: &lt;a class=&#34;link&#34; href=&#34;https://www.codedump.info/post/20200522-sgfap-softirq/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;System Guide for Application Developers - CPU Part on Soft Interrupts&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;Frequent triggering of soft interrupts will also be reflected in system load&lt;/p&gt;
+&lt;h2 id=&#34;troubleshooting&#34;&gt;Troubleshooting
+&lt;/h2&gt;&lt;p&gt;Considering that analyzing the problem solely from a CPU perspective is unable to pinpoint the issue, should we start suspecting an anomaly in the system? It&amp;rsquo;s possible that the Linux operating system has an excessively high load, leading VMware to consume excessive CPU resources. By using &lt;code&gt;mpstat&lt;/code&gt; to analyze the local virtual machine, we found abnormal &lt;code&gt;irq&lt;/code&gt; usage, approaching 25% on a single core. Under normal circumstances, when running business processes without any load, the &lt;code&gt;irq&lt;/code&gt; percentage should be around 5%.&lt;/p&gt;
+&lt;p&gt;Within the development environment of his team, CentOS 7 is deployed on VMware and resource usage appears normal. On the other hand, in the Shanghai development environment, although it&amp;rsquo;s also VMware, we cannot directly observe the CPU resources of the host machine. We are now facing multiple variables: the VMware virtual machine, the Linux operating system, and the GCC version.&lt;/p&gt;
+&lt;p&gt;Turning to analyze the test environment, Shenzhen&amp;rsquo;s test environment is deployed on physical machines and runs a low-version GCC compilation service, and it operates on CentOS 8. Interestingly, in the Shenzhen environment, &lt;code&gt;irq&lt;/code&gt; occupancy is normal.&lt;/p&gt;
+&lt;p&gt;To investigate issues introduced by GCC versions, we deployed programs compiled with a newer version of GCC to the Shenzhen environment for testing, and the results were also normal&lt;/p&gt;
+&lt;p&gt;The issue seems to be becoming clearer, and we&amp;rsquo;ve started to suspect there might be a problem with the operating system. After all, CentOS 8 is no longer officially supported. But even after redeploying clean installations of both CentOS 7 and CentOS 8, the problem persists.&lt;/p&gt;
+&lt;p&gt;At this point, we began to suspect the only remaining uncertainty: VMware virtualization software. Suddenly, an idea struck us – Hyper-V technology. Could Hyper-V have been enabled previously but not completely shut down, leading to this issue? After all, soft interrupts are also implemented through virtualization software. Are there bugs in different virtualization technologies? These questions warrant further thought and investigation.&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion
+&lt;/h2&gt;&lt;p&gt;According to the Microsoft official manual, we completely shut down the local Hyper-V service and found that VMware recovered normally on the host machine. With this, the problem was finally resolved. As mentioned earlier, this experience was tortuous and arduous, requiring comprehensive analysis and judgment. This was also the first time we troubleshooted the issue and located it at the virtual machine level.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor
+bcdedit /set hypervisorlaunchtype off
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>VMware virtual machine disk space optimization</title>
+        <link>https://ttf248.life/en/p/vmware-virtual-disk-space-optimization/</link>
+        <pubDate>Wed, 21 Jun 2023 18:35:41 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/vmware-virtual-disk-space-optimization/</guid>
+        <description>&lt;p&gt;When installing a VMware virtual machine development system, it&amp;rsquo;s common practice to reserve extra disk space. Over time, the local disk space occupied far exceeds the actual content of the virtual machine files.&lt;/p&gt;
+&lt;h2 id=&#34;scene-description&#34;&gt;Scene description
+&lt;/h2&gt;&lt;p&gt;The &lt;code&gt;df -h&lt;/code&gt; command shows the disk information of the current machine, which is actually using 60GB. After deleting all snapshots and clone images, the local virtual machine still occupies far more than 60GB of disk space, adding insult to injury for a hard drive that was already not spacious enough.&lt;/p&gt;
+&lt;h2 id=&#34;prerequisites&#34;&gt;Prerequisites
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;The virtual machine was installed without allocating the disk space in advance&lt;/li&gt;
+&lt;li&gt;The hard drive where the virtual machine is stored has remaining disk space greater than the space currently occupied by the virtual machine&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The remaining space is insufficient; you could consider temporarily moving the virtual machine to an external hard drive, and then migrate it back after optimizing the disk&lt;/p&gt;
+&lt;h2 id=&#34;tools&#34;&gt;Tools
+&lt;/h2&gt;&lt;p&gt;The official provider offers the &lt;code&gt;open-vm-tools&lt;/code&gt; package, which can be installed via yum or through the VMware Tools ISO image&lt;/p&gt;
+&lt;h2 id=&#34;command&#34;&gt;Command
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;vmware-toolbox-cmd disk shrink /
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;After execution, the virtual machine will automatically shut down, and the VMware host program will perform disk compression. The execution time depends on the size of the virtual machine and the access speed of the disk.&lt;/p&gt;
+&lt;p&gt;The execution result is still very good, and the virtual machine&amp;rsquo;s disk space usage is basically equal to the disk information from &lt;code&gt;df -h&lt;/code&gt;&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

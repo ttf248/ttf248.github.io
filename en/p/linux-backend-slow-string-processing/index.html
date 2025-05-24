@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="In C++ development projects, we used a custom protocol for communication that adopted a two-dimensional array pattern. When processing large amounts of data, the protocol needed to traverse and serialize arrays internally to generate logs. Due to low efficiency, this caused noticeable lag in the system under high load, which was reported by the business department.\n">
+<title>Slow efficiency when processing large string data in Linux backend services</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/linux-backend-slow-string-processing/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="Slow efficiency when processing large string data in Linux backend services">
+<meta property='og:description' content="In C++ development projects, we used a custom protocol for communication that adopted a two-dimensional array pattern. When processing large amounts of data, the protocol needed to traverse and serialize arrays internally to generate logs. Due to low efficiency, this caused noticeable lag in the system under high load, which was reported by the business department.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/linux-backend-slow-string-processing/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='Troubleshooting' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T02:57:45&#43;08:00'/>
+<meta name="twitter:title" content="Slow efficiency when processing large string data in Linux backend services">
+<meta name="twitter:description" content="In C++ development projects, we used a custom protocol for communication that adopted a two-dimensional array pattern. When processing large amounts of data, the protocol needed to traverse and serialize arrays internally to generate logs. Due to low efficiency, this caused noticeable lag in the system under high load, which was reported by the business department.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#problem-identification">Problem identification</a></li>
+    <li><a href="#demo-verification">Demo verification</a>
+      <ol>
+        <li><a href="#key-points-explanation">Key points explanation</a></li>
+      </ol>
+    </li>
+    <li><a href="#complete-code">Complete code</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/linux-backend-slow-string-processing/">Slow efficiency when processing large string data in Linux backend services</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>In C++ development projects, we used a custom protocol for communication that adopted a two-dimensional array pattern. When processing large amounts of data, the protocol needed to traverse and serialize arrays internally to generate logs. Due to low efficiency, this caused noticeable lag in the system under high load, which was reported by the business department.</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Nov 13, 2024</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约6分钟，共1235字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/linux-backend-slow-string-processing/" class="link">中文</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>In C++ development projects, we used a custom protocol for communication that adopted a two-dimensional array pattern. When processing large amounts of data, the protocol needed to traverse and serialize arrays internally to generate logs. Due to low efficiency, this caused noticeable lag in the system under high load, which was reported by the business department.</p>
+<h2 id="problem-identification">Problem identification
+</h2><p>When troubleshooting the issue, we first performed a performance analysis of the system and found that the CPU utilization increased significantly when processing large amounts of data, and the system response time lengthened. By analyzing the system logs, we discovered numerous serialization operations, which were inefficient when handling two-dimensional arrays, leading to decreased system performance.</p>
+<p>The <code>pstack</code> tool captured thread information for the service, revealing that the log thread spends most of its time processing string concatenation</p>
+<blockquote>
+<p>Here&rsquo;s the key point for today: different accumulation methods can make a huge difference in efficiency. The historical code uses the <code>+</code> operator, which frequently creates temporary objects and is very inefficient. You know it’s inefficient, but you don’t realize just how inefficient it is.</p>
+</blockquote>
+<h2 id="demo-verification">Demo verification
+</h2><p>Based on the project code, we extracted the business logic and wrote a simple demo to verify the efficiency of string concatenation. Compile and run with the <code>vs2022</code> compiler under <code>windows</code>, the <code>gcc8.5</code> compiler under <code>linux</code>, in <code>Release</code> mode, and compare their efficiencies.</p>
+<h3 id="key-points-explanation">Key points explanation
+</h3><p>The project uses method four. Before receiving the test data, readers can first think about which method is most efficient and which is least efficient? I was still very surprised when I saw the results.</p>
+<ol>
+<li>Method 1 (Concatenation using +=): Directly concatenate each field to the string using +=</li>
+<li>Method 2 (using <code>std::ostringstream</code> concatenation): This method uses streams (<code>std::ostringstream</code>) to concatenate each field, which is more efficient, especially when concatenating large amounts of data</li>
+<li>Method 3 (Pre-allocated Memory with <code>+=</code>) involves allocating sufficient memory for the string in advance using <code>reserve</code>, which reduces the overhead of memory reallocation and improves performance</li>
+<li>Method 4 (<code>bodys = bodys + body + &quot;\n&quot;</code>): Creating a new temporary string object with each concatenation leads to performance degradation, especially when concatenating strings on a large scale, because each concatenation involves a new memory allocation and copy</li>
+</ol>
+<p>According to the results, the project selected the least efficient method</p>
+<p>To take things a step further, let&rsquo;s analyze the optimization efficiency of different platform compilers. Microsoft&rsquo;s <code>Visual Studio</code> remains consistently excellent, with very high optimization efficiency for strings, while the <code>GCC</code> compiler is somewhat lacking in this area.</p>
+<blockquote>
+<p>The code runs on different machines, and there is no direct comparison between the two sets of data. You can compare the differences between different concatenation methods separately.</p>
+</blockquote>
+<pre><code class="language-shell">windows 平台下的 vs2022 编译器
+
+----------------------------------------
+Data Generation Time: 0.054 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.053 seconds.
++ ostringstream Data merging took: 0.054 seconds.
++ Pre-reserved Data merging took: 0.045 seconds.
++ Data merging (bodys = bodys + body + &quot;\n&quot;) took: 16.108 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+</code></pre>
+<pre><code class="language-shell">linux 平台下的 gcc8.5 编译器
+----------------------------------------
+Data Generation Time: 0.108 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.100 seconds.
++ ostringstream Data merging took: 0.083 seconds.
++ Pre-reserved Data merging took: 0.057 seconds.
++ Data merging (bodys = bodys + body + &quot;\n&quot;) took: 29.298 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+</code></pre>
+<h2 id="complete-code">Complete code
+</h2><pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;string&gt;
+#include &lt;vector&gt;
+#include &lt;random&gt;
+#include &lt;chrono&gt;
+#include &lt;sstream&gt;
+#include &lt;iomanip&gt;
+
+typedef std::vector&lt;std::string&gt; DataRow;
+typedef std::vector&lt;DataRow&gt; DataGroup;
+
+struct ResponsePackage
+{
+    std::string ErrorInfo;
+    DataRow Head;
+    std::string ClientId;
+    std::string UUID;
+    std::string MsgID;
+    std::string SessionID;
+    std::string ExtraInfo1;
+    std::string ExtraInfo2;
+    DataGroup DataBody;
+};
+
+// Generate specified length of random string
+std::string generateRandomString(size_t length)
+{
+    const char charset[] = &quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&quot;;
+    const size_t max_index = sizeof(charset) - 1;
+    std::string random_string;
+    random_string.reserve(length);
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution&lt;&gt; distribution(0, max_index);
+
+    for (size_t i = 0; i &lt; length; ++i)
+    {
+        random_string += charset[distribution(generator)];
+    }
+
+    return random_string;
+}
+
+void create_large_string()
+{
+    // Example request package with 50 fields
+    ResponsePackage requestPackage;
+
+    requestPackage.Head = {
+        &quot;Field1&quot;, &quot;Field2&quot;, &quot;Field3&quot;, &quot;Field4&quot;, &quot;Field5&quot;,
+        &quot;Field6&quot;, &quot;Field7&quot;, &quot;Field8&quot;, &quot;Field9&quot;, &quot;Field10&quot;,
+        &quot;Field11&quot;, &quot;Field12&quot;, &quot;Field13&quot;, &quot;Field14&quot;, &quot;Field15&quot;,
+        &quot;Field16&quot;, &quot;Field17&quot;, &quot;Field18&quot;, &quot;Field19&quot;, &quot;Field20&quot;,
+        &quot;Field21&quot;, &quot;Field22&quot;, &quot;Field23&quot;, &quot;Field24&quot;, &quot;Field25&quot;,
+        &quot;Field26&quot;, &quot;Field27&quot;, &quot;Field28&quot;, &quot;Field29&quot;, &quot;Field30&quot;,
+        &quot;Field31&quot;, &quot;Field32&quot;, &quot;Field33&quot;, &quot;Field34&quot;, &quot;Field35&quot;,
+        &quot;Field36&quot;, &quot;Field37&quot;, &quot;Field38&quot;, &quot;Field39&quot;, &quot;Field40&quot;,
+        &quot;Field41&quot;, &quot;Field42&quot;, &quot;Field43&quot;, &quot;Field44&quot;, &quot;Field45&quot;,
+        &quot;Field46&quot;, &quot;Field47&quot;, &quot;Field48&quot;, &quot;Field49&quot;, &quot;Field50&quot;
+    };
+
+    requestPackage.ClientId = &quot;ClientID&quot;;
+    requestPackage.UUID = &quot;UUID&quot;;
+    requestPackage.MsgID = &quot;MsgID&quot;;
+    requestPackage.SessionID = &quot;SessionID&quot;;
+    requestPackage.ExtraInfo1 = &quot;ExtraInfo1&quot;;
+    requestPackage.ExtraInfo2 = &quot;ExtraInfo2&quot;;
+
+    // Start timing for data generation
+    auto start_gen = std::chrono::high_resolution_clock::now();
+
+    // Generate 10,000 rows of data, each with 50 fields
+    for (size_t i = 0; i &lt; 10000; ++i)
+    {
+        DataRow dataRow(50, &quot;This is a test string&quot;);
+        requestPackage.DataBody.push_back(dataRow);
+    }
+
+    // End timing for data generation
+    auto end_gen = std::chrono::high_resolution_clock::now();
+    std::chrono::duration&lt;double&gt; duration_gen = end_gen - start_gen;
+
+    // Display result generation time
+    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
+    std::cout &lt;&lt; &quot;Data Generation Time: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_gen.count() &lt;&lt; &quot; seconds.\n&quot;;
+    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
+
+    // Data merging using different methods
+    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
+    std::cout &lt;&lt; &quot;Data Merging Performance:\n&quot;;
+    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
+
+    {
+        // Method 1: Using '+=' string concatenation
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&quot;&quot;);
+        for (auto&amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&quot;This is a test string&quot;);
+            for (auto&amp; item : vec)
+            {
+                body += item + &quot; &quot;;
+            }
+            bodys += body + &quot;\n&quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+        std::cout &lt;&lt; &quot;+ Data merging (+=) took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
+    }
+
+    {
+        // Method 2: Using ostringstream
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::ostringstream bodys;
+        for (auto&amp; vec : requestPackage.DataBody)
+        {
+            std::ostringstream body;
+            body &lt;&lt; &quot;This is a test string&quot;;
+            for (auto&amp; item : vec)
+            {
+                body &lt;&lt; item &lt;&lt; &quot; &quot;;
+            }
+            bodys &lt;&lt; body.str() &lt;&lt; &quot;\n&quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+        std::cout &lt;&lt; &quot;+ ostringstream Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
+    }
+
+    {
+        // Method 3: Pre-allocated memory
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys;
+        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
+        for (auto&amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&quot;This is a test string&quot;);
+            body.reserve(50 * 20); // Pre-allocate memory for each row
+            for (auto&amp; item : vec)
+            {
+                body += item + &quot; &quot;;
+            }
+            bodys += body + &quot;\n&quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+        std::cout &lt;&lt; &quot;+ Pre-reserved Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
+    }
+
+    {
+        // Method 4: Using 'bodys = bodys + body + &quot;\n&quot;'
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&quot;&quot;);
+        for (auto&amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&quot;This is a test string&quot;);
+            for (auto&amp; item : vec)
+            {
+                body = body + item + &quot; &quot;; // Note the use of 'body = body + item'
+            }
+            bodys = bodys + body + &quot;\n&quot;; // Again, using 'bodys = bodys + body'
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+        std::cout &lt;&lt; &quot;+ Data merging (bodys = bodys + body + \&quot;\\n\&quot;) took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
+    }
+
+    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
+    std::cout &lt;&lt; &quot;Data Merging Complete.\n&quot;;
+    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
+}
+
+int main()
+{
+    try
+    {
+        create_large_string();
+    }
+    catch (const std::exception&amp; e)
+    {
+        std::cerr &lt;&lt; &quot;Caught exception: &quot; &lt;&lt; e.what() &lt;&lt; std::endl;
+    }
+
+    std::cout &lt;&lt; &quot;\nProgram finished.\n&quot;;
+    return 0;
+}
+</code></pre>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/c-/">C&#43;&#43;</a>
+        
+            <a href="/en/tags/linux/">Linux</a>
+        
+            <a href="/en/tags/troubleshooting/">Troubleshooting</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on May 25, 2025 02:57
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">Related content</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/en/p/upgrade-gcc-version-causes-program-crash-code-irregularities/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Upgrading GCC version leads to program crashes: Hidden dangers of non-compliant code</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/cpp-programming-traps-std-map-crash-details/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Traps in C&#43;&#43; Programming: Detailed Explanation of Program Crashes Caused by Misusing `std::map`</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/protobuf-zero-value-traps/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Protobuf Zero-Value Trap: When Defaults Become Silent Killers of Business Logic</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/backend-service-tcp-communication-troubleshooting/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Troubleshooting TCP Communication Abnormalities in Backend Services</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/using-atop-to-monitor-linux-system-metrics-installation-configuration-and-usage-guide/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">A Complete Guide to Monitoring Linux System Metrics with the atop Tool: Installation, Configuration, and Usage</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

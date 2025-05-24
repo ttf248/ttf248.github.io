@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="I recently got a mini desktop for the office, thinking it would be convenient to set up an environment and occasionally access things from home. So I temporarily deployed an intranet penetration tool. Based on my past experience, I deployed the frp service with port forwarding, which requires a public server – the connection quality depends on the bandwidth of that public server. Then I decided to try something new: a Zerotier virtual machine local area network, similar to a VPN. I created a new virtual network card locally and added all machines to a virtual network.\n">
+<title>ZeroTier local area network across locations</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/zero-tier-remote-lan/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="ZeroTier local area network across locations">
+<meta property='og:description' content="I recently got a mini desktop for the office, thinking it would be convenient to set up an environment and occasionally access things from home. So I temporarily deployed an intranet penetration tool. Based on my past experience, I deployed the frp service with port forwarding, which requires a public server – the connection quality depends on the bandwidth of that public server. Then I decided to try something new: a Zerotier virtual machine local area network, similar to a VPN. I created a new virtual network card locally and added all machines to a virtual network.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/zero-tier-remote-lan/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='ZeroTier' /><meta property='article:tag' content='Network port forwarding' /><meta property='article:published_time' content='2023-09-19T04:58:03&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T02:57:45&#43;08:00'/>
+<meta name="twitter:title" content="ZeroTier local area network across locations">
+<meta name="twitter:description" content="I recently got a mini desktop for the office, thinking it would be convenient to set up an environment and occasionally access things from home. So I temporarily deployed an intranet penetration tool. Based on my past experience, I deployed the frp service with port forwarding, which requires a public server – the connection quality depends on the bandwidth of that public server. Then I decided to try something new: a Zerotier virtual machine local area network, similar to a VPN. I created a new virtual network card locally and added all machines to a virtual network.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#what-is-zerotier">What is ZeroTier?</a></li>
+    <li><a href="#installation-and-deployment">Installation and deployment</a></li>
+    <li><a href="#install-and-deploy-moon">Install and deploy Moon</a></li>
+    <li><a href="#how-to-uninstall">How to uninstall</a></li>
+    <li><a href="#afterword">Afterword</a></li>
+    <li><a href="#reference-materials">Reference materials</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/zero-tier-remote-lan/">ZeroTier local area network across locations</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>I recently got a mini desktop for the office, thinking it would be convenient to set up an environment and occasionally access things from home. So I temporarily deployed an intranet penetration tool. Based on my past experience, I deployed the <code>frp</code> service with port forwarding, which requires a public server – the connection quality depends on the bandwidth of that public server. Then I decided to try something new: a <code>Zerotier</code> virtual machine local area network, similar to a <code>VPN</code>. I created a new virtual network card locally and added all machines to a virtual network.</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Sep 19, 2023</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约5分钟，共928字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/zero-tier-remote-lan/" class="link">中文</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>I recently got a mini desktop for the office, thinking it would be convenient to set up an environment and occasionally access things from home. So I temporarily deployed an intranet penetration tool. Based on my past experience, I deployed the <code>frp</code> service with port forwarding, which requires a public server – the connection quality depends on the bandwidth of that public server. Then I decided to try something new: a <code>Zerotier</code> virtual machine local area network, similar to a <code>VPN</code>. I created a new virtual network card locally and added all machines to a virtual network.</p>
+<h2 id="what-is-zerotier">What is ZeroTier?
+</h2><p>ZeroTier is a software-defined wide area network (SD-WAN) solution that allows users to create secure virtual networks between devices in different geographical locations. With ZeroTier, you can easily connect multiple computers, servers, and devices into a virtual, encrypted network as if they were on the same local area network. This helps programmers and IT professionals securely share data and resources across different locations without complex network setups and VPN configurations.</p>
+<ol>
+<li>
+<p>Zerotier Network: Zerotier Network is a virtual, global local area network that allows different devices to connect together over the internet as if they were on the same physical network. This network can contain multiple subnets, and all devices are connected through Zerotier&rsquo;s technology.</p>
+</li>
+<li>
+<p>Planet servers are one of the key components of the Zerotier network. They are global and responsible for maintaining and managing the topology, routing information, and network status of the entire Zerotier network. Planet servers act as a global network control center but do not directly transmit data. User devices need to connect to at least one planet server to participate in the Zerotier network.</p>
+</li>
+<li>
+<p>Relay servers are auxiliary nodes in the Zerotier network, used to help devices establish direct communication channels. When devices cannot connect directly, they can transmit data through relay servers. This helps improve network reachability and performance. Relay servers are typically located around the world, acting as transit points for data transmission.</p>
+</li>
+</ol>
+<p>Overall, Zerotier uses planetary and relay servers to enable devices to create a virtual local area network globally, achieving secure and fast communication between devices. Planetary servers are responsible for global network management, while relay servers help devices establish communication connections when needed.</p>
+<h2 id="installation-and-deployment">Installation and deployment
+</h2><ol>
+<li>Visit the ZeroTier official website (<a class="link" href="https://www.zerotier.com/"  target="_blank" rel="noopener"
+    >https://www.zerotier.com/</a>) to obtain installation files and documentation</li>
+<li>Download and install the ZeroTier One client according to your operating system. It supports Windows, macOS, Linux, and many other platforms.</li>
+<li>After installation, start the ZeroTier One client</li>
+<li>Register a ZeroTier account, if you don&rsquo;t already have one. You can create an account within the client.</li>
+<li>Log in to your ZeroTier account and create a new network. The network will have a unique 16-character ID that you need to remember.</li>
+<li>Join this network on your device. You can enter the network ID in the client or use the QR code scanning function.</li>
+<li>Devices installed with and configured with the ZeroTier client will be added to the same virtual network. These devices can now communicate directly as if they were on the same local area network.</li>
+<li>You can manage network settings, add devices, and monitor network traffic in ZeroTier&rsquo;s control panel</li>
+</ol>
+<h2 id="install-and-deploy-moon">Install and deploy Moon
+</h2><p>Many domestic carriers prohibit UDP tunneling, but frp service is stable. Because it uses the TCP protocol, a similar effect can be achieved by deploying a Zerotier relay server. The firewall needs to open udp 9993.</p>
+<pre><code class="language-shell">curl -s https://install.zerotier.com/ | sudo bash
+</code></pre>
+<p>Check if the installation was successful</p>
+<pre><code class="language-shell">zerotier-cli info
+</code></pre>
+<p>Join the local area network</p>
+<pre><code class="language-shell">zerotier-cli join network-id
+</code></pre>
+<p>Create <code>moon</code></p>
+<pre><code class="language-shell">cd /var/lib/zerotier-one &amp;&amp; sudo zerotier-idtool initmoon identity.public &gt; moon.json
+</code></pre>
+<p>Edit the configuration file, adjust the <code>stableEndpoints</code> node, &ldquo;public IP address of the server/9993&rdquo;</p>
+<p>Generate signature configuration, create a <code>moons.d</code> folder, move the previous files into it, and restart the service</p>
+<pre><code class="language-shell">sudo zerotier-idtool genmoon moon.json
+mkdir moons.d &amp;&amp; mv 000000eb444ec0d8.moon moons.d/
+systemctl restart zerotier-one.service
+</code></pre>
+<p>Client nodes join the Moon server; their ID is taken from the ID field in the preceding JSON configuration file</p>
+<pre><code class="language-shell">zerotier-cli.bat orbit ztaddr ztaddr
+</code></pre>
+<pre><code class="language-shell"># 观察是否出现新的 mooon 节点，id 和信息为服务器配置的相同
+[root@idv-36f9d5 ~]# zerotier-cli listpeers
+200 listpeers &lt;ztaddr&gt; &lt;path&gt; &lt;latency&gt; &lt;version&gt; &lt;role&gt;
+200 listpeers 0cccb***** 35.236.*.*/64393;110;10726 327 1.6.3 LEAF
+200 listpeers 3a46f***** 185.180.*.*/9993;110;757 -1 - PLANET
+200 listpeers 3ed7c***** 39.97.*.*/9993;172;79 32 1.6.3 MOON
+200 listpeers 4f838***** - -1 - LEAF
+200 listpeers 62f86***** 50.7.*.*/9993;110;4796 351 - PLANET
+200 listpeers 778cd***** 103.195.*.*/9993;5148;4887 253 - PLANET
+200 listpeers 992fc***** 195.181.*.*/9993;10161;4921 226 - PLANET
+200 listpeers 9d2b5***** - -1 - LEAF
+</code></pre>
+<blockquote>
+<p>On Windows, launch the terminal with administrator privileges and use the zerotier-cli.bat command-line tool; on Linux, use the zerotier-cli command. The peers subcommand shows connections, listpeers displays all nodes, and successful joining is indicated by the normal display of the <code>moon</code> node.</p>
+</blockquote>
+<h2 id="how-to-uninstall">How to uninstall
+</h2><p>There&rsquo;s no need to elaborate on how to uninstall software on Windows; it’s a standard procedure that can be done through the Control Panel. We will focus on Ubuntu instead.</p>
+<ol>
+<li>Remove the zerotier-one service using dpkg</li>
+</ol>
+<pre><code class="language-shell">sudo dpkg -P zerotier-one
+</code></pre>
+<ol start="2">
+<li>Delete the zerotier-one folder, which stores the address; deleting it and reinstalling will obtain a new address</li>
+</ol>
+<pre><code class="language-shell">sudo rm -rf /var/lib/zerotier-one/
+</code></pre>
+<h2 id="afterword">Afterword
+</h2><p>They were all already uninstalled. When the server arrived, there weren&rsquo;t any suitable services available as proxy nodes. Aliyun, pushing for performance, offered developer-exclusive servers with modest configurations at a reasonable price of 99 yuan per year. We used them for two years, primarily because of the bandwidth the servers provided.</p>
+<h2 id="reference-materials">Reference materials
+</h2><ul>
+<li><a class="link" href="https://www.wnark.com/archives/152.html"  target="_blank" rel="noopener"
+    >https://www.wnark.com/archives/152.html</a></li>
+<li><a class="link" href="https://www.cnblogs.com/Yogile/p/12642423.html"  target="_blank" rel="noopener"
+    >https://www.cnblogs.com/Yogile/p/12642423.html</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/zerotier/">ZeroTier</a>
+        
+            <a href="/en/tags/network-port-forwarding/">Network Port Forwarding</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on May 25, 2025 02:57
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

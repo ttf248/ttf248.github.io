@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="We conducted a time-consuming test of the Design Quotation SDK, implementing different callback function approaches. Recently I&rsquo;ve been looking at C++ functional programming – what difference does it make in terms of performance when functions become first-class citizens and circulate within a program?\nPrevious link: [Compiler, Callback Functions, Performance Testing]\nlemao also did similar tests and borrowed the code for use\n">
+<title>C&#43;&#43; function call time consumption</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/cpp-function-call-timing/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="C++ function call time consumption">
+<meta property='og:description' content="We conducted a time-consuming test of the Design Quotation SDK, implementing different callback function approaches. Recently I&rsquo;ve been looking at C++ functional programming – what difference does it make in terms of performance when functions become first-class citizens and circulate within a program?\nPrevious link: [Compiler, Callback Functions, Performance Testing]\nlemao also did similar tests and borrowed the code for use\n">
+<meta property='og:url' content='https://ttf248.life/en/p/cpp-function-call-timing/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:published_time' content='2024-01-24T14:11:33&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T02:57:45&#43;08:00'/>
+<meta name="twitter:title" content="C++ function call time consumption">
+<meta name="twitter:description" content="We conducted a time-consuming test of the Design Quotation SDK, implementing different callback function approaches. Recently I&rsquo;ve been looking at C++ functional programming – what difference does it make in terms of performance when functions become first-class citizens and circulate within a program?\nPrevious link: [Compiler, Callback Functions, Performance Testing]\nlemao also did similar tests and borrowed the code for use\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#main-body">Main body</a></li>
+    <li><a href="#reference-materials">Reference materials</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/cpp-function-call-timing/">C&#43;&#43; function call time consumption</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>We conducted a time-consuming test of the Design Quotation SDK, implementing different callback function approaches. Recently I&rsquo;ve been looking at C++ functional programming – what difference does it make in terms of performance when functions become first-class citizens and circulate within a program?</p>
+<p>Previous link: [Compiler, Callback Functions, Performance Testing]</p>
+<p>lemao also did similar tests and borrowed the code for use</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jan 24, 2024</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约4分钟，共880字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/cpp-function-call-timing/" class="link">中文</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>We conducted a time-consuming test of the Design Quotation SDK, implementing different callback function approaches. Recently I&rsquo;ve been looking at C++ functional programming – what difference does it make in terms of performance when functions become first-class citizens and circulate within a program?</p>
+<p>Previous link: [Compiler, Callback Functions, Performance Testing]</p>
+<p>lemao also did similar tests and borrowed the code for use</p>
+<h2 id="main-body">Main body
+</h2><p>The execution platform remains our old friend, <a class="link" href="https://wandbox.org/"  target="_blank" rel="noopener"
+    >https://wandbox.org/</a></p>
+<pre><code class="language-c++">#include &lt;cassert&gt;
+#include &lt;chrono&gt;
+#include &lt;functional&gt;
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+int add_one(int input) { return input + 1; }
+
+bool validate_vector_add_one(std::vector&lt;int&gt; const&amp; input_vector,
+                             std::vector&lt;int&gt; const&amp; output_vector)
+{
+    bool is_valid{true};
+    for (size_t i{0}; i &lt; input_vector.size(); ++i)
+    {
+        if (output_vector.at(i) != input_vector.at(i) + 1)
+        {
+            is_valid = false;
+            break;
+        }
+    }
+    return is_valid;
+}
+
+void reset_vector(std::vector&lt;int&gt;&amp; input_vector)
+{
+    for (size_t i{0}; i &lt; input_vector.size(); ++i)
+    {
+        input_vector.at(i) = 0;
+    }
+}
+
+template &lt;typename T, typename Func&gt;
+void unitary_function_pass_by_lambda_function(T&amp; output, T const&amp; input,
+                                              Func const func)
+{
+    output = func(input);
+}
+
+template &lt;typename T&gt;
+void unitary_function_pass_by_std_function_value(T&amp; output, T const&amp; input,
+                                                 std::function&lt;T(T)&gt; const func)
+{
+    output = func(input);
+}
+
+template &lt;typename T&gt;
+void unitary_function_pass_by_std_function_reference(
+    T&amp; output, T const&amp; input, std::function&lt;T(T)&gt; const&amp; func)
+{
+    output = func(input);
+}
+
+template &lt;typename T&gt;
+void unitary_function_pass_by_function_pointer(T&amp; output, T const&amp; input,
+                                               T (*func)(T))
+{
+    output = func(input);
+}
+
+int main()
+{
+    // Set floating point format std::cout with 3 decimal places.
+    std::cout.precision(3);
+
+    size_t const num_elements{10000000};
+    std::vector&lt;int&gt; input_vector(num_elements, 0);
+    std::vector&lt;int&gt; output_vector(num_elements, 0);
+
+    auto const lambda_function_add_one{[](int const&amp; input) -&gt; int
+                                       { return input + 1; }};
+    std::function&lt;int(int)&gt; const std_function_add_one{lambda_function_add_one};
+
+    std::cout &lt;&lt; &quot;The size of a function pointer: &quot; &lt;&lt; sizeof(&amp;add_one)
+              &lt;&lt; std::endl;
+    std::cout &lt;&lt; &quot;The size of a std::function pointer: &quot;
+              &lt;&lt; sizeof(&amp;std_function_add_one) &lt;&lt; std::endl;
+    std::cout &lt;&lt; &quot;The size of a std::function: &quot; &lt;&lt; sizeof(std_function_add_one)
+              &lt;&lt; std::endl;
+
+    // Call function frequently in a vanilla way.
+    // The compiler knows what function to call at compile time and can optimize
+    // the code.
+    // This is the best performance we could get.
+    std::chrono::steady_clock::time_point const time_start_vanilla{
+        std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &lt; num_elements; ++i)
+    {
+        output_vector.at(i) = add_one(input_vector.at(i));
+    }
+    std::chrono::steady_clock::time_point const time_end_vanilla{
+        std::chrono::steady_clock::now()};
+    auto const time_elapsed_vanilla{
+        std::chrono::duration_cast&lt;std::chrono::nanoseconds&gt;(time_end_vanilla -
+                                                             time_start_vanilla)
+            .count()};
+    float const latency_vanilla{time_elapsed_vanilla /
+                                static_cast&lt;float&gt;(num_elements)};
+    std::cout &lt;&lt; &quot;Latency Pass Vanilla: &quot; &lt;&lt; latency_vanilla &lt;&lt; &quot; ns&quot;
+              &lt;&lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // Sometimes, we don't know what function to call at compile time.
+    // We can use std::function to pass a function as an argument.
+    // In this case, we pass the std::function by value.
+    // Because the size of a std::function is 32 bytes, passing by value
+    // results in a lot of copying and bad performance.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_std_function_value{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_std_function_value(
+            output_vector.at(i), input_vector.at(i), std_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_std_function_value{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_std_function_value{
+        std::chrono::duration_cast&lt;std::chrono::nanoseconds&gt;(
+            time_end_pass_by_std_function_value -
+            time_start_pass_by_std_function_value)
+            .count()};
+    float const latency_pass_by_std_function_value{
+        time_elapsed_pass_by_std_function_value /
+        static_cast&lt;float&gt;(num_elements)};
+    std::cout &lt;&lt; &quot;Latency Pass By Std Function Value: &quot;
+              &lt;&lt; latency_pass_by_std_function_value &lt;&lt; &quot; ns&quot; &lt;&lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // Instead of passing the std::function by value, we can pass it by
+    // reference (pointer). In this case, object copying is eliminated. The
+    // performance is better than passing the std::function by value. However,
+    // the performance is still not as good as the vanilla way.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_std_function_reference{
+            std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_std_function_reference(
+            output_vector.at(i), input_vector.at(i), std_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_std_function_reference{
+            std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_std_function_reference{
+        std::chrono::duration_cast&lt;std::chrono::nanoseconds&gt;(
+            time_end_pass_by_std_function_reference -
+            time_start_pass_by_std_function_reference)
+            .count()};
+    float const latency_pass_by_std_function_reference{
+        time_elapsed_pass_by_std_function_reference /
+        static_cast&lt;float&gt;(num_elements)};
+    std::cout &lt;&lt; &quot;Latency Pass By Std Function Reference: &quot;
+              &lt;&lt; latency_pass_by_std_function_reference &lt;&lt; &quot; ns&quot; &lt;&lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // std::function is a general purpose wrapper for function pointers,
+    // callable objects, and lambda functions. Because it's general purpose,
+    // it's not as efficient as a function pointer. In this case, we pass a
+    // function pointer to a function. The performance is better than passing
+    // the std::function by reference.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_function_pointer{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_function_pointer(output_vector.at(i),
+                                                  input_vector.at(i), &amp;add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_function_pointer{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_function_pointer{
+        std::chrono::duration_cast&lt;std::chrono::nanoseconds&gt;(
+            time_end_pass_by_function_pointer -
+            time_start_pass_by_function_pointer)
+            .count()};
+    float const latency_pass_by_function_pointer{
+        time_elapsed_pass_by_function_pointer /
+        static_cast&lt;float&gt;(num_elements)};
+    std::cout &lt;&lt; &quot;Latency Pass By Function Pointer: &quot;
+              &lt;&lt; latency_pass_by_function_pointer &lt;&lt; &quot; ns&quot; &lt;&lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // We can also pass a lambda function to a function.
+    // The compiler knows what function to call at compile time and can optimize
+    // the code. The performance is also better than passing the std::function
+    // by reference.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_lambda_function{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_lambda_function(
+            output_vector.at(i), input_vector.at(i), lambda_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_lambda_function{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_lambda_function{
+        std::chrono::duration_cast&lt;std::chrono::nanoseconds&gt;(
+            time_end_pass_by_lambda_function -
+            time_start_pass_by_lambda_function)
+            .count()};
+    float const latency_pass_by_lambda_function{
+        time_elapsed_pass_by_lambda_function /
+        static_cast&lt;float&gt;(num_elements)};
+    std::cout &lt;&lt; &quot;Latency Pass By Lambda Function: &quot;
+              &lt;&lt; latency_pass_by_lambda_function &lt;&lt; &quot; ns&quot; &lt;&lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+}
+</code></pre>
+<pre><code class="language-shell"># 组里常规也就开启 O2 优化，编译选用了 gcc13，不同版本的 gcc 性能耗时略有不同，版本越高 lambda 效果越好
+The size of a function pointer: 8
+The size of a std::function pointer: 8
+The size of a std::function: 32
+Latency Pass Vanilla: 0.418 ns
+Latency Pass By Std Function Value: 3.47 ns
+Latency Pass By Std Function Reference: 1.36 ns
+Latency Pass By Function Pointer: 0.396 ns
+Latency Pass By Lambda Function: 0.44 ns
+</code></pre>
+<h2 id="reference-materials">Reference materials
+</h2><p><a class="link" href="https://leimao.github.io/blog/CPP-Function-Call-Performance/"  target="_blank" rel="noopener"
+    >https://leimao.github.io/blog/CPP-Function-Call-Performance/</a></p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/c-/">C&#43;&#43;</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on May 25, 2025 02:57
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">Related content</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/en/p/cpp-bitwise-operations-basics-flags/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">C&#43;&#43; Bitwise Operations Basics: Bit Extraction and Flag Setting</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/deep-understanding-gcc-glibc-cpp-compatibility-issues/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Understanding GCC, GLIBC, and C&#43;&#43; Program Compatibility Issues</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/linux-backend-slow-string-processing/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Slow efficiency when processing large string data in Linux backend services</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/cpp-lambda-parameter-lifetime/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Lambda expression parameter lifetime in C&#43;&#43;</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/en/p/upgrade-gcc-version-causes-program-crash-code-irregularities/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Upgrading GCC version leads to program crashes: Hidden dangers of non-compliant code</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
