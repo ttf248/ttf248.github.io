@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="Pythonプログラミングにおいて、辞書は非常に強力なデータ構造であり、キーと値を関連付けて、これらのデータを効率的に検索および操作できます。辞書にカスタムオブジェクトを格納しようとするとき、重要な概念に出くわします。Pythonにおけるオブジェクトの代入は実際には参照による代入であり、オブジェクト自体の深いコピーではありません。つまり、カスタムオブジェクトを辞書に格納すると、辞書に格納されるのはオブジェクトへの参照であり、オブジェクトの新しいコピーではありません。\n">
+<title>Python辞書にカスタムオブジェクトを格納する際の参照とdeepcopyの重要性</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/python-dictionary-custom-objects-reference-vs-deepcopy/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="Python辞書にカスタムオブジェクトを格納する際の参照とdeepcopyの重要性">
+<meta property='og:description' content="Pythonプログラミングにおいて、辞書は非常に強力なデータ構造であり、キーと値を関連付けて、これらのデータを効率的に検索および操作できます。辞書にカスタムオブジェクトを格納しようとするとき、重要な概念に出くわします。Pythonにおけるオブジェクトの代入は実際には参照による代入であり、オブジェクト自体の深いコピーではありません。つまり、カスタムオブジェクトを辞書に格納すると、辞書に格納されるのはオブジェクトへの参照であり、オブジェクトの新しいコピーではありません。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/python-dictionary-custom-objects-reference-vs-deepcopy/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='python' /><meta property='article:published_time' content='2024-03-22T01:08:05&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T14:10:37&#43;08:00'/>
+<meta name="twitter:title" content="Python辞書にカスタムオブジェクトを格納する際の参照とdeepcopyの重要性">
+<meta name="twitter:description" content="Pythonプログラミングにおいて、辞書は非常に強力なデータ構造であり、キーと値を関連付けて、これらのデータを効率的に検索および操作できます。辞書にカスタムオブジェクトを格納しようとするとき、重要な概念に出くわします。Pythonにおけるオブジェクトの代入は実際には参照による代入であり、オブジェクト自体の深いコピーではありません。つまり、カスタムオブジェクトを辞書に格納すると、辞書に格納されるのはオブジェクトへの参照であり、オブジェクトの新しいコピーではありません。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#カスタムオブジェクトの保存に関する基本的な例">カスタムオブジェクトの保存に関する基本的な例</a></li>
+    <li><a href="#深いコピーと浅いコピーの違い">深いコピーと浅いコピーの違い</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
+                コンピュータ
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/python-dictionary-custom-objects-reference-vs-deepcopy/">Python辞書にカスタムオブジェクトを格納する際の参照とdeepcopyの重要性</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>Pythonプログラミングにおいて、辞書は非常に強力なデータ構造であり、キーと値を関連付けて、これらのデータを効率的に検索および操作できます。辞書にカスタムオブジェクトを格納しようとするとき、重要な概念に出くわします。Pythonにおけるオブジェクトの代入は実際には参照による代入であり、オブジェクト自体の深いコピーではありません。つまり、カスタムオブジェクトを辞書に格納すると、辞書に格納されるのはオブジェクトへの参照であり、オブジェクトの新しいコピーではありません。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2024年03月22日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约5分钟，共1101字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/python-dictionary-custom-objects-reference-vs-deepcopy/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/python-dictionary-custom-objects-reference-vs-deepcopy/" class="link">English</a>
+                
+                    <a href="https://ttf248.life/ko/p/python-dictionary-custom-objects-reference-vs-deepcopy/" class="link">한국어</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>Pythonプログラミングにおいて、辞書は非常に強力なデータ構造であり、キーと値を関連付けて、これらのデータを効率的に検索および操作できます。辞書にカスタムオブジェクトを格納しようとするとき、重要な概念に出くわします。Pythonにおけるオブジェクトの代入は実際には参照による代入であり、オブジェクト自体の深いコピーではありません。つまり、カスタムオブジェクトを辞書に格納すると、辞書に格納されるのはオブジェクトへの参照であり、オブジェクトの新しいコピーではありません。</p>
+<h2 id="カスタムオブジェクトの保存に関する基本的な例">カスタムオブジェクトの保存に関する基本的な例
+</h2><p>仮に、単純な <code>Person</code> クラスがあるとします。</p>
+<pre><code class="language-python">class Person:
+    def __init__(self, name, age):
+        self.name = name
+        self.age = age
+
+# 创建一个 Person 对象
+p1 = Person(&quot;Alice&quot;, 30)
+
+# 将对象存储到字典中
+people_dict = {}
+people_dict[&quot;alice&quot;] = p1
+</code></pre>
+<p>この例では、<code>people_dict</code> ディクショナリはキーが <code>&quot;alice&quot;</code> の項目を含み、その値は <code>Person</code> 型の <code>p1</code> オブジェクトへの参照です。もし <code>p1</code> の属性を修正すると:</p>
+<pre><code class="language-python">p1.age = 31
+</code></pre>
+<p>そうすると、辞書を通してこのオブジェクトにアクセスしたとき、その年齢も更新されていることがわかります。</p>
+<pre><code class="language-python">print(people_dict[&quot;alice&quot;].age)  # 输出：31
+</code></pre>
+<p>辞書に格納されているのは、<code>Person</code>オブジェクトの独立したコピーではなく、同じメモリのアドレスを指す参照です。</p>
+<h2 id="深いコピーと浅いコピーの違い">深いコピーと浅いコピーの違い
+</h2><p>ネストされたデータ構造やカスタムオブジェクトを扱う場合、この参照動作は予期せぬ結果を引き起こす可能性があります。例えば、カスタムオブジェクトに可変型の属性（リストや別のカスタムオブジェクトなど）が含まれている場合、そのようなオブジェクトを直接辞書に格納し、それを変更すると、辞書を通して取得したオブジェクトに影響が及ぶことがあります。</p>
+<pre><code class="language-python">class Address:
+    def __init__(self, street, city):
+        self.street = street
+        self.city = city
+
+class Person:
+    def __init__(self, name, age, address):
+        self.name = name
+        self.age = age
+        self.address = address
+
+address = Address(&quot;Main St.&quot;, &quot;Springfield&quot;)
+p1 = Person(&quot;Bob&quot;, 40, address)
+people_dict[&quot;bob&quot;] = p1
+
+# 修改原始地址对象
+address.city = &quot;Shelbyville&quot;
+
+# 字典中的人的地址也变了
+print(people_dict[&quot;bob&quot;].address.city)  # 输出：Shelbyville
+</code></pre>
+<p>解決策：ディープコピー</p>
+<p>このような共有状態がもたらす問題を避けるために、辞書にオブジェクトの完全なコピーを格納し、参照ではなく、というようにすることが必要な場合があります。Python の <code>copy</code> モジュールにある <code>deepcopy</code> 関数は、この目的を達成するために使用できます。</p>
+<pre><code class="language-python">import copy
+
+# 使用深拷贝存储对象
+people_dict[&quot;bob_deepcopy&quot;] = copy.deepcopy(p1)
+
+# 此时即使修改原始地址对象，深拷贝的对象不会受影响
+address.city = &quot;Capital City&quot;
+print(people_dict[&quot;bob&quot;].address.city)  # 输出：Capital City
+print(people_dict[&quot;bob_deepcopy&quot;].address.city)  # 输出：Shelbyville
+</code></pre>
+<p>要するに、Pythonで辞書を使ってカスタムオブジェクトを保存する場合、デフォルトではオブジェクトへの参照が格納されることに注意してください。独立した状態を維持する必要がある場合は、共有による予期せぬデータ変更を防ぐために<code>deepcopy</code>を使用して深いコピーを作成してください。</p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/python/">Python</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年05月25日 14:10
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">関連するコンテンツ</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/ja/p/stable-diffusion-zero-install-saga/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Stable Diffusion - ゼロからのインストールにおける愛憎劇</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/why-learn-a-new-language/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">新しい言語を学ぶ必要があるのはなぜか。</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

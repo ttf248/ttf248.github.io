@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>ネットワーク通信 on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E9%80%9A%E4%BF%A1/</link>
+        <description>Recent content in ネットワーク通信 on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Sun, 25 May 2025 14:10:37 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E9%80%9A%E4%BF%A1/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>バックエンドサービスTCP通信異常調査</title>
+        <link>https://ttf248.life/ja/p/backend-service-tcp-communication-troubleshooting/</link>
+        <pubDate>Fri, 14 Feb 2025 22:54:13 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/backend-service-tcp-communication-troubleshooting/</guid>
+        <description>&lt;p&gt;ビジネスモデル：バックエンドサービスはTCP経由でグループのマーケットデータゲートウェイと接続を確立します。各接続において、まず認証リクエストを送信し、その後、継続的にハートビートパケットを送信して接続状態を維持します。
+しかし、ある日、サービス接続が切れているという警告メッセージを受け取りました。ログを詳細に調査した結果、バックグラウンドサービスは継続的にハートビートパケットを送信しているものの、相手からの応答はなく、それでも接続は切断されませんでした。&lt;/p&gt;
+&lt;h2 id=&#34;現場概説&#34;&gt;現場概説
+&lt;/h2&gt;&lt;p&gt;元々会社で残業してプロジェクトの進捗を詰めていたところ、仕事のグループチャットに突然警告メッセージが飛び込んできた。最初はよくあるトラブルかと思ったが、ネットワークのタイムアウトで心跳送信が失敗し、結果としてサービス接続が切れたのだろうと推測した。しかし、ログを詳しく調査したところ、実際はそうではなかった。バックエンドから認証ログインメッセージは送信されているものの、応答がないままで、その間も心跳パケットは途絶えず送られ続けている。ログの深掘り分析の結果、以下のいくつかの重要な問題点が明らかになった：&lt;/p&gt;
+&lt;p&gt;認証メッセージに応答がない場合、相手のシステムが再起動中の可能性が非常に高く、その結果、認証メッセージがタイムリーに処理されなかったと考えられます。
+未認証のままハートビートデータが送信される問題について調査した結果、プログラムのロジックに欠陥があることが判明しました。ハートビート送信関数の判定ロジックには問題があり、接続状態のみを検証しているものの、認証状態の検証は考慮されていませんでした。
+サービスが接続を解除できれば、再接続メカニズムがトリガーされ、承認メッセージが再送信されます。&lt;/p&gt;
+&lt;p&gt;現在、まだ最後の解決すべき問題が残っています—それはなぜサービスが接続を切断していないのかです。この問題を解決するには、より深く詳細な調査が必要です。&lt;/p&gt;
+&lt;h2 id=&#34;ネットワークデータパケットを解析する&#34;&gt;ネットワークデータパケットを解析する
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;tcpdump&lt;/code&gt;は非常に強力なネットワークパケットキャプチャツールであり、ネットワークデータパケットをキャプチャするために使用できます。ネットワークパケットを分析することで、ネットワーク通信の詳細をより直感的に理解できます。ここでは、&lt;code&gt;tcpdump&lt;/code&gt;を使用してネットワークデータパケットをキャプチャし、さらに分析することができます。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/backend-service-tcp-communication-troubleshooting/20250220151952.png&#34;
+	width=&#34;1126&#34;
+	height=&#34;202&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;tcpdump&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;557&#34;
+		data-flex-basis=&#34;1337px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;グラフ中のデータから、心拍が常に正常に送信されていることがわかりますが、相手側のサーバーからはデータが一切返信されておらず、ただ &lt;code&gt;ACK&lt;/code&gt; だけが送られてきました。これにより、接続は自動的に切断されません。&lt;/p&gt;
+&lt;h2 id=&#34;一般的なフラグの説明&#34;&gt;一般的なフラグの説明
+&lt;/h2&gt;&lt;p&gt;TCPプロトコルにおいて、&lt;code&gt;PSH&lt;/code&gt;(Push)と&lt;code&gt;ACK&lt;/code&gt;(Acknowledgment)は、データ転送とフロー制御の確認にそれぞれ使用される重要なフラグです。それらの役割は以下の通りです。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;1-pshpush-flag&#34;&gt;&lt;strong&gt;1. PSH（Push Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;機能：
+PSH フラグの役割は、**受信側がバッファ内のデータを上層アプリケーションに直ちにプッシュする（バッファがいっぱいになるまで待つのではなく）**ことです。つまり、PSHフラグが付いたデータセグメントを受信すると、受信側は可能な限り速やかに処理してアプリケーションに渡すため、オペレーティングシステムのバッファに一時的に保存することはありません。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;典型的な状況：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;HTTP/HTTPSリクエスト：クライアントがリクエストを送信する際（例：&lt;code&gt;GET /index.html&lt;/code&gt;）には、&lt;code&gt;PSH&lt;/code&gt;を設定し、サーバーに直ちにレスポンスすることを期待します。&lt;/li&gt;
+&lt;li&gt;SSHプロトコル：キーボード入力ごとに&lt;code&gt;PSH&lt;/code&gt;がトリガーされ、入力文字のリアルタイム転送を保証します。&lt;/li&gt;
+&lt;li&gt;リアルタイム通信：ビデオストリーミングやオンラインゲームなどの低遅延シナリオでは、&lt;code&gt;PSH&lt;/code&gt;を使用して遅延を削減することがあります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;注意：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;PSHは必須ではなく、受信側はこのフラグを無視しても構いません（ただし、データは通常通り処理する必要があります）。&lt;/li&gt;
+&lt;li&gt;送信元が&lt;code&gt;PSH&lt;/code&gt;を設定しない場合、受信側は自身のバッファポリシーに基づいてデータをいつプッシュするかを決定します。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;2-ackacknowledgment-flag&#34;&gt;&lt;strong&gt;2. ACK（Acknowledgment Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;機能：
+ACK フラグは、&lt;strong&gt;先行するデータセグメントが正しく受信されたことを示す&lt;/strong&gt;ものです。各 ACK には、期待される次のバイトのシーケンス番号を含む確認番号（Acknowledgment Number）が含まれており、これは TCP の信頼性のある転送の中核となるメカニズムです。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;動作原理：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;送信元がデータセグメントを送信する際、受信者が期待する &lt;code&gt;ACK&lt;/code&gt; 値（例えば &lt;code&gt;ACK = シーケンス番号 + データ長&lt;/code&gt;）を一緒に持ちます。&lt;/li&gt;
+&lt;li&gt;受信側はデータを受信後、&lt;code&gt;ACK&lt;/code&gt;セグメントを生成し、受信確認済みのデータシーケンス番号を示すものとする。&lt;/li&gt;
+&lt;li&gt;送信者は、対応する&lt;code&gt;ACK&lt;/code&gt;を受け取るまで、未確認のデータを再送しません。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;例&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;送信元がシーケンス番号&lt;code&gt;100～199&lt;/code&gt;のデータセグメントを送信した場合、受信側の&lt;code&gt;ACK&lt;/code&gt;は&lt;code&gt;200&lt;/code&gt;であるべきです。&lt;/li&gt;
+&lt;li&gt;受信側が&lt;code&gt;100～199&lt;/code&gt;のデータの一部を受信していない場合、&lt;code&gt;ACK=150&lt;/code&gt;を送信側に送信して再送を要求します。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;pshとackの組み合わせ&#34;&gt;PSHとACKの組み合わせ
+&lt;/h3&gt;&lt;p&gt;TCP パケットにおいて、&lt;code&gt;PSH&lt;/code&gt; と &lt;code&gt;ACK&lt;/code&gt; が同時に出現することは、以下の状況でよく見られます。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;HTTPリクエスト応答
+クライアントが &lt;code&gt;POST&lt;/code&gt; リクエストを送信する際（データを含む場合）、&lt;code&gt;PSH&lt;/code&gt; と &lt;code&gt;ACK&lt;/code&gt;（以前の応答に対する確認）が設定されます。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-plaintext&#34;&gt;Client → Server: SYN, ACK=1 → 建立连接
+Client → Server: PSH, ACK=1, 数据 → 发送请求数据
+Server → Client: PSH, ACK=数据长度+1 → 返回响应
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;SSHハンドシェイク後のコマンド送信
+クライアントがコマンドを入力すると、&lt;code&gt;PSH&lt;/code&gt;と&lt;code&gt;ACK&lt;/code&gt;を含むデータセグメントを送信し、コマンドが直ちに転送され、サーバーによって処理されることを保証します。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;他のフラグとの関連&#34;&gt;他のフラグとの関連
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;フラグ&lt;/th&gt;
+&lt;th&gt;名前&lt;/th&gt;
+&lt;th&gt;簡単な説明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;SYN&lt;/td&gt;
+&lt;td&gt;同期&lt;/td&gt;
+&lt;td&gt;初期化接続（三次握手）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;FIN&lt;/td&gt;
+&lt;td&gt;終了&lt;/td&gt;
+&lt;td&gt;エレガントな接続のクローズ&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;リセット&lt;/td&gt;
+&lt;td&gt;強制終了 (異常時)&lt;/td&gt;
+&lt;td&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;URG&lt;/td&gt;
+&lt;td&gt;緊急&lt;/td&gt;
+&lt;td&gt;緊急ポインタをマークする（ほとんど使用しない）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;まとめ&#34;&gt;まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;データがアプリケーション層にできるだけ早く到達することに注力し、遅延を低減することです。&lt;/li&gt;
+&lt;li&gt;ACKは、&lt;strong&gt;データの信頼性のある転送&lt;/strong&gt;に焦点を当てており、パケットの消失や順不同を避けることを目的としています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;両者は協調して働き、TCPプロトコルの効率と信頼性のバランスを取った。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

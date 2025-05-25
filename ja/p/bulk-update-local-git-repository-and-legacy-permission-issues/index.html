@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="チーム内のプロジェクト間には依存関係があり、過去の経緯からsubmoduleを利用して依存関係を管理していなかったため、日々の開発では倉庫コードを手動で順番に更新する必要がある。そうしないと、様々な奇妙な問題が発生する可能性がある。\n">
+<title>一括でローカルのGitリポジトリと、過去の権限問題を更新する</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/bulk-update-local-git-repository-and-legacy-permission-issues/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="一括でローカルのGitリポジトリと、過去の権限問題を更新する">
+<meta property='og:description' content="チーム内のプロジェクト間には依存関係があり、過去の経緯からsubmoduleを利用して依存関係を管理していなかったため、日々の開発では倉庫コードを手動で順番に更新する必要がある。そうしないと、様々な奇妙な問題が発生する可能性がある。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/bulk-update-local-git-repository-and-legacy-permission-issues/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='git' /><meta property='article:published_time' content='2023-10-19T14:16:22&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T14:10:37&#43;08:00'/>
+<meta name="twitter:title" content="一括でローカルのGitリポジトリと、過去の権限問題を更新する">
+<meta name="twitter:description" content="チーム内のプロジェクト間には依存関係があり、過去の経緯からsubmoduleを利用して依存関係を管理していなかったため、日々の開発では倉庫コードを手動で順番に更新する必要がある。そうしないと、様々な奇妙な問題が発生する可能性がある。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#linux">linux</a></li>
+    <li><a href="#windows">windows</a>
+      <ol>
+        <li><a href="#歴史的遺棄問題">歴史的遺棄問題</a></li>
+        <li><a href="#デスクトップのosを入れ替える">デスクトップのOSを入れ替える</a></li>
+      </ol>
+    </li>
+    <li><a href="#資料">資料</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
+                コンピュータ
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/bulk-update-local-git-repository-and-legacy-permission-issues/">一括でローカルのGitリポジトリと、過去の権限問題を更新する</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>チーム内のプロジェクト間には依存関係があり、過去の経緯から<code>submodule</code>を利用して依存関係を管理していなかったため、日々の開発では倉庫コードを手動で順番に更新する必要がある。そうしないと、様々な奇妙な問題が発生する可能性がある。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2023年10月19日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约9分钟，共1897字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/bulk-update-local-git-repository-and-legacy-permission-issues/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/bulk-update-local-git-repository-and-legacy-permission-issues/" class="link">English</a>
+                
+                    <a href="https://ttf248.life/ko/p/bulk-update-local-git-repository-and-legacy-permission-issues/" class="link">한국어</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>チーム内のプロジェクト間には依存関係があり、過去の経緯から<code>submodule</code>を利用して依存関係を管理していなかったため、日々の開発では倉庫コードを手動で順番に更新する必要がある。そうしないと、様々な奇妙な問題が発生する可能性がある。</p>
+<p>オンラインの資料を参考に、構造は基本的に似ているので、ローカルで手動で倉庫ディレクトリ <strong>git_list.txt</strong> を維持し、スクリプトを作成してディレクトリをトラバースし、一度実行して更新し、その後作業を開始する前にスクリプトを実行します。</p>
+<h2 id="linux">linux
+</h2><p>create new file: batch_pull.sh</p>
+<pre><code class="language-shell">#!/bin/bash
+
+echo &quot;============ 更新仓库 ===================&quot;
+
+# 检查 git_list.txt 是否存在
+if [ ! -f &quot;git_list.txt&quot; ]; then
+  echo &quot;git_list.txt 文件不存在！请创建并添加要拉取的 git 仓库 URL。&quot;
+  exit 1
+else
+  echo &quot;============ 检测到了 git 仓库清单文件 ====&quot;
+fi
+
+# 逐行读取 git_list.txt 中的 URL，并执行拉取操作
+while read -r url; do
+  if [ -d &quot;$url&quot; ]; then
+    cd &quot;$url&quot; || continue
+    git pull
+    cd ..
+    echo &quot;Pull $url 完成！&quot;
+    echo &quot;========================================&quot;
+  else
+    echo &quot;目录 $url 不存在，跳过拉取。&quot;
+  fi
+done &lt; &quot;git_list.txt&quot;
+</code></pre>
+<h2 id="windows">windows
+</h2><p>create a new file: batch_pull.bat</p>
+<pre><code class="language-bat">@echo off
+chcp 65001 &gt; nul
+rem 进入脚本所在目录
+cd /d &quot;%~dp0&quot;
+
+rem 检查 git_list.txt 是否存在
+if not exist &quot;git_list.txt&quot; (
+  echo git_list.txt 文件不存在！请创建并添加要拉取的 git 仓库 URL。
+  exit /b 1
+) else (
+  echo ============ 检测到了 git 仓库清单文件 ====
+)
+
+rem 逐行读取 git_list.txt 中的 URL，并执行拉取操作
+for /f %%i in (git_list.txt) do (
+  if exist &quot;%%i&quot; (
+    pushd &quot;%%i&quot;
+    git pull
+    popd
+    echo Pull %%i 完成！
+    echo ========================================
+  ) else (
+    echo 目录 %%i 不存在，跳过拉取。
+  )
+)
+</code></pre>
+<h3 id="歴史的遺棄問題">歴史的遺棄問題
+</h3><p>システムを再インストールした後で遭遇した<code>git</code>フォルダの権限ファイルに関する問題：<strong>&ldquo;unsafe repository (&rsquo;/home/repon&rsquo; is owned by someone else)&ldquo;という致命的なエラー</strong></p>
+<p>オンラインで推奨されている方法は、ほとんどの場合 <code>stack overflow</code> から来ています。</p>
+<p>リポジトリディレクトリへの信頼追加：<code>git config --global --add safe.directory /home/repon</code>
+手動で設定ファイル<code>.gitconfig</code>を修正し、ディレクトリを追加して信頼を設定する。</p>
+<pre><code class="language-shell">[safe]
+    directory = /home/repon
+</code></pre>
+<p>処理が終わった後、倉庫のアップデートは正常になりましたが、毎回 <code>git pull</code> を実行すると、コンソールに多くの警告メッセージが表示され、ユーザー権限のエラーを促されています。</p>
+<h3 id="デスクトップのosを入れ替える">デスクトップのOSを入れ替える
+</h3><p>開発した機械、あまりにも長い間再インストールしていないのでシステムディスクのゴミファイルが爆発してしまい、どうしようもない。時間を作って再インストールしたらまたこの権限の問題に遭遇し、昔のスクリプトが動かず、修正した権限が不完全だった。</p>
+<p>新しいプランを使って、直接<code>*</code>を追加すれば、<code>git</code>はすべてのディレクトリを自動的に信頼する。</p>
+<pre><code class="language-shell">git config --global --add safe.directory &quot;*&quot;
+</code></pre>
+<hr>
+<p>不明瞭です、ユーザー権限の問題なのか、それとも皆さんが<code>windows</code>プラットフォームにも<code>chown</code>のようなコマンドがあることに慣れていないのか。フォルダの所有者を変更するには、ディレクトリが少ない場合は手動で所有者を変更しても良いのですが、このワークステーションにはドメイン情報が追加されています。会社のドメインに異常があるのか、それともローカルシステムの設定に異常があるのかわかりません。ユーザーリストにはログインに使用しているユーザーが見つかりませんでした。結局、コマンドラインで処理しました。</p>
+<p>管理者権限で、<code>powershell</code>スクリプト<code>change_ower.ps1</code>を実行してください。スクリプトファイルのエンコーディングを<code>gbk</code>に調整することを忘れずに。中国語のオペレーティングシステムなので、そうしないと文字化けします。</p>
+<pre><code class="language-powershell"># 获取当前用户的用户名
+$currentUserName = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+
+# 设置 PowerShell 的字符编码为 UTF-8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# 要更改所有者的根目录路径
+$rootDirectory = &quot;G:\workspace&quot;  # 替换为实际的目录路径
+
+# 递归遍历目录并更改文件和文件夹的所有者
+Get-ChildItem -Path $rootDirectory -Recurse | ForEach-Object {
+    $itemPath = $_.FullName
+
+    # 检查是文件还是文件夹
+    if ($_ -is [System.IO.DirectoryInfo]) {
+        # 如果是文件夹，使用 icacls 更改所有者权限
+        $icaclsResult = icacls $itemPath /setowner &quot;$currentUserName&quot; 2&gt;&amp;1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host &quot;已更改文件夹 $itemPath 的所有者为 $currentUserName&quot;
+        } else {
+            Write-Host &quot;无法更改文件夹 $itemPath 的所有者。错误信息: $icaclsResult&quot;
+        }
+    } else {
+        # 如果是文件，使用 icacls 更改所有者权限
+        $takeownResult = icacls $itemPath /setowner &quot;$currentUserName&quot; 2&gt;&amp;1
+        if ($LASTEXITCODE -eq 0) {
+            # Write-Host &quot;已更改文件 $itemPath 的所有者为 $currentUserName&quot;
+        } else {
+            Write-Host &quot;无法更改文件 $itemPath 的所有者。错误信息: $takeownResult&quot;
+        }
+    }
+}
+</code></pre>
+<p>予期せぬ事態が発生し、やはり予想外のことが起きた。スクリプト実行時の中国語情報が文字化けし、コンソールの文字コード設定やスクリプトのエンコーディング調整を試みたが、すべて文字化けした。頭が働いていないのだろうか。試しにコントロールパネル-地域-言語設定のベータ機能を有効にし、グローバルでUnicodeエンコーディングを有効にしたところ、スクリプトは正常に実行されるようになった。しかし、いくつかの開発ソフトウェアが正常に動作しなくなった。後で資料を整理したところ、ようやくスクリプトファイルのエンコーディングを<code>gbk</code>に設定する必要があることに気づいた。</p>
+<h2 id="資料">資料
+</h2><ul>
+<li><a class="link" href="https://ganzhixiong.com/p/f1b9f4fc/"  target="_blank" rel="noopener"
+    >https://ganzhixiong.com/p/f1b9f4fc/</a></li>
+<li><a class="link" href="https://stackoverflow.com/questions/71901632/fatal-error-unsafe-repository-home-repon-is-owned-by-someone-else"  target="_blank" rel="noopener"
+    >https://stackoverflow.com/questions/71901632/fatal-error-unsafe-repository-home-repon-is-owned-by-someone-else</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/git/">Git</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年05月25日 14:10
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">関連するコンテンツ</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/ja/p/git-modify-commit-message/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Git のコミット履歴のメッセージ変更</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/git-disable-http-repositories/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Gitが無効なHTTPリポジトリ</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/git-less-common-commands-summary/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">いくつかのあまり使われないGitコマンドまとめ</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

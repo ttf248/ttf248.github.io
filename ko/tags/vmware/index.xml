@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Vmware on 향숙의 수첩</title>
+        <link>https://ttf248.life/ko/tags/vmware/</link>
+        <description>Recent content in Vmware on 향숙의 수첩</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ko</language>
+        <lastBuildDate>Sun, 25 May 2025 14:10:37 +0800</lastBuildDate><atom:link href="https://ttf248.life/ko/tags/vmware/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>VMware 가상 머신 CPU 리소스 사용량 이상</title>
+        <link>https://ttf248.life/ko/p/vmware-virtual-machine-cpu-resource-usage-anomaly/</link>
+        <pubDate>Sun, 10 Mar 2024 22:14:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/vmware-virtual-machine-cpu-resource-usage-anomaly/</guid>
+        <description>&lt;p&gt;로컬 머신에 Windows 버전의 업무 시스템이 배포되어 있으며, CPU 자원 사용량은 약 5% 정도입니다. VMware에 설치된 CentOS8에서 Linux 버전의 업무 시스템을 배포했는데, 자원 사용량이 비정상적입니다.&lt;/p&gt;
+&lt;h2 id=&#34;문제-설명&#34;&gt;문제 설명
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;호스트 시스템: win10 기업 버전&lt;/li&gt;
+&lt;li&gt;vmware：17.5&lt;/li&gt;
+&lt;li&gt;가상 머신: CentOS 8&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;가상 머신 리소스 할당은 &lt;code&gt;4C8GB&lt;/code&gt;로 설정하고, 비즈니스 시스템을 시작했습니다. 비즈니스 시스템은 가상 머신 Linux 시스템에 배포되었으며, 내부 top 명령어를 통해 시스템 리소스 사용량을 관찰한 결과 CPU 사용량은 높지 않았습니다. 하지만 외부 Windows 시스템에서 작업 관리자를 통해 확인했을 때 CPU 리소스 사용량이 매우 높았고, 프로세스를 확인해 보니 VMware 프로세스가 CPU 리소스를 많이 사용하고 있었습니다.&lt;/p&gt;
+&lt;p&gt;+&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+
+|         Windows           |
+|                           |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|   |      VMware        |  |
+|   |      Program       |  |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|                           |
++&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+&lt;/p&gt;
+&lt;h2 id=&#34;지식점&#34;&gt;지식점
+&lt;/h2&gt;&lt;p&gt;이 문제의 원인 분석은 순조롭지 않았는데, 그 이유는 도화선이 비즈니스 시스템 자체가 아니라 가상 머신 자체의 문제였기 때문이다. 어떻게 하면 일반적인 비즈니스 코드에서 벗어나 시스템 부하로 사고를 전환하고, 부하 데이터의 이상 현상을 통해 소프트 인터럽트를 찾아내어 결국 핵심에 다다를 수 있을까? 무엇이 VMware 소프트 인터럽트의 효율성을 저해하는 것일까? 본 논문에서는 먼저 각 지식 포인트를 설명하고 마지막으로 해결책을 제시한다.&lt;/p&gt;
+&lt;h3 id=&#34;hyper-v&#34;&gt;hyper-v
+&lt;/h3&gt;&lt;p&gt;윈도우 운영 체제의 가상화 기술이 중대한 변화를 겪었습니다. 마이크로소프트가 WSL을 처음 출시했을 때 Hyper-V 서비스를 활성화하면 VMware 가상 머신을 동시에 사용할 수 없었습니다. 이후 버전에서 VMware는 Hyper-V 서비스와 호환되게 되었습니다.&lt;/p&gt;
+&lt;h3 id=&#34;시스템-부하&#34;&gt;시스템 부하
+&lt;/h3&gt;&lt;p&gt;리눅스 시스템에서 &amp;ldquo;로드(load)&amp;ldquo;는 실행 중이거나 실행을 기다리는 프로세스의 수를 의미합니다. 로드는 일반적으로 1분, 5분, 15분 동안의 실행 대기열에 있는 평균 프로세스 수를 나타내는 세 자리 숫자로 표시됩니다. 이러한 숫자는 &amp;ldquo;uptime&amp;rdquo; 명령이나 &amp;ldquo;top&amp;rdquo; 명령을 실행하여 확인할 수 있습니다.&lt;/p&gt;
+&lt;p&gt;구체적으로 말씀드리면, 이 세 개의 숫자는 각각 다음을 의미합니다:&lt;/p&gt;
+&lt;p&gt;1분간의 로드(load): 시스템이 지난 1분 동안 실행 중인 프로세스들의 평균 수량입니다
+과거 5분 동안의 평균 실행 프로세스 수입니다
+지난 15분 동안 시스템에서 실행 중인 프로세스 평균 수입니다&lt;/p&gt;
+&lt;p&gt;부하의 의미는 시스템에서 실행을 기다리는 프로세스 수입니다. 이 숫자가 시스템의 논리 CPU 수보다 높으면 시스템 부하가 높다는 것을 나타내며, 많은 프로세스가 프로세서 리소스를 기다리고 있다는 뜻입니다. 부하 정도와 시스템 구성 및 성능에 따라 시스템이 느려지거나 응답하지 않을 수 있습니다.&lt;/p&gt;
+&lt;p&gt;이상적으로는, 부하가 시스템의 논리 CPU 수 범위 내에 유지되어야 시스템 성능을 최적화할 수 있습니다. 부하가 지속적으로 CPU 수보다 높다면, 시스템 내 프로세스를 추가적으로 분석하여 높은 부하를 유발하는 원인을 파악하고, 시스템 리소스 할당을 조정하거나 프로세스 실행 방식을 최적화하기 위한 적절한 조치를 취해야 합니다.&lt;/p&gt;
+&lt;h3 id=&#34;mpstat-로드-분석&#34;&gt;mpstat 로드 분석
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;mpstat&lt;/code&gt; 명령은 평균 로드, CPU 사용률, 인터럽트 및 컨텍스트 스위치와 같은 단일 또는 여러 프로세서의 다양한 정보를 보고하는 데 사용됩니다. &lt;code&gt;sysstat&lt;/code&gt; 패키지에서 &lt;code&gt;mpstat&lt;/code&gt;은 시스템 부하를 분석하는 데 유용한 도구입니다. 다음은 &lt;code&gt;mpstat&lt;/code&gt;을 사용하여 부하를 분석하는 단계입니다.&lt;/p&gt;
+&lt;p&gt;설치 sysstat
+시스템에 &lt;code&gt;sysstat&lt;/code&gt;이 설치되어 있지 않다면, 시스템에 적합한 패키지 관리 도구를 사용하여 설치할 수 있습니다&lt;/p&gt;
+&lt;p&gt;mpstat 실행
+&lt;code&gt;mpstat&lt;/code&gt; 명령어를 사용하여 CPU 사용률과 부하를 확인합니다. 기본적으로 &lt;code&gt;mpstat&lt;/code&gt;는 CPU 사용률의 평균값을 매초마다 표시합니다. 출력 빈도를 조정하려면 시간 간격을 지정할 수 있습니다. 예를 들어, &lt;code&gt;mpstat -P ALL 2&lt;/code&gt; 명령어를 사용하면 매초마다 한 번씩 실행되며, &lt;code&gt;irq&lt;/code&gt;는 리소스 점유를 나타냅니다.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;```shell
+01:32:33 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+01:32:35 PM  all    0.00    0.00    0.26    0.00    3.73    0.26    0.00    0.00    0.00   95.76
+01:32:35 PM    0    0.00    0.00    0.51    0.00    3.57    0.00    0.00    0.00    0.00   95.92
+01:32:35 PM    1    0.00    0.00    0.00    0.00    3.59    0.51    0.00    0.00    0.00   95.90
+01:32:35 PM    2    0.00    0.00    0.00    0.00    4.15    0.00    0.00    0.00    0.00   95.85
+01:32:35 PM    3    0.00    0.00    0.52    0.00    3.61    0.52    0.00    0.00    0.00   95.36
+```
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;분석 결과 출력
+mpstat 출력에는 각 CPU의 사용률과 시스템의 평균 부하가 포함됩니다. 평균 부하와 각 CPU의 사용률에 특히 주의를 기울이면 시스템의 부하 상태를 파악하는 데 도움이 됩니다. 부하가 높으면 어떤 프로세스가 원인인지 추가 분석하고 성능 병목 현상이 있는지 확인할 수 있습니다.&lt;/p&gt;
+&lt;p&gt;다른 도구와 결합하세요:
+&lt;code&gt;mpstat&lt;/code&gt; 외에도 &lt;code&gt;sar&lt;/code&gt;, &lt;code&gt;pidstat&lt;/code&gt;, &lt;code&gt;iostat&lt;/code&gt; 등의 도구를 사용하여 시스템 성능을 종합적으로 분석할 수 있습니다. 다양한 도구의 출력을 결합하면 시스템 부하를 보다 포괄적으로 파악하고 성능 문제의 근본 원인을 찾아낼 수 있습니다.&lt;/p&gt;
+&lt;h3 id=&#34;중단&#34;&gt;중단
+&lt;/h3&gt;&lt;p&gt;여기서는 내용을 너무 자세히 설명하지 않겠습니다
+추천: &lt;a class=&#34;link&#34; href=&#34;https://www.codedump.info/post/20200522-sgfap-softirq/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;애플리케이션 개발자를 위한 시스템 가이드 CPU편 - 소프트 인터럽트&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;잦은 소프트웨어 인터럽트 발생은 시스템 부하에도 반영된다&lt;/p&gt;
+&lt;h2 id=&#34;문제-해결&#34;&gt;문제 해결
+&lt;/h2&gt;&lt;p&gt;CPU 관점에서만 문제를 파악하기 어렵다는 점을 고려할 때, 시스템에 이상이 발생했을 가능성을 의심해 볼 시점일까요? Linux 운영체제의 부하가 과도하여 VMware가 지나치게 많은 CPU 자원을 사용하고 있을 수도 있습니다. &lt;code&gt;mpstat&lt;/code&gt;를 사용하여 로컬 가상 머신을 분석한 결과, &lt;code&gt;irq&lt;/code&gt; 점유율이 비정상적으로 높았고 단일 코어는 약 25%에 달했습니다. 정상적인 상황에서는 비즈니스 프로세스를 시작하지 않은 상태에서 &lt;code&gt;irq&lt;/code&gt; 점유율은 약 5% 정도여야 합니다.&lt;/p&gt;
+&lt;p&gt;그룹 내 동료 개발 환경에서 그의 CentOS 7은 VMware에 배포되었으며, 리소스 사용량은 정상적으로 표시됩니다. 반면에 상하이의 개발 환경에서는 동일하게 VMware이지만 호스트 CPU 리소스 상황을 직접 관찰할 수 없습니다. 이때 우리는 VMware 가상 머신, Linux 운영 체제 및 GCC 버전을 포함한 여러 변수를 고려해야 합니다.&lt;/p&gt;
+&lt;p&gt;전환하여 테스트 환경을 분석해 보니, 선전의 테스트 환경은 물리 머신에 배포되어 있고, 오래된 버전 GCC 컴파일 서비스가 실행 중이며 CentOS 8 위에서 운영되고 있습니다. 흥미롭게도, 선전 환경에서는 &lt;code&gt;irq&lt;/code&gt; 점유량이 모두 정상입니다.&lt;/p&gt;
+&lt;p&gt;문제점을 파악하기 위해 GCC 최신 버전으로 컴파일된 프로그램을 선전 환경에 배포하여 테스트한 결과, 모두 정상 작동하는 것으로 나타났습니다&lt;/p&gt;
+&lt;p&gt;문제는 더 명확해지는 듯하고, 우리는 운영체제에 문제가 있는 것은 아닌지 의심하기 시작했다. 결국 CentOS 8은 더 이상 공식 지원을 받지 못한다. 하지만 순수한 CentOS 7과 CentOS 8을 다시 배포해도 문제는 여전히 존재한다.&lt;/p&gt;
+&lt;p&gt;지금, 우리는 유일한 불확실 요소인 VMware 가상화 소프트웨어를 의심하기 시작했습니다. 갑자기 아이디어가 떠올랐습니다. Hyper-V 기술은 어떨까요? 혹시 이전에 Hyper-V가 활성화되었지만 완전히 종료되지 않아 이런 문제가 발생했을 수도 있습니다? 결국, 소프트 인터럽트도 가상화 소프트웨어를 통해 구현되니까요. 서로 다른 가상화 기술에 버그는 없는 걸까요? 이러한 문제들은 깊이 생각하고 조사할 가치가 있습니다.&lt;/p&gt;
+&lt;h2 id=&#34;결론&#34;&gt;결론
+&lt;/h2&gt;&lt;p&gt;마이크로소프트 공식 매뉴얼에 따르면, 로컬 Hyper-V 서비스를 완전히 종료한 후 VMware가 호스트에서 정상적으로 복구되는 것을 확인했습니다. 이렇게 해서 문제 해결이 마침내 순조롭게 진행되었습니다. 처음 설명했듯이 이 경험은 굴곡지고 고되었으며 종합적인 분석과 판단이 필요했습니다. 또한, 이번에 처음으로 문제를 진단하고 가상 머신 수준까지 위치를 특정하게 되었습니다.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor
+bcdedit /set hypervisorlaunchtype off
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>VMware 가상 머신 디스크 공간 최적화</title>
+        <link>https://ttf248.life/ko/p/vmware-virtual-disk-space-optimization/</link>
+        <pubDate>Wed, 21 Jun 2023 18:35:41 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/vmware-virtual-disk-space-optimization/</guid>
+        <description>&lt;p&gt;VMware 가상 머신을 설치하고 개발 시스템을 사용할 때, 보통은 디스크 공간을 넉넉하게 남겨두는데, 시간이 지나면 실제 파일 내용보다 훨씬 더 많은 로컬 디스크 공간을 차지하게 됩니다&lt;/p&gt;
+&lt;h2 id=&#34;장면-묘사&#34;&gt;장면 묘사
+&lt;/h2&gt;&lt;p&gt;df -h 명령어를 통해 현재 기계의 디스크 정보를 확인하니, 실제로 60GB를 사용 중이었고, 모든 스냅샷과 클론 이미지를 삭제했음에도 불구하고 로컬 가상 머신이 차지하는 디스크 공간은 여전히 60GB를 훨씬 넘어섰다. 본래 부족한 하드디스크에 더 많은 부담을 주게 되었다.&lt;/p&gt;
+&lt;h2 id=&#34;선행-조건&#34;&gt;선행 조건
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;가상 머신 설치할 때, 미리 할당된 디스크를 선택하지 않았습니다&lt;/li&gt;
+&lt;li&gt;가상 머신이 사용하는 공간보다 현재 로컬에 저장된 가상 머신의 하드 디스크에 남은 디스크 공간이 더 큽니다&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;남은 공간이 부족하므로, 임시로 가상 머신을 외장 하드 드라이브로 이동한 후 디스크를 최적화했다가 다시 이전하는 것을 고려해 볼 수 있습니다&lt;/p&gt;
+&lt;h2 id=&#34;도구&#34;&gt;도구
+&lt;/h2&gt;&lt;p&gt;공식적으로 &lt;code&gt;open-vm-tools&lt;/code&gt; 패키지를 제공하며, yum을 통해 설치하거나 VMware Tools 이미지 패키지로 설치할 수 있습니다&lt;/p&gt;
+&lt;h2 id=&#34;명령&#34;&gt;명령
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;vmware-toolbox-cmd disk shrink /
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;실행하면 가상 머신이 자동으로 종료되고 VMware 호스트 프로그램은 디스크 압축을 실행합니다. 이 작업 시간은 가상 머신의 크기와 디스크 액세스 속도에 따라 달라집니다.&lt;/p&gt;
+&lt;p&gt;실행 결과는 여전히 꽤 괜찮으며, 가상 머신의 디스크 공간 사용량은 &lt;code&gt;df -h&lt;/code&gt;의 디스크 정보와 거의 동일합니다&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

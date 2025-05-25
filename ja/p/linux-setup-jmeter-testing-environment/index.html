@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="著者はハードウェアに強い興味を持ち、Jmeterを用いて負荷テストを実施し、CentOS 7上にJmeter、InfluxDB、Grafanaをデプロイした過程を記録した。Jmeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerのインストール方法、そしてGrafanaの簡単なデプロイと設定について共有している。高性能プログラムのパターンに関する経験と参考文献をまとめた。\n">
+<title>LinuxでJMeterテスト環境を構築する</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/linux-setup-jmeter-testing-environment/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="LinuxでJMeterテスト環境を構築する">
+<meta property='og:description' content="著者はハードウェアに強い興味を持ち、Jmeterを用いて負荷テストを実施し、CentOS 7上にJmeter、InfluxDB、Grafanaをデプロイした過程を記録した。Jmeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerのインストール方法、そしてGrafanaの簡単なデプロイと設定について共有している。高性能プログラムのパターンに関する経験と参考文献をまとめた。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/linux-setup-jmeter-testing-environment/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='jmeter' /><meta property='article:tag' content='ストレステスト' /><meta property='article:tag' content='docker' /><meta property='article:published_time' content='2020-12-22T10:12:50&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T14:10:37&#43;08:00'/>
+<meta name="twitter:title" content="LinuxでJMeterテスト環境を構築する">
+<meta name="twitter:description" content="著者はハードウェアに強い興味を持ち、Jmeterを用いて負荷テストを実施し、CentOS 7上にJmeter、InfluxDB、Grafanaをデプロイした過程を記録した。Jmeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerのインストール方法、そしてGrafanaの簡単なデプロイと設定について共有している。高性能プログラムのパターンに関する経験と参考文献をまとめた。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#背景">背景</a></li>
+    <li><a href="#jmeter">Jmeter</a>
+      <ol>
+        <li><a href="#jmeter-部署-centos7">JMeter 部署 CentOS7</a></li>
+        <li><a href="#jmeter-コマンド">JMeter コマンド</a></li>
+      </ol>
+    </li>
+    <li><a href="#influxdb">InfluxDB</a>
+      <ol>
+        <li><a href="#influxdbの特徴">InfluxDBの特徴</a></li>
+        <li><a href="#influxdb-docker-インストール">InfluxDB Docker インストール</a></li>
+        <li><a href="#influxdb-データベースとユーザーの作成">InfluxDB データベースとユーザーの作成</a></li>
+      </ol>
+    </li>
+    <li><a href="#grafana">Grafana</a></li>
+    <li><a href="#あとがき">あとがき</a></li>
+    <li><a href="#参照資料">参照資料</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
+                コンピュータ
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/linux-setup-jmeter-testing-environment/">LinuxでJMeterテスト環境を構築する</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>著者はハードウェアに強い興味を持ち、Jmeterを用いて負荷テストを実施し、CentOS 7上にJmeter、InfluxDB、Grafanaをデプロイした過程を記録した。Jmeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerのインストール方法、そしてGrafanaの簡単なデプロイと設定について共有している。高性能プログラムのパターンに関する経験と参考文献をまとめた。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2020年12月22日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约15分钟，共3360字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/linux-setup-jmeter-testing-environment/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/linux-setup-jmeter-testing-environment/" class="link">English</a>
+                
+                    <a href="https://ttf248.life/ko/p/linux-setup-jmeter-testing-environment/" class="link">한국어</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>著者はハードウェアに強い興味を持ち、Jmeterを用いて負荷テストを実施し、CentOS 7上にJmeter、InfluxDB、Grafanaをデプロイした過程を記録した。Jmeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerのインストール方法、そしてGrafanaの簡単なデプロイと設定について共有している。高性能プログラムのパターンに関する経験と参考文献をまとめた。</p>
+<h2 id="背景">背景
+</h2><p>周知の通り、私はハードウェアに強い興味があります。たまたまテストチームがJmeterでパフォーマンステストを行っているところを見かけ、性能が上がらないというので、好奇心旺盛な私が早速乗り出し、会社のパフォーマンステストを試してみることにしました。 ここでちょっとしたエピソードがあります。ある昔のことですが、OSC（开源中国）で記事を拝見し、より高尚に見えるパフォーマンステストのグラフを描く方法について学んだことがあります。Windows版のテストを実行しているところを見学し、TPSデータを可視化するまで来ています。それに加えてWebパネルを設定することにどのようなメリットがあるのでしょうか？</p>
+<p>考えたことがすべて思い込みで、試してみないとわからない。</p>
+<blockquote>
+<p>Don&rsquo;t use GUI mode for load testing! only for Test creation and Test debuggin.</p>
+</blockquote>
+<p>公式的には、コマンドラインで結果を取得し、GUIで表示する方法ではデータの誤差が生じる可能性があるとのことです。JMeterについてはあまり詳しくないのですが、せめてLinux版のコンソールパネルを試してみる理由にはなります。</p>
+<p>オープンソース中国のフォーラムでの投稿ですが、主要コンポーネントのデプロイメントは友好的ではありません。必要なファイルも公众号をフォローしないとダウンロードできないので、新しい世代として当然Dockerで代替しました。結局のところ、自分のサーバーが国内にあること、そしてクロスボーダーのソースアドレスへのアクセス速度が非常に遅いことが原因です。少なくともイメージサービスに関しては、アリババクラウドには無料のアクセラレーションがあります。</p>
+<p>Dockerのインストールとデプロイについては、ここでは詳細を述べません。以前の記事をご参照ください。</p>
+<hr>
+<p>今後の内容は大きく分けて二つです。基本的なテスト環境コンポーネントの構築と、各コンポーネントの簡単な説明。</p>
+<h2 id="jmeter">Jmeter
+</h2><p>Apache JMeterは、Apache Foundationが開発したJavaベースの負荷テストツールです。ソフトウェアの負荷テストに用いられ、当初はWebアプリケーションのテスト用に設計されましたが、その後他のテスト分野にも拡張されています。静的なリソースや動的なリソースなど、さまざまなものをテストできます。例えば、静的ファイル、Javaマイクロサービス、CGIスクリプト、Javaオブジェクト、データベース、FTPサーバーなどです。JMeterは、サーバー、ネットワーク、またはオブジェクトに対して巨大な負荷をシミュレートし、さまざまなプレッシャーカテゴリー下での強度をテストし、全体的なパフォーマンスを分析するために使用できます。また、アサーションを含むスクリプトを作成することで、アプリケーションの機能/回帰テストを行い、プログラムが期待される結果を返すことを検証できます。最大限の柔軟性を実現するため、JMeterは正規表現を使用してアサーションを作成することを許可しています。</p>
+<p>Apache JMeterは、静的なリソースと動的なリソース（ファイル、サーブレット、Perlスクリプト、Javaオブジェクト、データベースおよびクエリ、FTPサーバーなど）のパフォーマンスをテストするために使用できます。サーバー、ネットワーク、またはオブジェクトに過剰な負荷をかけて強度をテストしたり、さまざまな種類のプレッシャー下での全体的なパフォーマンスを分析したりすることができます。パフォーマンスのグラフ解析や、高並行負荷テストでサーバー/スクリプト/オブジェクトを使用することも可能です。</p>
+<h3 id="jmeter-部署-centos7">JMeter 部署 CentOS7
+</h3><p>JDKランタイム環境をインストールし、Jmeterのインストーラパッケージをダウンロードする。</p>
+<pre><code class="language-shell">yum install java-1.8.0-openjdk -y &amp;&amp; \
+wget https://mirrors.bfsu.edu.cn/apache//jmeter/binaries/apache-jmeter-5.4.tgz &amp;&amp; tar -xf apache-jmeter-5.4.tgz
+</code></pre>
+<p>環境変数を設定する</p>
+<pre><code class="language-shell">export JMETER_HOME=$HOME/jmeter/apache-jmeter-5.4
+export PATH=$JMETER_HOME/bin:$PATH
+</code></pre>
+<h3 id="jmeter-コマンド">JMeter コマンド
+</h3><p>最後に<code>Grafana</code>コントロールパネルと接続し、<code>-l</code>パラメータを入力せずに<code>web</code>コンソールでデータを観察できます。</p>
+<pre><code class="language-shell">jmeter -n -t /tmp/order-500-10s.jmx -l /tmp/jmeter-order-report-20200109/order-500-10s.jtl
+# 一般不用测试结果和测试报告，简化命令
+jmeter -n -t /tmp/order-500-10s.jmx
+</code></pre>
+<h2 id="influxdb">InfluxDB
+</h2><p>InfluxDBは、外部依存関係なしにGo言語で記述されたオープンソースの分散型時系列、イベント、および指標データベースです。現在、このデータベースは主に、DevOpsモニタリングデータ、APPメトリクス、IoTセンサーデータ、リアルタイム解析データなど、大量の時間スタンプデータを保存するために使用されています。</p>
+<h3 id="influxdbの特徴">InfluxDBの特徴
+</h3><p>InfluxDBの特徴は、以下の9つの側面からまとめられます。</p>
+<ul>
+<li>構造（パターン）なし：任意の数の列が可能です。</li>
+<li>メトリクスの保存期間を設定できます。</li>
+<li>時間に関連する関数（最小値、最大値、合計、カウント、平均、中央値など）をサポートし、統計処理に便利です。</li>
+<li>サポートされているストレージポリシー：データの削除と変更に使用できます。（InfluxDBはデータの削除および変更の方法を提供していません。）</li>
+<li>継続クエリのサポート：データベース内で自動的にスケジュールされた一連の文であり、ストレージポリシーと組み合わせることでInfluxDBのシステムリソース使用量を削減できます。</li>
+<li>ネイティブなHTTPサポート、組み込みHTTP API。</li>
+<li>SQLに類似した構文をサポートします。</li>
+<li>クラスタ内のデータレプリカ数を設定する機能をサポートします。</li>
+<li>定期サンプリングデータをサポートし、別のmeasurementに書き込むことで、細分化されたデータストレージを容易にする。</li>
+</ul>
+<h3 id="influxdb-docker-インストール">InfluxDB Docker インストール
+</h3><pre><code class="language-shell">mkdir influxdb &amp;&amp; cd influxdb &amp;&amp; \
+docker run -p 8086:8086 -d --name influxdb -v $PWD:/var/lib/influxdb influxdb:1.7
+</code></pre>
+<p>コンテナに入り、コマンドを実行して、手動でデータベースを作成します。</p>
+<pre><code class="language-shell">root@bce0a55bbc72:/# influx
+Connected to http://localhost:8086 version 1.7.10
+InfluxDB shell version: 1.7.10
+&gt; 交互面板执行命令
+</code></pre>
+<h3 id="influxdb-データベースとユーザーの作成">InfluxDB データベースとユーザーの作成
+</h3><p>データベースを作成します：create database jmeter_t2
+データベースを確認する：show databases
+データベースを切り替えます：use jmeter_t2
+ユーザーを作成：パスワード&rsquo;admin&rsquo;でユーザー&quot;admin&quot;を全権限で作成する
+ユーザーを表示</p>
+<pre><code class="language-shell">&gt; show users
+user  admin
+----  -----
+admin true
+</code></pre>
+<p>ユーザー権限<code>admin</code>が<code>true</code>に表示されれば、データベースの準備は完了です。</p>
+<h2 id="grafana">Grafana
+</h2><p>テストケースを作成していると、グラフ表示はそれほど必須ではないことがわかった。インターフェースの<code>tps</code>データはコマンドラインで実行すれば確認できるし、むしろプログラム内部の処理時間を知りたいだけだ。</p>
+<p>シンプルな<code>Grafana</code>コントロールパネルをデプロイし、設定ファイルをインポートして<code>InfluxDB</code>に接続する。</p>
+<p>コントロールパネルでは、タグによるテスト結果のフィルタリングが可能で、通常は <code>InfluxDB</code> データベースを一つ設定するだけで済みます。</p>
+<ul>
+<li>アプリケーション名</li>
+<li>テストケース名</li>
+</ul>
+<p><img src="/p/linux-setup-jmeter-testing-environment/Snipaste_2021-03-09_19-44-22.png"
+	width="861"
+	height="357"
+	
+	loading="lazy"
+	
+		alt="grafana"
+	
+	
+		class="gallery-image" 
+		data-flex-grow="241"
+		data-flex-basis="578px"
+	
+></p>
+<pre><code class="language-shell">docker run -d --name=grafana -p 3000:3000 grafana/grafana:7.3.1
+</code></pre>
+<p>ウェブ版では、サンプラー間隔により計算される<code>TPS</code>や関連数値が<code>Jmeter</code>の集約レポートと一致しない場合があります。参考リンク：<a class="link" href="https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/"  target="_blank" rel="noopener"
+    >https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/</a></p>
+<p>資料には、リスナーをカスタマイズする方法についても説明されています。</p>
+<h2 id="あとがき">あとがき
+</h2><ul>
+<li>高性能なプログラムパターンは必ずしもone loop threadであり、ロック、キューへの入列と退列は不要なパフォーマンス損失を引き起こす。</li>
+<li>コアビジネスロジックの処理時間よりも、他のコードを導入する時間が長くなる場合がある。並行処理によってのみ効率を効果的に向上させることができ、コア処理時間が十分短い場合に限って、他のコードの導入は慎重に行うべきである。</li>
+</ul>
+<h2 id="参照資料">参照資料
+</h2><ul>
+<li>JMeterシリーズ：JMeter+Grafana+InfluxDBによるリアルタイム監視</li>
+<li>InfluxDB公式イメージ</li>
+<li>Grafana公式イメージ</li>
+<li><a class="link" href="https://jmeter.apache.org/download_jmeter.cgi"  target="_blank" rel="noopener"
+    >JMeter公式サイト</a></li>
+<li><a class="link" href="https://medium.com/@jasonli.studio/to-install-apache-jmeter-in-centos7-294bc72a97ba"  target="_blank" rel="noopener"
+    >To install Apache JMeter in CentOS7</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/linux/">Linux</a>
+        
+            <a href="/ja/tags/jmeter/">Jmeter</a>
+        
+            <a href="/ja/tags/%E3%82%B9%E3%83%88%E3%83%AC%E3%82%B9%E3%83%86%E3%82%B9%E3%83%88/">ストレステスト</a>
+        
+            <a href="/ja/tags/docker/">Docker</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年05月25日 14:10
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">関連するコンテンツ</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/ja/p/docker-two-three-things/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Dockerの豆知識</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/docker-domestic-mirror-failure/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Docker国内镜像代理失効</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/linux-backend-slow-string-processing/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Linuxバックエンドサービス、大量文字列データの処理が遅い</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/upgrade-gcc-version-causes-program-crash-code-irregularities/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">GCCバージョンアップによりプログラムがクラッシュ：非標準コードの潜在的な問題</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/linux-system-benchmark-test/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Linuxシステムベンチマークテスト</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

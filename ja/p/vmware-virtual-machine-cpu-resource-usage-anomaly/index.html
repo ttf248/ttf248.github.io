@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="背景：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソースの使用率は約5％です。VMwareにインストールされたCentOS8にはLinux版の業務システムがデプロイされていますが、リソース使用量が異常です。\n">
+<title>VMware仮想マシンCPUリソース使用量異常</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/vmware-virtual-machine-cpu-resource-usage-anomaly/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="VMware仮想マシンCPUリソース使用量異常">
+<meta property='og:description' content="背景：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソースの使用率は約5％です。VMwareにインストールされたCentOS8にはLinux版の業務システムがデプロイされていますが、リソース使用量が異常です。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/vmware-virtual-machine-cpu-resource-usage-anomaly/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='vmware' /><meta property='article:tag' content='問題の切り分け' /><meta property='article:published_time' content='2024-03-10T22:14:59&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T14:10:37&#43;08:00'/>
+<meta name="twitter:title" content="VMware仮想マシンCPUリソース使用量異常">
+<meta name="twitter:description" content="背景：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソースの使用率は約5％です。VMwareにインストールされたCentOS8にはLinux版の業務システムがデプロイされていますが、リソース使用量が異常です。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#問題の説明">問題の説明</a></li>
+    <li><a href="#知識点">知識点</a>
+      <ol>
+        <li><a href="#hyper-v">hyper-v</a></li>
+        <li><a href="#システム負荷">システム負荷</a></li>
+        <li><a href="#負荷解析-mpstat">負荷解析 mpstat</a></li>
+        <li><a href="#中断">中断</a></li>
+      </ol>
+    </li>
+    <li><a href="#問題の切り分け">問題の切り分け</a></li>
+    <li><a href="#結論">結論</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
+                コンピュータ
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/vmware-virtual-machine-cpu-resource-usage-anomaly/">VMware仮想マシンCPUリソース使用量異常</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>背景：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソースの使用率は約5％です。VMwareにインストールされたCentOS8にはLinux版の業務システムがデプロイされていますが、リソース使用量が異常です。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2024年03月10日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约15分钟，共3329字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/vmware-virtual-machine-cpu-resource-usage-anomaly/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/vmware-virtual-machine-cpu-resource-usage-anomaly/" class="link">English</a>
+                
+                    <a href="https://ttf248.life/ko/p/vmware-virtual-machine-cpu-resource-usage-anomaly/" class="link">한국어</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>背景：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソースの使用率は約5％です。VMwareにインストールされたCentOS8にはLinux版の業務システムがデプロイされていますが、リソース使用量が異常です。</p>
+<h2 id="問題の説明">問題の説明
+</h2><ul>
+<li>ホストマシン：Windows 10 エンタープライズ版</li>
+<li>vmware：17.5</li>
+<li>仮想マシン：CentOS 8</li>
+</ul>
+<p>仮想マシンリソースの割り当ては<code>4C8GB</code>、ビジネスシステムを起動します。ビジネスシステムは仮想マシンLinuxシステムにデプロイされており、仮想マシン内部のtopコマンドでシステムリソースの使用状況を確認すると、CPU使用率は高くありません。外側のWindowsシステムではタスクマネージャーでCPUリソースの使用率が高いことが確認され、プロセスを確認した結果、vmwareプロセスがCPUリソースを多く消費していることがわかりました。</p>
+<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+|         Windows           |
+|                           |
+|   +&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+  |
+|   |      VMware        |  |
+|   |      Program       |  |
+|   +&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+  |
+|                           |
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
+<h2 id="知識点">知識点
+</h2><p>この問題のトラブルシューティングは順調に進まず、原因が通常のビジネスシステムではなく、仮想マシン自体の問題にあったためです。どのようにして思考を通常のビジネスコードからシステム負荷へ、そして負荷データの異常からソフト割り込みへと、最後に重要なポイントである「VMware ソフト割り込みの効率に影響を与えるものは何か？」という点に絞り込むのか。本稿ではまず各知識点を解説し、最後に解決策を示します。</p>
+<h3 id="hyper-v">hyper-v
+</h3><p>Windows オペレーティングシステムの仮想化技術は大きな変革を遂げました。Microsoft が WSL を初めてリリースした際、Hyper-V サービスを有効にすると VMware の仮想マシンを同時に使用できなくなりました。しかし、その後のバージョンでは、VMware は Hyper-V サービスとの互換性が得られるようになりました。</p>
+<h3 id="システム負荷">システム負荷
+</h3><p>Linuxシステムにおいて、「ロード」（load）とは、実行中または実行待ちのプロセスの数を指します。ロードは通常、1分間、5分間、および15分間の実行キュー内の平均プロセス数を示す3つの数字で表されます。これらの数値は、「uptime」コマンドまたは「top」コマンドを実行することで確認できます。</p>
+<p>具体的には、この3つの数字はそれぞれ以下のものを表しています。</p>
+<p>1分間の負荷：システムが過去1分間実行キューにいたプロセスの平均数。
+5分間の負荷：システムが過去5分間実行キューにいたプロセスの平均数。
+15分間の負荷：システムが過去15分間実行キューに保持していたプロセスの平均数。</p>
+<p>負荷の定義は、システム内で実行待ちのプロセスの数です。この数がシステムの論理CPU数を超えると、システム負荷が高いことを示し、多くのプロセスがプロセッサリソースを待機していることを意味します。これにより、システムが遅くなったり、応答しなくなったりする可能性があります。その程度やシステムの構成・性能によって異なります。</p>
+<p>理想的には、負荷はシステムの論理 CPU 数範囲内に維持されるべきであり、そうすることでシステムのパフォーマンスが最適化されます。もし負荷が継続的に CPU 数を超えた場合、システム内のプロセスをさらに分析し、高負荷の原因となっているものを特定し、それに応じてシステムリソースの割り当てを調整したり、プロセスの実行方法を最適化する対策を講じる必要があるかもしれません。</p>
+<h3 id="負荷解析-mpstat">負荷解析 mpstat
+</h3><p><code>mpstat</code> コマンドは、単一または複数のプロセッサに関する様々な情報、例えば平均負荷、CPU 使用率、割り込み、コンテキストスイッチなどを報告するために使用されます。<code>sysstat</code> パッケージに含まれる <code>mpstat</code> は、システムの負荷状況を分析するのに非常に役立つツールです。以下に <code>mpstat</code> を用いた負荷分析の手順を示します。</p>
+<p>sysstat のインストール
+もしあなたのシステムに<code>sysstat</code>がインストールされていない場合は、あなたのシステムに適したパッケージ管理ツールを使ってインストールしてください。</p>
+<p>mpstatを実行する。
+<code>mpstat</code> コマンドを使用して、CPU の使用状況と負荷を確認します。デフォルトでは、<code>mpstat</code> は CPU 使用率の平均値を毎秒表示します。出力頻度は、時間間隔を指定することで調整できます。例えば、<code>mpstat</code> を毎秒実行するには、次のコマンドを使用します: <code>mpstat -P ALL 2</code> 、<code>irq</code> はリソース使用状況を示します。</p>
+<pre><code>```shell
+01:32:33 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+01:32:35 PM  all    0.00    0.00    0.26    0.00    3.73    0.26    0.00    0.00    0.00   95.76
+01:32:35 PM    0    0.00    0.00    0.51    0.00    3.57    0.00    0.00    0.00    0.00   95.92
+01:32:35 PM    1    0.00    0.00    0.00    0.00    3.59    0.51    0.00    0.00    0.00   95.90
+01:32:35 PM    2    0.00    0.00    0.00    0.00    4.15    0.00    0.00    0.00    0.00   95.85
+01:32:35 PM    3    0.00    0.00    0.52    0.00    3.61    0.52    0.00    0.00    0.00   95.36
+```
+</code></pre>
+<p>分析出力：
+mpstat の出力には、各 CPU の使用率とシステムの平均負荷が含まれています。平均負荷と各 CPU の使用率に特に注意を払うことで、システムの負荷状況を把握できます。負荷が高い場合は、どのプロセスが原因であるかをさらに分析し、パフォーマンスのボトルネックが存在するかどうかを確認できます。</p>
+<p>他のツールとの連携：
+<code>mpstat</code> 以外にも、<code>sar</code>、<code>pidstat</code>、<code>iostat</code> などのツールを使用してシステムパフォーマンスを総合的に分析できます。複数のツールの出力を組み合わせることで、システムの負荷状況をより包括的に把握し、パフォーマンス問題の根本原因を見つけることができます。</p>
+<h3 id="中断">中断
+</h3><p>ここでは内容を詳しく説明することは省略します。
+推奨：<a class="link" href="https://www.codedump.info/post/20200522-sgfap-softirq/"  target="_blank" rel="noopener"
+    >アプリケーション開発者向けシステムガイド CPU編 ソフトウェア割り込み</a></p>
+<p>頻繁なソフト割り込みの発生も、システム負荷に現れます。</p>
+<h2 id="問題の切り分け">問題の切り分け
+</h2><p>CPUの観点だけで問題を特定できない場合、システムに異常が発生しているのではないかと疑うべきでしょうか？ Linuxオペレーティングシステムの負荷が高すぎて、VMwareが過剰なCPUリソースを消費している可能性があります。 <code>mpstat</code>を使用してローカル仮想マシンを分析した結果、<code>irq</code>の使用率が異常で、単核は約25%です。正常時には、ビジネスプロセスを開始してもアイドル状態の時、<code>irq</code>の割合は通常約5%であるべきです。</p>
+<p>グループ内の同僚の開発環境では、彼のCentOS 7はVMware上にデプロイされており、リソース使用量は正常に表示されています。一方、上海の開発環境でも同様にVMwareですが、ホストマシンのCPUリソース状況を直接観察することができません。このとき、私たちはVMware仮想マシン、Linuxオペレーティングシステム、そしてGCCバージョンという複数の変数に直面しています。</p>
+<p>転換してテスト環境を分析すると、深センのテスト環境は物理マシン上にデプロイされており、古いバージョンのGCCコンパイルサービスが稼働しており、CentOS 8上で動作している。興味深いことに、深セン環境では<code>irq</code>の使用状況は正常である。</p>
+<p>問題の切り分けのため、より新しいバージョンの GCC でコンパイルしたプログラムを深セン環境にデプロイしてテストした結果、すべて正常でした。</p>
+<p>問題はより明確になりつつあり、オペレーティングシステムに問題があるのではないかと疑い始めています。結局のところ、CentOS 8 は公式サポートが終了しているのです。しかし、クリーンな CentOS 7 と CentOS 8 を再デプロイしても、問題は依然として存在します。</p>
+<p>今のところ、唯一の不確定要素であるVMware仮想マシンソフトウェアを疑い始めています。すると突然、Hyper-V技術が頭に浮かびました。以前にHyper-Vが有効になっていて、完全にシャットダウンされなかったために、このような問題が発生したのでしょうか？結局のところ、ソフト割り込みも仮想マシンソフトウェアによって実現されています。異なる仮想化技術にバグは存在しないのでしょうか？これらの問題は深く考察し、調査する価値があります。</p>
+<h2 id="結論">結論
+</h2><p>マイクロソフトの公式マニュアルによると、ローカルのHyper-Vサービスを完全にシャットダウンしたところ、VMwareがホスト上で正常に復旧しました。これで問題はついに解決しました。当初から述べたように、この経験は紆余曲折し、包括的な分析と判断が必要でした。これも初めて問題をトラブルシューティングし、仮想マシンレベルまで特定することになった事例です。</p>
+<pre><code class="language-shell">Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor
+bcdedit /set hypervisorlaunchtype off
+</code></pre>
+<ul>
+<li><a class="link" href="https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v"  target="_blank" rel="noopener"
+    >https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/vmware/">Vmware</a>
+        
+            <a href="/ja/tags/%E5%95%8F%E9%A1%8C%E3%81%AE%E5%88%87%E3%82%8A%E5%88%86%E3%81%91/">問題の切り分け</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年05月25日 14:10
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">関連するコンテンツ</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/ja/p/protobuf-zero-value-traps/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">プロトバッファのゼロ値トラップ：デフォルト値がビジネスロジックの隠れた殺人者となる場合</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/backend-service-tcp-communication-troubleshooting/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">バックエンドサービスTCP通信異常調査</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/using-atop-to-monitor-linux-system-metrics-installation-configuration-and-usage-guide/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">atopツールによるLinuxシステム指標の監視：インストール、設定と使用完全ガイド</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/visual-studio-loading-unmatched-pdb-files/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Visual Studio で「非対応」の PDB ファイルを読み込む</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/linux-backend-slow-string-processing/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Linuxバックエンドサービス、大量文字列データの処理が遅い</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

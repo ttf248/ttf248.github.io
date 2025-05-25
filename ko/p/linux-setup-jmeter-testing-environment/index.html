@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ko" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="저자는 하드웨어에 대한 깊은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유했습니다. 고성능 프로그램 패턴에 대한 경험과 참고 자료를 정리했습니다.\n">
+<title>리눅스 기반 Jmeter 압력 테스트 환경 구축</title>
+
+<link rel='canonical' href='https://ttf248.life/ko/p/linux-setup-jmeter-testing-environment/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="리눅스 기반 Jmeter 압력 테스트 환경 구축">
+<meta property='og:description' content="저자는 하드웨어에 대한 깊은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유했습니다. 고성능 프로그램 패턴에 대한 경험과 참고 자료를 정리했습니다.\n">
+<meta property='og:url' content='https://ttf248.life/ko/p/linux-setup-jmeter-testing-environment/'>
+<meta property='og:site_name' content='향숙의 수첩'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='jmeter' /><meta property='article:tag' content='스트레스 테스트' /><meta property='article:tag' content='docker' /><meta property='article:published_time' content='2020-12-22T10:12:50&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T14:10:37&#43;08:00'/>
+<meta name="twitter:title" content="리눅스 기반 Jmeter 압력 테스트 환경 구축">
+<meta name="twitter:description" content="저자는 하드웨어에 대한 깊은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유했습니다. 고성능 프로그램 패턴에 대한 경험과 참고 자료를 정리했습니다.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="메뉴 여닫기">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ko">향숙의 수첩</a></h1>
+            <h2 class="site-description">시간을 모으고, 세월에 흔적을 남기다</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" selected>한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">목차</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#배경">배경</a></li>
+    <li><a href="#jmeter">Jmeter</a>
+      <ol>
+        <li><a href="#jmeter-배포-centos7">JMeter 배포 CentOS7</a></li>
+        <li><a href="#지메터-명령어">지메터 명령어</a></li>
+      </ol>
+    </li>
+    <li><a href="#influxdb">InfluxDB</a>
+      <ol>
+        <li><a href="#인플럭스db-특징">인플럭스DB 특징</a></li>
+        <li><a href="#인플럭스db-도커-설치">인플럭스DB 도커 설치</a></li>
+        <li><a href="#인플럭스db-데이터베이스-및-사용자-생성">인플럭스DB 데이터베이스 및 사용자 생성</a></li>
+      </ol>
+    </li>
+    <li><a href="#grafana">Grafana</a></li>
+    <li><a href="#사후기">사후기</a></li>
+    <li><a href="#참고-자료">참고 자료</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ko/categories/%EC%BB%B4%ED%93%A8%ED%84%B0/" >
+                컴퓨터
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ko/p/linux-setup-jmeter-testing-environment/">리눅스 기반 Jmeter 압력 테스트 환경 구축</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>저자는 하드웨어에 대한 깊은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유했습니다. 고성능 프로그램 패턴에 대한 경험과 참고 자료를 정리했습니다.</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2020년 12월 22일</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约12分钟，共2572字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/linux-setup-jmeter-testing-environment/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/linux-setup-jmeter-testing-environment/" class="link">English</a>
+                
+                    <a href="https://ttf248.life/ja/p/linux-setup-jmeter-testing-environment/" class="link">日本語</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>저자는 하드웨어에 대한 깊은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유했습니다. 고성능 프로그램 패턴에 대한 경험과 참고 자료를 정리했습니다.</p>
+<h2 id="배경">배경
+</h2><p>다들 아시다시피 저는 하드웨어에 관심이 많습니다. 우연히 테스트팀에서 <code>Jmeter</code>로 성능 테스트를 하고 있는데, 성능이 올라가지 않는 것을 발견했습니다. 호기심 많은 저라서 단번에 뛰어들어 회사에서 어떻게 압력 테스트를 하는지 살펴보기로 했습니다. 여기서 잠깐 일화 하나를 덧붙이자면, 아주 먼 옛날 오픈소스 차이나에서 어떤 게시글을 봤는데, 보기에도 더 멋진 성능 압력 테스트 그림을 그리는 방법에 대한 내용이었습니다. 테스트팀은 <code>windows</code> 버전으로 실행되는 테스트를 지켜봤고, 시각화된 <code>TPS</code> 데이터 표시가 이미 되어 있었습니다. 게다가 웹 패널을 설정하면 어떤 도움이 있을까요?</p>
+<p>생각은 자기만 생각하는 대로인데, 직접 해봐야 알 수 있어</p>
+<blockquote>
+<p>Don&rsquo;t use GUI mode for load testing! only for Test creation and Test debuggin.</p>
+</blockquote>
+<p>공식적으로 권장하는 방법은 명령줄을 통해 부하 테스트 보고서를 얻고 GUI 방식으로 표시하는 것인데, 데이터 오류가 발생할 수 있나요? JMeter에 대한 이해는 깊지 않지만, 적어도 <code>Linux</code> 버전 콘솔 패널을 굴려볼 만한 이유를 찾았습니다</p>
+<p>오픈소스차이나의 게시글인데, 핵심 컴포넌트 배포 방식이 썩 좋지 않고, 설치에 필요한 파일도 공중계정을 팔로우해야 다운로드할 수 있어서, 새세대 청년으로서 당연히 <code>Docker</code>로 대체했다. 결국 서버가 국내에 있는 것이고, 국경 간 소스 주소 접근 속도는 매우 느리다. 적어도 이미지 서비스는 알리바이가 무료 가속을 제공한다.</p>
+<p><code>docker</code> 설치 배포에 대한 내용은 여기서는 더 이상 설명하지 않겠습니다. 이전 기사를 참고하시기 바랍니다.</p>
+<hr>
+<p>다음 내용은 크게 두 부분으로 나뉩니다: 기본 테스트 환경 구성 요소 구축 및 각 구성 요소에 대한 간단한 설명</p>
+<h2 id="jmeter">Jmeter
+</h2><p>Apache JMeter는 Apache 재단에서 개발한 Java 기반의 성능 테스트 도구입니다. 소프트웨어에 대한 부하 테스트를 위해 설계되었으며, 처음에는 웹 애플리케이션 테스트용으로 만들어졌지만 이후 다른 테스트 영역으로 확장되었습니다. 정적 파일, Java 마이크로 서비스, CGI 스크립트, Java 객체, 데이터베이스, FTP 서버 등과 같은 정적 및 동적 리소스를 테스트하는 데 사용할 수 있습니다. JMeter는 다양한 압력 범주에서 서버, 네트워크 또는 객체에 대한 막대한 부하를 시뮬레이션하여 강도를 테스트하고 전반적인 성능을 분석할 수 있습니다. 또한 JMeter는 어설션을 사용하여 스크립트를 생성하여 프로그램이 예상 결과를 반환하는지 확인하여 기능/회귀 테스트를 수행할 수 있습니다. 최대의 유연성을 위해 JMeter는 정규 표현식을 사용하여 어설션을 만들 수 있습니다.</p>
+<p>Apache JMeter는 정적 및 동적인 리소스(파일, 서블릿, Perl 스크립트, Java 객체, 데이터베이스 쿼리, FTP 서버 등)의 성능을 테스트하는 데 사용될 수 있습니다. 서버, 네트워크 또는 객체에 상당한 부하를 가하여 강도를 테스트하거나 다양한 유형의 압력 하에서 전체적인 성능을 분석할 수 있습니다. 성능의 그래프 분석을 수행하거나 대규모 동시 부하 테스트 시 서버/스크립트/객체를 테스트하는 데 사용할 수 있습니다.</p>
+<h3 id="jmeter-배포-centos7">JMeter 배포 CentOS7
+</h3><p>JDK 실행 환경을 설치하고, Jmeter 설치 패키지를 다운로드합니다</p>
+<pre><code class="language-shell">yum install java-1.8.0-openjdk -y &amp;&amp; \
+wget https://mirrors.bfsu.edu.cn/apache//jmeter/binaries/apache-jmeter-5.4.tgz &amp;&amp; tar -xf apache-jmeter-5.4.tgz
+</code></pre>
+<p>환경 변수 설정</p>
+<pre><code class="language-shell">export JMETER_HOME=$HOME/jmeter/apache-jmeter-5.4
+export PATH=$JMETER_HOME/bin:$PATH
+</code></pre>
+<h3 id="지메터-명령어">지메터 명령어
+</h3><p>최종적으로 <code>Grafana</code> 제어판과 연결하면 <code>-l</code> 파라미터를 입력하지 않고도 <code>web</code> 제어대에서 데이터를 관찰할 수 있습니다</p>
+<pre><code class="language-shell">jmeter -n -t /tmp/order-500-10s.jmx -l /tmp/jmeter-order-report-20200109/order-500-10s.jtl
+# 一般不用测试结果和测试报告，简化命令
+jmeter -n -t /tmp/order-500-10s.jmx
+</code></pre>
+<h2 id="influxdb">InfluxDB
+</h2><p>InfluxDB는 Go 언어로 작성된 오픈 소스 분산 시계열, 이벤트 및 지표 데이터베이스이며 외부 의존성이 필요 없습니다. 이 데이터베이스는 현재 DevOps 모니터링 데이터, APP 메트릭, IoT 센서 데이터 및 실시간 분석 데이터와 같이 대량의 타임스탬프 데이터를 저장하는 데 주로 사용됩니다.</p>
+<h3 id="인플럭스db-특징">인플럭스DB 특징
+</h3><p>인플럭스DB의 특징은 다음과 같은 9가지로 요약될 수 있습니다</p>
+<ul>
+<li>구조(패턴) 없음: 열의 개수가 임의일 수 있습니다</li>
+<li>메트릭 저장 기간을 설정할 수 있습니다</li>
+<li>시간 관련 함수(최소값, 최대값, 합계, 개수, 평균, 중앙값 등)를 지원하여 통계 처리에 용이하도록 합니다</li>
+<li>지원되는 저장 정책: 데이터의 삭제 및 수정에 사용할 수 있습니다.(InfluxDB는 데이터 삭제 및 수정 방법을 제공하지 않습니다)</li>
+<li>연속 쿼리 지원: 데이터베이스에서 자동으로 주기적으로 시작되는 일련의 문이며, 저장 정책과 함께 사용하면 InfluxDB 시스템 점유량을 줄일 수 있습니다</li>
+<li>네이티브 HTTP 지원, 내장된 HTTP API;</li>
+<li>SQL과 유사한 구문을 지원합니다</li>
+<li>클러스터 내 데이터 복제 수를 설정할 수 있습니다</li>
+<li>정기 샘플링 데이터를 지원하고, 다른 measurement에 기록하여 데이터의 세분화된 저장 기능을 제공합니다</li>
+</ul>
+<h3 id="인플럭스db-도커-설치">인플럭스DB 도커 설치
+</h3><pre><code class="language-shell">mkdir influxdb &amp;&amp; cd influxdb &amp;&amp; \
+docker run -p 8086:8086 -d --name influxdb -v $PWD:/var/lib/influxdb influxdb:1.7
+</code></pre>
+<p>컨테이너에 진입하여 명령을 실행하고, 수동으로 데이터베이스를 생성합니다</p>
+<pre><code class="language-shell">root@bce0a55bbc72:/# influx
+Connected to http://localhost:8086 version 1.7.10
+InfluxDB shell version: 1.7.10
+&gt; 交互面板执行命令
+</code></pre>
+<h3 id="인플럭스db-데이터베이스-및-사용자-생성">인플럭스DB 데이터베이스 및 사용자 생성
+</h3><p>데이터베이스 생성: create database jmeter_t2
+데이터베이스 확인:
+데이터베이스 전환: use jmeter_t2
+사용자 생성: 비밀번호 &lsquo;admin&rsquo;으로 사용자 &ldquo;admin&quot;을 모든 권한으로 생성
+사용자 보기</p>
+<pre><code class="language-shell">&gt; show users
+user  admin
+----  -----
+admin true
+</code></pre>
+<p>사용자 권한 <code>admin</code>이 <code>true</code>로 표시되면 데이터베이스 준비 작업은 완료되었습니다</p>
+<h2 id="grafana">Grafana
+</h2><p>테스트 케이스를 작성하다 보니 차트 표시가 크게 필요하지 않다는 것을 알게 되었고, 인터페이스의 <code>tps</code> 데이터는 명령줄에서 실행할 때 이미 관찰할 수 있으며, 더 중요한 것은 프로그램 내부의 소요 시간을 알고 싶다는 것이었습니다</p>
+<p>간단하게 <code>Grafana</code> 대시보드 패널을 배포하고, 설정 파일을 가져와서 <code>InfluxDB</code>에 연결합니다</p>
+<p>콘솔은 태그를 통해 테스트 결과를 필터링할 수 있으며, 일반적으로 <code>InfluxDB</code> 데이터베이스 하나만 구성하면 됩니다</p>
+<ul>
+<li>애플리케이션 이름</li>
+<li>테스트 사례 이름</li>
+</ul>
+<p><img src="/p/linux-setup-jmeter-testing-environment/Snipaste_2021-03-09_19-44-22.png"
+	width="861"
+	height="357"
+	
+	loading="lazy"
+	
+		alt="grafana"
+	
+	
+		class="gallery-image" 
+		data-flex-grow="241"
+		data-flex-basis="578px"
+	
+></p>
+<pre><code class="language-shell">docker run -d --name=grafana -p 3000:3000 grafana/grafana:7.3.1
+</code></pre>
+<p>웹 버전은 샘플러 간격으로 인해 계산된 <code>TPS</code> 및 관련 수치와 <code>Jmeter</code> 집계 보고서가 일치하지 않을 수 있습니다. 참고 링크: <a class="link" href="https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/"  target="_blank" rel="noopener"
+    >https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/</a></p>
+<p>자료에는 <code>리스너</code>를 사용자 정의하는 방법도 설명되어 있습니다</p>
+<h2 id="사후기">사후기
+</h2><ul>
+<li>고성능 프로그램 모드는 필연적으로 단일 루프 스레드이며, 어떠한 락, 대기열에 삽입 및 삭제도 불필요한 성능 손실을 야기한다</li>
+<li>핵심 비즈니스 로직의 처리 시간은 다른 코드 도입에 소요되는 시간보다 길기 때문에, 동시성만이 효율성을 효과적으로 높일 수 있다. 핵심 처리 시간이 충분히 짧다면 다른 코드를 신중하게 도입하는 것이 좋다.</li>
+</ul>
+<h2 id="참고-자료">참고 자료
+</h2><ul>
+<li>JMeter 시리즈의 JMeter + Grafana + InfluxDB 실시간 모니터링</li>
+<li>인플럭스DB 공식 이미지</li>
+<li><a class="link" href="https://hub.docker.com/r/grafana/grafana"  target="_blank" rel="noopener"
+    >Grafana 공식 이미지</a></li>
+<li><a class="link" href="https://jmeter.apache.org/download_jmeter.cgi"  target="_blank" rel="noopener"
+    >JMeter 공식 웹사이트</a></li>
+<li><a class="link" href="https://medium.com/@jasonli.studio/to-install-apache-jmeter-in-centos7-294bc72a97ba"  target="_blank" rel="noopener"
+    >To install Apache JMeter in CentOS7</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ko/tags/linux/">Linux</a>
+        
+            <a href="/ko/tags/jmeter/">Jmeter</a>
+        
+            <a href="/ko/tags/%EC%8A%A4%ED%8A%B8%EB%A0%88%EC%8A%A4-%ED%85%8C%EC%8A%A4%ED%8A%B8/">스트레스 테스트</a>
+        
+            <a href="/ko/tags/docker/">Docker</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            마지막 수정:  2025년 05월 25일 14:10
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">관련 글</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/ko/p/docker-two-three-things/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">도커 두 세 가지 일</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ko/p/docker-domestic-mirror-failure/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">도커 국내 이미지 프록시 만료</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ko/p/linux-backend-slow-string-processing/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">리눅스 백엔드 서비스 문자열 데이터 처리 - 속도가 느림</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ko/p/upgrade-gcc-version-causes-program-crash-code-irregularities/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">GCC 버전 업그레이드로 인한 프로그램 충돌: 비표준 코드의 잠재적 위험</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ko/p/linux-system-benchmark-test/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">리눅스 시스템 벤치마크 테스트</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 향숙의 수첩
+    </section>
+    
+    <section class="powerby">
+        
+            금융 IT 프로그래머의 이것저것 만지작거리기와 일상의 중얼거림 <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a>로 만듦 <br />
+        <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>의 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 테마 사용 중
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

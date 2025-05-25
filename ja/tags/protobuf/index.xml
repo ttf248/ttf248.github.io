@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Protobuf on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/protobuf/</link>
+        <description>Recent content in Protobuf on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Sun, 25 May 2025 14:10:37 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/protobuf/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>プロトバッファのゼロ値トラップ：デフォルト値がビジネスロジックの隠れた殺人者となる場合</title>
+        <link>https://ttf248.life/ja/p/protobuf-zero-value-traps/</link>
+        <pubDate>Thu, 20 Feb 2025 15:26:51 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/protobuf-zero-value-traps/</guid>
+        <description>&lt;p&gt;米国株には3つの取引時間帯があり、それぞれ盤前、盤中、盤後です。データインターフェースは、可能な限り帯域幅を節約するために、数値増分方式でデータをプッシュします。初回送信時はフルデータですが、2回目以降はすべてのフィールドが差分更新となります。&lt;/p&gt;
+&lt;p&gt;なぜ最適な方法を使わないのか？いくつかのプロジェクトチームが関わっていて、すでに何年も稼働しているものもある。当方は新規の連携なので、できるだけ互換性を保つようにするしかない。&lt;/p&gt;
+&lt;h2 id=&#34;一連の問題&#34;&gt;一連の問題
+&lt;/h2&gt;&lt;p&gt;概要だけ見れば、まだ問題なさそうに見えるかもしれないが、システムアーキテクチャに問題を持ち込むと、一連の問題を引き起こす。先の問題を解決したと思ったら、また新しい問題が発生し、その問題は以前の問題が原因だ。&lt;/p&gt;
+&lt;h3 id=&#34;取引期間を識別できません&#34;&gt;取引期間を識別できません。
+&lt;/h3&gt;&lt;p&gt;既知ディスク上のフェーズ定義は、&lt;code&gt;protobuf&lt;/code&gt;で0と定義されていますが、データ受信時に増分プッシュであるため、ビジネス側はこの0がデフォルト値なのか、実際のビジネス値なのかを有効に識別できません。&lt;/p&gt;
+&lt;p&gt;平たく言うと、0を受け取るたびに、その0が新しい相場設定の値なのか、それともprotobufのデフォルト値なのかを判断できないということです。&lt;/p&gt;
+&lt;h3 id=&#34;オプション導入&#34;&gt;オプション導入
+&lt;/h3&gt;&lt;p&gt;Since protobuf release 3.15, proto3 supports using the optional keyword (just as in proto2) to give a scalar field presence information&lt;/p&gt;
+&lt;p&gt;グループ内の通信プロトコルは &lt;code&gt;protobuf&lt;/code&gt; をベースにしていますが、過去の経緯から古いバージョンが採用されており、&lt;code&gt;optional&lt;/code&gt; キーワードに対応していません。事情はよくわかっていると思いますが、&lt;code&gt;protobuf&lt;/code&gt;を基盤から導入しているため、プロジェクトは静的ライブラリとして配布され、そのためにはコンパイルチェーン全体をアップグレードする必要があります。このコストは非常に高いです。&lt;/p&gt;
+&lt;h3 id=&#34;gccのバージョン問題&#34;&gt;GCCのバージョン問題
+&lt;/h3&gt;&lt;p&gt;やっとの思いで計画を立てたものの、基盤に2つの異なるバージョンをリリースし、可能な限り&lt;code&gt;protobuf&lt;/code&gt;の新バージョンのコンパイル依存関係の伝播を制御しようとしたのですが、コンパイル時に&lt;code&gt;gcc&lt;/code&gt;のバージョンが低く、&lt;code&gt;protobuf&lt;/code&gt;の新機能に対応していないことがわかりました。&lt;/p&gt;
+&lt;p&gt;チーム内でよく使用されるサーバーの種類：CentOS 7、CentOS 8。CentOS 7 のデフォルトの &lt;code&gt;gcc&lt;/code&gt; バージョンは 4.8 で、CentOS 8 のデフォルトの &lt;code&gt;gcc&lt;/code&gt; バージョンは 8.3 です。&lt;code&gt;protobuf&lt;/code&gt; の新機能には &lt;code&gt;gcc&lt;/code&gt; バージョンが 7.4 以上必要であるため、CentOS 7 ではサポートできません。&lt;/p&gt;
+&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82461&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Bug 82461 - [7 Regression] Temporary required for brace-initializing (non-literal-type) member variable&lt;/a&gt;。&lt;/p&gt;
+&lt;p&gt;最終、関連サービスのデプロイやコンパイルサーバーをCentOS 8に移行することで、この問題を解決しました。&lt;/p&gt;
+&lt;h2 id=&#34;合理な列挙&#34;&gt;合理な列挙
+&lt;/h2&gt;&lt;p&gt;問題全体を振り返ると、実はもっと簡単で効率的な解決策があります。それは、列挙の定義を調整し、0からではなく1から番号付けすることです。これにより、デフォルト値とビジネス値を効果的に区別でき、上記の様々な問題を回避できます。&lt;/p&gt;
+&lt;h3 id=&#34;なぜ1から始めるのがもっと合理的だろうか&#34;&gt;なぜ1から始めるのがもっと合理的だろうか？
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;protobuf&lt;/code&gt;において、列挙型のデフォルト値は常に0に固定されています。もしビジネス上の意味のある値を0として定義した場合（例えば「盤中」）、増分プッシュ時に受信した0がビジネスの値なのか、未設定のデフォルト値なのかをクライアント側で判断することができません。しかし、列挙型を1から開始して定義すれば、0を有意義でないデフォルト値や「未知」の状態として保持できるため、問題は容易に解決されます。&lt;/p&gt;
+&lt;p&gt;推奨される実践：&lt;/p&gt;
+&lt;p&gt;プロトバッファの列挙型を設計する際には、常に 0 を無意味なデフォルト値として定義してください（例：&lt;code&gt;UNKNOWN&lt;/code&gt; または &lt;code&gt;RESERVED&lt;/code&gt;）。
+実際のビジネス値を1から割り当て、デフォルト値の0と区別するようにしてください。&lt;/p&gt;
+&lt;p&gt;この小さな調整により、取引セッションの識別問題を解決するだけでなく、将来のプロトコル設計のための貴重な経験となりました。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

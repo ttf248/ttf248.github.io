@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Github Action on 향숙의 수첩</title>
+        <link>https://ttf248.life/ko/tags/github-action/</link>
+        <description>Recent content in Github Action on 향숙의 수첩</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ko</language>
+        <lastBuildDate>Sun, 25 May 2025 14:10:37 +0800</lastBuildDate><atom:link href="https://ttf248.life/ko/tags/github-action/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>자동 통합 시스템 전환</title>
+        <link>https://ttf248.life/ko/p/auto-integration-system-switch/</link>
+        <pubDate>Sun, 29 Mar 2020 02:11:33 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/auto-integration-system-switch/</guid>
+        <description>&lt;p&gt;GitHub Actions를 사용하여 Hugo 블로그를 GitHub Pages 및 Gitee에 자동으로 배포합니다&lt;/p&gt;
+&lt;h4 id=&#34;배경-소개&#34;&gt;배경 소개
+&lt;/h4&gt;&lt;p&gt;어제 블로그를 업데이트하려는데 Travis 서비스가 안 된다는 걸 발견했어요. Travis 웹페이지를 살펴보니 진행이 소스 코드를 가져오는 단계에서 멈춰 있었고, 그때 GitHub에서 출시한 Action 서비스가 떠올랐습니다.&lt;/p&gt;
+&lt;p&gt;그때는 좀 바쁠 것 같고, 액션을 사용하려면 신청도 해야 해서, 지금부터 정식으로 출시되었으니 주말에 시간 나면 새로운 장난감을 한번 해볼까요?&lt;/p&gt;
+&lt;p&gt;공식 자료는 다들 웹사이트에서 직접 확인하시면 되고, 본문은 더 이상 인용하지 않겠습니다. 이전에 쿠버네티스를 사용해 보신 분들은 액션의 YAML 파일 설정이 쿠버네티스와 비슷하다고 느끼실 겁니다.&lt;/p&gt;
+&lt;p&gt;초보자를 위한 튜토리얼이나 중국어 소개 자료를 찾고 있다면 &lt;strong&gt;阮一峰의 블로그&lt;/strong&gt;에서 검색해 보세요. 두 개의 기사가 있는데, 하나는 기본적인 문법 설명이고 다른 하나는 실제 사례입니다.&lt;/p&gt;
+&lt;h4 id=&#34;본문&#34;&gt;본문
+&lt;/h4&gt;&lt;p&gt;필요한 지식점&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;github secrets&lt;/li&gt;
+&lt;li&gt;행동 구문&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;핵심 작업은 기존 컴포넌트를 사용하여 완료되었고, 명령어를 통해 국내 gitee에 푸시했습니다. 명령어 부분은 다소 거칠며 강제 푸시를 사용하고 있으며, travis를 사용하던 로직을 이어받았습니다.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;name: github pages and gitee pages
+
+on:
+  push:
+    branches:
+      - hugo
+
+jobs:
+  deploy:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: &#39;latest&#39;
+          extended: true
+
+      - name: Build Github and Gitee ## 单个step只能写一个run命令
+        run: hugo -b &amp;quot;https://www.xiangtianlong.com/&amp;quot; -d &amp;quot;github_public&amp;quot; &amp;amp;&amp;amp; hugo -b &amp;quot;https://www.xiangtianlong.com/&amp;quot; -d &amp;quot;gitee_public&amp;quot; &amp;amp;&amp;amp; ls
+
+      - name: Deploy Github
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.BLOG_TOKEN }}
+          publish_dir: ./github_public
+          publish_branch: master
+          cname: xiangtianlong.com
+
+      - name: Deploy Gitee
+        run: cd ./gitee_public &amp;amp;&amp;amp; git init &amp;amp;&amp;amp; git config user.name &amp;quot;TianlongXiang&amp;quot; &amp;amp;&amp;amp; git config user.email &amp;quot;tianlongxiang51@gmail.com&amp;quot; &amp;amp;&amp;amp; git add . &amp;amp;&amp;amp; git commit -m &amp;quot;Update TianlongXiang&#39;s Blog&amp;quot; &amp;amp;&amp;amp; git push --force &amp;quot;https://xiangtianlong:${{ secrets.GITEE_PASSWORD }}@gitee.com/xiangtianlong/xiangtianlong.git&amp;quot; master:master   
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;사후기&#34;&gt;사후기
+&lt;/h4&gt;&lt;p&gt;공식 시장에서 제공하는 기능들을 보면 현재 지원되는 플레이 방식이 꽤 많고, Docker 이미지를 구축하면 더 이상 Docker Hub에서 제공하는 서비스에 의존하지 않아도 된다&lt;/p&gt;
+&lt;p&gt;Hugo 이슈를 확인해 보니, GitHub 액션을 사용하여 Git Pages를 자동으로 배포하려면 최종적으로 게시되는 웹 페이지가 master 브랜치에 있어야 합니다. 다른 브랜치에 배포하면 설정 인터페이스에서 GitHub이 배포된 웹 페이지에 구문 문제가 있다는 것을 알립니다.&lt;/p&gt;
+&lt;p&gt;실제로 hugo의 원 파일이 master 브랜치에 위치해 있어서, github가 jelly 블로그의 소스 코드로 간주하여 검사하고 통과하지 못하게 하는 오류로 인한 것이다&lt;/p&gt;
+&lt;p&gt;솔루션도 간단합니다. Hugo 소스 파일을 다른 분기에 두고, 정적 파일은 master 분기에 게시하면 됩니다.&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

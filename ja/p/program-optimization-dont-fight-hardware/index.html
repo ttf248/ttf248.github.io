@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="ワンループスレッドの処理時間はすでにマイクロ秒レベルにあり、サーバーを入れ替えたことで、最大で6万パケットが溜積される状態から、ほとんど溜積しなくなった。\nシングルスレッドでデータを処理する場合、CPUの性能はクロック周波数、キャッシュサイズ、命令セットアーキテクチャなどの要素に左右されます。一般的に、クロック周波数が高く、キャッシュが大きく、命令セットアーキテクチャが高度なCPUほど、シングルスレッドでのデータ処理性能が高いと言えます。\n">
+<title>プログラム最適化は、ハードウェアに逆らうようなことはしないこと。</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/program-optimization-dont-fight-hardware/'>
+
+<link rel="stylesheet" href="/scss/style.min.dd926b14604b90f1712d236b9b7c7a026496084942861f8248cd1abe0374ee22.css"><meta property='og:title' content="プログラム最適化は、ハードウェアに逆らうようなことはしないこと。">
+<meta property='og:description' content="ワンループスレッドの処理時間はすでにマイクロ秒レベルにあり、サーバーを入れ替えたことで、最大で6万パケットが溜積される状態から、ほとんど溜積しなくなった。\nシングルスレッドでデータを処理する場合、CPUの性能はクロック周波数、キャッシュサイズ、命令セットアーキテクチャなどの要素に左右されます。一般的に、クロック周波数が高く、キャッシュが大きく、命令セットアーキテクチャが高度なCPUほど、シングルスレッドでのデータ処理性能が高いと言えます。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/program-optimization-dont-fight-hardware/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2023-04-07T16:30:15&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T14:10:37&#43;08:00'/>
+<meta name="twitter:title" content="プログラム最適化は、ハードウェアに逆らうようなことはしないこと。">
+<meta name="twitter:description" content="ワンループスレッドの処理時間はすでにマイクロ秒レベルにあり、サーバーを入れ替えたことで、最大で6万パケットが溜積される状態から、ほとんど溜積しなくなった。\nシングルスレッドでデータを処理する場合、CPUの性能はクロック周波数、キャッシュサイズ、命令セットアーキテクチャなどの要素に左右されます。一般的に、クロック周波数が高く、キャッシュが大きく、命令セットアーキテクチャが高度なCPUほど、シングルスレッドでのデータ処理性能が高いと言えます。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            localStorage.setItem(colorSchemeKey, "auto");
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                                    <option value="https://ttf248.life/ko/" >한국어</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#シングルスレッド">シングルスレッド</a></li>
+    <li><a href="#事件">事件</a></li>
+    <li><a href="#openaiに問い合わせる">OpenAIに問い合わせる</a></li>
+    <li><a href="#ハードウェア資料">ハードウェア資料</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
+                コンピュータ
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/program-optimization-dont-fight-hardware/">プログラム最適化は、ハードウェアに逆らうようなことはしないこと。</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>ワンループスレッドの処理時間はすでにマイクロ秒レベルにあり、サーバーを入れ替えたことで、最大で6万パケットが溜積される状態から、ほとんど溜積しなくなった。</p>
+<p>シングルスレッドでデータを処理する場合、CPUの性能はクロック周波数、キャッシュサイズ、命令セットアーキテクチャなどの要素に左右されます。一般的に、クロック周波数が高く、キャッシュが大きく、命令セットアーキテクチャが高度なCPUほど、シングルスレッドでのデータ処理性能が高いと言えます。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2023年04月07日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-words">
+                    
+                    约9分钟，共1929字
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/program-optimization-dont-fight-hardware/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/program-optimization-dont-fight-hardware/" class="link">English</a>
+                
+                    <a href="https://ttf248.life/ko/p/program-optimization-dont-fight-hardware/" class="link">한국어</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>ワンループスレッドの処理時間はすでにマイクロ秒レベルにあり、サーバーを入れ替えたことで、最大で6万パケットが溜積される状態から、ほとんど溜積しなくなった。</p>
+<p>シングルスレッドでデータを処理する場合、CPUの性能はクロック周波数、キャッシュサイズ、命令セットアーキテクチャなどの要素に左右されます。一般的に、クロック周波数が高く、キャッシュが大きく、命令セットアーキテクチャが高度なCPUほど、シングルスレッドでのデータ処理性能が高いと言えます。</p>
+<h2 id="シングルスレッド">シングルスレッド
+</h2><p>パフォーマンスの向上は、スレッドを増やすことが必ずしも必要なわけではありません。プロジェクトのプロセスを見直し、ボトルネックとなっている箇所を特定し、シングルスレッドで要件を満たせるかどうか検討しましょう。シングルスレッドであれば考慮すべき点が少なく、問題が発生しにくいという利点もあります。</p>
+<p>来てすぐ、何か言われたり、追加の作業を頼まれたりする。少しばかり問題がある。</p>
+<h2 id="事件">事件
+</h2><p>扱っているのは<strong>市場データで、遅延が重要</strong></p>
+<p>ぐったりしながら徹夜で頑張って、新しい最適化バージョンをリリース。ローカルでインターフェースを分離してテストしたところ、速度もまあまあ。TPS: 4.2万</p>
+<p>サーバーにデプロイするとTPSが急落：2.1万。自宅でデスクトップPCを試すと、TPS：7.9万。内部サービス仮想化に何か問題があるのではないかと疑い始めた。まずCPUのクロック周波数が原因ではないかと思われ、家庭用デスクトップPCとサーバーの<code>CPU</code>の違いは、主にクロック周波数にある。</p>
+<p>テストサーバーA</p>
+<pre><code class="language-shell">processor	: 7
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 47
+model name	: Intel(R) Xeon(R) CPU E7- 4807  @ 1.87GHz
+stepping	: 2
+microcode	: 0x34
+cpu MHz		: 1866.733
+cache size	: 18432 KB
+physical id	: 1
+siblings	: 4
+core id		: 3
+cpu cores	: 4
+apicid		: 7
+initial apicid	: 7
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 11
+wp		: yes
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss ht syscall nx rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf pni pclmulqdq ssse3 cx16 sse4_1 sse4_2 popcnt aes hypervisor lahf_lm pti dtherm arat
+bugs		: clflush_monitor cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit
+bogomips	: 3733.46
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 40 bits physical, 48 bits virtual
+power management:
+</code></pre>
+<p>テストサーバーB</p>
+<pre><code class="language-shell">processor	: 7
+vendor_id	: GenuineIntel
+cpu family	: 6
+model		: 63
+model name	: Intel(R) Xeon(R) CPU E5-2640 v3 @ 2.60GHz
+stepping	: 2
+microcode	: 0x3c
+cpu MHz		: 2599.998
+cache size	: 20480 KB
+physical id	: 14
+siblings	: 1
+core id		: 0
+cpu cores	: 1
+apicid		: 14
+initial apicid	: 14
+fpu		: yes
+fpu_exception	: yes
+cpuid level	: 15
+wp		: yes
+flags		: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cpuid_fault epb pti fsgsbase smep xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts
+bugs		: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit
+bogomips	: 5199.99
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 40 bits physical, 48 bits virtual
+power management:
+</code></pre>
+<h2 id="openaiに問い合わせる">OpenAIに問い合わせる
+</h2><p>まず、コア数とクロック周波数についてですが、Intel(R) Xeon(R) CPU E7-4807 @ 1.87GHzは6つの物理コアと12個の論理コアを持ち、クロック周波数は1.87GHzです。一方、Intel(R) Xeon(R) CPU E5-2640 v3 @ 2.60GHzは8つの物理コアと16個の論理コアを持ち、クロック周波数は2.60GHzです。したがって、コア数とクロック周波数に関して見ると、E5-2640 v3は単スレッドでのデータ処理において、E7-4807よりも優位性があると考えられます。</p>
+<p>次に、キャッシュサイズに関して、E7-4807は12MBのキャッシュサイズであり、E5-2640 v3は20MBです。したがって、E5-2640 v3の方がキャッシュスペースが大きく、データのアクセス速度とキャッシュヒット率を向上させることができます。</p>
+<p>最後にアーキテクチャについてですが、E5-2640 v3はより高度なHaswellアーキテクチャを採用しており、一方、E7-4807は古いNehalemアーキテクチャを採用しています。HaswellアーキテクチャはNehalemアーキテクチャと比較して性能が向上しており、このことがE5-2640 v3のシングルスレッドでのデータ処理性能に影響を与える可能性があります。</p>
+<p>したがって、総合的に考えると、シングルスレッドでデータを処理するシナリオでは、E5-2640 v3の方がE7-4807よりも優れた性能を発揮するはずです。ただし、具体的な性能差は、データ処理のアルゴリズム、メモリ帯域幅、システム負荷など、さまざまな要因の影響を受けます。そのため、個別の問題に対して個別に分析する必要があります。</p>
+<h2 id="ハードウェア資料">ハードウェア資料
+</h2><p><a class="link" href="https://www.cpubenchmark.net/compare/3786.2vs2365.2/%5BDual-CPU%5D-Intel-Xeon-E7%e2%80%934807-vs-%5BDual-CPU%5D-Intel-Xeon-E5-2640-v3"  target="_blank" rel="noopener"
+    >https://www.cpubenchmark.net/compare/3786.2vs2365.2/%5BDual-CPU%5D-Intel-Xeon-E7–4807-vs-%5BDual-CPU%5D-Intel-Xeon-E5-2640-v3</a></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Specification</th>
+<th>Xeon E7-4807 (LGA1567)</th>
+<th>Xeon E5-2640 v3 (LGA2011-v3)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Price</td>
+<td>Search Online  $78 - BUY</td>
+<td></td>
+</tr>
+<tr>
+<td>Socket Type</td>
+<td>LGA1567</td>
+<td>LGA2011-v3</td>
+</tr>
+<tr>
+<td>CPU Class</td>
+<td>Server</td>
+<td>Server</td>
+</tr>
+<tr>
+<td>Clockspeed</td>
+<td>1.9 GHz</td>
+<td>2.6 GHz</td>
+</tr>
+<tr>
+<td>Turbo Speed</td>
+<td>Not Supported</td>
+<td>Up to 3.4 GHz</td>
+</tr>
+<tr>
+<td># of Physical Cores</td>
+<td>6 (Threads: 12)</td>
+<td>8 (Threads: 16)</td>
+</tr>
+<tr>
+<td>Cache</td>
+<td>NA2</td>
+<td>NA2</td>
+</tr>
+<tr>
+<td>Max TDP</td>
+<td>95W x 2</td>
+<td>90W x 2</td>
+</tr>
+<tr>
+<td>Yearly Running Cost</td>
+<td>$34.68</td>
+<td>$32.85</td>
+</tr>
+<tr>
+<td>Other</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>First Seen on Chart</td>
+<td>Q3 2020</td>
+<td>Q3 2014</td>
+</tr>
+<tr>
+<td># of Samples</td>
+<td>1</td>
+<td>46</td>
+</tr>
+<tr>
+<td>CPU Value</td>
+<td>69.1</td>
+<td>225.6</td>
+</tr>
+<tr>
+<td>Single Thread Rating</td>
+<td>721 (-59.2%)</td>
+<td>1767 (0.0%)</td>
+</tr>
+<tr>
+<td>CPU Mark</td>
+<td>6223 (-64.6%)</td>
+<td>17600 (0.0%)</td>
+</tr>
+</tbody>
+</table></div>
+</section>
+
+
+    <footer class="article-footer">
+    
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年05月25日 14:10
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

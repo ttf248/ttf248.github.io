@@ -1,0 +1,972 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>C&#43;&#43; on 향숙의 수첩</title>
+        <link>https://ttf248.life/ko/tags/c-/</link>
+        <description>Recent content in C&#43;&#43; on 향숙의 수첩</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ko</language>
+        <lastBuildDate>Sun, 25 May 2025 14:10:37 +0800</lastBuildDate><atom:link href="https://ttf248.life/ko/tags/c-/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>C&#43;&#43; 비트 연산 기초: 비트별 값 가져오기 및 플래그 설정</title>
+        <link>https://ttf248.life/ko/p/cpp-bitwise-operations-basics-flags/</link>
+        <pubDate>Fri, 17 Jan 2025 02:23:56 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/cpp-bitwise-operations-basics-flags/</guid>
+        <description>&lt;p&gt;실제 C++ 개발에서 비트 연산은 흔한 기술이며, 특히 시스템 상태, 플래그 또는 제어 비트를 처리할 때 매우 효율적인 솔루션을 제공합니다. 본 글에서는 예제를 통해 비트 연산을 사용하여 특정 플래그를 가져오고 설정하는 방법을 설명하겠습니다.&lt;/p&gt;
+&lt;h3 id=&#34;비트-연산-기초-개념&#34;&gt;비트 연산 기초 개념
+&lt;/h3&gt;&lt;p&gt;컴퓨터에서 데이터는 이진 비트(0과 1)로 저장됩니다. 비트 연산은 이러한 이진 비트에 대한 연산을 말합니다. C++에는 몇 가지 일반적인 비트 연산자가 있습니다:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;비트 AND 연산 (&amp;amp;)는 특정 비트가 1인지 확인하는 데 사용됩니다&lt;/li&gt;
+&lt;li&gt;비트 OR (|) : 특정 비트를 1로 설정하는 데 사용됩니다&lt;/li&gt;
+&lt;li&gt;비트별 XOR(^) 연산은 특정 비트를 반전시키는 데 사용됩니다&lt;/li&gt;
+&lt;li&gt;비트 반전(~)&lt;/li&gt;
+&lt;li&gt;모든 비트를 몇 자리 왼쪽으로 이동합니다&lt;/li&gt;
+&lt;li&gt;모든 비트를 지정된 자릿수만큼 오른쪽으로 이동합니다&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;이 예제에서는 &lt;code&gt;unsigned short&lt;/code&gt; 타입의 변수 &lt;code&gt;wInfo&lt;/code&gt;에 대해 일련의 비트 연산을 수행하여 다양한 플래그를 통해 서로 다른 상태를 표현해야 합니다&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-mermaid&#34;&gt;flowchart LR
+    A[原始数值: 00010000] --&amp;gt; B[左移: 00010000 &amp;lt;&amp;lt; 1]
+    B --&amp;gt; C[结果: 00100000]
+    C --&amp;gt; D[右移: 00100000 &amp;gt;&amp;gt; 1]
+    D --&amp;gt; E[结果: 00010000]
+
+    subgraph 左移操作
+        direction LR
+        A --&amp;gt; B --&amp;gt; C
+    end
+
+    subgraph 右移操作
+        direction LR
+        C --&amp;gt; D --&amp;gt; E
+    end
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;요구사항-분석&#34;&gt;요구사항 분석
+&lt;/h3&gt;&lt;p&gt;문제 설명에 따르면, 우리는 다양한 상태를 나타내기 위해 사용되는 16비트 플래그가 있습니다. 이러한 상태는 각각 다른 이진 비트를 통해 표현되며, 각 이진 비트는 특정 의미를 가집니다. 예를 들어:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;비트 0가 실패했습니까?&lt;/li&gt;
+&lt;li&gt;비트 1 압축되었습니까?&lt;/li&gt;
+&lt;li&gt;비트2 증분 업데이트인가?&lt;/li&gt;
+&lt;li&gt;비트3에 후속 패키지가 있나요?&lt;/li&gt;
+&lt;li&gt;정상 요청 또는 로그아웃&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;비트-연산을-사용하여-구현하세요&#34;&gt;비트 연산을 사용하여 구현하세요
+&lt;/h3&gt;&lt;p&gt;우리는 비트 연산을 통해 이러한 플래그를 설정하고 가져올 것입니다. 구체적으로:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;각 자리 값 가져오기：어떤 한 자리의 값(0 또는 1)을 얻는다&lt;/li&gt;
+&lt;li&gt;비트 설정: 특정 비트를 1로 설정합니다&lt;/li&gt;
+&lt;li&gt;비트 단위로 지우기: 특정 비트를 0으로 설정합니다&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;우리는 먼저 &lt;code&gt;unsigned short&lt;/code&gt; 타입의 변수 &lt;code&gt;wInfo&lt;/code&gt;를 정의하여 이러한 플래그들을 저장합니다. 그런 다음, 비트 연산을 통해 해당 플래그들을 확인하고 설정합니다.&lt;/p&gt;
+&lt;h3 id=&#34;c-예제-코드&#34;&gt;C++ 예제 코드
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;bitset&amp;gt;
+
+// 定义标志位常量
+const unsigned short BIT_0_FAIL = 1 &amp;lt;&amp;lt; 0;    // bit0 是否失败
+const unsigned short BIT_1_COMPRESSED = 1 &amp;lt;&amp;lt; 1; // bit1 是否压缩
+const unsigned short BIT_2_INCREMENT = 1 &amp;lt;&amp;lt; 2;  // bit2 是否增量
+const unsigned short BIT_3_HAS_MORE = 1 &amp;lt;&amp;lt; 3;   // bit3 是否有后续包
+const unsigned short BIT_5_CANCEL = 1 &amp;lt;&amp;lt; 5;     // bit5 正常请求(0)或注销(1)
+
+// 检查某一位是否为1
+bool isBitSet(unsigned short wInfo, unsigned short bitMask) {
+    return (wInfo &amp;amp; bitMask) != 0;
+}
+
+// 设置某一位为1
+void setBit(unsigned short&amp;amp; wInfo, unsigned short bitMask) {
+    wInfo |= bitMask;
+}
+
+// 清除某一位（设置为0）
+void clearBit(unsigned short&amp;amp; wInfo, unsigned short bitMask) {
+    wInfo &amp;amp;= ~bitMask;
+}
+
+int main() {
+    // 假设wInfo的初始值为0
+    unsigned short wInfo = 0;
+
+    // 设置bit0（失败标志）
+    setBit(wInfo, BIT_0_FAIL);
+    
+    // 设置bit1（压缩标志）
+    setBit(wInfo, BIT_1_COMPRESSED);
+    
+    // 打印wInfo的二进制值
+    std::cout &amp;lt;&amp;lt; &amp;quot;wInfo (in binary): &amp;quot; &amp;lt;&amp;lt; std::bitset&amp;lt;16&amp;gt;(wInfo) &amp;lt;&amp;lt; std::endl;
+
+    // 检查各个标志位
+    std::cout &amp;lt;&amp;lt; &amp;quot;bit0 (是否失败): &amp;quot; &amp;lt;&amp;lt; (isBitSet(wInfo, BIT_0_FAIL) ? &amp;quot;是&amp;quot; : &amp;quot;否&amp;quot;) &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;bit1 (是否压缩): &amp;quot; &amp;lt;&amp;lt; (isBitSet(wInfo, BIT_1_COMPRESSED) ? &amp;quot;是&amp;quot; : &amp;quot;否&amp;quot;) &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;bit2 (是否增量): &amp;quot; &amp;lt;&amp;lt; (isBitSet(wInfo, BIT_2_INCREMENT) ? &amp;quot;是&amp;quot; : &amp;quot;否&amp;quot;) &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;bit3 (是否有后续包): &amp;quot; &amp;lt;&amp;lt; (isBitSet(wInfo, BIT_3_HAS_MORE) ? &amp;quot;是&amp;quot; : &amp;quot;否&amp;quot;) &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;bit5 (是否注销): &amp;quot; &amp;lt;&amp;lt; (isBitSet(wInfo, BIT_5_CANCEL) ? &amp;quot;是&amp;quot; : &amp;quot;否&amp;quot;) &amp;lt;&amp;lt; std::endl;
+
+    // 清除bit1（压缩标志）
+    clearBit(wInfo, BIT_1_COMPRESSED);
+    
+    // 打印更新后的wInfo
+    std::cout &amp;lt;&amp;lt; &amp;quot;Updated wInfo (in binary): &amp;quot; &amp;lt;&amp;lt; std::bitset&amp;lt;16&amp;gt;(wInfo) &amp;lt;&amp;lt; std::endl;
+
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;코드 실행, 오래된 친구 추천: &lt;a class=&#34;link&#34; href=&#34;https://wandbox.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://wandbox.org/&lt;/a&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;wInfo (in binary): 0000000000000011
+bit0 (是否失败): 是
+bit1 (是否压缩): 是
+bit2 (是否增量): 否
+bit3 (是否有后续包): 否
+bit5 (是否注销): 否
+Updated wInfo (in binary): 0000000000000001
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;코드-설명&#34;&gt;코드 설명
+&lt;/h3&gt;&lt;p&gt;플래그 비트는 비트 시프트 연산(&lt;code&gt;1 &amp;lt;&amp;lt; n&lt;/code&gt;)을 사용하여 정의합니다. 예를 들어, &lt;code&gt;1 &amp;lt;&amp;lt; 0&lt;/code&gt;은 &lt;code&gt;bit0&lt;/code&gt;에 해당하고, &lt;code&gt;1 &amp;lt;&amp;lt; 1&lt;/code&gt;은 &lt;code&gt;bit1&lt;/code&gt;에 해당하며, 이와 같은 방식으로 계속됩니다. 이렇게 하면 각 플래그 비트에 고유한 이진 위치를 할당하게 됩니다.&lt;/p&gt;
+&lt;p&gt;특정 비트가 1인지 확인하려면 &lt;code&gt;isBitSet&lt;/code&gt; 함수가 비트 AND 연산 &lt;code&gt;wInfo &amp;amp; bitMask&lt;/code&gt;를 사용하여 이를 수행합니다. 해당 비트가 1이면 함수는 &lt;code&gt;true&lt;/code&gt;를 반환하고, 그렇지 않으면 &lt;code&gt;false&lt;/code&gt;를 반환합니다.&lt;/p&gt;
+&lt;p&gt;설정비트: &lt;code&gt;setBit&lt;/code&gt; 함수는 비트 OR 연산 &lt;code&gt;wInfo |= bitMask&lt;/code&gt;를 통해 특정 플래그 비트를 1로 설정합니다&lt;/p&gt;
+&lt;p&gt;특정 비트 위치를 0으로 설정하기 위해 &lt;code&gt;clearBit&lt;/code&gt; 함수는 비트 AND 연산 &lt;code&gt;wInfo &amp;amp;= ~bitMask&lt;/code&gt;를 사용합니다&lt;/p&gt;
+&lt;h3 id=&#34;요약&#34;&gt;요약
+&lt;/h3&gt;&lt;p&gt;비트 연산을 통해 우리는 여러 상태 플래그를 효율적으로 처리할 수 있습니다. 실제 개발에서 이 기술은 특히 유용합니다. 예를 들어, 임베디드 개발, 네트워크 프로토콜, 시스템 상태 관리 등의 시나리오에서 비트 플래그를 사용하여 여러 개의 이진 상태를 표현함으로써 공간을 절약하고 효율성을 높일 수 있습니다.&lt;/p&gt;
+&lt;p&gt;이 블로그 게시물이 C++에서 비트 연산을 사용하여 비트 값 가져오기 및 설정 방법을 이해하는 데 도움이 되기를 바랍니다. 이러한 기술을 숙달하면 효율적이고 유지 관리하기 쉬운 코드를 작성하는 데 매우 유용합니다!&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>GCC, GLIBC 및 C&#43;&#43; 프로그램 호환성 문제 심층 이해</title>
+        <link>https://ttf248.life/ko/p/deep-understanding-gcc-glibc-cpp-compatibility-issues/</link>
+        <pubDate>Mon, 06 Jan 2025 19:51:16 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/deep-understanding-gcc-glibc-cpp-compatibility-issues/</guid>
+        <description>&lt;p&gt;C++ 개발 분야에서 GCC와 GLIBC는 피할 수 없는 핵심 요소이며, 프로그램 출시 후 호환성 문제는 개발자를 끊임없이 괴롭힌다. 본 논문에서는 이들의 본질을 심층적으로 분석하고, 호환성 문제의 근원과 대응 전략을 탐구한다.&lt;/p&gt;
+&lt;h2 id=&#34;하나-gcc-강력한-컴파일러-기반&#34;&gt;하나, GCC: 강력한 컴파일러 기반
+&lt;/h2&gt;&lt;p&gt;정의와 기능&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;GCC는 GNU 컴파일러 컬렉션의 약자로, GNU 프로젝트에서 개발한 오픈 소스 컴파일러 모음입니다. 이는 일반적인 컴파일러가 아니며, C, C++, Objective-C, Fortran, Ada 및 Go와 같은 다양한 주류 언어를 지원하여 크로스 플랫폼 개발을 위한 원스톱 솔루션을 제공합니다.&lt;/li&gt;
+&lt;li&gt;C++를 예로 들어보면, 클래스, 템플릿, 함수 오버로딩과 같은 복잡한 특징을 포함하는 소스 파일을 작성할 때 GCC는 C++의 엄격한 문법 및 의미 규칙에 따라 고급 C++ 코드를 하위 레벨 기계가 이해하고 실행할 수 있는 명령어 시퀀스로 변환합니다. 이 과정은 어휘 분석, 구문 분석, 의미 분석, 최적화 및 코드 생성과 같은 여러 가지 정교한 단계를 포함합니다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;컴파일 과정 상세 설명&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;전처리 단계&lt;/strong&gt;: GCC는 먼저 소스 파일을 전처리합니다. 이 과정에서 &lt;code&gt;#&lt;/code&gt;로 시작하는 모든 전처리 지시를 처리합니다. 예를 들어, &lt;code&gt;#include&lt;/code&gt; 지시는 지정된 헤더 파일(C++ 입출력 스트림 작업에 사용되는 &lt;code&gt;&amp;lt;iostream&amp;gt;&lt;/code&gt;과 같이)의 전체 내용을 소스 파일의 해당 위치에 삽입하여 프로그램이 헤더 파일에 선언된 함수, 클래스와 같은 리소스를 사용할 수 있도록 합니다. &lt;code&gt;#define&lt;/code&gt; 지시로 정의된 매크로는 이 단계에서 펼쳐서 대체됩니다. 예를 들어, &lt;code&gt;#define PI 3.14159&lt;/code&gt;인 경우 소스 파일의 모든 &lt;code&gt;PI&lt;/code&gt;가 &lt;code&gt;3.14159&lt;/code&gt;로 바뀝니다. 전처리가 완료되면 소스 파일은 초기 “확장”을 거칩니다.&lt;/li&gt;
+&lt;li&gt;컴파일 단계: 전처리된 파일은 컴파일 과정으로 들어가고, GCC는 C++ 언어 표준에 따라 소스 파일을 어셈블리 언어 코드로 변환합니다. 이 과정에서 코드 구조를 꼼꼼히 검사하여 클래스 상속, 다형성 구현의 정확성, 함수 호출 인자 일치 여부 등을 확인하며, 문법 및 의미 규칙에 위배되는 오류가 발견되면 즉시 에러를 발생시키고 컴파일 과정을 중단합니다. 예를 들어, 함수 선언과 정의된 인자 목록이 불일치하는 경우, GCC는 문제 지점을 정확하게 지적합니다.&lt;/li&gt;
+&lt;li&gt;어셈블리 단계: 어셈블러는 이전 단계에서 생성된 어셈블리 코드를 기계어로 변환하여 &lt;code&gt;.o&lt;/code&gt; 확장자를 가진 목적 파일을 생성합니다. 이러한 목적 파일에는 기기가 직접 실행할 수 있는 이진 명령어가 포함되어 있지만, 일반적으로 완전한 프로그램은 여러 모듈로 구성되고 각 모듈 간의 함수 및 변수 참조 관계가 해결되지 않았기 때문에 독립적으로 실행될 수 없습니다.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;링크 단계&lt;/strong&gt;: 이는 실행 파일을 생성하는 마지막 스퍼트 단계입니다. 링커는 여러 목표 파일과 필요한 라이브러리 파일(정적 라이브러리 또는 동적 라이브러리)을 통합합니다. 예를 들어, C++ 표준 템플릿 라이브러리의 컨테이너 클래스를 사용할 때 링크 시에는 해당 라이브러리 구현 코드를 찾아야 하며, 프로그램 실행 시 &lt;code&gt;vector&lt;/code&gt;, &lt;code&gt;list&lt;/code&gt; 등의 컨테이너 기능을 올바르게 호출할 수 있도록 보장하여 최종적으로 완전한 실행 파일을 생성합니다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;두-번째-glibc-c-프로그램-실행의-숨겨진-기반&#34;&gt;두 번째, GLIBC: C++ 프로그램 실행의 숨겨진 기반
+&lt;/h2&gt;&lt;p&gt;본질과 작용&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;GLIBC는 GNU C Library이며, GNU 생태계에서 C 표준 라이브러리의 구체적인 구현입니다. 이름에서 C가 강조되어 있지만, C++ 프로그램 역시 C의 기본 부분을 상속받기 때문에 GLIBC에 크게 의존합니다. 메모리 관리를 위한 &lt;code&gt;malloc&lt;/code&gt;(동적 메모리 할당), &lt;code&gt;free&lt;/code&gt;(메모리 해제) 함수와 같이 방대한 기본 함수를 제공하는데, 이는 C++에서 동적 배열이나 객체를 생성할 때 필수적입니다. 또한 &lt;code&gt;strcpy&lt;/code&gt;(문자열 복사), &lt;code&gt;strcat&lt;/code&gt;(문자열 연결)과 같은 문자열 처리 함수는 C++에 더 고급의 &lt;code&gt;string&lt;/code&gt; 클래스가 있더라도 하위 코드와의 상호 작용이나 최고의 성능을 추구할 때 여전히 사용됩니다. 뿐만 아니라 &lt;code&gt;printf&lt;/code&gt;, &lt;code&gt;scanf&lt;/code&gt;와 같은 표준 입력/출력 함수 역시 C++ 초기 개발 단계나 성능에 민감하고 간결함을 추구하는 상황에서 자주 등장합니다.
+운영 체제와의 협력&lt;/li&gt;
+&lt;li&gt;GLIBC는 운영체제와 애플리케이션 간의 중요한 연결고리 역할을 합니다. Linux 시스템에서 C++ 프로그램이 파일을 열기 위해 &lt;code&gt;open&lt;/code&gt; 함수를 사용하는 등 시스템 호출을 시작하면 GLIBC는 프로그램의 요청을 운영체제 커널이 규정한 방식으로 캡슐화하여 커널에 전달하고, 커널 처리 완료 후 결과를 애플리케이션으로 다시 반환합니다. 이를 통해 애플리케이션은 파일 시스템, 네트워크, 프로세스 관리와 같은 다양한 시스템 리소스를 복잡한 운영체제 하위 수준의 시스템 호출 인터페이스 세부 사항을 깊이 이해하지 않고도 편리하게 사용할 수 있습니다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;세-번째-c-프로그램-배포-후-호환성-문제-분석&#34;&gt;세 번째, C++ 프로그램 배포 후 호환성 문제 분석
+&lt;/h2&gt;&lt;p&gt;GLIBC 버전 차이로 인한 호환성 문제&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;다양한 Linux 배포판은 종종 서로 다른 버전의 GLIBC를 탑재하고 있습니다. C++ 프로그램이 높은 버전의 GLIBC 환경에서 컴파일되면, 의식하지 못 사이에 해당 버전에서 새롭게 추가된 특정 함수 기능이나 최적화된 함수 구현에 의존하게 될 수 있습니다. 예를 들어, 새로운 GLIBC 버전은 메모리 할당 알고리즘을 개선했으며, 프로그램은 런타임 시 이러한 새로운 알고리즘을 빈번히 활용하여 성능을 향상시킵니다. 만약 이 프로그램을 낮은 버전의 GLIBC 시스템에서 실행한다면, 해당 함수를 찾을 수 없거나 (해당 기능이 낮은 버전에 도입되지 않았기 때문입니다) 함수의 동작에 이상이 생길 수 있습니다 (오래된 함수 구현 로직과 새로운 버전 간의 차이로 인해). 이는 프로그램 충돌이나 결과 오류로 이어질 수 있습니다.
+컴파일러 차이로 인한 호환성 문제&lt;/li&gt;
+&lt;li&gt;비록 모두 GCC 컴파일러를 사용하더라도, 다른 버전의 GCC는 코드 생성, 표준 라이브러리 지원 및 C++ 기능 구현 방식에 차이가 있습니다. 최신 버전의 GCC는 C++ 최신 표준(예: C++20의 모듈, 코루틴 등)을 완벽하게 지원할 수 있지만, 이러한 최첨단 기능을 사용하는 프로그램이 구버전 GCC에서 컴파일하면 컴파일러가 새로운 문법 구조를 인식하지 못해 오류를 발생시킵니다. 심지어 문법 오류가 없더라도, 다른 GCC 버전 간의 최적화 전략이 다르기 때문에 생성된 기계 코드의 실행 효율성 및 메모리 사용량에 큰 차이가 있을 수 있으며, 성능이 중요한 환경에서는 프로그램의 동작 방식이 크게 달라질 수 있습니다.
+시스템 아키텍처 차이로 인한 과제&lt;/li&gt;
+&lt;li&gt;C++ 프로그램은 x86, ARM, PowerPC 등 다양한 하드웨어 시스템 아키텍처에서 실행될 수 있습니다. 각 아키텍처는 고유한 명령어 집합, 메모리 레이아웃 및 데이터 정렬 요구 사항을 가지고 있습니다. 예를 들어 데이터 정렬의 경우, x86 아키텍처에서 정상적으로 작동하는 구조체 데이터 저장 방식이 ARM 아키텍처에서는 정렬 규칙이 다르기 때문에 메모리 접근 이상을 일으켜 프로그램 오류를 유발할 수 있습니다. 또한 GCC는 서로 다른 아키텍처에 대해 컴파일할 때 생성되는 기계 코드의 차이가 매우 크며, 프로그램 내에 하드 코딩된 아키텍처 관련 명령어 또는 가정이 있는 경우, 여러 아키텍처에서 실행 시 빈번한 오류가 발생합니다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;네-가지-대응-호환성-문제-전략&#34;&gt;네 가지 대응 호환성 문제 전략
+&lt;/h2&gt;&lt;p&gt;정적 링크 라이브러리의 활용&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;정적 링크 라이브러리 사용을 고려해 볼 수 있는데, 이는 프로그램이 의존하는 GLIBC와 같은 라이브러리 코드를 실행 파일에 직접 패키징하는 방식입니다. 이렇게 하면 프로그램은 런타임 시 대상 시스템의 특정 GLIBC 버전에 더 이상 의존하지 않으므로 GLIBC 버전 불일치로 인해 발생하는 문제를 효과적으로 피할 수 있습니다. 하지만 정적 링크는 실행 파일 크기를 크게 증가시키므로 저장 공간이 제한된 환경에서는 장단점을 신중하게 고려해야 합니다.
+컨테이너화 배포&lt;/li&gt;
+&lt;li&gt;Docker와 같은 컨테이너화 기술을 활용하여 C++ 프로그램과 필요한 실행 환경(특정 버전의 GCC, GLIBC 등)을 하나의 독립적인 컨테이너로 묶습니다. 어떤 기본 운영체제로 배포하든 컨테이너 내부에서는 항상 프로그램 개발 시의 환경 일관성을 유지하여 프로그램이 예상대로 작동하도록 하고, 다양한 환경에 대한 배포 복잡성을 크게 줄입니다.
+호환성 테스트 및 지속적 통합&lt;/li&gt;
+&lt;li&gt;다양한 GLIBC 버전, GCC 버전 및 일반적인 시스템 아키텍처를 포괄하는 종합적인 호환성 테스트 체계를 구축한다. 프로그램 개발 과정에서 지속적 통합 도구를 사용하여 다양한 환경에서 정기적으로 자동화된 테스트를 수행하고, 호환성 문제가 발견되면 즉시 수정하여 잠재적인 위험을 초기 단계에서 제거함으로써 프로그램 출시 후의 안정성을 확보한다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;결론적으로, GCC와 GLIBC의 작동 방식을 깊이 이해하고, C++ 프로그램 호환성 문제의 근원을 정확하게 파악하며, 유연하게 대응 전략을 활용하는 것은 모든 C++ 개발자가 안정적이고 크로스 플랫폼 애플리케이션을 구축하기 위한 필수적인 기술입니다. 그래야만 우리의 C++ 작품은 다양한 기술 생태계에서 자유롭게 이동할 수 있습니다.&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>리눅스 백엔드 서비스 문자열 데이터 처리 - 속도가 느림</title>
+        <link>https://ttf248.life/ko/p/linux-backend-slow-string-processing/</link>
+        <pubDate>Wed, 13 Nov 2024 19:42:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/linux-backend-slow-string-processing/</guid>
+        <description>&lt;p&gt;C++ 개발의 과거 프로젝트에서 우리는 자체 프로토콜을 사용하여 통신했고, 이 프로토콜은 2차원 배열 패턴을 채택했습니다. 대량의 데이터를 처리할 때 프로토콜 내부에서 배열을 순회하고 시리얼화 작업을 수행하여 로그를 생성해야 했는데, 효율성이 낮아 시스템이 고부하 상태에서 눈에 띄는 끊김 현상을 일으켰고, 이로 인해 사업 부서로부터 시스템 끊김에 대한 피드백을 받았습니다.&lt;/p&gt;
+&lt;h2 id=&#34;문제-파악&#34;&gt;문제 파악
+&lt;/h2&gt;&lt;p&gt;문제 해결 과정에서, 우리는 먼저 시스템 성능을 분석했고, 대량의 데이터를 처리할 때 CPU 사용률이 눈에 띄게 증가하고 시스템 응답 시간이 길어지는 것을 확인했습니다. 시스템 로그를 분석한 결과, 많은 양의 직렬화 작업이 있었고, 이러한 작업은 특히 2차원 배열을 처리할 때 효율성이 낮아 시스템 성능 저하를 유발하는 것으로 나타났습니다.&lt;/p&gt;
+&lt;p&gt;pstack 도구로 스레드 정보를 캡처한 결과, 로그 스레드가 대부분의 시간을 문자열 연결 처리에 소비하는 것으로 나타났다&lt;/p&gt;
+&lt;p&gt;여기 오늘의 핵심인데, 다른 누적 방식에 따라 효율성이 엄청나게 달라집니다. 기존 코드에서는 + 연산자를 사용했는데, 이 방식은 빈번하게 임시 객체를 생성하므로 효율이 매우 낮습니다. 그 비효율성을 알고는 있지만, 얼마나 비효율적인지 제대로 모르는 그런 종류입니다.&lt;/p&gt;
+&lt;h2 id=&#34;데모-검증&#34;&gt;데모 검증
+&lt;/h2&gt;&lt;p&gt;프로젝트 코드를 기반으로 비즈니스 로직을 분리하고, 문자열 연결 효율성 문제를 검증하기 위한 간단한 데모를 작성했습니다. &lt;code&gt;windows&lt;/code&gt; 환경의 &lt;code&gt;vs2022&lt;/code&gt; 컴파일러와 &lt;code&gt;linux&lt;/code&gt; 환경의 &lt;code&gt;gcc8.5&lt;/code&gt; 컴파일러로 &lt;code&gt;Release&lt;/code&gt; 모드에서 컴파일 및 실행하여 효율성을 비교했습니다.&lt;/p&gt;
+&lt;h3 id=&#34;주요-사항-안내&#34;&gt;주요 사항 안내
+&lt;/h3&gt;&lt;p&gt;프로젝트에서는 방법 네 가지를 사용했는데, 테스트 데이터를 받기 전 독자들은 어떤 방식이 가장 효율적이고 어떤 방식이 가장 비효율적인지 먼저 생각해 볼 수 있습니다. 결과를 보았을 때 저는 여전히 놀랐습니다.&lt;/p&gt;
+&lt;p&gt;방법 1 (&lt;code&gt;+=&lt;/code&gt; 연결): 각 필드를 &lt;code&gt;+=&lt;/code&gt; 연산자를 사용하여 문자열에 직접 연결합니다
+방법 2 ( &lt;code&gt;std::ostringstream&lt;/code&gt; 연결): 스트림(&lt;code&gt;std::ostringstream&lt;/code&gt;)을 사용하여 각 필드를 연결하는 방법으로, 특히 대량의 데이터를 연결할 때 더 효율적입니다
+방법 3(미리 할당된 메모리의 += 연결): &lt;code&gt;reserve&lt;/code&gt;를 사용하여 문자열에 필요한 충분한 메모리를 미리 할당하면 메모리 재할당 비용을 줄여 성능을 향상시킬 수 있습니다
+방법 4(&lt;code&gt;bodys = bodys + body + &amp;quot;\n&amp;quot;&lt;/code&gt;): 매번 연결할 때마다 새로운 임시 문자열 객체를 생성하므로, 특히 대규모 연결 시 성능 저하가 발생합니다. 이는 매번 연결이 새로운 메모리 할당 및 복사를 수반하기 때문입니다.&lt;/p&gt;
+&lt;p&gt;참고 결과, 프로젝트가 효율이 가장 낮은 방식을 선택한 것을 알 수 있습니다&lt;/p&gt;
+&lt;p&gt;더 나아가, 다양한 플랫폼 컴파일러의 최적화 효율을 분석해 보겠습니다. 마이크로소프트의 &lt;code&gt;Visual Studio&lt;/code&gt;는 여전히 뛰어난 성능을 보여주며 문자열 최적화 효율이 매우 높지만, &lt;code&gt;gcc&lt;/code&gt; 컴파일러는 이 부분에서 최적화 효율이 다소 떨어지는 편입니다.&lt;/p&gt;
+&lt;p&gt;코드 실행 환경이 다른 기계에서 이루어지므로 데이터 간의 직접적인 비교는 의미가 없습니다. 각각의 조인 방법 간의 차이를 비교하는 것이 좋습니다.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;windows 平台下的 vs2022 编译器
+
+----------------------------------------
+Data Generation Time: 0.054 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.053 seconds.
++ ostringstream Data merging took: 0.054 seconds.
++ Pre-reserved Data merging took: 0.045 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 16.108 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;linux 平台下的 gcc8.5 编译器
+----------------------------------------
+Data Generation Time: 0.108 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.100 seconds.
++ ostringstream Data merging took: 0.083 seconds.
++ Pre-reserved Data merging took: 0.057 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 29.298 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;전체-코드&#34;&gt;전체 코드
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;string&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;random&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;sstream&amp;gt;
+#include &amp;lt;iomanip&amp;gt;
+
+typedef std::vector&amp;lt;std::string&amp;gt; DataRow;
+typedef std::vector&amp;lt;DataRow&amp;gt; DataGroup;
+
+struct ResponsePackage
+{
+    std::string ErrorInfo;
+    DataRow Head;
+    std::string ClientId;
+    std::string UUID;
+    std::string MsgID;
+    std::string SessionID;
+    std::string ExtraInfo1;
+    std::string ExtraInfo2;
+    DataGroup DataBody;
+};
+
+// Generate specified length of random string
+std::string generateRandomString(size_t length)
+{
+    const char charset[] = &amp;quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&amp;quot;;
+    const size_t max_index = sizeof(charset) - 1;
+    std::string random_string;
+    random_string.reserve(length);
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution&amp;lt;&amp;gt; distribution(0, max_index);
+
+    for (size_t i = 0; i &amp;lt; length; ++i)
+    {
+        random_string += charset[distribution(generator)];
+    }
+
+    return random_string;
+}
+
+void create_large_string()
+{
+    // Example request package with 50 fields
+    ResponsePackage requestPackage;
+
+    requestPackage.Head = {
+        &amp;quot;Field1&amp;quot;, &amp;quot;Field2&amp;quot;, &amp;quot;Field3&amp;quot;, &amp;quot;Field4&amp;quot;, &amp;quot;Field5&amp;quot;,
+        &amp;quot;Field6&amp;quot;, &amp;quot;Field7&amp;quot;, &amp;quot;Field8&amp;quot;, &amp;quot;Field9&amp;quot;, &amp;quot;Field10&amp;quot;,
+        &amp;quot;Field11&amp;quot;, &amp;quot;Field12&amp;quot;, &amp;quot;Field13&amp;quot;, &amp;quot;Field14&amp;quot;, &amp;quot;Field15&amp;quot;,
+        &amp;quot;Field16&amp;quot;, &amp;quot;Field17&amp;quot;, &amp;quot;Field18&amp;quot;, &amp;quot;Field19&amp;quot;, &amp;quot;Field20&amp;quot;,
+        &amp;quot;Field21&amp;quot;, &amp;quot;Field22&amp;quot;, &amp;quot;Field23&amp;quot;, &amp;quot;Field24&amp;quot;, &amp;quot;Field25&amp;quot;,
+        &amp;quot;Field26&amp;quot;, &amp;quot;Field27&amp;quot;, &amp;quot;Field28&amp;quot;, &amp;quot;Field29&amp;quot;, &amp;quot;Field30&amp;quot;,
+        &amp;quot;Field31&amp;quot;, &amp;quot;Field32&amp;quot;, &amp;quot;Field33&amp;quot;, &amp;quot;Field34&amp;quot;, &amp;quot;Field35&amp;quot;,
+        &amp;quot;Field36&amp;quot;, &amp;quot;Field37&amp;quot;, &amp;quot;Field38&amp;quot;, &amp;quot;Field39&amp;quot;, &amp;quot;Field40&amp;quot;,
+        &amp;quot;Field41&amp;quot;, &amp;quot;Field42&amp;quot;, &amp;quot;Field43&amp;quot;, &amp;quot;Field44&amp;quot;, &amp;quot;Field45&amp;quot;,
+        &amp;quot;Field46&amp;quot;, &amp;quot;Field47&amp;quot;, &amp;quot;Field48&amp;quot;, &amp;quot;Field49&amp;quot;, &amp;quot;Field50&amp;quot;
+    };
+
+    requestPackage.ClientId = &amp;quot;ClientID&amp;quot;;
+    requestPackage.UUID = &amp;quot;UUID&amp;quot;;
+    requestPackage.MsgID = &amp;quot;MsgID&amp;quot;;
+    requestPackage.SessionID = &amp;quot;SessionID&amp;quot;;
+    requestPackage.ExtraInfo1 = &amp;quot;ExtraInfo1&amp;quot;;
+    requestPackage.ExtraInfo2 = &amp;quot;ExtraInfo2&amp;quot;;
+
+    // Start timing for data generation
+    auto start_gen = std::chrono::high_resolution_clock::now();
+
+    // Generate 10,000 rows of data, each with 50 fields
+    for (size_t i = 0; i &amp;lt; 10000; ++i)
+    {
+        DataRow dataRow(50, &amp;quot;This is a test string&amp;quot;);
+        requestPackage.DataBody.push_back(dataRow);
+    }
+
+    // End timing for data generation
+    auto end_gen = std::chrono::high_resolution_clock::now();
+    std::chrono::duration&amp;lt;double&amp;gt; duration_gen = end_gen - start_gen;
+
+    // Display result generation time
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Generation Time: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_gen.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    // Data merging using different methods
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Performance:\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    {
+        // Method 1: Using &#39;+=&#39; string concatenation
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (+=) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 2: Using ostringstream
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::ostringstream bodys;
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::ostringstream body;
+            body &amp;lt;&amp;lt; &amp;quot;This is a test string&amp;quot;;
+            for (auto&amp;amp; item : vec)
+            {
+                body &amp;lt;&amp;lt; item &amp;lt;&amp;lt; &amp;quot; &amp;quot;;
+            }
+            bodys &amp;lt;&amp;lt; body.str() &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ ostringstream Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 3: Pre-allocated memory
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys;
+        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            body.reserve(50 * 20); // Pre-allocate memory for each row
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Pre-reserved Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 4: Using &#39;bodys = bodys + body + &amp;quot;\n&amp;quot;&#39;
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body = body + item + &amp;quot; &amp;quot;; // Note the use of &#39;body = body + item&#39;
+            }
+            bodys = bodys + body + &amp;quot;\n&amp;quot;; // Again, using &#39;bodys = bodys + body&#39;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (bodys = bodys + body + \&amp;quot;\\n\&amp;quot;) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Complete.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+}
+
+int main()
+{
+    try
+    {
+        create_large_string();
+    }
+    catch (const std::exception&amp;amp; e)
+    {
+        std::cerr &amp;lt;&amp;lt; &amp;quot;Caught exception: &amp;quot; &amp;lt;&amp;lt; e.what() &amp;lt;&amp;lt; std::endl;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\nProgram finished.\n&amp;quot;;
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
+        <title>C&#43;&#43; 람다 표현식 매개변수 생명 주기</title>
+        <link>https://ttf248.life/ko/p/cpp-lambda-parameter-lifetime/</link>
+        <pubDate>Wed, 13 Nov 2024 19:23:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/cpp-lambda-parameter-lifetime/</guid>
+        <description>&lt;p&gt;C++에서 람다 표현식은 외부 변수를 캡처하여 그 안에서 사용할 수 있는 편리한 익명 함수입니다. 이는 람다가 유연한 프로그래밍 도구가 되도록 합니다. 하지만 람다 표현식의 매개변수 생명 주기는 특히 캡처 및 전달 시 특별히 주의해야 할 측면입니다.&lt;/p&gt;
+&lt;h3 id=&#34;람다-표현식의-매개변수-생명-주기&#34;&gt;람다 표현식의 매개변수 생명 주기
+&lt;/h3&gt;&lt;p&gt;람다 표현식의 매개변수 수명은 일반적으로 다른 C++ 함수와 동일합니다. 함수의 매개변수는 함수 호출 시 존재하며, 함수 호출이 종료되면 매개변수 수명이 종료됩니다. 하지만 람다 표현식이 외부 변수를 캡처할 수 있기 때문에 매개변수 수명은 캡처 방식에 영향을 받기도 합니다.&lt;/p&gt;
+&lt;h3 id=&#34;포획과-매개변수-생명-주기의-관계&#34;&gt;포획과 매개변수 생명 주기의 관계
+&lt;/h3&gt;&lt;h4 id=&#34;외부-변수-캡처&#34;&gt;외부 변수 캡처
+&lt;/h4&gt;&lt;p&gt;C++ 람다 표현식은 외부 변수를 두 가지 방식으로 캡처할 수 있습니다&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;값 캡처: 값 캡처를 통해 외부 변수의 값이 람다 내부에 복사되고, 람다 내부의 복사본은 람다의 생명주기에 의해 제어됩니다&lt;/li&gt;
+&lt;li&gt;참조 캡처: 참조 캡처를 통해 외부 변수의 참조가 유지되며, 람다 내부의 참조는 원래 외부 변수를 가리키고, 생명 주기는 외부 변수에 의존합니다&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;int x = 10;
+auto lambda_by_value = [x]() { std::cout &amp;lt;&amp;lt; x &amp;lt;&amp;lt; std::endl; };  // 捕获x的副本
+auto lambda_by_reference = [&amp;amp;x]() { std::cout &amp;lt;&amp;lt; x &amp;lt;&amp;lt; std::endl; };  // 捕获x的引用
+
+lambda_by_value();  // 打印10
+lambda_by_reference();  // 打印10
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;캡처된 변수의 수명 주기는 다음과 같습니다&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;값 캡처: 캡처 시 외부 변수의 값이 람다에 복사되고, 람다가 종료될 때 복사된 사본이 파괴됩니다&lt;/li&gt;
+&lt;li&gt;람다가 외부 변수를 참조할 때, &lt;strong&gt;외부 변수는 람다 사용 전에 유효해야 하며, 그렇지 않으면 정의되지 않은 동작이 발생할 수 있습니다.&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;람다-매개변수&#34;&gt;람다 매개변수
+&lt;/h4&gt;&lt;p&gt;람다 함수의 매개변수는 일반 함수 매개변수와 유사하며, 그 수명은 람다 함수 내에서만 유효합니다. 즉, 람다 매개변수는 람다 호출 시 생성되고, 람다 호출이 종료되면 매개변수의 수명도 함께 종료됩니다.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;auto lambda = [](int a, int b) {
+    std::cout &amp;lt;&amp;lt; a + b &amp;lt;&amp;lt; std::endl;
+};
+lambda(5, 10);  // a和b在这里是lambda的参数
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;이 예제에서, &lt;code&gt;a&lt;/code&gt;와 &lt;code&gt;b&lt;/code&gt;는 람다 표현식의 매개변수이며, 람다 호출 시 생성되고 람다 실행 종료 후 파괴됩니다&lt;/p&gt;
+&lt;h3 id=&#34;외부-변수-캡처-시-라이프사이클-문제&#34;&gt;외부 변수 캡처 시 라이프사이클 문제
+&lt;/h3&gt;&lt;h4 id=&#34;람다-외부에서-포획된-변수가-유효한지&#34;&gt;람다 외부에서 포획된 변수가 유효한지
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;람다 호출 후 외부 변수가 파괴되더라도 람다는 여전히 외부 변수의 복사본을 보유합니다. 따라서 외부 변수가 더 이상 존재하지 않더라도 람다 내부의 복사본은 안전하게 사용할 수 있습니다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;int x = 10;
+auto lambda = [x]() { std::cout &amp;lt;&amp;lt; x &amp;lt;&amp;lt; std::endl; };
+x = 20;  // x 在lambda调用后修改
+lambda();  // 打印10，捕获的是x的副本
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;캡처된 변수가 참조에 의한 캡처인 경우, 람다 내부에서 해당 참조에 대한 접근은 외부 변수의 수명 주기(lifetime)에 의존합니다. 만약 외부 변수가 람다가 실행되기 전에 소멸된다면, 댕글링 포인터(dangling reference) 문제가 발생하여 정의되지 않은 동작을 초래할 수 있습니다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;int x = 10;
+auto lambda = [&amp;amp;x]() { std::cout &amp;lt;&amp;lt; x &amp;lt;&amp;lt; std::endl; };
+x = 20;  // x 在lambda调用前修改
+lambda();  // 打印20，捕获的是x的引用
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;람다 함수의 실행 순서가 불확실한 경우, 람다가 실행될 때 캡처된 외부 변수가 여전히 유효한지 확인하는 것이 중요합니다&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>GCC 버전 업그레이드로 인한 프로그램 충돌: 비표준 코드의 잠재적 위험</title>
+        <link>https://ttf248.life/ko/p/upgrade-gcc-version-causes-program-crash-code-irregularities/</link>
+        <pubDate>Sun, 10 Mar 2024 23:19:06 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/upgrade-gcc-version-causes-program-crash-code-irregularities/</guid>
+        <description>&lt;p&gt;동일한 비즈니스 코드의 경우, 프로그램은 CentOS 7 환경에서 정상적으로 컴파일 및 실행되었지만, CentOS 8로 전환하고 최신 버전의 GCC를 사용하여 컴파일하면 프로그램이 충돌합니다. 주목할 점은 문제가 &lt;strong&gt;릴리스 모드&lt;/strong&gt;에서만 발생하며, &lt;strong&gt;디버그 모드&lt;/strong&gt;에서는 전혀 문제가 없다는 것입니다. 이와 같은 상황은 처음 경험했으며, 삼 일간의 조사 끝에 문제의 근본 원인을 찾았습니다.&lt;/p&gt;
+&lt;h3 id=&#34;문제-파악&#34;&gt;문제 파악
+&lt;/h3&gt;&lt;p&gt;일련의 점검을 거쳐 문제의 원인은 &lt;strong&gt;함수가 반환값을 갖지 못하는 것&lt;/strong&gt;으로 밝혀졌습니다. Release 모드에서는 GCC 최신 버전이 더 많은 최적화를 수행하는데, 이로 인해 명시적으로 반환값이 없는 함수 실행 과정에서 예상치 못한 로직이 발생하여 충돌을 일으켰습니다. 결론은 &lt;strong&gt;컴파일러 경고를 간과해서는 안 된다는 것입니다. 특히 기존 프로젝트에서는 일부 경고가 무시될 수도 있지만, 모든 경고를 차단하는 것은 피해야 합니다.&lt;/strong&gt;&lt;/p&gt;
+&lt;h3 id=&#34;환경-설명&#34;&gt;환경 설명
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;CentOS 7 GCC 버전:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-39)
+Copyright © 2015 Free Software Foundation, Inc.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;CentOS 8 GCC 버전:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;gcc (GCC) 8.5.0 20210514 (Red Hat 8.5.0-21)
+Copyright (C) 2018 Free Software Foundation, Inc.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;붕괴-현상&#34;&gt;붕괴 현상
+&lt;/h3&gt;&lt;p&gt;프로그램 충돌 스택을 분석하는 과정에서 다음과 같은 스택 정보를 확인했습니다:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;[New LWP 1385902]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library &amp;quot;/lib64/libthread_db.so.1&amp;quot;.
+Core was generated by `./pstack_main`.
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x00007ffe894b4420 in ?? ()
+(gdb) bt
+#0  0x00007ffe894b4420 in ?? ()
+#1  0x00000000004008e9 in main ()
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;이 스택은 직관적이지 않아 보이고, 충돌 함수의 스택 정보가 &lt;code&gt;??&lt;/code&gt;로 표시되어 있어 문제 해결이 더욱 복잡해졌다&lt;/p&gt;
+&lt;h3 id=&#34;코드-예시&#34;&gt;코드 예시
+&lt;/h3&gt;&lt;p&gt;문제 이해를 돕기 위해, 오류 재현을 위한 최소 코드 예제는 다음과 같습니다:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;map&amp;gt;
+
+int test() {
+    std::cout &amp;lt;&amp;lt; &amp;quot;1&amp;quot; &amp;lt;&amp;lt; std::endl;
+}
+
+int main() {
+    test();
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;해당 코드의 &lt;code&gt;test()&lt;/code&gt; 함수는 명시적으로 값을 반환하지 않음에도 불구하고, 반환 타입이 &lt;code&gt;int&lt;/code&gt;로 선언되어 있습니다. C++ 규격에 따르면 &lt;code&gt;int&lt;/code&gt; 타입으로 선언된 함수는 반드시 값을 반환해야 하며, 그렇지 않으면 정의되지 않은 동작을 초래할 수 있습니다.&lt;/p&gt;
+&lt;h3 id=&#34;컴파일-경고&#34;&gt;컴파일 경고
+&lt;/h3&gt;&lt;p&gt;우리 프로젝트에서 CMake 스크립트는 많은 컴파일 시 경고를 비활성화했으며, 그 중에는 다음과 같은 경고 메시지도 포함되어 있습니다:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;/root/pstack/main.cpp: In function ‘int test()’:
+/root/pstack/main.cpp:7:1: warning: no return statement in function returning non-void [-Wreturn-type]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;이 경고는 &lt;code&gt;test()&lt;/code&gt; 함수가 값을 반환하지 않는다는 것을 의미하며, 이것이 문제의 근원입니다. 높은 버전의 GCC(예: 8.5.0)는 코드를 최적화할 때 이러한 정의되지 않은 동작에 대해 불안정한 최적화를 수행하여 프로그램 충돌을 일으킬 수 있습니다.&lt;/p&gt;
+&lt;h3 id=&#34;어셈블리-코드-차이&#34;&gt;어셈블리 코드 차이
+&lt;/h3&gt;&lt;p&gt;GCC 컴파일러 최적화 동작의 차이를 설명하기 위해, 우리는 서로 다른 버전의 GCC가 생성한 어셈블리 코드를 비교했습니다&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;GCC 4.8.5가 생성한 어셈블리 코드:&lt;/p&gt;
+&lt;p&gt;어셈블리 코드는 다소 장황하며 표준 출력 스트림(예: &lt;code&gt;std::cout&lt;/code&gt;) 처리를 위한 로직을 포함하고 있습니다. 이는 컴파일러가 더 보수적인 최적화를 수행했으며, &lt;code&gt;test()&lt;/code&gt; 함수에서 누락된 반환값 문제에 대한 과도한 최적화를 하지 않았음을 시사합니다. 아마도 이로 인해 프로그램이 충돌하는 것을 피했을 것입니다.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;GCC 8.5.0에서 생성된 어셈블리 코드:&lt;/p&gt;
+&lt;p&gt;새 버전의 GCC는 더 많은 최적화를 수행하여 코드 양을 줄였습니다. 하지만 이러한 최적화로 인해 반환 값이 없는 함수의 실행 시 동작이 불확실해져 프로그램이 충돌할 수 있습니다.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;결론&#34;&gt;결론
+&lt;/h3&gt;&lt;p&gt;이번 문제 해결 과정을 통해, C++에서 &lt;strong&gt;함수 반환 값은 명시적이어야 한다&lt;/strong&gt;는 것을 깊이 인식하게 되었습니다. 특히 함수가 &lt;code&gt;int&lt;/code&gt;로 선언된 경우 반드시 반환 값을 제공해야 합니다. 구 버전 컴파일러를 사용하는 프로젝트의 경우, 최신 버전 GCC로 업그레이드하면 더 많은 최적화와 엄격한 경고 메커니즘을 마주할 수 있습니다. 따라서 컴파일 시 &lt;strong&gt;모든 경고를 숨기지 말고&lt;/strong&gt;, 함수 반환 값, 타입 매칭 등과 같은 일반적인 문제에 대해 선택적으로 처리하는 것을 권장합니다.&lt;/p&gt;
+&lt;p&gt;결국, &lt;code&gt;test()&lt;/code&gt; 함수에 반환값을 추가함으로써 문제가 해결되었고 프로그램이 정상적으로 작동하게 되었습니다&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>C&#43;&#43; 프로그래밍의 함정: `std::map` 오용으로 인한 프로그램 충돌 상세 분석</title>
+        <link>https://ttf248.life/ko/p/cpp-programming-traps-std-map-crash-details/</link>
+        <pubDate>Sun, 10 Mar 2024 22:03:06 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/cpp-programming-traps-std-map-crash-details/</guid>
+        <description>&lt;p&gt;C++ 프로그래밍에서 &lt;code&gt;std::map&lt;/code&gt; 컨테이너를 잘못 사용하면 프로그램이 충돌할 수 있습니다. 대괄호 연산자를 사용하여 존재하지 않는 키에 접근하려고 하면 자동으로 빈 요소가 추가됩니다. 이 오해를 자세히 분석하고 예제 코드를 통해 잠재적인 위험을 보여드리겠습니다.&lt;/p&gt;
+&lt;p&gt;저장하는 값이 단순한 값이라면 문제가 없지만, 포인터를 저장하면 문제가 발생할 수 있습니다. 왜냐하면 포인터는 주소이고, 초기화되지 않으면 해당 주소가 불확실해져 프로그램이 충돌할 수 있기 때문입니다.&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;본문&#34;&gt;본문
+&lt;/h2&gt;&lt;p&gt;C++ 표준 라이브러리에서 &lt;code&gt;std::map&lt;/code&gt;은 키(key)를 기준으로 오름차순으로 요소를 저장하는 연관 컨테이너이며, 효율적인 키워드 검색 기능을 제공합니다. 하지만 초보 개발자는 &lt;code&gt;std::map&lt;/code&gt;의 대괄호 연산자 &lt;code&gt;[]&lt;/code&gt;의 동작 방식에 대한 이해 부족으로 어려움을 겪을 수 있습니다. 실제로 &lt;code&gt;[]&lt;/code&gt;를 사용하여 존재하지 않는 키에 접근하면 &lt;code&gt;std::map&lt;/code&gt;은 새로운 키-값 쌍을 삽입하고, 기본 생성자를 사용하여 해당 키에 해당하는 값 타입이 초기화됩니다.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;map&amp;gt;
+
+int main() {
+    std::map&amp;lt;std::string, int&amp;gt; myMap;
+    
+    // 错误的用法：假设这里试图访问一个不存在的键并认为会得到0
+    std::cout &amp;lt;&amp;lt; &amp;quot;Value for &#39;nonexistent_key&#39;: &amp;quot; &amp;lt;&amp;lt; myMap[&amp;quot;nonexistent_key&amp;quot;] &amp;lt;&amp;lt; std::endl;
+
+    // 实际上，上述行代码创建了一个新的键值对，其中值被默认初始化为int的默认值（通常是0）
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;위 코드 조각은 프로그램 충돌을 직접적으로 유발하지는 않지만, 이러한 암묵적인 삽입 동작은 특정 상황에서 예상치 못한 부작용을 초래할 수 있습니다. 예를 들어 리소스 누수나 예측 불가능한 상태 변경이 발생할 수 있습니다. 더 나쁜 것은 다중 스레드 환경에서 초기화되지 않은 메모리 영역에 동시에 접근하면 프로그램 충돌로 이어질 수도 있습니다.&lt;/p&gt;
+&lt;p&gt;이러한 문제가 발생하는 것을 방지하기 위해 &lt;code&gt;std::map::find()&lt;/code&gt; 또는 &lt;code&gt;std::map::count()&lt;/code&gt; 메서드를 사용하여 키가 존재하는지 확인하거나, &lt;code&gt;std::map::insert()&lt;/code&gt;를 사용하여 명시적으로 요소를 삽입하는 것이 좋습니다&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;std::map&amp;lt;std::string, int&amp;gt; safeMap;
+if (safeMap.count(&amp;quot;nonexistent_key&amp;quot;) == 0) {
+    std::cout &amp;lt;&amp;lt; &amp;quot;Key does not exist.&amp;quot; &amp;lt;&amp;lt; std::endl;
+} else {
+    std::cout &amp;lt;&amp;lt; &amp;quot;Value for existing key: &amp;quot; &amp;lt;&amp;lt; safeMap[&amp;quot;nonexistent_key&amp;quot;] &amp;lt;&amp;lt; std::endl;
+}
+
+// 或者明确插入一个键值对，指定初始值
+safeMap.insert({ &amp;quot;new_key&amp;quot;, 0 });
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;만약 map 컨테이너 내부에 저장된 객체가 포인터 타입이라면, 자동 삽입 동작은 초기화되지 않은 포인터를 저장하며, 이 포인터에 대한 어떠한 작업도 프로그램 충돌을 야기할 수 있습니다&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>C&#43;&#43; 함수 호출 시간</title>
+        <link>https://ttf248.life/ko/p/cpp-function-call-timing/</link>
+        <pubDate>Wed, 24 Jan 2024 14:11:33 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/cpp-function-call-timing/</guid>
+        <description>&lt;p&gt;다양한 콜백 함수 구현 방식에 맞춰 디자인 시나리오 SDK를 테스트하는 데 많은 시간이 소요되었습니다. 최근 C++ 함수 프로그래밍을 살펴보고 있는데, 함수가 일급 시민이 되어 프로그램 내부에서 자유롭게 흐르는 경우 성능 차이가 있나요?&lt;/p&gt;
+&lt;p&gt;이전 링크: [컴파일러, 콜백 함수, 성능 테스트]({&amp;lt; relref &amp;ldquo;/post/2023/02-15-컴파일러、콜백 함수、성능 테스트&amp;rdquo; &amp;gt;}})&lt;/p&gt;
+&lt;p&gt;레이마오 대장도 비슷한 테스트를 해서 코드를 빌려 썼다&lt;/p&gt;
+&lt;h2 id=&#34;본문&#34;&gt;본문
+&lt;/h2&gt;&lt;p&gt;실행 플랫폼은 여전히 우리의 오랜 친구, &lt;a class=&#34;link&#34; href=&#34;https://wandbox.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://wandbox.org/&lt;/a&gt; 입니다&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;cassert&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;functional&amp;gt;
+#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;vector&amp;gt;
+
+int add_one(int input) { return input + 1; }
+
+bool validate_vector_add_one(std::vector&amp;lt;int&amp;gt; const&amp;amp; input_vector,
+                             std::vector&amp;lt;int&amp;gt; const&amp;amp; output_vector)
+{
+    bool is_valid{true};
+    for (size_t i{0}; i &amp;lt; input_vector.size(); ++i)
+    {
+        if (output_vector.at(i) != input_vector.at(i) + 1)
+        {
+            is_valid = false;
+            break;
+        }
+    }
+    return is_valid;
+}
+
+void reset_vector(std::vector&amp;lt;int&amp;gt;&amp;amp; input_vector)
+{
+    for (size_t i{0}; i &amp;lt; input_vector.size(); ++i)
+    {
+        input_vector.at(i) = 0;
+    }
+}
+
+template &amp;lt;typename T, typename Func&amp;gt;
+void unitary_function_pass_by_lambda_function(T&amp;amp; output, T const&amp;amp; input,
+                                              Func const func)
+{
+    output = func(input);
+}
+
+template &amp;lt;typename T&amp;gt;
+void unitary_function_pass_by_std_function_value(T&amp;amp; output, T const&amp;amp; input,
+                                                 std::function&amp;lt;T(T)&amp;gt; const func)
+{
+    output = func(input);
+}
+
+template &amp;lt;typename T&amp;gt;
+void unitary_function_pass_by_std_function_reference(
+    T&amp;amp; output, T const&amp;amp; input, std::function&amp;lt;T(T)&amp;gt; const&amp;amp; func)
+{
+    output = func(input);
+}
+
+template &amp;lt;typename T&amp;gt;
+void unitary_function_pass_by_function_pointer(T&amp;amp; output, T const&amp;amp; input,
+                                               T (*func)(T))
+{
+    output = func(input);
+}
+
+int main()
+{
+    // Set floating point format std::cout with 3 decimal places.
+    std::cout.precision(3);
+
+    size_t const num_elements{10000000};
+    std::vector&amp;lt;int&amp;gt; input_vector(num_elements, 0);
+    std::vector&amp;lt;int&amp;gt; output_vector(num_elements, 0);
+
+    auto const lambda_function_add_one{[](int const&amp;amp; input) -&amp;gt; int
+                                       { return input + 1; }};
+    std::function&amp;lt;int(int)&amp;gt; const std_function_add_one{lambda_function_add_one};
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;The size of a function pointer: &amp;quot; &amp;lt;&amp;lt; sizeof(&amp;amp;add_one)
+              &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;The size of a std::function pointer: &amp;quot;
+              &amp;lt;&amp;lt; sizeof(&amp;amp;std_function_add_one) &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;The size of a std::function: &amp;quot; &amp;lt;&amp;lt; sizeof(std_function_add_one)
+              &amp;lt;&amp;lt; std::endl;
+
+    // Call function frequently in a vanilla way.
+    // The compiler knows what function to call at compile time and can optimize
+    // the code.
+    // This is the best performance we could get.
+    std::chrono::steady_clock::time_point const time_start_vanilla{
+        std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        output_vector.at(i) = add_one(input_vector.at(i));
+    }
+    std::chrono::steady_clock::time_point const time_end_vanilla{
+        std::chrono::steady_clock::now()};
+    auto const time_elapsed_vanilla{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(time_end_vanilla -
+                                                             time_start_vanilla)
+            .count()};
+    float const latency_vanilla{time_elapsed_vanilla /
+                                static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass Vanilla: &amp;quot; &amp;lt;&amp;lt; latency_vanilla &amp;lt;&amp;lt; &amp;quot; ns&amp;quot;
+              &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // Sometimes, we don&#39;t know what function to call at compile time.
+    // We can use std::function to pass a function as an argument.
+    // In this case, we pass the std::function by value.
+    // Because the size of a std::function is 32 bytes, passing by value
+    // results in a lot of copying and bad performance.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_std_function_value{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_std_function_value(
+            output_vector.at(i), input_vector.at(i), std_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_std_function_value{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_std_function_value{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_std_function_value -
+            time_start_pass_by_std_function_value)
+            .count()};
+    float const latency_pass_by_std_function_value{
+        time_elapsed_pass_by_std_function_value /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Std Function Value: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_std_function_value &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // Instead of passing the std::function by value, we can pass it by
+    // reference (pointer). In this case, object copying is eliminated. The
+    // performance is better than passing the std::function by value. However,
+    // the performance is still not as good as the vanilla way.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_std_function_reference{
+            std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_std_function_reference(
+            output_vector.at(i), input_vector.at(i), std_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_std_function_reference{
+            std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_std_function_reference{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_std_function_reference -
+            time_start_pass_by_std_function_reference)
+            .count()};
+    float const latency_pass_by_std_function_reference{
+        time_elapsed_pass_by_std_function_reference /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Std Function Reference: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_std_function_reference &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // std::function is a general purpose wrapper for function pointers,
+    // callable objects, and lambda functions. Because it&#39;s general purpose,
+    // it&#39;s not as efficient as a function pointer. In this case, we pass a
+    // function pointer to a function. The performance is better than passing
+    // the std::function by reference.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_function_pointer{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_function_pointer(output_vector.at(i),
+                                                  input_vector.at(i), &amp;amp;add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_function_pointer{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_function_pointer{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_function_pointer -
+            time_start_pass_by_function_pointer)
+            .count()};
+    float const latency_pass_by_function_pointer{
+        time_elapsed_pass_by_function_pointer /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Function Pointer: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_function_pointer &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // We can also pass a lambda function to a function.
+    // The compiler knows what function to call at compile time and can optimize
+    // the code. The performance is also better than passing the std::function
+    // by reference.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_lambda_function{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_lambda_function(
+            output_vector.at(i), input_vector.at(i), lambda_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_lambda_function{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_lambda_function{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_lambda_function -
+            time_start_pass_by_lambda_function)
+            .count()};
+    float const latency_pass_by_lambda_function{
+        time_elapsed_pass_by_lambda_function /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Lambda Function: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_lambda_function &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# 组里常规也就开启 O2 优化，编译选用了 gcc13，不同版本的 gcc 性能耗时略有不同，版本越高 lambda 效果越好
+The size of a function pointer: 8
+The size of a std::function pointer: 8
+The size of a std::function: 32
+Latency Pass Vanilla: 0.418 ns
+Latency Pass By Std Function Value: 3.47 ns
+Latency Pass By Std Function Reference: 1.36 ns
+Latency Pass By Function Pointer: 0.396 ns
+Latency Pass By Lambda Function: 0.44 ns
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;참고-자료&#34;&gt;참고 자료
+&lt;/h2&gt;&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://leimao.github.io/blog/CPP-Function-Call-Performance/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://leimao.github.io/blog/CPP-Function-Call-Performance/&lt;/a&gt;&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>C11: sleep for vs yield</title>
+        <link>https://ttf248.life/ko/p/c11-sleep-for-vs-yield/</link>
+        <pubDate>Tue, 20 Sep 2022 20:54:51 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/c11-sleep-for-vs-yield/</guid>
+        <description>&lt;p&gt;코드를 살펴보던 중, &lt;code&gt;std::this_thread::yield()&lt;/code&gt;가 갑자기 눈에 들어왔다. C11의 문법적 설탕을 많이 사용했는데, &lt;code&gt;yield&lt;/code&gt;는 처음 보는 것 같고, 예전에는 신경 쓰지 않았다.&lt;/p&gt;
+&lt;p&gt;매뉴얼을 확인하지 않고 가장 먼저 떠오르는 것은 비동기와 관련이 있는지인데, &lt;code&gt;yield&lt;/code&gt; boost 라이브러리의 코루틴 구현에 이 단어가 사용되었으므로 여기서는 코루틴과는 상관없고 제어 로직은 일반 스레드와 관련이 있는 것 같습니다&lt;/p&gt;
+&lt;h2 id=&#34;문서&#34;&gt;문서
+&lt;/h2&gt;&lt;h3 id=&#34;yield&#34;&gt;yield
+&lt;/h3&gt;&lt;p&gt;이 함수의 정확성은 구현에 의존하며, 특히 사용 중인 OS 스케줄러 메커니즘과 시스템 상태에 따라 달라집니다. 예를 들어, 먼저 온(First-Come, First-Served) 실시간 스케줄러(Linux의 SCHED_FIFO)는 현재 스레드를 일시 중단하고 준비 실행 대기열의 동일 우선순위 스레드 뒤로 배치합니다(다른 스레드가 동일한 우선순위에 없다면 yield 효과는 없습니다).&lt;/p&gt;
+&lt;h3 id=&#34;sleep_for&#34;&gt;sleep_for
+&lt;/h3&gt;&lt;p&gt;지정된 sleep_duration 동안 현재 스레드의 실행을 차단합니다
+이 함수는 스케줄링 지연이나 리소스 충돌로 인해 sleep_duration보다 오래 블록될 수 있습니다
+표준 라이브러리는 안정적인 클럭으로 지속 시간을 측정하는 것을 권장합니다. 구현이 시스템 시간으로 대체되면 대기 시간 또한 클럭 조정에 민감할 수 있습니다.&lt;/p&gt;
+&lt;h3 id=&#34;분석&#34;&gt;분석
+&lt;/h3&gt;&lt;p&gt;두 함수 모두 현재 스레드가 더 이상 스레드를 점유하지 않도록 하는 것인데, 실행 결과는 플랫폼에 따라 다를 수 있나요? 여기서도 여전히 엉망진창인 느낌인데, 코드를 실행해서 결과를 확인해 보겠습니다&lt;/p&gt;
+&lt;p&gt;ThinkPad 노트북(Visual Studio 커뮤니티 버전 2022), 텐센트 클라우드 S2 표준 서버(gcc8.5)&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;실행 플랫폼&lt;/th&gt;
+&lt;th&gt;함수&lt;/th&gt;
+&lt;th&gt;첫 번째/μs&lt;/th&gt;
+&lt;th&gt;두 번째/μs&lt;/th&gt;
+&lt;th&gt;세 번째/μs&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Windows&lt;/td&gt;
+&lt;td&gt;sleep_for&lt;/td&gt;
+&lt;td&gt;9872&lt;/td&gt;
+&lt;td&gt;1884&lt;/td&gt;
+&lt;td&gt;11302&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Windows&lt;/td&gt;
+&lt;td&gt;yield&lt;/td&gt;
+&lt;td&gt;119&lt;/td&gt;
+&lt;td&gt;100&lt;/td&gt;
+&lt;td&gt;100&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Linux&lt;/td&gt;
+&lt;td&gt;sleep_for&lt;/td&gt;
+&lt;td&gt;171&lt;/td&gt;
+&lt;td&gt;168&lt;/td&gt;
+&lt;td&gt;167&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Linux&lt;/td&gt;
+&lt;td&gt;yield&lt;/td&gt;
+&lt;td&gt;101&lt;/td&gt;
+&lt;td&gt;102&lt;/td&gt;
+&lt;td&gt;101&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;운영 결과에서 알 수 있듯이, 운영 체제 구현 방식에 따라 고정밀 슬립 시 &lt;code&gt;sleep_for&lt;/code&gt;의 안정성은 매우 다릅니다. 고정밀 슬립을 원한다면 &lt;code&gt;yield&lt;/code&gt;를 사용하는 것이 더 적합합니다.&lt;/p&gt;
+&lt;p&gt;시간 정밀도가 &lt;code&gt;ms&lt;/code&gt; 단위까지 향상되니, 두 값 사이의 차이는 뚜렷하지 않다&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;thread&amp;gt;
+ 
+// 建议其他线程运行一小段时间的“忙睡眠”
+void little_sleep(std::chrono::microseconds us)
+{
+    auto start = std::chrono::high_resolution_clock::now();
+    auto end = start + us;
+    do {
+        std::this_thread::yield();
+    } while (std::chrono::high_resolution_clock::now() &amp;lt; end);
+}
+ 
+int main()
+{
+    auto start = std::chrono::high_resolution_clock::now();
+ 
+    little_sleep(std::chrono::microseconds(100));
+    std::this_thread::sleep_for(std::chrono::microseconds(100));
+ 
+    auto elapsed = std::chrono::high_resolution_clock::now() - start;
+    std::cout &amp;lt;&amp;lt; &amp;quot;waited for &amp;quot;
+              &amp;lt;&amp;lt; std::chrono::duration_cast&amp;lt;std::chrono::microseconds&amp;gt;(elapsed).count()
+              &amp;lt;&amp;lt; &amp;quot; microseconds\n&amp;quot;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;참조&#34;&gt;참조
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://qingcms.gitee.io/cppreference/20210212/zh/cpp/header/thread.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://qingcms.gitee.io/cppreference/20210212/zh/cpp/header/thread.html&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://qingcms.gitee.io/cppreference/20210212/zh/cpp/thread/sleep_for.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://qingcms.gitee.io/cppreference/20210212/zh/cpp/thread/sleep_for.html&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>새로운 언어를 배워야 하는 이유는 무엇인가?</title>
+        <link>https://ttf248.life/ko/p/why-learn-a-new-language/</link>
+        <pubDate>Thu, 04 Aug 2022 11:27:30 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/why-learn-a-new-language/</guid>
+        <description>&lt;p&gt;학교 다닐 때부터 세면 10년이 넘게 C++를 접했는데, 왜 다른 프로그래밍 언어를 배워야 할까요?&lt;/p&gt;
+&lt;p&gt;세련된 모듈 설계 경험은 부족하지만, &lt;code&gt;C++&lt;/code&gt; 문법은 자유로운 편이고 다른 언어를 학습하면서 더 세련된 설계를 유도할 수 있다&lt;/p&gt;
+&lt;p&gt;도구를 작성할 때 자주 사용하게 된다&lt;/p&gt;
+&lt;p&gt;하위 레이어 라이브러리 설계든, 비즈니스 모듈 구현이든, 설계의 원칙은 일관성이 있습니다&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>표준 라이브러리 컨테이너의 메모리 할당자: allocator</title>
+        <link>https://ttf248.life/ko/p/standard-library-container-memory-allocator/</link>
+        <pubDate>Mon, 30 Dec 2019 13:26:19 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ko/p/standard-library-container-memory-allocator/</guid>
+        <description>&lt;p&gt;사용자 정의 할당자는 성능을 향상시키고 메모리 사용 효율성을 높이며 빈번한 소량의 메모리 할당 문제를 해결할 수 있습니다&lt;/p&gt;
+&lt;h4 id=&#34;전인&#34;&gt;전인
+&lt;/h4&gt;&lt;p&gt;최근 네트워크 데이터 패킷 개발을 진행하면서 빈번하게 작은 메모리 블록을 할당하고 해제해야 하는데, 원래는 메모리 풀을 사용하려 했고, 기존의 몇몇 메모리 풀들을 살펴보니 이런 것을 발견했다&lt;/p&gt;
+&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/cacay/MemoryPool&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://github.com/cacay/MemoryPool&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;인터페이스를 보니까 좀 이상하다는 생각이 들었는데, 이 메모리 풀 구현 방식이 왜 이렇게 특이할까. &lt;code&gt;MemoryPool&lt;/code&gt;의 구현 로직은 고정된 크기의 메모리 공간을 할당하는 방식인데. Boost의 메모리 풀 인터페이스를 보면 템플릿으로 제공되고 사용 시에 인스턴스화해야 한다. 다행히 이 라이브러리에 대한 설명이 있는 글도 있고, 거기서 &lt;code&gt;allocator&lt;/code&gt;라는 개념이 언급되어 있었다.&lt;/p&gt;
+&lt;h4 id=&#34;wikihttpszhwikipediaorgwikie58886e9858de599a8_c2b2b&#34;&gt;&lt;a class=&#34;link&#34; href=&#34;https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_%28C%2B%2B%29&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;wiki&lt;/a&gt;
+&lt;/h4&gt;&lt;p&gt;C++ 프로그래밍에서 할당자(allocator)는 C++ 표준 라이브러리의 중요한 구성 요소입니다. C++ 라이브러리에는 연결 리스트, 집합 등 다양한 “컨테이너” 데이터 구조가 정의되어 있으며, 이러한 컨테이너의 공통적인 특징 중 하나는 프로그램 실행 시간에 크기를 변경할 수 있다는 것입니다. 이를 구현하기 위해 동적 메모리 할당이 필수적이므로 할당자는 컨테이너의 메모리 할당 및 해제 요청을 처리하는 데 사용됩니다. 다시 말해, 할당자는 표준 템플릿 라이브러리(STL) 컨테이너의 메모리 관리에 대한 저수준 세부 사항을 캡슐화합니다. 기본적으로 C++ 표준 라이브러리는 자체 제공하는 범용 할당자를 사용하지만, 필요에 따라 프로그래머는 자신만의 할당자를 정의하여 이를 대체할 수 있습니다.&lt;/p&gt;
+&lt;p&gt;할당기는 원래 C++ 표준 템플릿 라이브러리(Standard Template Library, STL)의 일부로 알렉산드르 스테파노프에 의해 발명되었으며, 그의 초기 목표는 &amp;ldquo;라이브러리를 더욱 유연하게 만들고 기본 데이터 모델에 의존하지 않는 방법&amp;quot;을 만드는 것이었습니다. 이를 통해 프로그래머는 라이브러리에서 사용자 정의 포인터 및 참조 유형을 활용할 수 있었습니다. 그러나 C++ 표준 템플릿 라이브러리를 C++ 표준으로 포함하는 과정에서 C++ 표준 위원회는 데이터 모델의 완전한 추상화가 용납할 수 없는 성능 저하를 초래한다는 것을 깨달았습니다. 이러한 절충안으로 인해 표준에서 할당기에 대한 제한이 더욱 엄격해졌고, 결과적으로 현재 표준에 설명된 할당기는 스테파노프의 원래 구상과 비교하여 사용자 정의 가능성이 크게 제한되었습니다.&lt;/p&gt;
+&lt;p&gt;할당기 사용자 정의는 어느 정도 제한이 있지만, 많은 경우 다양한 메모리 공간(공유 메모리나 재활용 메모리와 같은)에 대한 접근 방식을 캡슐화하거나, 메모리 풀을 사용하여 메모리를 할당할 때 성능을 향상시키기 위해 여전히 사용자 정의 할당기가 필요합니다. 또한, 빈번한 소량의 메모리 할당이 발생하는 프로그램에서 전용으로 맞춤 제작된 할당기를 도입하면 메모리 사용량과 실행 시간 측면에서도 상당한 이점을 얻을 수 있습니다.&lt;/p&gt;
+&lt;h4 id=&#34;사용-요건&#34;&gt;사용 요건
+&lt;/h4&gt;&lt;p&gt;정의된 사용자 정의 할당자의 주요 이유 중 하나는 성능 향상입니다. 전용 사용자 정의 할당자를 사용하면 프로그램의 성능을 높이거나 메모리 사용 효율성을 높이거나 둘 다 달성할 수 있습니다[4][8]. 기본 할당자는 new 연산자를 사용하여 저장 공간을 할당하는데, 이는 종종 C 언어 힙 할당 함수(malloc())를 통해 구현됩니다[9]. 힙 할당 함수는 일반적으로 일시적으로 많은 양의 메모리를 할당하는 데 최적화되므로 대량의 메모리를 한 번에 할당해야 하는 컨테이너(예: 벡터, 양방향 큐)의 경우 기본 할당자는 일반적으로 효율적입니다[8]. 그러나 연결된 컨테이너 및 양방향 링크드 리스트와 같이 빈번하게 소량의 메모리를 할당해야 하는 컨테이너의 경우 기본 할당자를 사용하면 일반적으로 효율성이 매우 낮습니다[4][9]. 또한 malloc()을 기반으로 하는 기본 할당자는 낮은 지역성[4]과 메모리 조각화 발생 가능성[4][9]과 같은 많은 문제를 가지고 있습니다.&lt;/p&gt;
+&lt;p&gt;간단히 말해서, 이 부분(……)은 마치 이 표준이 할당기(allocator)에 대해 발표한 《나는 꿈이 있다》와 같습니다. 꿈이 실현되기 전에는 이식 가능성을 고려하는 프로그래머들은 상태 없는(stateless) 사용자 정의 할당기를 사용하는 데 스스로를 제한할 것입니다.
+——스코트 메이스, 《Effective STL》
+이러한 점을 감안하여, 이러한 상황에서 사람들은 빈번한 소량 할당 문제를 해결하기 위해 메모리 풀 기반 할당기를 자주 사용합니다[8]. 기본 “요청 시 할당” 방식과 달리, 메모리 풀 기반 할당기를 사용할 때는 프로그램이 미리 대용량 메모리(즉, &amp;ldquo;메모리 풀&amp;rdquo;)를 할당하고, 필요할 때 사용자 정의 할당기는 요청자에게 풀 내 메모리의 포인터를 반환하기만 합니다. 객체 소멸 시에는 실제로 메모리를 해제하지 않고, 메모리 풀의 수명이 종료될 때 비로소 메모리를 해제합니다[주 1][8].&lt;/p&gt;
+&lt;p&gt;“사용자 정의 할당기”라는 주제에 대해 이미 많은 C++ 전문가와 관련 저자들이 참여하여 토론해 왔습니다. 예를 들어 스콧 메이어스의 “Effective STL”과 안드레이 알렉산더레스쿠의 “Modern C++ Design”에도 언급되어 있습니다. 메이어스는 특정 타입 T의 할당기 인스턴스가 모두 동일해야 한다면, 이식 가능한 할당기 인스턴스는 상태를 포함해서는 안 된다고 통찰했습니다. C++ 표준은 라이브러리 구현자가 상태 기반 할당기를 지원하도록 장려하지만[문헌 4], 메이어스는 관련 단락이 “（보이는 듯한）아름다운 관점”이지만 거의 말장난이라고 비판하며, 할당기의 제약이 “지나치게 엄격하다”고 주장했습니다[4]. 예를 들어 STL의 list는 splice 메서드를 제공하는데, 이는 list 객체 A의 노드를 다른 list 객체 B에 직접 이동시킬 수 있습니다. 이는 A의 할당기가 할당한 메모리가 B의 할당기에 의해 해제될 수 있어야 하므로, A와 B의 할당기 인스턴스가 동일해야 함을 의미합니다. 메이어스의 결론은 할당기를 정적 메서드를 사용하는 타입으로 정의하는 것이 가장 좋다는 것입니다. 예를 들어 C++ 표준에 따르면 할당기는 rebind 메서스를 구현한 other 클래스 템플릿을 제공해야 합니다.&lt;/p&gt;
+&lt;p&gt;또 다른 한편, 《C++ 프로그램 설계 언어》에서 비야니 스트라우스트루프는 “‘엄격한 할당기 제한으로 각 객체 정보의 차이를 없앤다’는 점은 분명 큰 문제가 아니다.”라고 주장하며 대부분의 할당기는 상태가 필요하지 않으며 심지어 상태가 없는 경우 성능이 더 좋을 수도 있다고 지적한다. 그는 메모리 풀형 할당기, 공유 메모리형 할당기 및 가비지 컬렉션형 할당기의 세 가지 사용자 정의 할당기 사용 사례를 제시하고 내부 메모리 풀을 활용하여 소량의 메모리를 빠르게 할당/해제하는 할당기 구현을 보여준다. 하지만 그는 이러한 최적화가 이미 그가 제공한 예시 할당기에서 구현되었을 수도 있다고 언급한다[3].&lt;/p&gt;
+&lt;p&gt;사용자 정의 할당기의 또 다른 용도는 메모리 관련 오류를 디버깅하는 것입니다[10]. 이를 위해 추가 메모리를 할당하여 디버그 정보를 저장할 수 있도록 할당기를 작성할 수 있습니다. 이러한 할당기는 메모리가 동일한 유형의 할당기에서 할당/해제되는지 확인하는 것 외에도 캐시 오버플로로부터 프로그램이 어느 정도 보호되도록 할 수 있습니다[11].&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
