@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="ja" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="C++開発の過去プロジェクトにおいて、独自のプロトコルを使用して通信しており、そのプロトコルは二次元配列の形式を採用していました。大量のデータを処理する際、プロトコル内で配列を走査し、シリアライズ操作によってログを生成する必要がありましたが、効率が悪かったため、高負荷時にシステムが顕著にカクつき、業務部門からシステムの動作不良に関するフィードバックがありました。\n">
-<title>Linuxバックエンドサービス、大量文字列データの処理が遅い</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。\n">
+<title>Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い</title>
 
 <link rel='canonical' href='https://ttf248.life/ja/p/linux-backend-slow-string-processing/'>
 
-<link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="Linuxバックエンドサービス、大量文字列データの処理が遅い">
-<meta property='og:description' content="C++開発の過去プロジェクトにおいて、独自のプロトコルを使用して通信しており、そのプロトコルは二次元配列の形式を採用していました。大量のデータを処理する際、プロトコル内で配列を走査し、シリアライズ操作によってログを生成する必要がありましたが、効率が悪かったため、高負荷時にシステムが顕著にカクつき、業務部門からシステムの動作不良に関するフィードバックがありました。\n">
+<link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い">
+<meta property='og:description' content="C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。\n">
 <meta property='og:url' content='https://ttf248.life/ja/p/linux-backend-slow-string-processing/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='問題の切り分け' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2025-05-25T14:10:37&#43;08:00'/>
-<meta name="twitter:title" content="Linuxバックエンドサービス、大量文字列データの処理が遅い">
-<meta name="twitter:description" content="C++開発の過去プロジェクトにおいて、独自のプロトコルを使用して通信しており、そのプロトコルは二次元配列の形式を採用していました。大量のデータを処理する際、プロトコル内で配列を走査し、シリアライズ操作によってログを生成する必要がありましたが、効率が悪かったため、高負荷時にシステムが顕著にカクつき、業務部門からシステムの動作不良に関するフィードバックがありました。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='問題の切り分け' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2025-05-28T09:47:38&#43;08:00'/>
+<meta name="twitter:title" content="Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い">
+<meta name="twitter:description" content="C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
   
@@ -217,7 +217,7 @@
     <li><a href="#問題特定">問題特定</a></li>
     <li><a href="#デモ検証">デモ検証</a>
       <ol>
-        <li><a href="#重要なポイント説明">重要なポイント説明</a></li>
+        <li><a href="#主なポイント">主なポイント</a></li>
       </ol>
     </li>
     <li><a href="#完全コード">完全コード</a></li>
@@ -305,13 +305,13 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
     <div class="article-title-wrapper">
         <h2 class="article-title">
-            <a href="/ja/p/linux-backend-slow-string-processing/">Linuxバックエンドサービス、大量文字列データの処理が遅い</a>
+            <a href="/ja/p/linux-backend-slow-string-processing/">Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い</a>
         </h2>
     
         
 
         
-        <h5 class="article-summary" style="display: none;"><p>C++開発の過去プロジェクトにおいて、独自のプロトコルを使用して通信しており、そのプロトコルは二次元配列の形式を採用していました。大量のデータを処理する際、プロトコル内で配列を走査し、シリアライズ操作によってログを生成する必要がありましたが、効率が悪かったため、高負荷時にシステムが顕著にカクつき、業務部門からシステムの動作不良に関するフィードバックがありました。</p></h5>
+        <h5 class="article-summary" style="display: none;"><p>C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。</p></h5>
         <script>
             document.addEventListener("DOMContentLoaded", function() {
                 if (typeof isHomepage !== 'undefined' && isHomepage === true) {
@@ -391,22 +391,28 @@ document.addEventListener("DOMContentLoaded", (event) => {
     <section class="article-content">
     
     
-    <p>C++開発の過去プロジェクトにおいて、独自のプロトコルを使用して通信しており、そのプロトコルは二次元配列の形式を採用していました。大量のデータを処理する際、プロトコル内で配列を走査し、シリアライズ操作によってログを生成する必要がありましたが、効率が悪かったため、高負荷時にシステムが顕著にカクつき、業務部門からシステムの動作不良に関するフィードバックがありました。</p>
+    <p>C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。</p>
 <h2 id="問題特定">問題特定
-</h2><p>問題の調査 során、まずシステムのパフォーマンス分析を行い、大量のデータを処理する際に CPU 使用率が大幅に増加し、システム応答時間が長くなることを発見しました。システムのログを分析した結果、大量のシリアライズ操作があり、これらの操作は 2 次元配列の処理において効率が悪く、システムパフォーマンスの低下につながっていました。</p>
-<p>pstackツールでサービスの糸処理情報を取得したところ、ログスレッドの大部分の時間文字列の結合処理に費やされていることがわかった。</p>
-<p>今日の焦点は、異なる累積方法による効率の大きな違いです。過去のコードでは「+」演算子を使用しており、この方法は頻繁に一時オブジェクトを作成するため、非常に非効率的です。それが非効率的だと知っていても、どれほど非効率的なのかを理解していないようなものです。</p>
+</h2><p>問題の調査において、まずシステムを性能解析したところ、大量データを処理する際にCPU使用率が顕著に増加し、システム応答時間が長くなっていることが判明しました。システムのログを分析した結果、二次元配列の処理における効率の低いシリアライズ操作が多く存在することがわかり、これがシステムパフォーマンスの低下を引き起こしていると考えられます。</p>
+<p>ツール切り取りサービスの スレッド情報を確認した結果、ログスレッドの大部分の時間文字列の結合処理に費やされていることが判明しました。</p>
+<blockquote>
+<p>ここが今日のポイントです。異なる加算方法によって、効率は大きく異なります。過去のコードでは <strong>INLINE_CODE_0</strong> 演算子を使用しており、この方法は頻繁に一時オブジェクトを作成するため、非常に低速です。それが非効率的だと知っていても、どれほど非効率的なのかを理解していないようなものです。</p>
+</blockquote>
 <h2 id="デモ検証">デモ検証
-</h2><p>プロジェクトコードに基づいて、業務ロジックを分離し、文字列結合の効率に関する検証のために簡単なデモを作成しました。<code>windows</code> の <code>vs2022</code> コンパイラ、<code>linux</code> の <code>gcc8.5</code> コンパイラで、<code>Release</code> モードでコンパイル・実行し、効率を比較します。</p>
-<h3 id="重要なポイント説明">重要なポイント説明
-</h3><p>プロジェクトでは手法4を使用しており、テストデータを入手する前に、読者はどの方法が最も効率的か、またどの方法が最も非効率かを考えてみることができます。結果を見たときには、やはり驚きました。</p>
-<p>方法 1（<code>+=</code> 連結）：各フィールドを <code>+=</code> を使って文字列に連結します。
-方法 2 ( <code>std::ostringstream</code> による結合) ：ストリーム (<code>std::ostringstream</code>) を用いて各フィールドを結合する方法です。この方法は特に、大量のデータを結合する場合に効率的です。
-方法3（事前にメモリを割り当てた<code>+=</code>連結）：<code>reserve</code>を使って文字列に十分なメモリを事前に割り当てることで、メモリの再割り当てにかかるコストを削減し、パフォーマンスが向上します。
-方法 4 ( <code>bodys = bodys + body + &quot;\n&quot;</code> ) : 毎回新しい一時的な文字列オブジェクトを作成するため、パフォーマンスが低下します。特に大規模な結合の場合、結合ごとに新しいメモリ割り当てとコピーが発生するためです。</p>
-<p>参照結果を見ると、プロジェクトは効率が最も悪い方法が選択されたようです。</p>
-<p>さらに踏み込んで、各プラットフォームのコンパイラ最適化効率を分析してみましょう。MicrosoftのVisual Studioは相変わらず優れており、文字列の最適化効率は非常に高いですが、GCCコンパイラはその点では少し劣ります。</p>
-<p>コードを異なる機械で実行すると、2つのデータには直接的な比較の意味がないため、それぞれの結合方法間の差異を別々に比較できます。</p>
+</h2><p>プロジェクトコードに基づいて、業務ロジックを抽出し、文字列結合の効率問題を検証するための簡単なデモを作成しました。<strong>INLINE_CODE_0</strong> 下的 __INLINE_CODE_1__BOLD_6<code>linux</code> 下的 <strong>INLINE_CODE_3</strong> 编译器，__INLINE_CODE_4__モードでコンパイル実行し、効率を比較します。</p>
+<h3 id="主なポイント">主なポイント
+</h3><p>プロジェクトでは手法4を使用しており、テストデータを入手する前に、読者はどの方法が最も効率的か、またどれが最も非効率かを考えてみることができます。結果を見たときは、やはり驚きました。</p>
+<ol>
+<li>各フィールドを文字列に連結します。</li>
+<li>流（ストリーム）を使用して各フィールドを結合すると、この方法がより効率的です。特に大量のデータを結合する場合に有効です。</li>
+<li>事前に文字列に十分なメモリを割り当てることで、メモリ再配置のオーバーヘッドを削減し、パフォーマンスが向上します。</li>
+<li><strong>太字_1</strong>インライン<strong>イタリック_3</strong>、<strong>太字_2</strong>：文字列を連結するたびに新しい一時的な文字列オブジェクトが作成されるため、特に大規模な連結ではパフォーマンスが低下します。これは、連結ごとに新しいメモリの割り当てとコピーが発生するためです。</li>
+</ol>
+<p>参照結果から、プロジェクトは効率が最も悪い方法が選択されたことが分かります。</p>
+<p>さらに、異なるプラットフォームのコンパイラ最適化効率を分析すると、Microsoftの<code>visual studio</code> 一如既往的优秀，针对字符串的优化效率很高，而 <code>gcc</code>コンパイラは、この点において若干見劣りする。</p>
+<blockquote>
+<p>コードを異なるマシンで実行した場合、データの比較は直接的な意味を持たないため、それぞれの結合方法間の差異を比較するのが適切です。</p>
+</blockquote>
 <pre><code class="language-shell">windows 平台下的 vs2022 编译器
 
 ----------------------------------------
@@ -689,7 +695,7 @@ int main()
 
 
         <span>
-            最終更新 2025年05月25日 14:10
+            最終更新 2025年05月28日 09:47
         </span>
     </section>
     
@@ -770,7 +776,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">プロトバッファのゼロ値トラップ：デフォルト値がビジネスロジックの隠れた殺人者となる場合</h2>
+            <h2 class="article-title">プロトバッファのゼロ値の落とし穴：デフォルト値がビジネスロジックを密かに破滅させる</h2>
         </div>
     </a>
 </article>
@@ -783,7 +789,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">バックエンドサービスTCP通信異常調査</h2>
+            <h2 class="article-title">バックエンドサービスTCP通信異常のトラブルシューティング</h2>
         </div>
     </a>
 </article>
@@ -796,7 +802,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">atopツールによるLinuxシステム指標の監視：インストール、設定と使用完全ガイド</h2>
+            <h2 class="article-title">atopツールによるLinuxシステム指標の監視：インストール、設定と利用完全ガイド</h2>
         </div>
     </a>
 </article>

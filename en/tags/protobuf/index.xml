@@ -6,38 +6,38 @@
         <description>Recent content in Protobuf on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Sun, 25 May 2025 02:57:45 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/protobuf/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Wed, 28 May 2025 09:47:38 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/protobuf/index.xml" rel="self" type="application/rss+xml" /><item>
         <title>Protobuf Zero-Value Trap: When Defaults Become Silent Killers of Business Logic</title>
         <link>https://ttf248.life/en/p/protobuf-zero-value-traps/</link>
         <pubDate>Thu, 20 Feb 2025 15:26:51 +0800</pubDate>
         
         <guid>https://ttf248.life/en/p/protobuf-zero-value-traps/</guid>
-        <description>&lt;p&gt;US stocks have three trading periods: pre-market, intra-market, and after-hours. The data push interface uses an incremental logic (to minimize bandwidth usage), sending the full dataset only once initially, and then pushing all subsequent fields as increments.&lt;/p&gt;
+        <description>&lt;p&gt;US stocks have three trading periods: pre-market, intra-market, and post-market. The data push logic (to minimize bandwidth usage) sends the full dataset once initially, then pushes incremental updates for all subsequent fields.&lt;/p&gt;
 &lt;blockquote&gt;
-&lt;p&gt;Why not use the optimal solution? It involves different project teams, some of which have been live for many years. We are newly connected, so we can only try our best to ensure compatibility.&lt;/p&gt;
+&lt;p&gt;Why not use the optimal solution? It involves different project teams, some of which have been live for many years. We are newly integrated, so we can only try to maintain compatibility.&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h2 id=&#34;a-series-of-questions&#34;&gt;A series of questions
-&lt;/h2&gt;&lt;p&gt;Looking at the abstract alone, there might not seem to be any issues. However, bringing the system architecture into the problem-solving group has led to a series of problems. Just as one problem was resolved, a new one emerged, and this new problem stemmed from the previous ones.&lt;/p&gt;
+&lt;/h2&gt;&lt;p&gt;Looking at the abstract alone, there might not seem to be a problem. However, bringing this system architecture into the problem-solving process has triggered a series of issues. Just as one issue was resolved, another arose, stemming from the previous ones.&lt;/p&gt;
 &lt;h3 id=&#34;unable-to-identify-trading-period&#34;&gt;Unable to identify trading period
-&lt;/h3&gt;&lt;p&gt;The known issue is that the stage in the table is defined as 0 in &lt;code&gt;protobuf&lt;/code&gt;, but due to incremental push when receiving data, the business side cannot effectively identify whether this 0 is a default value or a real business value&lt;/p&gt;
-&lt;p&gt;A layman&amp;rsquo;s understanding: Each time we receive a 0, it’s impossible to determine whether this 0 is the value of a newly set quote or the default value of Protobuf&lt;/p&gt;
+&lt;/h3&gt;&lt;p&gt;Whether the in-memory stage is defined as the default value or the actual business value&lt;/p&gt;
+&lt;p&gt;A simple understanding: Receiving a 0 each time makes it impossible to determine whether it&amp;rsquo;s a new quote setting or the default value of Protobuf&lt;/p&gt;
 &lt;h3 id=&#34;introduce-optional&#34;&gt;Introduce optional
 &lt;/h3&gt;&lt;p&gt;Since protobuf release 3.15, proto3 supports using the optional keyword (just as in proto2) to give a scalar field presence information&lt;/p&gt;
-&lt;p&gt;The communication protocol within the group is based on &lt;code&gt;protobuf&lt;/code&gt;, but due to historical reasons, an older version was chosen that doesn&amp;rsquo;t support the &lt;code&gt;optional&lt;/code&gt; keyword. Those who understand know that because &lt;code&gt;protobuf&lt;/code&gt; was introduced from the bottom up and the project is released as a static library, upgrading the entire compilation chain would be very costly.&lt;/p&gt;
+&lt;p&gt;The internal communication protocol is based on &lt;code&gt;protobuf&lt;/code&gt;BOLD_3&lt;code&gt;optional&lt;/code&gt;BOLD_4&lt;code&gt;protobuf&lt;/code&gt;, and the project&amp;rsquo;s underlying implementation uses a static library, which requires upgrading the entire compilation chain. This cost is very high.&lt;/p&gt;
 &lt;h3 id=&#34;gcc-version-issue&#34;&gt;GCC version issue
-&lt;/h3&gt;&lt;p&gt;After much effort, we devised a plan to release two different versions at the underlying level, attempting to control the propagation of compilation dependencies for the new version of &lt;code&gt;protobuf&lt;/code&gt;. However, during compilation, we discovered that the &lt;code&gt;gcc&lt;/code&gt; version was too low and did not support the new features of &lt;code&gt;protobuf&lt;/code&gt;.&lt;/p&gt;
-&lt;p&gt;Commonly used server types within the group: CentOS 7, CentOS 8. The default &lt;code&gt;gcc&lt;/code&gt; version for CentOS 7 is 4.8, and the default &lt;code&gt;gcc&lt;/code&gt; version for CentOS 8 is 8.3. Because new features of &lt;code&gt;protobuf&lt;/code&gt; require a &lt;code&gt;gcc&lt;/code&gt; version above 7.4, CentOS 7 cannot be supported.&lt;/p&gt;
+&lt;/h3&gt;&lt;p&gt;After much deliberation, we devised a plan to release two different versions at the underlying level, aiming to carefully control new features&lt;/p&gt;
+&lt;p&gt;Commonly used server types within the group: CentOS 7, CentOS 8. The default version of CentOS 7 is above 7.4, so CentOS 7 is not supported.&lt;/p&gt;
 &lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82461&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
     &gt;Bug 82461 - [7 Regression] Temporary required for brace-initializing (non-literal-type) member variable&lt;/a&gt;。&lt;/p&gt;
-&lt;p&gt;After some troubleshooting, I moved the deployment and compilation servers for related services to CentOS 8, which resolved the issue&lt;/p&gt;
-&lt;h2 id=&#34;reasonable-enumeration&#34;&gt;Reasonable enumeration
-&lt;/h2&gt;&lt;p&gt;Looking back at the whole issue, there&amp;rsquo;s actually a simpler and more efficient solution: adjust the enumeration definition to start numbering from 1 instead of 0. This can effectively distinguish between default values and business values, avoiding the aforementioned series of problems.&lt;/p&gt;
-&lt;h3 id=&#34;why-is-it-more-reasonable-to-start-from-1&#34;&gt;Why is it more reasonable to start from 1?
-&lt;/h3&gt;&lt;p&gt;In &lt;code&gt;protobuf&lt;/code&gt;, enumeration types default to a value of 0. If we define a meaningful business value as 0 (for example, &amp;ldquo;in-play&amp;rdquo;), the receiving party cannot determine whether the received 0 is a business value or an unset default value during incremental push. However, if we start defining enumerations from 1, 0 can be reserved for a meaningless default value or an &amp;ldquo;unknown&amp;rdquo; state, and the problem is easily resolved.&lt;/p&gt;
+&lt;p&gt;After some troubleshooting, moving the related services and compilation server to CentOS 8 resolved the issue&lt;/p&gt;
+&lt;h2 id=&#34;reasonable-enumeration&#34;&gt;Reasonable Enumeration
+&lt;/h2&gt;&lt;p&gt;Looking back at the entire issue, there&amp;rsquo;s a simpler and more efficient solution: adjust the enumeration definition to start numbering from 1 instead of 0. This effectively distinguishes default values from business values, avoiding the aforementioned series of problems.&lt;/p&gt;
+&lt;h3 id=&#34;why-is-starting-from-1-more-reasonable&#34;&gt;Why is starting from 1 more reasonable?
+&lt;/h3&gt;&lt;p&gt;In C++, the default value of an enumeration type is fixed at 0. If we define a meaningful business value as 0 (e.g., &amp;ldquo;in-plate&amp;rdquo;), the downstream system cannot determine whether the received 0 represents a business value or an unset default value during incremental push. However, if enumerations are defined starting from 1, 0 can be reserved for a meaningless default value or an &amp;ldquo;unknown&amp;rdquo; state, resolving the issue.&lt;/p&gt;
 &lt;p&gt;Suggested practices:&lt;/p&gt;
-&lt;p&gt;When designing protobuf enums, always define 0 as a meaningless default value (such as &lt;code&gt;UNKNOWN&lt;/code&gt; or &lt;code&gt;RESERVED&lt;/code&gt;)
-Assign actual business values starting from 1, ensuring they are distinct from the default value of 0&lt;/p&gt;
-&lt;p&gt;This small adjustment not only resolved the issue of identifying trading periods, but also provided a valuable lesson for future protocol design&lt;/p&gt;</description>
+&lt;p&gt;When designing Protobuf enums, always define 0 as a meaningless default value
+Assign actual business values starting from 1, ensuring distinction from the default value of 0&lt;/p&gt;
+&lt;p&gt;This small adjustment not only resolved the trading period identification issue but also provided a valuable lesson for future protocol design&lt;/p&gt;</description>
         </item>
         
     </channel>
