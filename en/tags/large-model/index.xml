@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Large Model on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/large-model/</link>
+        <description>Recent content in Large Model on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Mon, 02 Jun 2025 21:40:23 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/large-model/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Blog Translation Project Musings: Historical Conversations</title>
+        <link>https://ttf248.life/en/p/blog-translation-project-musings-historical-conversations/</link>
+        <pubDate>Mon, 02 Jun 2025 21:16:24 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/blog-translation-project-musings-historical-conversations/</guid>
+        <description>&lt;p&gt;The initial design of the blog translation project was overly complex – first parsing Markdown format, then using placeholders to protect the content, and finally sending it to a large model for translation. This was entirely unnecessary; large models inherently possess the ability to recognize Markdown syntax and can directly process the original content while maintaining formatting during translation.&lt;/p&gt;
+&lt;p&gt;Our work shifted from debugging code to debugging the &lt;strong&gt;prompting&lt;/strong&gt; of the model.
+Model: &lt;code&gt;google/gemma-3-4b&lt;/code&gt;
+Hardware: &lt;code&gt;Nvidia 3060 12GB&lt;/code&gt;
+Indeed, we chose a non-thinking model – thinking models were inefficient when executing translation tasks. We compared the performance of 4b and 12b parameters, and for translation purposes, gemma3’s 4b parameter was sufficient; there was no significant advantage in terms of 12b parameters.
+12b parameter speed: &lt;strong&gt;11.32 tok/sec&lt;/strong&gt; , 4b parameter speed: &lt;strong&gt;75.21 tok/sec&lt;/strong&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;background-introduction&#34;&gt;Background Introduction
+&lt;/h2&gt;&lt;p&gt;Despite adding various constraints within the &lt;strong&gt;system&lt;/strong&gt;, the output translation results still presented some issues, such as: lack of formatting protection, inclusion of extraneous explanatory content. When defining roles, it was already stated to protect Markdown format and only output translation results; ultimately, the translation remained unstable.&lt;/p&gt;
+&lt;p&gt;At this point, I remembered encountering a comic translation project previously, which also leveraged the capabilities of large models. Its translation effect seemed better than mine. Upon reviewing the code and comparing the request data, the comic translation project would include a set of context with each request, in addition to the current translation content, it would also include previous translation content.&lt;/p&gt;
+&lt;p&gt;What were the benefits? Not only did this improve the coherence between preceding and following translations, but it also ensured the stability of the output format.&lt;/p&gt;
+&lt;h2 id=&#34;the-importance-of-historical-conversations&#34;&gt;The Importance of Historical Conversations
+&lt;/h2&gt;&lt;p&gt;As large AI models (such as the GPT series, Claude, Gemini, etc.) become more prevalent, an increasing number of businesses and developers are accessing these models via APIs to build intelligent customer service, content generation, code assistant, and other applications. However, many people encounter a common issue during initial access: &lt;strong&gt;model outputs are disjointed, lack contextual understanding, and even answer the wrong questions.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;A key reason for this phenomenon is – &lt;strong&gt;not including historical conversation content in API requests.&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;what-is-a-history-dialogue&#34;&gt;What is a History Dialogue?
+&lt;/h2&gt;&lt;p&gt;A history dialogue refers to the exchange records between a model and a user within a single conversation session. In most large language model APIs (such as OpenAI’s Chat Completions API), developers need to construct the complete &lt;code&gt;messages&lt;/code&gt; array themselves, passing the historical dialogue in turn as &lt;code&gt;user&lt;/code&gt; and &lt;code&gt;assistant&lt;/code&gt; message format.&lt;/p&gt;
+&lt;h3 id=&#34;example&#34;&gt;Example
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;model&amp;quot;: &amp;quot;gpt-4&amp;quot;,
+  &amp;quot;messages&amp;quot;: [
+    {&amp;quot;role&amp;quot;: &amp;quot;user&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;Write me a resignation letter&amp;quot;},
+    {&amp;quot;role&amp;quot;: &amp;quot;assistant&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;Okay, what do you want to write about as the reason for your resignation?&amp;quot;},
+    {&amp;quot;role&amp;quot;: &amp;quot;user&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;I want to pursue personal career development&amp;quot;}
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If you only send the last sentence:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{&amp;quot;role&amp;quot;: &amp;quot;user&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;I want to pursue personal career development&amp;quot;}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The model won&amp;rsquo;t know you are writing a resignation letter, and its output quality will be very poor because it doesn’t understand the context.&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;why-historical-dialogue-is-so-important&#34;&gt;Why Historical Dialogue is So Important?
+&lt;/h2&gt;&lt;h3 id=&#34;1-build-context-enhance-coherence&#34;&gt;1. &lt;strong&gt;Build Context, Enhance Coherence&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;AI models are inherently “context-driven.” They cannot remember anything that has happened “previously,” unless you explicitly tell it. By passing in the dialogue history, the model can better understand your intent and topic context, resulting in outputs more aligned with expectations.&lt;/p&gt;
+&lt;h3 id=&#34;2-reduce-misunderstanding-rate&#34;&gt;2. &lt;strong&gt;Reduce Misunderstanding Rate&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;If you want the model to complete a multi-turn instruction, such as writing, summarizing, or debugging code, historical context allows the model to gradually accumulate understanding and avoid going off-topic or losing focus midway through.&lt;/p&gt;
+&lt;h3 id=&#34;3-simulating-realistic-human-dialogue-behavior&#34;&gt;3. &lt;strong&gt;Simulating Realistic Human Dialogue Behavior&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;In practical applications such as customer service systems, educational assistants, and health consultations, user questions often unfold gradually rather than being expressed clearly in a single instance. Preserving dialogue history allows the AI to behave more like a “memoryful assistant.”&lt;/p&gt;
+&lt;h2 id=&#34;how-to-correctly-add-historical-conversations-in-an-api&#34;&gt;How to Correctly Add Historical Conversations in an API?
+&lt;/h2&gt;&lt;p&gt;Using OpenAI&amp;rsquo;s API as an example, we recommend following the structure below:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-python&#34;&gt;messages = [
+    {&amp;quot;role&amp;quot;: &amp;quot;system&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;You are a professional legal assistant&amp;quot;},
+    {&amp;quot;role&amp;quot;: &amp;quot;user&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;What are the essential conditions for a contract?&amp;quot;},
+    {&amp;quot;role&amp;quot;: &amp;quot;assistant&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;Contract validity requires fulfilling several conditions: ...&amp;quot;},
+    {&amp;quot;role&amp;quot;: &amp;quot;user&amp;quot;, &amp;quot;content&amp;quot;: &amp;quot;Does an oral agreement count?&amp;quot;}
+]
+
+response = openai.ChatCompletion.create(
+    model=&amp;quot;gpt-4&amp;quot;,
+    messages=messages
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Note:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Use the &lt;code&gt;system&lt;/code&gt; message to set the model&amp;rsquo;s behavior and identity.&lt;/li&gt;
+&lt;li&gt;Only retain recent key conversations, not necessarily the entire history (to avoid exceeding token limits).&lt;/li&gt;
+&lt;li&gt;In long sessions, truncate early content and maintain core information summaries to control token consumption.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;practical-recommendations&#34;&gt;Practical Recommendations
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Dialogue State Management&lt;/strong&gt;: The backend needs to design caching mechanisms to record each user’s conversation history (e.g., Redis, database).&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Limit Length&lt;/strong&gt;: OpenAI GPT-4 has a context length of 128k tokens, Claude 3 can reach 200k~1M, and requires reasonable truncation.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Dynamic Summarization of History&lt;/strong&gt;: When the historical content is too long, use a model to first summarize the old conversations before adding them to the dialogue context.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary
+&lt;/h2&gt;&lt;p&gt;AI large model capabilities are powerful, but developers need to “feed” it sufficient contextual information. &lt;strong&gt;By adding historical conversations within API requests, not only can the quality and coherence of the model’s output be significantly improved, but users can also experience a more natural and realistic conversation.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Regardless of whether you&amp;rsquo;re building AI customer service, writing assistants, coding helpers, or educational applications, this is an optimization technique that cannot be ignored.&lt;/p&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>
