@@ -1,0 +1,766 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>トラブルシューティング on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/%E3%83%88%E3%83%A9%E3%83%96%E3%83%AB%E3%82%B7%E3%83%A5%E3%83%BC%E3%83%86%E3%82%A3%E3%83%B3%E3%82%B0/</link>
+        <description>Recent content in トラブルシューティング on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Mon, 02 Jun 2025 07:41:32 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/%E3%83%88%E3%83%A9%E3%83%96%E3%83%AB%E3%82%B7%E3%83%A5%E3%83%BC%E3%83%86%E3%82%A3%E3%83%B3%E3%82%B0/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Protobufのゼロ値問題：デフォルト値がビジネスロジックの影の殺し屋に</title>
+        <link>https://ttf248.life/ja/p/protobuf-zero-value-traps/</link>
+        <pubDate>Thu, 20 Feb 2025 15:26:51 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/protobuf-zero-value-traps/</guid>
+        <description>&lt;p&gt;米国株式市場には、プレマーケット、本日の取引時間、アフターマーケットの3つの取引セッションがあります。データ配信は、APIプッシュか数値増分のロジック（可能な限り帯域幅を節約）で、初回送信のみ全量配信し、それ以降はすべてのフィールドを増分推送します。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;なぜ最適解を使用しないのでしょうか？複数のプロジェクトグループが関与しており、一部はすでに数年前にリリースされています。弊社は新規の連携であるため、できる限り互換性を保つようにしています。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;いくつかの問題点&#34;&gt;いくつかの問題点
+&lt;/h2&gt;&lt;p&gt;概要だけでは、特に問題がないように見えるかもしれないが、社内システムアーキテクチャに組み込まれた問題や、それらを引き起こす一連の問題が発生する。直前に問題を解決したにもかかわらず、新たな問題が発生し、これは以前の問題によって引き起こされたものである。&lt;/p&gt;
+&lt;h3 id=&#34;取引時間帯の認識エラー&#34;&gt;取引時間帯の認識エラー
+&lt;/h3&gt;&lt;p&gt;盤中ステージは &lt;code&gt;protobuf&lt;/code&gt; で定義されている通り 0 であることが知られているものの、増分配信のため、業務側ではこの 0 がデフォルト値なのか、それとも実際の取引値なのかを明確に判断することができない。&lt;/p&gt;
+&lt;p&gt;平易な理解：毎回 0 を受信した場合、それが新しい市場設定の値なのか、それとも &lt;code&gt;protobuf&lt;/code&gt; のデフォルト値なのかが不明である&lt;/p&gt;
+&lt;h3 id=&#34;オプショナルについて&#34;&gt;オプショナルについて
+&lt;/h3&gt;&lt;p&gt;protobuf 3.15 以降、proto3 では (proto2 と同様に) オプショナルキーワードを使用してスカラーフィールドの存在情報を指定できるようになりました。&lt;/p&gt;
+&lt;p&gt;チーム内の通信プロトコルは &lt;code&gt;protobuf&lt;/code&gt; をベースにしていますが、歴史的な理由により選択されたバージョンが古く、&lt;code&gt;optional&lt;/code&gt; キーワードをサポートしていません。理解している方はご存知でしょう。底层から &lt;code&gt;protobuf&lt;/code&gt; を導入したため、プロジェクトの底层では静的ライブラリとして &lt;code&gt;protobuf&lt;/code&gt; を公開しており、その結果、全体のコンパイルチェーンをアップグレードする必要があり、このコストは非常に高くなります。&lt;/p&gt;
+&lt;h3 id=&#34;gcc-のバージョン問題&#34;&gt;GCC のバージョン問題
+&lt;/h3&gt;&lt;p&gt;ようやく解決策を思いついたのだが、底层で異なるバージョンのリリースをするという方法を試みた。可能な限り &lt;code&gt;protobuf&lt;/code&gt; の新しいバージョンのコンパイル依存関係の伝播を制御しようとした。しかし、コンパイル時に &lt;code&gt;gcc&lt;/code&gt; のバージョンが低すぎて、&lt;code&gt;protobuf&lt;/code&gt; の新機能に対応していないことが判明した。
+グループ内でよく使われるサーバーの種類：CentOS7、CentOS8。CentOS7 のデフォルトの &lt;code&gt;gcc&lt;/code&gt; バージョンは 4.8 であり、CentOS8 のデフォルトの &lt;code&gt;gcc&lt;/code&gt; バージョンは 8.3 である。&lt;code&gt;protobuf&lt;/code&gt; の新機能は &lt;code&gt;gcc&lt;/code&gt; のバージョンが 7.4 以上であることを必要とするため、CentOS7 はサポートできない。
+&lt;a class=&#34;link&#34; href=&#34;https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82461&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Bug 82461 - [7 Regression] Temporary required for brace-initializing (non-literal-type) member variable&lt;/a&gt;。
+結局、関連サービスのデプロイやコンパイルサーバーを CentOS8 に移動することで問題を解決した。&lt;/p&gt;
+&lt;h2 id=&#34;合理的な列挙&#34;&gt;合理的な列挙
+&lt;/h2&gt;&lt;p&gt;問題を振り返ると、よりシンプルで効率的な解決策があります。それは、列挙の定義を調整し、1から番号付けをするのではなく、0から番号付けをすることです。これにより、デフォルト値とビジネス値を明確に区別でき、上記のような問題を防ぐことができます。&lt;/p&gt;
+&lt;h3 id=&#34;なぜ-1-から始める方が合理的なのか&#34;&gt;なぜ 1 から始める方が合理的なのか？
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;protobuf&lt;/code&gt; において、enum 型のデフォルト値は固定で 0 に設定されています。もし、有意義なビジネス値を 0 (例えば「市場中」) に定義した場合、増量プッシュ時にビジネス側では受信した 0 がビジネス値なのか未設定のデフォルト値なのか判断できません。一方、enum を 1 から定義すれば、0 は無意味なデフォルト値または「未知」の状態として保持でき、問題が解決されます。&lt;/p&gt;
+&lt;p&gt;推奨される実践：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;protobuf の enum を設計する際には、常に 0 を無意味なデフォルト値 (例: &lt;code&gt;UNKNOWN&lt;/code&gt; または &lt;code&gt;RESERVED&lt;/code&gt;) として定義してください。&lt;/li&gt;
+&lt;li&gt;実際のビジネス値を 1 から割り当て、デフォルト値 0 と区別できるようにします。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;この小さな調整により、取引時間帯の識別の問題を解決するだけでなく、将来のプロトコル設計にも貴重な教訓を提供しました。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>バックエンドサービス TCP 通信異常トラブルシューティング</title>
+        <link>https://ttf248.life/ja/p/backend-service-tcp-communication-troubleshooting/</link>
+        <pubDate>Fri, 14 Feb 2025 22:54:13 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/backend-service-tcp-communication-troubleshooting/</guid>
+        <description>&lt;p&gt;ビジネスモデル：バックエンドサービスがTCPを通じてグループの行情ゲートウェイと接続します。接続ごとに、最初に権限リクエストを送信し、その後継続的にハニーポットパケットを送信して接続状態を維持します。&lt;/p&gt;
+&lt;p&gt;しかし、ある日、サービス切断警告の情報を受け取りました。詳細なログ調査の結果、バックエンドサービスが継続的にハニーポットパケットを送信していたにもかかわらず、相手からの応答はなく、接続は依然として切断されませんでした。&lt;/p&gt;
+&lt;h2 id=&#34;現場要約&#34;&gt;現場要約
+&lt;/h2&gt;&lt;p&gt;原本在会社でプロジェクトの進捗を推進していたところ、業務チャットに警報情報がポップアップされました。初めは、以前からのトラブルだと思っていましたが、おそらくネットワークタイムアウトによって心跳信号が送信に失敗し、サービスが切断されたのだと推測しました。しかし、ログの詳細な調査の結果、実際にはそうではありませんでした。バックエンドから認証ログインメッセージを送信しましたが、応答を受信しませんでした。同時に、心跳パケットは継続的に送信され続けていましたが、相手側からは決して応答がありませんでした。ログの徹底的な分析により、以下の重要な問題が明らかになりました：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;認証メッセージへの応答なし：おそらく相手側のシステムが再起動しており、認証メッセージが適切に処理されていない可能性があります。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;認証失敗中に心跳データ送信：調査の結果、これはプログラムロジック上の脆弱性であることが判明しました。 心拍送信関数の判断ロジックに欠陥があり、接続状態のみを検証するだけで、権限状態の検証が抜け落ちていました。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;サービス未断開接続：サービスが断開可能であれば、再接続メカニズムをトリガーして、改めて認証メッセージを送信できます。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;現在、解決すべき最後の課題は、なぜサービスが断開できないのかという点です。この問題の解決には、より詳細かつ綿密な調査が必要です。&lt;/p&gt;
+&lt;h2 id=&#34;ネットワークパケットの分析&#34;&gt;ネットワークパケットの分析
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;tcpdump&lt;/code&gt; は非常に強力なネットワークパケットキャプチャツールであり、ネットワークパケットを捕捉するために使用できます。ネットワークパケットを分析することで、通信の詳細をより直感的に理解することができます。ここでは、&lt;code&gt;tcpdump&lt;/code&gt; を使用してネットワークパケットをキャプチャし、さらに分析します。
+&lt;img src=&#34;https://ttf248.life/p/backend-service-tcp-communication-troubleshooting/20250220151952.png&#34;
+	width=&#34;1126&#34;
+	height=&#34;202&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;tcpdump&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;557&#34;
+		data-flex-basis=&#34;1337px&#34;
+	
+&gt;
+分析図のデータから、心拍は正常に送信され続けており、相手側のサーバーからはデータが返ってきていませんが、&lt;code&gt;ACK&lt;/code&gt; が送られていたため、接続は積極的に切断されませんでした。&lt;/p&gt;
+&lt;h2 id=&#34;共通フラグの説明&#34;&gt;共通フラグの説明
+&lt;/h2&gt;&lt;p&gt;TCP プロトコルにおいて、&lt;code&gt;PSH&lt;/code&gt; (Push) と &lt;code&gt;ACK&lt;/code&gt; (Acknowledgment) は重要なフラグであり、それぞれデータ転送の制御とフロー制御に使用されます。その機能は以下のとおりです。&lt;/p&gt;
+&lt;h3 id=&#34;1-pshpush-flag&#34;&gt;&lt;strong&gt;1. PSH（Push Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;機能:&lt;/strong&gt;
+&lt;code&gt;PSH&lt;/code&gt; フラグは、受信側がバッファ内のデータを上位のアプリケーションに&lt;strong&gt;即時送信するよう要求する&lt;/strong&gt;ものです。（バッファが満杯で待つのではなく）。 つまり、&lt;code&gt;PSH&lt;/code&gt; フラグが付いたデータ段を受信すると、受信側はできるだけ早く処理してアプリケーションに渡すのではなく、バッファー内に一時的に保存することなく送信します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;典型的なシナリオ:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/HTTPS リクエスト:&lt;/strong&gt; クライアントがリクエストを送信する際（例: &lt;code&gt;GET /index.html&lt;/code&gt;）には &lt;code&gt;PSH&lt;/code&gt; が設定され、サーバーから即時の応答を希望します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSH プロトコル:&lt;/strong&gt; キーボード入力のたびに &lt;code&gt;PSH&lt;/code&gt; がトリガーされ、入力された文字をリアルタイムで送信することを保証します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;リアルタイム通信:&lt;/strong&gt; ビデオストリームやオンラインゲームなど、低遅延が必要なシナリオでは &lt;code&gt;PSH&lt;/code&gt; を使用して遅延を減らすことがあります。 - &lt;strong&gt;注意&lt;/strong&gt;：&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;PSH&lt;/code&gt; は必須ではありません。受信側はフラグを無視することもできます（ただし、データは正常に処理する必要があります）。&lt;/li&gt;
+&lt;li&gt;送信側が &lt;code&gt;PSH&lt;/code&gt; を設定しない場合、受信側は自身のバッファリングポリシーに基づいてデータの送信タイミングを決定します。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-ackacknowledgment-flag&#34;&gt;&lt;strong&gt;2. ACK（Acknowledgment Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;機能&lt;/strong&gt;: &lt;br&gt;
+&lt;code&gt;ACK&lt;/code&gt; 标志位は、&lt;strong&gt;前序データ段が正しく受信されたことを示す&lt;/strong&gt;。各 &lt;code&gt;ACK&lt;/code&gt; には確認番号（&lt;code&gt;Acknowledgment Number&lt;/code&gt;）が含まれており、これは期待される次のバイトのシーケンス番号を表します。TCP の信頼性のある転送の中核メカニズムです。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;動作原理&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;送信側がデータ段を送信する際、期待される受信側の &lt;code&gt;ACK&lt;/code&gt; 値（例えば &lt;code&gt;ACK = シーケンス番号 + データ長&lt;/code&gt;）を付与します。&lt;/li&gt;
+&lt;li&gt;受信側がデータを受信すると、受信したデータのシーケンス番号を確認するための &lt;code&gt;ACK&lt;/code&gt; 報文段を生成します。&lt;/li&gt;
+&lt;li&gt;送信側は、対応する &lt;code&gt;ACK&lt;/code&gt; を受信するまで、データ再送を行いません。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;例&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;送信側がシリアル番号 &lt;code&gt;100~199&lt;/code&gt; のデータ段を送信した場合、期待される受信側の &lt;code&gt;ACK&lt;/code&gt; は &lt;code&gt;200&lt;/code&gt; になります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-psh-と-ack-の組み合わせ&#34;&gt;&lt;strong&gt;3. PSH と ACK の組み合わせ&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;TCP 報文において、&lt;code&gt;PSH&lt;/code&gt; (Push) と &lt;code&gt;ACK&lt;/code&gt; (確認応答) は同時に出現することがあり、以下のような状況でよく見られます。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;HTTP リクエスト応答&lt;/strong&gt;：&lt;br&gt;
+クライアントが &lt;code&gt;POST&lt;/code&gt; リクエスト（データを含む）を送信する際、&lt;code&gt;PSH&lt;/code&gt; と &lt;code&gt;ACK&lt;/code&gt; を設定し、前の応答の確認を行います。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSH ハンドシェイク後のコマンド転送&lt;/strong&gt;：&lt;br&gt;
+クライアントがコマンドを入力した後、&lt;code&gt;PSH&lt;/code&gt; と &lt;code&gt;ACK&lt;/code&gt; が付いたデータ段を送信することで、コマンドが即座にサーバーで処理されるようにします。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-その他の関連を示すフラグ&#34;&gt;&lt;strong&gt;4. その他の関連を示すフラグ&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;フラグ&lt;/th&gt;
+&lt;th&gt;名前&lt;/th&gt;
+&lt;th&gt;概要&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;SYN&lt;/td&gt;
+&lt;td&gt;シーケンス&lt;/td&gt;
+&lt;td&gt;接続の初期化 (3ウェイハンドシェイク)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;4-その他の重要な関連&#34;&gt;&lt;strong&gt;4. その他の重要な関連&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;標識&lt;/th&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;概要&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;FIN&lt;/td&gt;
+&lt;td&gt;終了&lt;/td&gt;
+&lt;td&gt;エレガントな接続のクローズ&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;4-その他の関連を示すフラグ-1&#34;&gt;&lt;strong&gt;4. その他の関連を示すフラグ&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;フラグ&lt;/th&gt;
+&lt;th&gt;名前&lt;/th&gt;
+&lt;th&gt;概要&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;RST&lt;/td&gt;
+&lt;td&gt;リセット&lt;/td&gt;
+&lt;td&gt;接続の強制終了 (異常状況)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;4-その他の重要な関連-1&#34;&gt;&lt;strong&gt;4. その他の重要な関連&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;標識&lt;/th&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;概要&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;URG&lt;/td&gt;
+&lt;td&gt;緊急&lt;/td&gt;
+&lt;td&gt;緊急ポインタのマーク (ほとんど使用されない)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;4-その他の関連要素&#34;&gt;&lt;strong&gt;4. その他の関連要素&lt;/strong&gt;
+&lt;/h3&gt;&lt;h3 id=&#34;まとめ&#34;&gt;&lt;strong&gt;まとめ&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;PSH&lt;/strong&gt; は、&lt;strong&gt;データのアプリケーション層への迅速な到達&lt;/strong&gt; と低遅延に焦点を当てています。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ACK&lt;/strong&gt; は、&lt;strong&gt;データの信頼性の高い伝送&lt;/strong&gt; を重視し、パケットロスや乱数（乱順）を防ぎます。
+両者は連携して、TCP プロトコルの効率性と信頼性をバランスさせます。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>atopツールでLinuxシステム指標を監視する：インストール、設定と使い方完全ガイド</title>
+        <link>https://ttf248.life/ja/p/using-atop-to-monitor-linux-system-metrics-installation-configuration-and-usage-guide/</link>
+        <pubDate>Thu, 06 Feb 2025 22:48:55 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/using-atop-to-monitor-linux-system-metrics-installation-configuration-and-usage-guide/</guid>
+        <description>&lt;p&gt;Linuxシステム運用において、リアルタイムかつ包括的にシステムリソースとプロセス状態を監視することは非常に重要です。atopは強力なモニタリングツールとして、この目標を簡単に達成するのに役立ちます。本稿では、Linuxインスタンスでatopモニタリングツールをインストール、設定、使用する方法について詳細に説明します。&lt;/p&gt;
+&lt;h2 id=&#34;一atopツールの紹介&#34;&gt;一、atopツールの紹介
+&lt;/h2&gt;&lt;p&gt;atopは、Linuxシステムの資源とプロセスを監視するために専門的に設計されたツールです。システムおよびプロセスの活動を記録し、すべてのプロセスの実行状況を報告します。このツールが収集するデータには、CPU、メモリ、ディスク、ネットワークなどのリソース使用量、およびプロセス状態が含まれます。さらに、データをログファイル形式でディスクに保存することも可能です。各プロセスについて、CPU使用率、メモリ増加量、ディスク使用量、優先度、ユーザー名、ステータス、および終了コードなど、重要な情報を取得できます。加えて、atopの設定ファイルを通じて、ログ収集頻度、ログファイル保存パス、ローテーションポリシーなどのパラメータをカスタマイズすることも可能です。&lt;/p&gt;
+&lt;h2 id=&#34;二atopツールのインストール&#34;&gt;二、atopツールのインストール
+&lt;/h2&gt;&lt;p&gt;異なるLinuxディストリビューションでのatopのインストール方法は若干異なります。以下に一般的なオペレーティングシステムを例として紹介します。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Alibaba Cloud Linux 3/2、CentOS 7/8、Fedora、Rocky Linux 9&lt;/strong&gt;：&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;インストールコマンドを実行: &lt;code&gt;sudo yum install -y atop&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;atopサービスを開始: &lt;code&gt;sudo systemctl start atop&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Ubuntu / Debian&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;パッケージリストを更新: &lt;code&gt;sudo apt update&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;インストールコマンドを実行: &lt;code&gt;sudo apt install -y atop&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;atopサービスを開始: &lt;code&gt;sudo systemctl start atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CentOS Stream 9&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;ダウンロードしてインストール: &lt;code&gt;sudo wget https://www.atoptool.nl/download/atop-2.11.0-1.el9.x86_64.rpm &amp;amp;&amp;amp; sudo rpm -i atop-2.11.0-1.el9.x86_64.rpm&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;atopサービスを開始: &lt;code&gt;sudo systemctl start atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;二atopツールのインストール-1&#34;&gt;二、atopツールのインストール
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;openSUSE&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;インストールコマンドを実行: &lt;code&gt;sudo zypper install -y atop atop-daemon&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;atopサービスを起動: &lt;code&gt;sudo systemctl start atop&lt;/code&gt;
+もし上記で挙げたディストリビューションに含まれていない場合は、atop公式ウェブサイトでインストール情報を参照してください。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;3-モニタリング周期とログ保持期間の設定&#34;&gt;3. モニタリング周期とログ保持期間の設定
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;設定ファイル位置:&lt;/strong&gt; Alibaba Cloud Linux 3/2、CentOS 7/8 および Fedora システムでは、atop の設定ファイルは &lt;code&gt;/etc/sysconfig/atop&lt;/code&gt; にあります。Ubuntu、Debian および openSUSE システムでは、設定ファイルは &lt;code&gt;/etc/default/atop&lt;/code&gt; にあります。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;デフォルト設定パラメータの説明&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;LOGOPTS&lt;/code&gt;: 日志ファイルの記録オプションを制御するために使用され、デフォルトでは空です。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LOGINTERVAL&lt;/code&gt;: モニタリング周期で、デフォルトは 600 秒です。過去のログ追跡の問題を解決するためには、実際の要件に応じてこの頻度を調整することをお勧めします。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LOGGENERATIONS&lt;/code&gt;: ログ保持期間で、デフォルトは 28 日です。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;LOGPATH&lt;/code&gt;: 日志ファイルの保存パスで、デフォルトは &lt;code&gt;/var/log/atop&lt;/code&gt; です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;3-モニタリング周期とログ保持期間の設定-1&#34;&gt;3. モニタリング周期とログ保持期間の設定
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;設定手順&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;コマンドを実行して設定ファイルを開きます:
+&lt;ul&gt;
+&lt;li&gt;Alibaba Cloud Linux 3/2、CentOS 7/8、Fedora システムの場合: &lt;code&gt;sudo vim /etc/sysconfig/atop&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Ubuntu、Debian、openSUSE、CentOS Stream 9、Rocky Linux 9 システムの場合: &lt;code&gt;sudo vim /etc/default/atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;i&lt;/code&gt; キーを押して編集モードに入り、必要に応じて設定パラメータを調整します。例えば、モニタリング周期を30秒に、ログ保持期間を7日間、ログパスはデフォルトのまま変更します。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Esc&lt;/code&gt; キーを押して &lt;code&gt;:wq&lt;/code&gt; と入力し、保存して編集モードから抜けます。&lt;/li&gt;
+&lt;li&gt;atop サービスを再起動して設定を有効にします: &lt;code&gt;sudo systemctl restart atop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;四atop-ツールを使用&#34;&gt;四、atop ツールを使用
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;一般的なコマンドの紹介&lt;/strong&gt;: インタラクティブコマンドモード下では、以下の一般的なコマンドがあります。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;g&lt;/code&gt;: デフォルトの総合出力ビューに戻ります。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;c&lt;/code&gt;: プロセスの完全なコマンドラインを表示します。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;m&lt;/code&gt;: メモリ使用率でプロセスを降順にソートします。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;d&lt;/code&gt;: ディスク使用率でプロセスを降順にソートします。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;a&lt;/code&gt;: 総合的なリソース使用率でプロセスを降順にソートします。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;n&lt;/code&gt;: ネットワーク使用率でプロセスを降順にソートします。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;t&lt;/code&gt;: 次のモニタリング収集点にジャンプします。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;T&lt;/code&gt;: 前のモニタリング収集点にジャンプします。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;b&lt;/code&gt;: 時間点を指定します（形式: YYYYMMDDhhmm）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;四atop-ツールを使用-1&#34;&gt;四、atop ツールを使用
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;リソース監視フィールドの意味解説&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;ATOP&lt;/strong&gt;: ホスト名、情報サンプリングの日時。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;PRC&lt;/strong&gt;: プロセスの全体的な実行状況（カーネルモードとユーザモードの実行時間、プロセス総数、異なる状態のプロセスの数など）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CPU&lt;/strong&gt;: CPU全体の利用状況。各フィールドの数字を合計した結果が&lt;code&gt;N*100%&lt;/code&gt;（NはCPUコア数）で、カーネルモード、ユーザモード、割り込み、アイドル、ディスクI/O待ちなどの時間割合を含みます。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CPL&lt;/strong&gt;: CPU負荷状況。過去1分、5分、および15分間の実行キュー内の平均プロセス数、コンテキストスイッチ回数、割り込み発生回数など。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;MEM&lt;/strong&gt;: メモリの使用状況。物理メモリ総量、空きメモリ、ページキャッシュメモリ、ファイルキャッシュメモリ、カーネル占有メモリなどを含みます。 - &lt;strong&gt;SWP&lt;/strong&gt;: 交换領域の使用状況（交換区の総量と空き交換領域のサイズを含む）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;PAG&lt;/strong&gt;: 仮想メモリのページング状況（入ったページ数と出たページ数）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;DSK&lt;/strong&gt;: ディスクの使用状況。各ディスクデバイスに対応する1列があり、デバイス識別子、繁忙状態の時間比例、読み書きリクエストの数を表示します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;NET&lt;/strong&gt;: ネットワークの状態。TCPおよびUDPのトランスポート層、IP層、および各アクティブなネットワークインターフェースでの受信および送信パケットサイズを表示します。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;四atopツールの使用&#34;&gt;四、atopツールの使用
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;リアルタイムシステム指標の確認&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;5秒ごとにシステム指標を確認：&lt;code&gt;atop 5&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;現在時刻から5分間（合計30回、10秒間隔）のシステム指標を確認：&lt;code&gt;atop -M 10 30&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;現在時刻から10分間（10回、60秒間隔）のシステム指標を収集し、結果をファイルに書き出す：&lt;code&gt;atop -M 60 10 &amp;gt; /log/atop.mem&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;履歴指標ログの確認&lt;/strong&gt;：atop起動後、記録された内容はデフォルトで&lt;code&gt;/var/log/atop&lt;/code&gt;ディレクトリに保存されます。確認する際は、日付を指定したログファイルが存在することを確認してください。存在しない場合、エラーが発生します。 - その日の履歴指標ログの確認: &lt;code&gt;atop -r&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;前日の履歴指標ログの確認: &lt;code&gt;atop -r y&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;指定日内の履歴指標ログの確認 (例: 2024年11月6日): &lt;code&gt;atop -r 20241106&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;指定日から指定時間以降の履歴指標ログの確認 (例: 2024年11月6日14:00から): &lt;code&gt;atop -r 20241106 -b 14:00&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;指定日期間と指定時間の履歴指標ログの確認 (例: 2024年11月5日00:04から00:08まで): &lt;code&gt;atop -r 20241105 -b 00:04 -e 00:08&lt;/code&gt; ## 四、atopツールの使用&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;リアルタイムシステム指標の確認&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;5秒ごとにシステム指標を確認：&lt;code&gt;atop 5&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;現在時刻から5分間（合計30回、10秒間隔）のシステム指標を確認：&lt;code&gt;atop -M 10 30&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;現在時刻から10分間（10回、60秒間隔）のシステム指標を収集し、結果をファイルに書き出す：&lt;code&gt;atop -M 60 10 &amp;gt; /log/atop.mem&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;履歴指標ログの確認&lt;/strong&gt;：atop起動後、記録された内容はデフォルトで&lt;code&gt;/var/log/atop&lt;/code&gt;ディレクトリに保存されます。確認する際は、日付を指定したログファイルが存在することを確認してください。存在しない場合、エラーが発生します。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;四atopツールの使用-1&#34;&gt;四、atopツールの使用
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;システムアクティビティレポートの確認&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;現在のシステムにおける1分間（12回、5秒間隔）のCPU利用率レポートを確認：&lt;code&gt;atopsar -c 5 12&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;指定した時間帯（例：18:00～18:01）のメモリ指標レポートを当日確認：&lt;code&gt;atopsar -m -b 18:00 -e 18:01&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;指定した日付の時間帯（例：2024年11月5日18:00～18:01）のメモリ指標レポートを確認：&lt;code&gt;atopsar -m -r 20241105 -b 18:00 -e 18:01&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;5その他の操作&#34;&gt;5．その他の操作
+&lt;/h2&gt;&lt;p&gt;1．&lt;strong&gt;天级别ログローテーションポリシーの設定&lt;/strong&gt;：毎日atop指標ログファイルを作成したい場合は、以下の手順を実行してください。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;（オプション）必要に応じて監視周期、ログ保持時間、およびログ保存パスを調整します。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;sudo systemctl enable --now atop atopacct atop-rotate.timer&lt;/code&gt;コマンドを実行して、日次ログローテーション関連サービスの起動設定とサービス開始を行います。&lt;/li&gt;
+&lt;li&gt;ビジネスがログ処理に対してより複雑な要件を持つ場合は、logrotateやカスタムスクリプトを組み合わせてログ管理を行うことも可能です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;五その他の操作&#34;&gt;五、その他の操作
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;オプションのnetatopカーネルモジュールをロードする&lt;/strong&gt;: 网络使用率を監視する必要がある場合は、atopにデフォルトでインストールされていないnetatopモジュールをインストールします（Alibaba Cloud Linux 3システムの場合）。
+&lt;ul&gt;
+&lt;li&gt;カーネル開発パッケージおよびコンパイルに必要なソフトウェア環境をインストール: &lt;code&gt;sudo yum install -y kernel-devel dkms elfutils-libelf-devel&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;最新バージョンのnetatopソースコードを指定ディレクトリにダウンロード: &lt;code&gt;cd /usr/src/ &amp;amp;&amp;amp; sudo wget https://www.atoptool.nl/download/netatop-3.2.2.tar.gz --no-check-certificate&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;ソースコードを解凍し、ソースコードディレクトリに移動: &lt;code&gt;sudo tar -zxvf netatop-3.2.2.tar.gz &amp;amp;&amp;amp; cd netatop-3.2.2&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;ソースコードに基づいてモジュールとデーモンをビルドおよびインストール: &lt;code&gt;sudo make &amp;amp;&amp;amp; sudo make install&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;netatopサービスを開始: &lt;code&gt;sudo systemctl start netatop&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;5-その他の操作&#34;&gt;5. その他の操作
+&lt;/h2&gt;&lt;p&gt;atopツールは強力で柔軟な機能を持っており、適切にインストール、設定、および使用することで、Linuxシステムの稼働状況をより深く理解し、潜在的な問題を迅速に発見して解決することができます。この記事が皆さんのLinuxシステム監視のレベルアップに役立つことを願っています。&lt;/p&gt;
+&lt;h2 id=&#34;6参考链接&#34;&gt;6．参考链接
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.atoptool.nl/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;atop公式サイト&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://help.aliyun.com/zh/ecs/use-cases/use-the-atop-tool-to-monitor-linux-system-metrics#99e53d0198euu&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;atopモニタリングツールのインストール、設定、および使用方法&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>Visual Studio が「不整合な」PDB ファイルをロードできません。</title>
+        <link>https://ttf248.life/ja/p/visual-studio-loading-unmatched-pdb-files/</link>
+        <pubDate>Thu, 23 Jan 2025 20:04:33 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/visual-studio-loading-unmatched-pdb-files/</guid>
+        <description>&lt;p&gt;WindowsでVisual Studioを使ってプログラムをデバッグする場合、PDBファイルと実行可能ファイルが一致しない場合、Visual Studioは「シンボルファイルを読み込めません」というエラーを表示します。プログラムの実行中にクラッシュが発生し、ダンプファイルが生成される場合、不一致なPDBファイルの場合、Visual Studioはクラッシュ現場にスムーズに入ることができません。&lt;/p&gt;
+&lt;h2 id=&#34;pdb-ファイルとは&#34;&gt;PDB ファイルとは
+&lt;/h2&gt;&lt;p&gt;PDB ファイルは、Microsoft が提供するデバッグ情報ファイルで、プログラムのデバッグに使用されます。PDB ファイルには、シンボルテーブル、ソースコードファイル名、行番号などの情報が含まれています。プログラムをコンパイルするときに生成され、プログラムのデバッグに使用されます。&lt;/p&gt;
+&lt;h2 id=&#34;windbg-デバッグ&#34;&gt;WinDbg デバッグ
+&lt;/h2&gt;&lt;p&gt;WinDbg は Microsoft 製のデバッガで、Windows プログラムをデバッグするために使用されます。WinDbg は不一致な PDB ファイルをロードできますが、手動でロードする必要があります。.reload /f /i コマンドを使用して、強制的に不一致な PDB ファイルをロードできます。
+しかし、WinDbg の使い勝手は Visual Studio ほど簡単ではないため、Visual Studio も不一致な PDB ファイルをロードできるようにしたいと考えています。&lt;/p&gt;
+&lt;h2 id=&#34;visual-studio-が-pdb-ファイルを読み込めない&#34;&gt;Visual Studio が PDB ファイルを読み込めない
+&lt;/h2&gt;&lt;p&gt;ソースコードは現在、Git などのバージョン管理システムで管理されることが一般的であり、対応するバージョンのコードを再コンパイルして、対応する PDB ファイルを生成できます。なぜこの PDB ファイルが読み込まれないのか？主な原因は、メタデータの不一致です。&lt;/p&gt;
+&lt;p&gt;元データを修正し、EXE ファイルの情報に基づいて新しい PDB ファイルを生成することで、Visual Studio が PDB ファイルを読み込めるようになります。&lt;/p&gt;
+&lt;p&gt;chkmatch のダウンロード先：&lt;a class=&#34;link&#34; href=&#34;https://www.debuginfo.com/tools/chkmatch.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://www.debuginfo.com/tools/chkmatch.html&lt;/a&gt;
+サイトのキャッシュアドレス：&lt;a class=&#34;link&#34; href=&#34;chkmatch.zip&#34; &gt;chkmatch.zip&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;chkmatch-の使用&#34;&gt;chkmatch の使用
+&lt;/h2&gt;&lt;p&gt;まず、チェック操作を実行し、不一致の原因を分析します。そして、署名が一致しないことを示唆するメッセージが表示されます。
+次に、修正操作を実行し、pdb ファイルと exe ファイルを一致させます。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://stackoverflow.com/questions/38147487/forcing-to-load-unmatched-symbols-in-visual-studio-2015-debugger&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;forcing-to-load-unmatched-symbols-in-visual-studio-2015-debugger&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</title>
+        <link>https://ttf248.life/ja/p/linux-backend-slow-string-processing/</link>
+        <pubDate>Wed, 13 Nov 2024 19:42:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/linux-backend-slow-string-processing/</guid>
+        <description>&lt;p&gt;C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していました。大量データを処理する際に、プロトコル内部では配列をトラバースし、シリアライズ操作を実行してログを生成する必要があり、このため効率が低く、システムが高負荷時に顕著なフレーム落ち（カドゥ）を引き起こしました。ビジネス部門からは、システムのフレーム落ちに関するフィードバックがありました。&lt;/p&gt;
+&lt;h2 id=&#34;問題の特定&#34;&gt;問題の特定
+&lt;/h2&gt;&lt;p&gt;問題のトラブルシューティングにおいて、まずシステムに対してパフォーマンス分析を実施し、大量データを処理する際にCPU使用率が著しく増加し、システムの応答時間が長くなっていることを発見しました。ログを分析した結果、多数のシリアライズ操作が見られ、これらの操作は2次元配列を処理する際の効率が低いことが原因でシステムのパフォーマンス低下を引き起こしていることがわかりました。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;pstack&lt;/code&gt;ツールを使用してサービスのスレッド情報を取得し、ログスレッドが大部分の時間文字列の連結に費やしていることを特定しました。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;今日は重点的に取り組むべき点です。異なる累積方法では、効率の違いが非常に大きいです。過去のコードでは&amp;quot;+&amp;ldquo;演算子を使用しており、この方法は頻繁に一時オブジェクトを作成するため、非常に非効率的でした。それは、その非効率性がどの程度であるかを理解していない状況です。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;デモ検証&#34;&gt;デモ検証
+&lt;/h2&gt;&lt;p&gt;プロジェクトコードに基づいて、ビジネスロジックを抽出し、文字列連結の効率に関する問題を検証するためのシンプルなデモを作成しました。Windows環境ではVisual Studio 2022コンパイラ、Linux環境ではgcc8.5コンパイラを使用し、Releaseモードでビルドして実行し、効率を比較します。&lt;/p&gt;
+&lt;h3 id=&#34;主要ポイント&#34;&gt;主要ポイント
+&lt;/h3&gt;&lt;p&gt;このプロジェクトでは、方法四を使用し、テストデータを入手する前に、どの方法が最も効率的で、最も非効率かを読者に考えてもらうようにしました。結果を見たときは、自分でも驚きました。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;方法 1 (&lt;code&gt;+=&lt;/code&gt; による連結)&lt;/strong&gt;：各フィールドを &lt;code&gt;+=&lt;/code&gt; を使って文字列に直接連結します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 2 (&lt;code&gt;std::ostringstream&lt;/code&gt; による連結)&lt;/strong&gt;：ストリーム（&lt;code&gt;std::ostringstream&lt;/code&gt;）を使用して各フィールドを連結する方法で、特に大量のデータを連結する場合に効率的です。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 3（事前にメモリを割り当てる &lt;code&gt;+=&lt;/code&gt; による連結）&lt;/strong&gt;: &lt;code&gt;reserve&lt;/code&gt; を使用して文字列に十分なメモリを事前に割り当て、メモリ再割り当てのオーバーヘッドを削減することでパフォーマンスを向上させます。 &lt;strong&gt;方法4 (&lt;code&gt;bodys = bodys + body + &amp;quot;\n&amp;quot;&lt;/code&gt;)&lt;/strong&gt;: 各自の連結ごとに新しい一時的な文字列オブジェクトが作成されるため、大規模な連結においてはパフォーマンスが低下します。これは、各連結で新たなメモリ割り当てとコピーが発生するためです。
+参照結果から、この方法が最も効率の悪いものとして適切に選択されていることがわかります。
+さらに詳しく分析すると、異なるプラットフォームコンパイラの最適化効率の違いが見られます。Microsoft の &lt;code&gt;Visual Studio&lt;/code&gt; は従来通り優れており、文字列の最適化効率は非常に高い一方、&lt;code&gt;gcc&lt;/code&gt; コンパイラはその最適化効率がやや劣ります。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;主要ポイント-1&#34;&gt;主要ポイント
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;コードを異なるマシンで実行した場合、2つのデータ間で直接的な比較の意味がないため、異なるパッチング方法間の差分を比較することができます。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;完全コード&#34;&gt;完全コード
+&lt;/h2&gt;</description>
+        </item>
+        <item>
+        <title>Win11 Logitech G431 ヘッドホン ドライバー インストール</title>
+        <link>https://ttf248.life/ja/p/win11-logitech-g431-headphone-driver-installation/</link>
+        <pubDate>Wed, 05 Jun 2024 07:20:17 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/win11-logitech-g431-headphone-driver-installation/</guid>
+        <description>&lt;p&gt;前回の続きですが、戻ってみたらGhubにアップデートがあったので少し嬉しい。カスタマーサポートが言っていた、ドライバが正常に読み込まれない問題が解決したとのことだった。ところが色々試して、再インストールもやっても、やはり正常には動かない。&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景
+&lt;/h2&gt;&lt;p&gt;引き続きカスタマーサポートに問い合わせて解決策を相談したが、エンジニアによるリモート支援が可能であると伝えられたが、エンジニアの勤務時間と自身の勤務時間が完全に一致しないため、結局諦めざるを得なかった。最後にトラブルシューティングで残された資料を確認し、手動でのドライバーインストールを試みることにした。&lt;/p&gt;
+&lt;h2 id=&#34;驱动安装包の入手方法&#34;&gt;驱动安装包の入手方法
+&lt;/h2&gt;&lt;p&gt;ロジック社の公式には、個別のデバイスのドライバインストールパッケージが提供されていません。どのようにしてドライバファイルを入手すれば良いでしょうか？
+最後にシステムを再構築した際のシステムイメージパッケージと組み合わせて、ローカル仮想マシンでシステムをクリーンに再構築し、そこでGhubを単独で展開します。その際、ヘッドホンデバイスを仮想マシンに導入し、ドライバのパスを見つけてコピーアウトします。
+関連するパス：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;C:\ProgramData\LGHUB&lt;/li&gt;
+&lt;li&gt;C:\Windows\System32\DriverStore\FileRepository\logi_audio.inf_amd64_010b035044e24be4&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;デバイスマネージャー&#34;&gt;デバイスマネージャー
+&lt;/h2&gt;&lt;p&gt;重点は2番目のパスを見つける方法です。まず、Windows 11 システムでドライバーファイルをどのように手動で管理するかを簡単に整理します。この内容は、&lt;strong&gt;因果関係の制御法を用いて特定し、デバイスの抜き差しを繰り返すことで、仮想マシン内でデバイスマネージャーの情報とデバイス情報を分析し、合計3つのドライバーを処理する必要があることが特定されました（ヘッドホンが3つ）。&lt;/strong&gt; そのうち2つのドライバーはシステムに組み込まれており、1つはLogitechから提供されています。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-headphone-driver-installation/20240605073331.png&#34;
+	width=&#34;433&#34;
+	height=&#34;904&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;ドライバーマネージャー&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;47&#34;
+		data-flex-basis=&#34;114px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;上記の画像にある2番目のドライバーは、Logitechから提供されており、現在のデバイスのドライバープログラムを分析し、仮想マシン内のすべてのドライバーパスを検索します。もちろん、最初に“logi”で始まるファイルを見つける必要があります。その後、ファイルの比較を行うことで、ドライバーのファイル件を特定し、そのフォルダ全体をコピーすることで、ドライバーのインストールパッケージを入手できます。&lt;/p&gt;
+&lt;h2 id=&#34;驅動のインストール&#34;&gt;驅動のインストール
+&lt;/h2&gt;&lt;p&gt;デバイスマネージャーのインターフェースで、以下の手順を実行します：&lt;/p&gt;
+&lt;p&gt;「ドライバーの更新」をクリックし、「コンピューター上のドライブを検索」をクリックすると、以下の画面が表示されます：&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-headphone-driver-installation/20240605074130.png&#34;
+	width=&#34;528&#34;
+	height=&#34;381&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;ドライバーインストール&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;138&#34;
+		data-flex-basis=&#34;332px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;通常起動すると、USBドライバのみが表示されます。ディスクからインストールを選択し、事前にコピーしてきたフォルダのパスを指定します。インストール後、「ドロップダウンリスト」からロジック特有のドライバを選択することで、デバイスドライバーを新しいドライバに切り替えることができます。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-headphone-driver-installation/20240605074208.png&#34;
+	width=&#34;593&#34;
+	height=&#34;423&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;ディスクインストール&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;140&#34;
+		data-flex-basis=&#34;336px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;人体工学デバイス駆動&#34;&gt;人体工学デバイス駆動
+&lt;/h2&gt;&lt;p&gt;このドライブファイルはすべてシステムが提供するものですが、デバイスのドライバの前に感嘆符 (!) があるかどうかを確認してください。もし感嘆符があれば、ドライバ選択インターフェースに移動し、ランダムな他の種類のドライバを選択した後、再度元のドライバに戻して正常化します。&lt;/p&gt;
+&lt;h2 id=&#34;修了&#34;&gt;修了
+&lt;/h2&gt;&lt;p&gt;ヘッドホンマイクの音量が正常に回復し、馴染みのあるエコーキャンセル機能も復帰しました。
+&lt;a class=&#34;link&#34; href=&#34;20240605074823.png&#34; &gt;サイドノイズ画像&lt;/a&gt;&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>新規に設置した10Gbps光回線なのに、なぜ速度が1Gbpsしか出ないのか？</title>
+        <link>https://ttf248.life/ja/p/new-gigabit-fiber-slow-speed/</link>
+        <pubDate>Mon, 18 Mar 2024 00:29:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/new-gigabit-fiber-slow-speed/</guid>
+        <description>&lt;p&gt;自宅のネットワークを驚くほど高速にしたいですか？鍵はケーブルの種類、光猫、ルーターの設定、そして些細なディテールを知ることです。この記事では、6種類のケーブルを使ってテラビット級のネットワークを構築する方法と、簡単なデバイスチェックと設定で、あなたのネットワーク速度が制限されないようにすることについて、簡単に解説します。さあ、一緒に探求して、自宅のネットワークを高速化しましょう！&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/gigabit-fiber-slow-speed/image.png&#34;
+	width=&#34;1001&#34;
+	height=&#34;590&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;手動修復&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;169&#34;
+		data-flex-basis=&#34;407px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;第1章ネットワーク伝送媒体の徹底分析&#34;&gt;第1章：ネットワーク伝送媒体の徹底分析
+&lt;/h2&gt;&lt;p&gt;千Gb級ネットワーク接続を実現する際、情報を高速に伝送するための担い手であるケーブルが極めて重要な役割を果たします。以下では、カテゴリ5、カテゴリ6、カテゴリ7ケーブルについて詳細な解説を行います。&lt;/p&gt;
+&lt;h3 id=&#34;1-五類ケーブルcat5&#34;&gt;1. &lt;strong&gt;五類ケーブル（CAT5）&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;五類ケーブル、別名CAT5は、最も普及した初期のツイストペアケーブルの一種であり、各対線芯を精密ならせん構造で設計することで、クロスプレーク（串扰）を低減します。主に10/100Mbpsの高速以太ネットで使用され、最大伝送周波数は約100MHzです。過去には広く利用されていましたが、現在の千ギガビット級、さらにはそれ以上の速度を求めるニーズにおいては、物理的な制限から五類ケーブルは要求を満たせません。&lt;/p&gt;
+&lt;h3 id=&#34;2-六類ケーブルcat6&#34;&gt;2. &lt;strong&gt;六類ケーブル（CAT6）&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;技術の発展に伴い、六類ケーブルが登場しました。五類ケーブルと比較して、六類ケーブルはより厳格な製造基準と先進的な構造設計を採用しており、干渉耐性を大幅に向上させ、伝送効率を高めています。1Gbpsまでの伝送速度をサポートし、理想的な条件下では伝送距離が100メートルにも達するため、千兆ネットワークへの接続要件を満たすのに適しています。&lt;/p&gt;
+&lt;h3 id=&#34;3-七類ケーブルcat7&#34;&gt;3. &lt;strong&gt;七類ケーブル（CAT7）&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;七類ケーブルは、現在のツイストペアケーブル技術における最先端の水準を代表しています。伝送速度において飛躍的な向上を実現し、理論上では最大10Gbpsの超高速率をサポートするだけでなく、設計段階で完全なシールドシステムを採用しており、各配線対間のシールドに加え、全体外側のシールドも備えることで、外部電磁干渉や近傍串波を大幅に低減し、データ伝送の安定性と正確性を保証します。しかしながら、七類ケーブルは主に将来の10Gbイーサネットまたは特定の要件の高いシーンでの利用を想定しています。&lt;/p&gt;
+&lt;p&gt;千兆光ファイバーの潜在能力を最大限に引き出す家庭ネットワーク環境の構築においては、六類ケーブルを選択することが最も経済的かつ効率的な選択肢となります。また、すべての接続ケーブルの品質が合格していることを確認し、標準に従った接線方法で作業を行うことも、ネットワーク性能を確保するための重要な要素です。&lt;/p&gt;
+&lt;h2 id=&#34;第2章深層ウェブの中枢デバイスの調査---光猫ルーターlanポート帯域幅の影響&#34;&gt;第2章：深層ウェブの中枢デバイスの調査 - 光猫、ルーターLANポート帯域幅の影響
+&lt;/h2&gt;&lt;h3 id=&#34;光猫とそのlanポート帯域幅の重要性&#34;&gt;光猫とそのLANポート帯域幅の重要性
+&lt;/h3&gt;&lt;p&gt;光猫（光ファイバーモジュレーター・デコーダー）は、家庭用ブロードバンド接続における主要な機器であり、その機能は光ファイバー内の光信号をデジタル信号に変換し、家庭内ネットワークデバイスで使用するために供与するものです。千兆光回線ユーザーの場合、光猫が千兆伝送をサポートしているかどうかが特に重要になります。もし光猫のWANポートが10Gb（百兆）のみをサポートする場合、入宅光ファイバーの速度が高くても、このボトルネックによって10Gb以内に制限される可能性があります。同様に、光猫のLANポートも千兆出力能力を備えている必要があり、それ以外に接続されたルーターやその他のデバイスが、その真の千兆レートを取得できないのです。&lt;/p&gt;
+&lt;h3 id=&#34;ルーターのlanポート帯域幅の役割&#34;&gt;ルーターのLANポート帯域幅の役割
+&lt;/h3&gt;&lt;p&gt;ルーターのLANポートは、受信したデータを各ターミナルデバイスに配布する役割を担います。ルーターのLANポートが単に10Gbps（百兆）の場合、他のデバイスの設定がどれほど優れていても、局所網通信は10Gbpsの速度でしか実現できません。したがって、千兆家庭ネットワークを構築する場合、ルーターのWANポートが千兆データを受信し、LANポートも千兆レベルのデータ出力能力を提供できるようにすることが重要です。これにより、ご自宅のすべてのスマートデバイスが高速ネットワークによるスムーズな体験を楽しむことができます。&lt;/p&gt;
+&lt;p&gt;さらに、一部の古いまたは低端のルーターには、LANポートのレート自動交渉メカニズムが存在する場合があります。これは、ルーター自体が千兆をサポートしていても、ケーブルやデバイスの互換性などの理由により、10Gbpsモードに降格してしまう可能性があることを意味します。 したがって、ルーターパラメータを正しく設定し、強制1ギガビットモードを有効化し、1ギガビットスイッチまたは直結デバイスと組み合わせることは、全1ギガビットネットワークを実現するための重要なステップの1つです。&lt;/p&gt;
+&lt;p&gt;1ギガビット光ファイバーにアップグレードした場合は、必ず1ギガビットオプト（光猫）および1ギガビットルーターに交換し、すべてのポートが1ギガビットレベルになっていることを確認してください。&lt;/p&gt;
+&lt;h2 id=&#34;第3章隠された謎--一本の断線したサブラインがテラバイト級ネットワークの速度にどのように影響するか&#34;&gt;第3章：隠された謎 – 一本の断線したサブラインがテラバイト級ネットワークの速度にどのように影響するか
+&lt;/h2&gt;&lt;h3 id=&#34;子線故障とネットワーク性能の低下&#34;&gt;子線故障とネットワーク性能の低下
+&lt;/h3&gt;&lt;p&gt;測定期間中にネットワークが常に接続を維持し、明らかな切断状態は発生しませんでした。これは新入戸でのブロードバンド導入であり、弱電箱内に配線が散らかっており、光猫のケーブルや電源インターフェース、延長コードの位置を時々調整していたため、偶発的に測定速度が千兆に達することがありました。&lt;/p&gt;
+&lt;p&gt;上記の資料に基づき、ケーブルの種類、光猫のLANポート速度などを分析・調査しましたが、最終的には原因はケーブル内部の一本の茶色の子線が断裂していることが判明しました。&lt;/p&gt;
+&lt;p&gt;断裂の原因：設置作業員が水晶頭を取り付ける際に、このケーブルを少し強く引っ張ったため、一根の子線が半分ほど断ち切られ、完全に切り離されずにいました。その後、光猫の位置を再調整する際に、繰り返し移動させることで、最終的に完全に断裂してしまいました。&lt;/p&gt;
+&lt;h3 id=&#34;ケーブルの種類8本の機能解析&#34;&gt;ケーブルの種類8本の機能解析
+&lt;/h3&gt;&lt;p&gt;六類網線はTIA/EIA-568-B規格に準拠し、8本の双絞り線を含みます。以下のカラーコードに従っています：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;白橙 / 橙 (しろおげ / おげ)&lt;/li&gt;
+&lt;li&gt;白緑 / 緑 (しろりょく / りょく)&lt;/li&gt;
+&lt;li&gt;白藍 / 藍 (しろらん / らん)&lt;/li&gt;
+&lt;li&gt;白棕 / 棕 (しろしゅん / しゅん)&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;千兆イーサネット（1000BASE-T）の規格下では、これらの8本の線の中から4対の線が同時に動作します。具体的な役割分担は以下の通りです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;白橙と橙のペア（1&amp;amp;2）、送信データ (Tx+/-) 用；&lt;/li&gt;
+&lt;li&gt;白緑と緑のペア（3&amp;amp;6）、受信データ (Rx+/-) 用；&lt;/li&gt;
+&lt;li&gt;白藍と藍のペア（4&amp;amp;5）および白棕と棕のペア（7&amp;amp;8）は、千兆イーサネットでは当初主用途ではありませんが、高度なアプリケーション（例えば、一部PoE給電や将来の技術拡張など）で有効化される場合があります。従来の10ギガビットネットワークでは、1, 2, 3, 6本の線を使用するだけで十分です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;断裂子線がネットワーク速度に与える影響&#34;&gt;断裂子線がネットワーク速度に与える影響
+&lt;/h3&gt;&lt;p&gt;上記の場合において、もし一本の褐色の子線（すなわち棕線または棕白線）が断裂した場合、理論上は千兆ネットワーク環境下で速度低下を引き起こす可能性があります。なぜなら、千兆ネットワークでは、すべての４対の線が同時に双方向で伝送することで満速を実現する必要があるためです。しかしながら、家庭用ネットワーク機器には自動ネゴシエーション機能が搭載されており、ケーブルに問題があると検知されると、正常に動作する低いレートモード（すなわち百兆モード）に回帰します。これが、一本の子線が断裂しても、ネットワークが接続を維持し、百兆速度で動作を続ける理由を説明しています。&lt;/p&gt;
+&lt;p&gt;要するに、一本の棕色子線が断裂しても百兆ネットワークの基本的な動作には影響しませんが、千兆ネットワーク環境下では、それがネットワーク速度を制限する重要な要因となる可能性があります。 徹底的な診断と修復を行うまでには、千兆光ファイバーの全 potensi を引き出すことはできません。これは、同様の問題が発生した際には、潜在的なネットワークインフラストラクチャの問題を無視してはならないことを示唆しています。たとえ基本的な接続に影響を与えないように見える小さな故障であっても、高速なネットワーク体験における隠れた障害となる可能性があります。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>WPFにおけるUIスレッドとフリーズ問題とその解決策</title>
+        <link>https://ttf248.life/ja/p/wpf-ui-thread-and-freezing-issues-solutions/</link>
+        <pubDate>Tue, 12 Mar 2024 07:12:21 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/wpf-ui-thread-and-freezing-issues-solutions/</guid>
+        <description>&lt;p&gt;デスクトップアプリケーションの開発、特にWindows Presentation Foundation (WPF) などのフレームワークを使用してリッチクライアントアプリケーションを構築する際には、ユーザーインターフェース（UI）スレッドの適切な処理が、アプリケーションの滑らかさと応答性を保証するために非常に重要です。UIスレッド、またはメインスレッドは、ウィンドウやコントロールのイベント、レイアウト計算、およびインターフェースの描画を担当するコアのスレッドです。UI要素とやり取りするすべての操作は、UIスレッド上で実行する必要があります。これは、WPFを含むほとんどのGUIフレームワークが従う基本的な原則です。&lt;/p&gt;
+&lt;h2 id=&#34;uiスレッドとは&#34;&gt;UIスレッドとは？
+&lt;/h2&gt;&lt;p&gt;UIスレッドは、WPFアプリケーションが起動される際にオペレーティングシステムによって作成され、初期化されるアプリケーションのメインウィンドウです。これは、アプリケーション内でUIコンポーネントの状態を直接アクセスし、変更できる唯一のスレッドです。つまり、ボタンのクリック、テキストボックスへの入力、ウィンドウサイズの変更など、すべてのユーザーインタラクションが発生したイベントは、このスレッドコンテキストで処理されます。さらに、WPFの依存性プロパティシステム、データバインディングメカニズム、レイアウトロジックもすべてUIスレッド上で同期的に実行されます。&lt;/p&gt;
+&lt;h2 id=&#34;uiフリーズとその原因&#34;&gt;UIフリーズとその原因
+&lt;/h2&gt;&lt;p&gt;UIスレッドが長時間占有またはブロックされると、例えば、時間のかかる計算、大量のデータ読み込み、データベースクエリ、その他のI/O密度の高いタスクを実行する場合、UIスレッドはユーザーからのインタラクションリクエストにタイムリーに対応できなくなり、結果として画面がフリーズ（Freeze）、つまり私たちがよく言う「カドト」が発生します。このような状況下では、ユーザーはアプリケーションの遅延や不自然さを明確に感じ、深刻な場合には「Application Not Responding」（ANR）警告が表示されることがあります。&lt;/p&gt;
+&lt;h2 id=&#34;uiスレッドの基本ルール２つ&#34;&gt;UIスレッドの基本ルール２つ
+&lt;/h2&gt;&lt;p&gt;上記のような状況を回避するため、WPF開発者は以下の２つの重要なルールに従う必要があります。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;UIスレッドで時間がかかる処理を実行しない&lt;/strong&gt;: UIスレッドがブロックされる可能性のある操作は、可能な限りバックグラウンドスレッドで実行し、UIスレッドがユーザーの入力や画面の変化に迅速に対応できるようにする必要があります。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;非UIスレッドから直接UI要素を更新しない&lt;/strong&gt;: WPFのセキュリティメカニズムにより、UIスレッドのみがUI要素の変更を行う権限を持ちます。他のスレッドから直接UIの状態を変更しようとすると例外が発生します。したがって、バックグラウンドスレッドで計算やデータ準備が完了した場合でも、適切なクロススレッド通信メカニズムを使用して結果をUIに表示する必要があります。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;解決策非同期プログラミングとスレッドセーフなアップデート&#34;&gt;解決策：非同期プログラミングとスレッドセーフなアップデート
+&lt;/h2&gt;&lt;p&gt;UIのフリーズを回避しつつ、時間のかかるタスクを実行するために、WPFは、開発者がこの目標を実現するためのさまざまな非同期プログラミングモデルおよびツールを提供しています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Dispatcherオブジェクト&lt;/strong&gt;: WPFのDispatcherクラスを使用すると、タスクをUIスレッドのキューに追加して実行できます。&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;または&lt;code&gt;Dispatcher.BeginInvoke&lt;/code&gt;メソッドを使用して、バックグラウンドスレッドからUIを安全に更新できます。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;async/awaitキーワード&lt;/strong&gt;: C#言語の非同期特性を活用し、&lt;code&gt;await&lt;/code&gt;キーワードを使用してバックグラウンドタスクが完了するのを待機し、完了後にUI更新コードを実行する非同期メソッドを作成できます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;ケース-ケース--例-れい&#34;&gt;ケース (ケース) / 例 (れい)
+&lt;/h2&gt;&lt;h3 id=&#34;dispatcherinvokeメソッドを使用してuiを更新する&#34;&gt;&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;メソッドを使用してUIを更新する
+&lt;/h3&gt;&lt;h3 id=&#34;asyncawaitキーワードとtaskrunの組み合わせ&#34;&gt;&lt;code&gt;async/await&lt;/code&gt;キーワードと&lt;code&gt;Task.Run&lt;/code&gt;の組み合わせ
+&lt;/h3&gt;</description>
+        </item>
+        <item>
+        <title>GCCバージョンをアップグレードした結果、プログラムがクラッシュしました：コードの非規整性による問題点</title>
+        <link>https://ttf248.life/ja/p/upgrade-gcc-version-causes-program-crash-code-irregularities/</link>
+        <pubDate>Sun, 10 Mar 2024 23:19:06 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/upgrade-gcc-version-causes-program-crash-code-irregularities/</guid>
+        <description>&lt;p&gt;同一段业务代码在 CentOS 7 环境下编译并运行正常，但在切换到 CentOS 8 并使用更新版的 GCC 进行编译时，程序却发生了崩溃。值得注意的是，问题仅在 &lt;strong&gt;Release 模式&lt;/strong&gt; 下出现，&lt;strong&gt;Debug 模式&lt;/strong&gt; 则完全没有问题。这是我们第一次遇到类似的情况，经过三天的排查，最终找到了问题的根源。&lt;/p&gt;
+&lt;h3 id=&#34;問題の特定&#34;&gt;問題の特定
+&lt;/h3&gt;&lt;p&gt;一番の原因究明の結果、問題の本質は &lt;strong&gt;関数に返り値がないこと&lt;/strong&gt; にあります。リリースモードにおいて、GCCの新バージョンではより多くの最適化が行われるため、本来返り値のない関数が実行中に未知のロジックが発生し、クラッシュを引き起こしました。結論として、&lt;strong&gt;コンパイラの警告を無視することは許されません。特に、古いプロジェクトにおいては、一部の警告が無視される可能性がありますが、すべての警告を無効にすることは避けるべきです&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;環境説明&#34;&gt;環境説明
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;CentOS 7 GCCバージョン:&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;CentOS 8 GCCバージョン:&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;クラッシュ現象&#34;&gt;クラッシュ現象
+&lt;/h3&gt;&lt;p&gt;プログラムのクラッシュに関するスタックを解析する際に見られるスタック情報は以下の通りです。
+このスタックは直感的ではありません。クラッシュ関数のスタック情報が &lt;code&gt;??&lt;/code&gt; と表示されると、問題の特定がさらに複雑になります。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;### コード例
+問題をより良く理解するために、クラッシュを再現するための最小コード例を示します。
+このコード内の `test()` 関数は明らかに値を明示的に返していないため、戻り値の型が `int` です。C++ 仕様によると、関数が `int` 型で宣言されている場合、必ず戻り値を持つ必要があり、そうでない場合は未定義動作を引き起こす可能性があります。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;コンパイル警告&#34;&gt;コンパイル警告
+&lt;/h3&gt;&lt;p&gt;当社のプロジェクトにおいて、CMake スクリプトが多くのコンパイル時の警告を抑制しており、その中に以下の警告が含まれています：&lt;/p&gt;
+&lt;p&gt;この警告は、&lt;code&gt;test()&lt;/code&gt; 関数が戻り値を持たないことを示しており、これが問題の根本原因です。GCC の高バージョン（例: 8.5.0）では、このような未定義の動作に対して不安定な最適化を行う可能性があり、プログラムのクラッシュを引き起こす可能性があります。&lt;/p&gt;
+&lt;h3 id=&#34;어셈블리-코드-차이점&#34;&gt;어셈블리 코드 차이점
+&lt;/h3&gt;&lt;p&gt;GCC 컴파일러 최적화 동작의 차이를 설명하기 위해, 서로 다른 버전의 GCC가 생성한 어셈블리 코드를 비교했습니다.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;GCC 4.8.5 생성된 어셈블리 코드:&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;어셈블리 코드가 다소 길고 표준 출력 스트림(예: &lt;code&gt;std::cout&lt;/code&gt;) 처리 로직을 포함하고 있습니다. 이는 컴파일러가 &lt;code&gt;test()&lt;/code&gt; 함수에서 누락된 반환 값 문제에 대해 과도하게 최적화하지 않았음을 나타내며, 이로 인해 잠재적으로 충돌을 피했을 수 있음을 시사합니다.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;GCC 8.5.0 생성된 어셈블리 코드:&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;새로운 버전의 GCC는 더 많은 최적화를 수행하여 코드 양을 줄였습니다. 그러나 이러한 최적화는 반환 값이 없는 함수가 실행될 때 동작이 불확실해져 프로그램 충돌을 유발할 수 있습니다.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;結論&#34;&gt;結論
+&lt;/h3&gt;&lt;p&gt;今回の問題解決を通して、C++において&lt;strong&gt;関数が返す値は明確に定義されるべきである&lt;/strong&gt;という点を深く認識しました。特に、関数を&lt;code&gt;int&lt;/code&gt;型として宣言する場合、必ず戻り値を指定する必要があります。古いコンパイラ版を使用しているプロジェクトでGCCの新しいバージョンにアップグレードした場合、より多くの最適化や厳格な警告メカニズムが導入される可能性があります。そのため、コンパイル時に&lt;strong&gt;すべての警告を無効化しない&lt;/strong&gt;ことを推奨します。代わりに、関数が返す値、型の一致など、一般的な問題に対して選択的に対処する必要があります。
+最終的に、&lt;code&gt;test()&lt;/code&gt;関数に戻り値を追加することで問題は解決し、プログラムは正常に動作するようになりました。&lt;/p&gt;
+</description>
+        </item>
+        <item>
+        <title>VMware仮想マシンのCPUリソース使用量異常</title>
+        <link>https://ttf248.life/ja/p/vmware-virtual-machine-cpu-resource-usage-anomaly/</link>
+        <pubDate>Sun, 10 Mar 2024 22:14:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/vmware-virtual-machine-cpu-resource-usage-anomaly/</guid>
+        <description>&lt;p&gt;背景：ローカルマシンにデプロイされたWindows版の業務システムで、CPU使用率が約5％です。VMwareにインストールしたCentOS8上にLinux版の業務システムをデプロイし、リソース使用量に異常が見られます。&lt;/p&gt;
+&lt;h2 id=&#34;問題の記述&#34;&gt;問題の記述
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;宿主机：win10 企业版&lt;/li&gt;
+&lt;li&gt;VMware：17.5&lt;/li&gt;
+&lt;li&gt;仮想マシン：centos8
+仮想マシンのリソース配分は&lt;code&gt;4C8GB&lt;/code&gt;で、ビジネスシステムを起動します。ビジネスシステムが仮想マシンLinuxシステムにデプロイされており、仮想マシン内部のtopコマンドでシステムのリソース使用率を確認すると、CPU使用率は高くありません。しかし、外側のWindowsシステムでタスクマネージャーを見ると、CPUリソース使用率は非常に高くなっています。プロセスを確認すると、VMware プロセスがCPUリソースを大量に使用しています。
++&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+
+|         Windows           |
+|                           |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|   |      VMware        |  |
+|   |      Program       |  |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|                           |
++&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;知識点&#34;&gt;知識点
+&lt;/h2&gt;&lt;p&gt;この問題のトラブルシューティングは、スムーズに進まず、原因はビジネスシステムそのものではなく、仮想マシンの問題にある。通常のビジネスコードからの思考を、システム負荷に転換し、さらに負荷データの異常から、スワップ中断へと追跡し、最終的に重要なポイントにたどり着くには、VMwareのスワップ中断のパフォーマンスに影響を与えるものは何か？ 本稿ではまず各知識点を解説し、最後に解決策を示す。&lt;/p&gt;
+&lt;h3 id=&#34;hyper-v&#34;&gt;Hyper-V
+&lt;/h3&gt;&lt;p&gt;Windowsオペレーティングシステムの仮想化技術において、大きな変革がありました。Microsoftが最初にWSL（Windows Subsystem for Linux）をリリースした際、Hyper-Vサービスを有効にすると、VMware仮想マシンの同時使用ができなくなっていました。その後、バージョンアップにより、VMwareはHyper-Vサービスと互換性を持つようになりました。&lt;/p&gt;
+&lt;h3 id=&#34;システム負荷&#34;&gt;システム負荷
+&lt;/h3&gt;&lt;p&gt;Linuxシステムにおいて、「負荷」（load）とは、実行中または実行を待っているプロセスの数を指します。負荷は通常、1分間、5分間、および15分間の実行キュー内の平均プロセス数という3つの数字で表されます。これらの数字は、「uptime」コマンドまたは「top」コマンドを実行することで確認できます。&lt;/p&gt;
+&lt;p&gt;具体的には、これらの3つの数字はそれぞれ以下の意味を持ちます。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;1分負荷&lt;/strong&gt;: システムが過去1分間に実行キュー内の平均プロセス数です。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;5分負荷&lt;/strong&gt;: システムが過去5分間に実行キュー内の平均プロセス数です。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;15分負荷&lt;/strong&gt;: システムが過去15分間に実行キュー内の平均プロセス数です。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;負荷の意味は、システム内で待っているプロセスの数です。 もしこの数値がシステムのロジックCPU数よりも高い場合、システム負荷が高いことを示し、多くのプロセスがプロセッサーリソースを待っている状態であることを意味します。これにより、システムが遅延したり応答しなくなったりする可能性があります。これは、負荷の高さとシステムの構成および性能によって異なります。&lt;/p&gt;
+&lt;p&gt;理想的には、負荷はシステムのロジックCPU数内に保たれるべきで、そのようにすればシステムの性能を最適化できます。負荷が継続してCPU数を超過する場合は、システム内のプロセスをさらに分析して、負荷の原因を特定し、適切な対策としてリソースの割り当てを調整したり、プロセスの実行方法を最適化したりする必要があります。&lt;/p&gt;
+&lt;h3 id=&#34;負荷分析---mpstat&#34;&gt;負荷分析 - mpstat
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;mpstat&lt;/code&gt; コマンドは、個々のプロセッサまたは複数のプロセッサに関するさまざまな情報を報告するために使用されます。これには、平均負荷、CPU利用率、割り込み、およびコンテキスト切り替えなどが含まれます。 &lt;code&gt;sysstat&lt;/code&gt; パッケージに含まれる &lt;code&gt;mpstat&lt;/code&gt; は、システムの負荷状況を分析するための非常に便利なツールです。以下に、&lt;code&gt;mpstat&lt;/code&gt; を使用した負荷分析の手順を示します。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;sysstat のインストール:&lt;/strong&gt;
+システムに &lt;code&gt;sysstat&lt;/code&gt; がインストールされていない場合は、お使いのシステムに適したパッケージマネージャを使用してインストールしてください。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;mpstat の実行:&lt;/strong&gt;
+&lt;code&gt;mpstat&lt;/code&gt; コマンドを実行して、CPUの使用状況と負荷を確認します。デフォルトでは、&lt;code&gt;mpstat&lt;/code&gt; は1秒ごとにCPU使用率の平均値を表示します。出力頻度を調整するには、時間間隔を指定できます。 例：毎秒1回で &lt;code&gt;mpstat&lt;/code&gt; を実行するには、次のコマンドを使用します: &lt;code&gt;mpstat -P ALL 2&lt;/code&gt;、&lt;code&gt;irq&lt;/code&gt; はリソース使用率を示します。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;出力の分析&lt;/strong&gt;：
+&lt;code&gt;mpstat&lt;/code&gt; の出力には、各 CPU の利用率とシステム全体の平均負荷が含まれます。特に平均負荷と各 CPU の利用率に注目することで、システムの負荷状況を把握できます。負荷が高い場合は、どのプロセスが原因となっているか、パフォーマンスボトルネックがないかをさらに分析する必要があります。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;負荷の分析-mpstat&#34;&gt;負荷の分析 mpstat
+&lt;/h3&gt;&lt;ol start=&#34;4&#34;&gt;
+&lt;li&gt;&lt;strong&gt;他のツールとの組み合わせ&lt;/strong&gt;：
+&lt;code&gt;mpstat&lt;/code&gt; 以外にも、&lt;code&gt;sar&lt;/code&gt;、&lt;code&gt;pidstat&lt;/code&gt;、&lt;code&gt;iostat&lt;/code&gt;などのツールを組み合わせて、システムパフォーマンスを総合的に分析できます。複数のツールの出力を組み合わせることで、より包括的にシステムの負荷状況を把握し、問題の原因を特定することができます。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;割り込み&#34;&gt;割り込み
+&lt;/h3&gt;&lt;p&gt;本内容は詳細に説明しないため、過度な説明は省略します。
+推奨: &lt;a class=&#34;link&#34; href=&#34;https://www.codedump.info/post/20200522-sgfap-softirq/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;アプリケーション開発者向けシステムガイド CPU編 - ソフトウェア割り込み&lt;/a&gt;
+頻繁にソフトウェア割り込みをトリガーすると、システム負荷にも反映されます。&lt;/p&gt;
+&lt;h2 id=&#34;問題のトラブルシューティング&#34;&gt;問題のトラブルシューティング
+&lt;/h2&gt;&lt;p&gt;CPUのみから分析するだけでは問題の原因を特定できないため、システムに異常が発生していないか疑うべきでしょうか？ 可能性がありますそれは、Linuxオペレーティングシステムの負荷が高すぎることで、VMwareが過剰なCPUリソースを使用していることです。 &lt;code&gt;mpstat&lt;/code&gt;を使用してローカル仮想マシンを分析したところ、&lt;code&gt;irq&lt;/code&gt;の使用量が異常で、1つのコアが約25%に達しており、正常時にはビジネスプロセスを開始する際に空転する場合、&lt;code&gt;irq&lt;/code&gt;の割合は約5%であるはずでした。&lt;/p&gt;
+&lt;p&gt;グループ内の同僚の開発環境では、彼のCentOS 7がVMware上でデプロイされており、リソース使用量は正常です。 一方、上海の開発環境では、VMware上にありますが、ホストマシンのCPUリソース状況を直接観察することはできません。 このとき、当社は複数の変数に直面しています：VMware仮想マシン、Linuxオペレーティングシステム、およびGCCバージョン。 - テスト環境の分析へ移行し、深圳のテスト環境は物理マシン上に低バージョンのGCCコンパイルサービスを実行しており、CentOS 8上で動作している。興味深いことに、深圳環境では&lt;code&gt;irq&lt;/code&gt;の占有率は正常だった。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;GCCのバージョンに関連する問題の特定のため、高バージョンのGCCでコンパイルされたプログラムを深圳環境にデプロイしてテストを実施したが、結果も正常であった。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;問題がより明確になってきたため、オペレーティングシステムに問題があるのではないかと疑念が生じた。毕竟、CentOS 8はすでに公式サポートを受けていないからだ。しかし、純粋なCentOS 7とCentOS 8を再デプロイしても問題は解決しなかった。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;問題解決&#34;&gt;問題解決
+&lt;/h2&gt;&lt;p&gt;この時、我々は唯一の不確実な要素、すなわちVMware仮想マシンのソフトウェアに疑念を抱き始める。突然、閃きを得て、Hyper-V技術を思いついた。以前にHyper-Vが有効になっていたものの、完全にシャットダウンしていなかったために、これが原因である可能性はないか？毕竟、ソフト中断も仮想マシンソフトウェアを通じて実現されているからだ。異なる仮想マシンの仮想化技術にはバグが存在する可能性があるのか。これらの問題は深く考える価値があるし、調査する必要がある。&lt;/p&gt;
+&lt;h2 id=&#34;結論&#34;&gt;結論
+&lt;/h2&gt;&lt;p&gt;Microsoftの公式マニュアルに従い、本機のHyper-Vサービスを完全に停止した後、VMwareがホストマシン上で正常に動作することが確認されました。これで問題はついに解決に至りました。当初述べたように、この経験は曲折で困難なものであり、包括的な分析と判断が必要でした。また、今回初めて問題を調査し、仮想マシンというレベルまで特定することができました。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>C&#43;&#43;プログラミングにおける罠：`std::map`の誤用がプログラムをクラッシュさせることの詳細な解説</title>
+        <link>https://ttf248.life/ja/p/cpp-programming-traps-std-map-crash-details/</link>
+        <pubDate>Sun, 10 Mar 2024 22:03:06 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/cpp-programming-traps-std-map-crash-details/</guid>
+        <description>e&gt;
+&lt;h2 id=&#34;本文&#34;&gt;本文
+&lt;/h2&gt;&lt;p&gt;C++標準ライブラリにおける &lt;code&gt;std::map&lt;/code&gt; は、キー（key）の値の昇順に要素を格納し、効率的なキーワード検索機能を提供する連想コンテナです。しかし、初心者開発者は &lt;code&gt;std::map&lt;/code&gt; の中括弧操作子 &lt;code&gt;[]&lt;/code&gt; の動作について理解不足なため、困惑することがあります。実際には、&lt;code&gt;[]&lt;/code&gt; を使用して存在しないキーにアクセスした場合、&lt;code&gt;std::map&lt;/code&gt; は新しいキー値ペアを挿入し、デフォルトコンストラクタを使用してそのキーに対応する値の型を初期化します。&lt;/p&gt;
+&lt;p&gt;このコードは直接プログラムをクラッシュさせるわけではありませんが、このような暗黙的な挿入動作は、リソースリークや予期しない状態の変化など、いくつかの状況で意図しない副作用を引き起こす可能性があります。さらに悪いことに、未初期化のメモリ領域への同時アクセス（特にマルチスレッド環境）は、プログラムのクラッシュにつながる可能性さえあります。 このような問題を防ぐためには、&lt;code&gt;std::map::find()&lt;/code&gt; または &lt;code&gt;std::map::count()&lt;/code&gt; メソッドを使用してキーの存在を確認するか、&lt;code&gt;std::map::insert()&lt;/code&gt; を使用して明示的に要素を挿入することをお勧めします。&lt;/p&gt;
+&lt;p&gt;マップコンテナ内部に保存されているオブジェクトがポインタ型の場合、自動的に要素を挿入する動作は未初期化されたポインタを保存し、そのポインタへの呼び出しはプログラムのクラッシュを引き起こす可能性があります。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>pstack でプロセスがフリーズしている原因を調査する</title>
+        <link>https://ttf248.life/ja/p/pstack-troubleshooting-process-hang/</link>
+        <pubDate>Sat, 24 Feb 2024 23:55:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/pstack-troubleshooting-process-hang/</guid>
+        <description>&lt;p&gt;ソフトウェア開発および運用において、プロセスがフリーズしてしまう状況は頻繁に発生します。この状態はシステム性能の低下やサービスの停止を引き起こす可能性があります。本稿では、pstackツールを使用してプロセスフリーズの問題を診断する方法について解説します。プロセスのスタック情報を分析することで、問題の原因を特定し解決策を見つけ出すことができます。&lt;/p&gt;
+&lt;p&gt;背景：リスク管理システムの子サービスでフリーズが発生し、リスク管理サービスが利用不可となりました。可用性監視の欠如により、プロセスフリーズの状況を早期に発見できず、システム全体が停止するという事態に至りました。&lt;/p&gt;
+&lt;h2 id=&#34;本文&#34;&gt;本文
+&lt;/h2&gt;&lt;p&gt;プロセスのフォジー（ゾンビプロセス）とは、プロセスが応答を停止しているにもかかわらず、終了していない状態を指します。この状況は、デッドロック、リソースの枯渇、例外など、さまざまな原因によって引き起こされる可能性があります。このような問題を解決するために、pstack ツールを使用してプロセスのスタック情報を分析し、問題の原因を特定することができます。&lt;/p&gt;
+&lt;h2 id=&#34;ステップ&#34;&gt;ステップ
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;pstack&lt;/code&gt; は一般的なツールで、通常は &lt;code&gt;gdb&lt;/code&gt; (GNU デバッガ) と共に提供されます。以下のコマンドでインストールできます：
+プロセスのIDを取得する：まず、スタックされたプロセスのプロセスID（PID）を取得する必要があります。&lt;code&gt;ps&lt;/code&gt; コマンドを使用してすべてのプロセスをリストし、調査対象のプロセスIDを見つけます。
+&lt;code&gt;pstack&lt;/code&gt; ツールを使ってプロセスのスタックを分析します。プロセスIDを取得したら、以下のコマンドを実行してそのプロセスのスタック情報を取得できます：
+これにより、現在の実行中の関数呼び出しシーケンスを含む、そのプロセスのスタック情報が出力されます。この情報を使用して、プロセスが停止している場所を特定し、問題の診断に役立てることができます。
+スタック情報を分析する：スタック情報を調べて、プロセスがスタックされた原因を特定できます。ロックアップ状況、無限ループ、またはその他の異常な状況などが見つかる可能性があります。&lt;/p&gt;
+&lt;h2 id=&#34;ケース&#34;&gt;ケース
+&lt;/h2&gt;&lt;p&gt;簡単なデモで、main関数が起動した後、新しいスレッドを作成し、実際の関数を実行することで無限ループに陥り、プログラムが正常に終了できず、偽の停止状態になります。&lt;/p&gt;
+&lt;p&gt;プログラムを起動して、pstackコマンドを実行した結果は次のとおりです。&lt;/p&gt;
+&lt;p&gt;確認すると、プロセスが停止している原因は無限ループであり、メインスレッドが無限ループに入り、子スレッドが終了できないため、プロセスが停止します。&lt;/p&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

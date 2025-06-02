@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>負荷テスト (Yōki Tesuto) on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/%E8%B2%A0%E8%8D%B7%E3%83%86%E3%82%B9%E3%83%88-y%C5%8Dki-tesuto/</link>
+        <description>Recent content in 負荷テスト (Yōki Tesuto) on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Sun, 01 Jun 2025 15:10:34 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/%E8%B2%A0%E8%8D%B7%E3%83%86%E3%82%B9%E3%83%88-y%C5%8Dki-tesuto/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>LinuxでJMeterの負荷テスト環境を構築する</title>
+        <link>https://ttf248.life/ja/p/linux-setup-jmeter-testing-environment/</link>
+        <pubDate>Tue, 22 Dec 2020 10:12:50 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/linux-setup-jmeter-testing-environment/</guid>
+        <description>&lt;p&gt;著者はハードウェアに強い関心を持ち、JMeterを用いて負荷テストを実施し、CentOS 7上にJMeter、InfluxDB、Grafanaをデプロイするプロセスを記録しました。JMeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerによるインストール方法、Grafanaの簡易的なデプロイと設定について共有しています。高性能プログラムモードに関する経験や参考資料についてもまとめました。&lt;/p&gt;
+&lt;h2 id=&#34;背景&#34;&gt;背景
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;広く知られているように&lt;/code&gt;、私にはハードウェアに対する強い関心が持っており、テストグループが &lt;code&gt;JMeter&lt;/code&gt; を使用して負荷テストを行っている際、パフォーマンスが向上しないことを発見しました。好奇心旺盛な私は、会社の負荷テストの方法を試してみることに決意しました。また、ある頃合いにオープンソース中国で読んだ投稿「より洗練された高性能の負荷テストグラフを作成する方法」があり、&lt;code&gt;Windows&lt;/code&gt; バージョンでのテスト実行時に可視化された &lt;code&gt;TPS&lt;/code&gt; データの表示を実現していました。さらに、Web パネルを構成することでどのようなメリットがあるのでしょうか？&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;頭の中で思いついたことは、当然のことばかりです。実際に試してみないとしかたないことを理解します
+テスト作成とデバッグには GUI モードを使用しないでください！負荷テストには&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;背景-1&#34;&gt;背景
+&lt;/h2&gt;&lt;p&gt;公式推奨されているのは、コマンドラインから負荷テストレポートを取得し、GUIで表示する方法ですが、データに誤差が含まれているという問題があります。JMeterの理解が十分ではないため、少なくとも&lt;code&gt;Linux&lt;/code&gt;版のコンソールパネルを弄り転げる理由を見つけたいと思います。&lt;/p&gt;
+&lt;p&gt;開かれた中国（オープンチャイナ）の投稿では、コアコンポーネントのデプロイメント方法があまりにも友好的ではなく、インストールに必要なファイルは公众号を通じてダウンロードする必要があり、現代的な若者として、もちろん&lt;code&gt;Docker&lt;/code&gt;で代替します。要するに、自分のサーバーが国内であり、国境を越えたソースアドレスへのアクセス速度も遅いため、少なくともイメージサービスとしては、阿里云には無料の加速があります。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;docker&lt;/code&gt; のインストールとデプロイメントについては、ここでは詳細な説明は省略し、以前の記事を参照してください。&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;次の内容は、主に2つの領域に分かれています：基本的なテスト環境コンポーネントの構築、および各コンポーネントの簡単な認識の説明&lt;/p&gt;
+&lt;h2 id=&#34;jmeter&#34;&gt;JMeter
+&lt;/h2&gt;&lt;p&gt;Apache JMeter は Apache 組織が開発した Java ベースの負荷テストツールです。ソフトウェアに対して負荷テストを実施するために使用され、当初は Web アプリケーション テスト用に設計されましたが、その後、他のテスト分野にも拡張されました。 静的および動的なリソース（静的ファイル、Java 小サービスプログラム、CGI スクリプト、Java オブジェクト、データベース、FTP サーバーなど）をテストに使用できます。 JMeter は、さまざまなストレスカテゴリからの巨大な負荷をシミュレートして、サーバー、ネットワーク、またはオブジェクトの強度をテストし、全体的なパフォーマンスを分析するために使用できます。 さらに、JMeter はアプリケーションに対して機能/回帰テストを実行し、断言を含むスクリプトを作成することで、プログラムが期待どおりの結果を返すことを検証します。 最大限の柔軟性を実現するため、JMeter は正規表現を使用して断言を作成することを許可しています。 Apache JMeter は、静的なリソース（ファイル、Servlet、Perlスクリプト、Javaオブジェクト、データベースとクエリ、FTPサーバーなど）および動的なリソースのパフォーマンスをテストするために使用できます。 サーバー、ネットワーク、またはオブジェクトに対して、過酷な負荷をシミュレートし、それらの強度をテストしたり、異なる負荷タイプ下での全体的なパフォーマンスを分析したりすることができます。 パフォーマンスのグラフィカル分析や、大規模な同時実行負荷でサーバー/スクリプト/オブジェクトをテストするために使用できます。&lt;/p&gt;
+&lt;h3 id=&#34;jmeter-のデプロイ-centos7&#34;&gt;JMeter のデプロイ (CentOS7)
+&lt;/h3&gt;&lt;p&gt;JDK 実行環境のインストール、JMeter インストールパッケージのダウンロード
+環境変数の設定&lt;/p&gt;
+&lt;h3 id=&#34;jmeter-コマンド&#34;&gt;JMeter コマンド
+&lt;/h3&gt;&lt;p&gt;最後に &lt;code&gt;Grafana&lt;/code&gt; パネルに接続し、&lt;code&gt;-l&lt;/code&gt; パラメータを入力する必要はありません。&lt;code&gt;web&lt;/code&gt; コンソールでデータを観察できます。&lt;/p&gt;
+&lt;h2 id=&#34;influxdb&#34;&gt;InfluxDB
+&lt;/h2&gt;&lt;p&gt;InfluxDBは、Go言語で記述されたオープンソースの分散型時系列、イベント、指標データベースです。外部依存なしで動作します。このデータベースは現在、大量の時間スタンプデータ（DevOpsモニタリングデータ、APPメトリクス、IoTセンサーデータ、リアルタイム分析データなど）を保存するために主に利用されています。&lt;/p&gt;
+&lt;h3 id=&#34;influxdbの特徴&#34;&gt;InfluxDBの特徴
+&lt;/h3&gt;&lt;p&gt;InfluxDBの特徴は、以下の9点にまとめられます。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;非構造化（非モデリング）：任意の数の列を格納できます。&lt;/li&gt;
+&lt;li&gt;メトリクスの保存期間の設定が可能&lt;/li&gt;
+&lt;li&gt;時間に関連する関数（min、max、sum、count、mean、medianなど）をサポートし、統計分析が容易です。&lt;/li&gt;
+&lt;li&gt;ストアポリシーのサポート：データの更新や削除に使用できます。（InfluxDBはデータの削除や修正方法を提供していません。）&lt;/li&gt;
+&lt;li&gt;連続クエリのサポート：データベース内で自動的にスケジュールされたSQL文群であり、ストアポリシーと組み合わせることでInfluxDBのシステム負荷を軽減できます。&lt;/li&gt;
+&lt;li&gt;ネイティブなHTTPサポート、組み込みHTTP API&lt;/li&gt;
+&lt;li&gt;SQLライクな構文のサポート&lt;/li&gt;
+&lt;li&gt;クラスタ内のデータのレプリカ数を設定可能&lt;/li&gt;
+&lt;li&gt;定期的なサンプリングによるデータ書き込みをサポートし、別のmeasurementにデータを格納することで、粒度ごとのデータストレージが可能です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;インフュージョンdb-docker-へのインストール&#34;&gt;インフュージョンDB Docker へのインストール
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;docker exec -it influxdb /bin/bash&lt;/code&gt; でコンテナに入り、コマンドを実行して、手動でデータベースを作成します。&lt;/p&gt;
+&lt;h3 id=&#34;influxdbデータベースとユーザーの作成&#34;&gt;InfluxDBデータベースとユーザーの作成
+&lt;/h3&gt;&lt;p&gt;データベースの作成: &lt;code&gt;create database jmeter_t2&lt;/code&gt;
+データベースの表示: &lt;code&gt;show databases&lt;/code&gt;
+データベースへの切り替え: &lt;code&gt;use jmeter_t2&lt;/code&gt;
+ユーザーの作成: &lt;code&gt;create user &amp;quot;admin&amp;quot; with password &#39;admin&#39; with all privileges&lt;/code&gt;
+ユーザーの表示: &lt;code&gt;show users&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;もしユーザー権限が&lt;code&gt;admin&lt;/code&gt;に&lt;code&gt;true&lt;/code&gt;と表示されれば、データベースの準備は完了です。&lt;/p&gt;
+&lt;h2 id=&#34;grafana&#34;&gt;Grafana
+&lt;/h2&gt;&lt;p&gt;テストケースの作成時に、グラフによる表現はあまり必要ないことが判明しました。インターフェースの &lt;code&gt;tps&lt;/code&gt; データはコマンドラインで実行するだけで観測できるため、主にプログラム内部の処理時間を確認したいと考えています。&lt;/p&gt;
+&lt;p&gt;簡易的に &lt;code&gt;grafana&lt;/code&gt; のコンソールパネルをデプロイし、InfluxDB と連携するための設定ファイルをインポートします。&lt;/p&gt;
+&lt;p&gt;コンソールではラベルによるフィルタリングでテスト結果を確認できます。通常は 1 つの InfluxDB データベースを設定するだけで十分です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;アプリケーション名&lt;/li&gt;
+&lt;li&gt;テストケース名&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/linux-setup-jmeter-testing-environment/Snipaste_2021-03-09_19-44-22.png&#34;
+	width=&#34;861&#34;
+	height=&#34;357&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;grafana&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;241&#34;
+		data-flex-basis=&#34;578px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;ウェブ版ではサンプリング間隔が原因で、計算された &lt;code&gt;TPS&lt;/code&gt; と関連する数値が JMeter の集計レポートと一致しません。参考リンク：&lt;a class=&#34;link&#34; href=&#34;https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;資料には、リスナーのカスタム設定方法も記載されています。&lt;/p&gt;
+&lt;h2 id=&#34;付録&#34;&gt;付録
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;高性能のプログラムパターンは必然的にone loop threadであり、ロック、入隊列、出隊列などのものは不必要なパフォーマンス損失をもたらす。&lt;/li&gt;
+&lt;li&gt;核心ビジネスロジックの実行時間が、他のコードを導入する時間よりも大きい場合、並行処理が効率を向上させる効果を発揮し、コアな実行時間が十分に小さい場合は慎重に他のコードを導入すべきである。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://my.oschina.net/u/4617935/blog/4680856&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;JMeterシリーズのJMeter+Grafana+InfluxDB リアルタイム監視&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hub.docker.com/_/influxdb&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;influxdb 公式イメージ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hub.docker.com/r/grafana/grafana&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;grafana 公式イメージ&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://jmeter.apache.org/download_jmeter.cgi&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;JMeter 公式サイト&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://medium.com/@jasonli.studio/to-install-apache-jmeter-in-centos7-294bc72a97ba&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;CentOS7にApache JMeterをインストールする方法&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        
+    </channel>
+</rss>

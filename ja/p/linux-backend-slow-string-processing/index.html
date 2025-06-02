@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="ja" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。\n">
-<title>Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していまし">
+<title>Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</title>
 
 <link rel='canonical' href='https://ttf248.life/ja/p/linux-backend-slow-string-processing/'>
 
-<link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い">
-<meta property='og:description' content="C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。\n">
+<link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い">
+<meta property='og:description' content="C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していまし">
 <meta property='og:url' content='https://ttf248.life/ja/p/linux-backend-slow-string-processing/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='問題の切り分け' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2025-05-28T09:47:38&#43;08:00'/>
-<meta name="twitter:title" content="Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い">
-<meta name="twitter:description" content="C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T06:00:45&#43;08:00'/>
+<meta name="twitter:title" content="Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い">
+<meta name="twitter:description" content="C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していまし">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
   
@@ -159,14 +159,6 @@
                                 
                                     <option value="https://ttf248.life/ja/" selected>日本語</option>
                                 
-                                    <option value="https://ttf248.life/ko/" >한국어</option>
-                                
-                                    <option value="https://ttf248.life/fr/" >Français</option>
-                                
-                                    <option value="https://ttf248.life/ru/" >Русский</option>
-                                
-                                    <option value="https://ttf248.life/hi/" >हिन्दी</option>
-                                
                             </select>
                         </li>
                     
@@ -220,10 +212,11 @@
         <div class="widget--toc">
             <nav id="TableOfContents">
   <ol>
-    <li><a href="#問題特定">問題特定</a></li>
+    <li><a href="#問題の特定">問題の特定</a></li>
     <li><a href="#デモ検証">デモ検証</a>
       <ol>
-        <li><a href="#主なポイント">主なポイント</a></li>
+        <li><a href="#主要ポイント">主要ポイント</a></li>
+        <li><a href="#主要ポイント-1">主要ポイント</a></li>
       </ol>
     </li>
     <li><a href="#完全コード">完全コード</a></li>
@@ -302,8 +295,8 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     <header class="article-category">
         
-            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
-                コンピュータ
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                コンピューター
             </a>
         
     </header>
@@ -311,13 +304,13 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
     <div class="article-title-wrapper">
         <h2 class="article-title">
-            <a href="/ja/p/linux-backend-slow-string-processing/">Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い</a>
+            <a href="/ja/p/linux-backend-slow-string-processing/">Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</a>
         </h2>
     
         
 
         
-        <h5 class="article-summary" style="display: none;"><p>C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。</p></h5>
+        <h5 class="article-summary" style="display: none;">C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していまし</h5>
         <script>
             document.addEventListener("DOMContentLoaded", function() {
                 if (typeof isHomepage !== 'undefined' && isHomepage === true) {
@@ -360,7 +353,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
                 <time class="article-time--reading">
-                    読了時間: 5分
+                    読了時間: 3分
                 </time>
             </div>
         
@@ -386,8 +379,6 @@ document.addEventListener("DOMContentLoaded", (event) => {
                 
                     <a href="https://ttf248.life/en/p/linux-backend-slow-string-processing/" class="link">English</a>
                 
-                    <a href="https://ttf248.life/ko/p/linux-backend-slow-string-processing/" class="link">한국어</a>
-                
             </div>
         </footer>
     
@@ -397,256 +388,30 @@ document.addEventListener("DOMContentLoaded", (event) => {
     <section class="article-content">
     
     
-    <p>C++開発の過去プロジェクトにおいて、カスタムプロトコルを用いて通信しており、そのプロトコルは二次元配列の形式を採用していました。大量データを処理する際、ログ生成のために配列を走査しシリアライズを行う必要がありましたが、効率が悪く、高負荷時にシステムが顕著にカクつくという問題が発生しました。この件について、ビジネス部門からシステムの動作不良に関するフィードバックがありました。</p>
-<h2 id="問題特定">問題特定
-</h2><p>問題の調査において、まずシステムを性能解析したところ、大量データを処理する際にCPU使用率が顕著に増加し、システム応答時間が長くなっていることが判明しました。システムのログを分析した結果、二次元配列の処理における効率の低いシリアライズ操作が多く存在することがわかり、これがシステムパフォーマンスの低下を引き起こしていると考えられます。</p>
-<p>ツール切り取りサービスの スレッド情報を確認した結果、ログスレッドの大部分の時間文字列の結合処理に費やされていることが判明しました。</p>
+    <p>C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していました。大量データを処理する際に、プロトコル内部では配列をトラバースし、シリアライズ操作を実行してログを生成する必要があり、このため効率が低く、システムが高負荷時に顕著なフレーム落ち（カドゥ）を引き起こしました。ビジネス部門からは、システムのフレーム落ちに関するフィードバックがありました。</p>
+<h2 id="問題の特定">問題の特定
+</h2><p>問題のトラブルシューティングにおいて、まずシステムに対してパフォーマンス分析を実施し、大量データを処理する際にCPU使用率が著しく増加し、システムの応答時間が長くなっていることを発見しました。ログを分析した結果、多数のシリアライズ操作が見られ、これらの操作は2次元配列を処理する際の効率が低いことが原因でシステムのパフォーマンス低下を引き起こしていることがわかりました。</p>
+<p><code>pstack</code>ツールを使用してサービスのスレッド情報を取得し、ログスレッドが大部分の時間文字列の連結に費やしていることを特定しました。</p>
 <blockquote>
-<p>ここが今日のポイントです。異なる加算方法によって、効率は大きく異なります。過去のコードでは <strong>INLINE_CODE_0</strong> 演算子を使用しており、この方法は頻繁に一時オブジェクトを作成するため、非常に低速です。それが非効率的だと知っていても、どれほど非効率的なのかを理解していないようなものです。</p>
+<p>今日は重点的に取り組むべき点です。異なる累積方法では、効率の違いが非常に大きいです。過去のコードでは&quot;+&ldquo;演算子を使用しており、この方法は頻繁に一時オブジェクトを作成するため、非常に非効率的でした。それは、その非効率性がどの程度であるかを理解していない状況です。</p>
 </blockquote>
 <h2 id="デモ検証">デモ検証
-</h2><p>プロジェクトコードに基づいて、業務ロジックを抽出し、文字列結合の効率問題を検証するための簡単なデモを作成しました。<strong>INLINE_CODE_0</strong> 下的 __INLINE_CODE_1__BOLD_6<code>linux</code> 下的 <strong>INLINE_CODE_3</strong> 编译器，__INLINE_CODE_4__モードでコンパイル実行し、効率を比較します。</p>
-<h3 id="主なポイント">主なポイント
-</h3><p>プロジェクトでは手法4を使用しており、テストデータを入手する前に、読者はどの方法が最も効率的か、またどれが最も非効率かを考えてみることができます。結果を見たときは、やはり驚きました。</p>
+</h2><p>プロジェクトコードに基づいて、ビジネスロジックを抽出し、文字列連結の効率に関する問題を検証するためのシンプルなデモを作成しました。Windows環境ではVisual Studio 2022コンパイラ、Linux環境ではgcc8.5コンパイラを使用し、Releaseモードでビルドして実行し、効率を比較します。</p>
+<h3 id="主要ポイント">主要ポイント
+</h3><p>このプロジェクトでは、方法四を使用し、テストデータを入手する前に、どの方法が最も効率的で、最も非効率かを読者に考えてもらうようにしました。結果を見たときは、自分でも驚きました。</p>
 <ol>
-<li>各フィールドを文字列に連結します。</li>
-<li>流（ストリーム）を使用して各フィールドを結合すると、この方法がより効率的です。特に大量のデータを結合する場合に有効です。</li>
-<li>事前に文字列に十分なメモリを割り当てることで、メモリ再配置のオーバーヘッドを削減し、パフォーマンスが向上します。</li>
-<li><strong>太字_1</strong>インライン<strong>イタリック_3</strong>、<strong>太字_2</strong>：文字列を連結するたびに新しい一時的な文字列オブジェクトが作成されるため、特に大規模な連結ではパフォーマンスが低下します。これは、連結ごとに新しいメモリの割り当てとコピーが発生するためです。</li>
+<li><strong>方法 1 (<code>+=</code> による連結)</strong>：各フィールドを <code>+=</code> を使って文字列に直接連結します。</li>
+<li><strong>方法 2 (<code>std::ostringstream</code> による連結)</strong>：ストリーム（<code>std::ostringstream</code>）を使用して各フィールドを連結する方法で、特に大量のデータを連結する場合に効率的です。</li>
+<li><strong>方法 3（事前にメモリを割り当てる <code>+=</code> による連結）</strong>: <code>reserve</code> を使用して文字列に十分なメモリを事前に割り当て、メモリ再割り当てのオーバーヘッドを削減することでパフォーマンスを向上させます。 <strong>方法4 (<code>bodys = bodys + body + &quot;\n&quot;</code>)</strong>: 各自の連結ごとに新しい一時的な文字列オブジェクトが作成されるため、大規模な連結においてはパフォーマンスが低下します。これは、各連結で新たなメモリ割り当てとコピーが発生するためです。
+参照結果から、この方法が最も効率の悪いものとして適切に選択されていることがわかります。
+さらに詳しく分析すると、異なるプラットフォームコンパイラの最適化効率の違いが見られます。Microsoft の <code>Visual Studio</code> は従来通り優れており、文字列の最適化効率は非常に高い一方、<code>gcc</code> コンパイラはその最適化効率がやや劣ります。</li>
 </ol>
-<p>参照結果から、プロジェクトは効率が最も悪い方法が選択されたことが分かります。</p>
-<p>さらに、異なるプラットフォームのコンパイラ最適化効率を分析すると、Microsoftの<code>visual studio</code> 一如既往的优秀，针对字符串的优化效率很高，而 <code>gcc</code>コンパイラは、この点において若干見劣りする。</p>
-<blockquote>
-<p>コードを異なるマシンで実行した場合、データの比較は直接的な意味を持たないため、それぞれの結合方法間の差異を比較するのが適切です。</p>
+<h3 id="主要ポイント-1">主要ポイント
+</h3><blockquote>
+<p>コードを異なるマシンで実行した場合、2つのデータ間で直接的な比較の意味がないため、異なるパッチング方法間の差分を比較することができます。</p>
 </blockquote>
-<pre><code class="language-shell">windows 平台下的 vs2022 编译器
-
-----------------------------------------
-Data Generation Time: 0.054 seconds.
-----------------------------------------
-
-----------------------------------------
-Data Merging Performance:
-----------------------------------------
-+ Data merging (+=) took: 0.053 seconds.
-+ ostringstream Data merging took: 0.054 seconds.
-+ Pre-reserved Data merging took: 0.045 seconds.
-+ Data merging (bodys = bodys + body + &quot;\n&quot;) took: 16.108 seconds.
-
-----------------------------------------
-Data Merging Complete.
-----------------------------------------
-
-Program finished.
-</code></pre>
-<pre><code class="language-shell">linux 平台下的 gcc8.5 编译器
-----------------------------------------
-Data Generation Time: 0.108 seconds.
-----------------------------------------
-
-----------------------------------------
-Data Merging Performance:
-----------------------------------------
-+ Data merging (+=) took: 0.100 seconds.
-+ ostringstream Data merging took: 0.083 seconds.
-+ Pre-reserved Data merging took: 0.057 seconds.
-+ Data merging (bodys = bodys + body + &quot;\n&quot;) took: 29.298 seconds.
-
-----------------------------------------
-Data Merging Complete.
-----------------------------------------
-
-Program finished.
-</code></pre>
 <h2 id="完全コード">完全コード
-</h2><pre><code class="language-cpp">#include &lt;iostream&gt;
-#include &lt;string&gt;
-#include &lt;vector&gt;
-#include &lt;random&gt;
-#include &lt;chrono&gt;
-#include &lt;sstream&gt;
-#include &lt;iomanip&gt;
-
-typedef std::vector&lt;std::string&gt; DataRow;
-typedef std::vector&lt;DataRow&gt; DataGroup;
-
-struct ResponsePackage
-{
-    std::string ErrorInfo;
-    DataRow Head;
-    std::string ClientId;
-    std::string UUID;
-    std::string MsgID;
-    std::string SessionID;
-    std::string ExtraInfo1;
-    std::string ExtraInfo2;
-    DataGroup DataBody;
-};
-
-// Generate specified length of random string
-std::string generateRandomString(size_t length)
-{
-    const char charset[] = &quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&quot;;
-    const size_t max_index = sizeof(charset) - 1;
-    std::string random_string;
-    random_string.reserve(length);
-
-    std::random_device rd;
-    std::mt19937 generator(rd());
-    std::uniform_int_distribution&lt;&gt; distribution(0, max_index);
-
-    for (size_t i = 0; i &lt; length; ++i)
-    {
-        random_string += charset[distribution(generator)];
-    }
-
-    return random_string;
-}
-
-void create_large_string()
-{
-    // Example request package with 50 fields
-    ResponsePackage requestPackage;
-
-    requestPackage.Head = {
-        &quot;Field1&quot;, &quot;Field2&quot;, &quot;Field3&quot;, &quot;Field4&quot;, &quot;Field5&quot;,
-        &quot;Field6&quot;, &quot;Field7&quot;, &quot;Field8&quot;, &quot;Field9&quot;, &quot;Field10&quot;,
-        &quot;Field11&quot;, &quot;Field12&quot;, &quot;Field13&quot;, &quot;Field14&quot;, &quot;Field15&quot;,
-        &quot;Field16&quot;, &quot;Field17&quot;, &quot;Field18&quot;, &quot;Field19&quot;, &quot;Field20&quot;,
-        &quot;Field21&quot;, &quot;Field22&quot;, &quot;Field23&quot;, &quot;Field24&quot;, &quot;Field25&quot;,
-        &quot;Field26&quot;, &quot;Field27&quot;, &quot;Field28&quot;, &quot;Field29&quot;, &quot;Field30&quot;,
-        &quot;Field31&quot;, &quot;Field32&quot;, &quot;Field33&quot;, &quot;Field34&quot;, &quot;Field35&quot;,
-        &quot;Field36&quot;, &quot;Field37&quot;, &quot;Field38&quot;, &quot;Field39&quot;, &quot;Field40&quot;,
-        &quot;Field41&quot;, &quot;Field42&quot;, &quot;Field43&quot;, &quot;Field44&quot;, &quot;Field45&quot;,
-        &quot;Field46&quot;, &quot;Field47&quot;, &quot;Field48&quot;, &quot;Field49&quot;, &quot;Field50&quot;
-    };
-
-    requestPackage.ClientId = &quot;ClientID&quot;;
-    requestPackage.UUID = &quot;UUID&quot;;
-    requestPackage.MsgID = &quot;MsgID&quot;;
-    requestPackage.SessionID = &quot;SessionID&quot;;
-    requestPackage.ExtraInfo1 = &quot;ExtraInfo1&quot;;
-    requestPackage.ExtraInfo2 = &quot;ExtraInfo2&quot;;
-
-    // Start timing for data generation
-    auto start_gen = std::chrono::high_resolution_clock::now();
-
-    // Generate 10,000 rows of data, each with 50 fields
-    for (size_t i = 0; i &lt; 10000; ++i)
-    {
-        DataRow dataRow(50, &quot;This is a test string&quot;);
-        requestPackage.DataBody.push_back(dataRow);
-    }
-
-    // End timing for data generation
-    auto end_gen = std::chrono::high_resolution_clock::now();
-    std::chrono::duration&lt;double&gt; duration_gen = end_gen - start_gen;
-
-    // Display result generation time
-    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
-    std::cout &lt;&lt; &quot;Data Generation Time: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_gen.count() &lt;&lt; &quot; seconds.\n&quot;;
-    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
-
-    // Data merging using different methods
-    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
-    std::cout &lt;&lt; &quot;Data Merging Performance:\n&quot;;
-    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
-
-    {
-        // Method 1: Using '+=' string concatenation
-        auto start_merge = std::chrono::high_resolution_clock::now();
-        std::string bodys(&quot;&quot;);
-        for (auto&amp; vec : requestPackage.DataBody)
-        {
-            std::string body(&quot;This is a test string&quot;);
-            for (auto&amp; item : vec)
-            {
-                body += item + &quot; &quot;;
-            }
-            bodys += body + &quot;\n&quot;;
-        }
-        auto end_merge = std::chrono::high_resolution_clock::now();
-        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-        std::cout &lt;&lt; &quot;+ Data merging (+=) took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
-    }
-
-    {
-        // Method 2: Using ostringstream
-        auto start_merge = std::chrono::high_resolution_clock::now();
-        std::ostringstream bodys;
-        for (auto&amp; vec : requestPackage.DataBody)
-        {
-            std::ostringstream body;
-            body &lt;&lt; &quot;This is a test string&quot;;
-            for (auto&amp; item : vec)
-            {
-                body &lt;&lt; item &lt;&lt; &quot; &quot;;
-            }
-            bodys &lt;&lt; body.str() &lt;&lt; &quot;\n&quot;;
-        }
-        auto end_merge = std::chrono::high_resolution_clock::now();
-        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-        std::cout &lt;&lt; &quot;+ ostringstream Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
-    }
-
-    {
-        // Method 3: Pre-allocated memory
-        auto start_merge = std::chrono::high_resolution_clock::now();
-        std::string bodys;
-        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
-        for (auto&amp; vec : requestPackage.DataBody)
-        {
-            std::string body(&quot;This is a test string&quot;);
-            body.reserve(50 * 20); // Pre-allocate memory for each row
-            for (auto&amp; item : vec)
-            {
-                body += item + &quot; &quot;;
-            }
-            bodys += body + &quot;\n&quot;;
-        }
-        auto end_merge = std::chrono::high_resolution_clock::now();
-        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-        std::cout &lt;&lt; &quot;+ Pre-reserved Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
-    }
-
-    {
-        // Method 4: Using 'bodys = bodys + body + &quot;\n&quot;'
-        auto start_merge = std::chrono::high_resolution_clock::now();
-        std::string bodys(&quot;&quot;);
-        for (auto&amp; vec : requestPackage.DataBody)
-        {
-            std::string body(&quot;This is a test string&quot;);
-            for (auto&amp; item : vec)
-            {
-                body = body + item + &quot; &quot;; // Note the use of 'body = body + item'
-            }
-            bodys = bodys + body + &quot;\n&quot;; // Again, using 'bodys = bodys + body'
-        }
-        auto end_merge = std::chrono::high_resolution_clock::now();
-        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-        std::cout &lt;&lt; &quot;+ Data merging (bodys = bodys + body + \&quot;\\n\&quot;) took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
-    }
-
-    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
-    std::cout &lt;&lt; &quot;Data Merging Complete.\n&quot;;
-    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
-}
-
-int main()
-{
-    try
-    {
-        create_large_string();
-    }
-    catch (const std::exception&amp; e)
-    {
-        std::cerr &lt;&lt; &quot;Caught exception: &quot; &lt;&lt; e.what() &lt;&lt; std::endl;
-    }
-
-    std::cout &lt;&lt; &quot;\nProgram finished.\n&quot;;
-    return 0;
-}
-</code></pre>
+</h2>
 </section>
 
 
@@ -658,7 +423,7 @@ int main()
         
             <a href="/ja/tags/linux/">Linux</a>
         
-            <a href="/ja/tags/%E5%95%8F%E9%A1%8C%E3%81%AE%E5%88%87%E3%82%8A%E5%88%86%E3%81%91/">問題の切り分け</a>
+            <a href="/ja/tags/%E3%83%88%E3%83%A9%E3%83%96%E3%83%AB%E3%82%B7%E3%83%A5%E3%83%BC%E3%83%86%E3%82%A3%E3%83%B3%E3%82%B0/">トラブルシューティング</a>
         
     </section>
 
@@ -701,7 +466,7 @@ int main()
 
 
         <span>
-            最終更新 2025年05月28日 09:47
+            最終更新 2025年06月02日 06:00
         </span>
     </section>
     
@@ -756,7 +521,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">GCCバージョンアップによりプログラムがクラッシュ：非標準コードの潜在的な問題</h2>
+            <h2 class="article-title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました：コードの非規整性による問題点</h2>
         </div>
     </a>
 </article>
@@ -769,7 +534,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">C&#43;&#43;プログラミングの落とし穴：`std::map` の誤った使用によるプログラムクラッシュの詳細解説</h2>
+            <h2 class="article-title">C&#43;&#43;プログラミングにおける罠：`std::map`の誤用がプログラムをクラッシュさせることの詳細な解説</h2>
         </div>
     </a>
 </article>
@@ -782,7 +547,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">プロトバッファのゼロ値の落とし穴：デフォルト値がビジネスロジックを密かに破滅させる</h2>
+            <h2 class="article-title">Protobufのゼロ値問題：デフォルト値がビジネスロジックの影の殺し屋に</h2>
         </div>
     </a>
 </article>
@@ -795,7 +560,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">バックエンドサービスTCP通信異常のトラブルシューティング</h2>
+            <h2 class="article-title">バックエンドサービス TCP 通信異常トラブルシューティング</h2>
         </div>
     </a>
 </article>
@@ -808,7 +573,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">atopツールによるLinuxシステム指標の監視：インストール、設定と利用完全ガイド</h2>
+            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定と使い方完全ガイド</h2>
         </div>
     </a>
 </article>

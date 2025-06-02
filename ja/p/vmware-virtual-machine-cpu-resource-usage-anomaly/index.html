@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="ja" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="バックグラウンド：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソース使用率は約5%。VMwareにインストールされたCentOS8上にLinux版業務システムをデプロイしたところ、リソース使用量が異常です。\n">
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="背景：ローカルマシンにデプロイされたWindows版の業務システムで、CPU使用率が約5％です。VMwareにインストールしたCentOS8">
 <title>VMware仮想マシンのCPUリソース使用量異常</title>
 
 <link rel='canonical' href='https://ttf248.life/ja/p/vmware-virtual-machine-cpu-resource-usage-anomaly/'>
 
 <link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="VMware仮想マシンのCPUリソース使用量異常">
-<meta property='og:description' content="バックグラウンド：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソース使用率は約5%。VMwareにインストールされたCentOS8上にLinux版業務システムをデプロイしたところ、リソース使用量が異常です。\n">
+<meta property='og:description' content="背景：ローカルマシンにデプロイされたWindows版の業務システムで、CPU使用率が約5％です。VMwareにインストールしたCentOS8">
 <meta property='og:url' content='https://ttf248.life/ja/p/vmware-virtual-machine-cpu-resource-usage-anomaly/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='vmware' /><meta property='article:tag' content='問題の切り分け' /><meta property='article:published_time' content='2024-03-10T22:14:59&#43;08:00'/><meta property='article:modified_time' content='2025-05-28T09:47:38&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='vmware' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:published_time' content='2024-03-10T22:14:59&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T06:00:45&#43;08:00'/>
 <meta name="twitter:title" content="VMware仮想マシンのCPUリソース使用量異常">
-<meta name="twitter:description" content="バックグラウンド：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソース使用率は約5%。VMwareにインストールされたCentOS8上にLinux版業務システムをデプロイしたところ、リソース使用量が異常です。\n">
+<meta name="twitter:description" content="背景：ローカルマシンにデプロイされたWindows版の業務システムで、CPU使用率が約5％です。VMwareにインストールしたCentOS8">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
   
@@ -159,14 +159,6 @@
                                 
                                     <option value="https://ttf248.life/ja/" selected>日本語</option>
                                 
-                                    <option value="https://ttf248.life/ko/" >한국어</option>
-                                
-                                    <option value="https://ttf248.life/fr/" >Français</option>
-                                
-                                    <option value="https://ttf248.life/ru/" >Русский</option>
-                                
-                                    <option value="https://ttf248.life/hi/" >हिन्दी</option>
-                                
                             </select>
                         </li>
                     
@@ -220,16 +212,18 @@
         <div class="widget--toc">
             <nav id="TableOfContents">
   <ol>
-    <li><a href="#問題説明">問題説明</a></li>
+    <li><a href="#問題の記述">問題の記述</a></li>
     <li><a href="#知識点">知識点</a>
       <ol>
-        <li><a href="#hyper-v">hyper-v</a></li>
+        <li><a href="#hyper-v">Hyper-V</a></li>
         <li><a href="#システム負荷">システム負荷</a></li>
-        <li><a href="#負荷解析-mpstat">負荷解析 mpstat</a></li>
-        <li><a href="#中断">中断</a></li>
+        <li><a href="#負荷分析---mpstat">負荷分析 - mpstat</a></li>
+        <li><a href="#負荷の分析-mpstat">負荷の分析 mpstat</a></li>
+        <li><a href="#割り込み">割り込み</a></li>
       </ol>
     </li>
-    <li><a href="#問題の切り分け">問題の切り分け</a></li>
+    <li><a href="#問題のトラブルシューティング">問題のトラブルシューティング</a></li>
+    <li><a href="#問題解決">問題解決</a></li>
     <li><a href="#結論">結論</a></li>
   </ol>
 </nav>
@@ -306,8 +300,8 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     <header class="article-category">
         
-            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
-                コンピュータ
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                コンピューター
             </a>
         
     </header>
@@ -321,7 +315,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
         
 
         
-        <h5 class="article-summary" style="display: none;"><p>バックグラウンド：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソース使用率は約5%。VMwareにインストールされたCentOS8上にLinux版業務システムをデプロイしたところ、リソース使用量が異常です。</p></h5>
+        <h5 class="article-summary" style="display: none;">背景：ローカルマシンにデプロイされたWindows版の業務システムで、CPU使用率が約5％です。VMwareにインストールしたCentOS8</h5>
         <script>
             document.addEventListener("DOMContentLoaded", function() {
                 if (typeof isHomepage !== 'undefined' && isHomepage === true) {
@@ -364,7 +358,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
                 <time class="article-time--reading">
-                    読了時間: 6分
+                    読了時間: 7分
                 </time>
             </div>
         
@@ -386,11 +380,9 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
             <div>
                 
-                    <a href="https://ttf248.life/p/vmware-virtual-machine-cpu-resource-usage-anomaly/" class="link">中文</a>
+                    <a href="https://ttf248.life/p/vmware-virtual-machine-cpu-usage-anomaly/" class="link">中文</a>
                 
                     <a href="https://ttf248.life/en/p/vmware-virtual-machine-cpu-resource-usage-anomaly/" class="link">English</a>
-                
-                    <a href="https://ttf248.life/ko/p/vmware-virtual-machine-cpu-resource-usage-anomaly/" class="link">한국어</a>
                 
             </div>
         </footer>
@@ -401,15 +393,14 @@ document.addEventListener("DOMContentLoaded", (event) => {
     <section class="article-content">
     
     
-    <p>バックグラウンド：ローカルマシンにWindows版の業務システムがデプロイされており、CPUリソース使用率は約5%。VMwareにインストールされたCentOS8上にLinux版業務システムをデプロイしたところ、リソース使用量が異常です。</p>
-<h2 id="問題説明">問題説明
+    <p>背景：ローカルマシンにデプロイされたWindows版の業務システムで、CPU使用率が約5％です。VMwareにインストールしたCentOS8上にLinux版の業務システムをデプロイし、リソース使用量に異常が見られます。</p>
+<h2 id="問題の記述">問題の記述
 </h2><ul>
-<li>ホストOS：Windows 10 Enterprise</li>
-<li>vmware：17.5</li>
-<li>仮想マシン：CentOS 8</li>
-</ul>
-<p>仮想マシンリソースの割り当ては__INLINE_CODE_0__です。ビジネスシステムを起動します。ビジネスシステムは仮想マシンLinuxにデプロイされており、仮想マシン内部のtopコマンドでシステムリソースの使用状況を確認したところ、CPU使用率は高くありませんでした。一方、外側のWindowsシステムではタスクマネージャーでCPUリソースの使用率が非常に高いことが確認でき、プロセスを確認するとVMwareプロセスがCPUリソースを大量に消費していました。</p>
-<p>+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
+<li>宿主机：win10 企业版</li>
+<li>VMware：17.5</li>
+<li>仮想マシン：centos8
+仮想マシンのリソース配分は<code>4C8GB</code>で、ビジネスシステムを起動します。ビジネスシステムが仮想マシンLinuxシステムにデプロイされており、仮想マシン内部のtopコマンドでシステムのリソース使用率を確認すると、CPU使用率は高くありません。しかし、外側のWindowsシステムでタスクマネージャーを見ると、CPUリソース使用率は非常に高くなっています。プロセスを確認すると、VMware プロセスがCPUリソースを大量に使用しています。
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+
 |         Windows           |
 |                           |
 |   +&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+  |
@@ -417,69 +408,68 @@ document.addEventListener("DOMContentLoaded", (event) => {
 |   |      Program       |  |
 |   +&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&ndash;+  |
 |                           |
-+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</p>
++&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+</li>
+</ul>
 <h2 id="知識点">知識点
-</h2><p>この問題の切り分けは順調に進まず、原因が通常のビジネスシステムではなく、仮想マシン自体の問題にあることが判明しました。いかにして発想を通常のビジネスコードからシステム負荷へ、そして負荷データの異常からソフト割り込みへと転換し、最終的に何がVMwareソフト割り込みの効率に影響を与えるかを特定するか？ 本稿ではまず各知識点を解説し、最後に解決策を示します。</p>
-<h3 id="hyper-v">hyper-v
-</h3><p>Windows オペレーティングシステムの仮想化技術は大きな変革を遂げました。Microsoft が WSL を初めてリリースした際、Hyper-V サービスを有効にすると VMware 仮想マシンが同時に使用できませんでした。しかし、その後のバージョンで VMware は Hyper-V サービスとの互換性が得られました。</p>
+</h2><p>この問題のトラブルシューティングは、スムーズに進まず、原因はビジネスシステムそのものではなく、仮想マシンの問題にある。通常のビジネスコードからの思考を、システム負荷に転換し、さらに負荷データの異常から、スワップ中断へと追跡し、最終的に重要なポイントにたどり着くには、VMwareのスワップ中断のパフォーマンスに影響を与えるものは何か？ 本稿ではまず各知識点を解説し、最後に解決策を示す。</p>
+<h3 id="hyper-v">Hyper-V
+</h3><p>Windowsオペレーティングシステムの仮想化技術において、大きな変革がありました。Microsoftが最初にWSL（Windows Subsystem for Linux）をリリースした際、Hyper-Vサービスを有効にすると、VMware仮想マシンの同時使用ができなくなっていました。その後、バージョンアップにより、VMwareはHyper-Vサービスと互換性を持つようになりました。</p>
 <h3 id="システム負荷">システム負荷
-</h3><p>Linuxシステムにおいて、「ロード」（load）とは、実行中または実行待ちのプロセスの数を指します。通常、ロードは1分間、5分間、および15分間の実行キュー内の平均プロセス数を示す3つの数字で表されます。これらの数値は、「uptime」コマンドや「top」コマンドを実行することで確認できます。</p>
-<p>具体的には、この3つの数字はそれぞれ以下のものを表します。</p>
+</h3><p>Linuxシステムにおいて、「負荷」（load）とは、実行中または実行を待っているプロセスの数を指します。負荷は通常、1分間、5分間、および15分間の実行キュー内の平均プロセス数という3つの数字で表されます。これらの数字は、「uptime」コマンドまたは「top」コマンドを実行することで確認できます。</p>
+<p>具体的には、これらの3つの数字はそれぞれ以下の意味を持ちます。</p>
 <ol>
-<li>過去1分間の実行キューの平均プロセス数。</li>
-<li>過去5分間の実行キューの平均プロセス数。</li>
-<li>過去15分間の実行キューの平均プロセス数。</li>
+<li><strong>1分負荷</strong>: システムが過去1分間に実行キュー内の平均プロセス数です。</li>
+<li><strong>5分負荷</strong>: システムが過去5分間に実行キュー内の平均プロセス数です。</li>
+<li><strong>15分負荷</strong>: システムが過去15分間に実行キュー内の平均プロセス数です。</li>
 </ol>
-<p>負荷とは、システム内で実行待ちのプロセス数を指します。この数がシステムの論理 CPU 数よりも高い場合、システム負荷が高いことを示し、多くのプロセスがプロセッサリソースを待機していることを意味します。これにより、システムが遅くなったり、応答しなくなったりする可能性があります。その程度やシステムの構成・性能によって異なります。</p>
-<p>理想的には、負荷はシステムの論理 CPU 数範囲内に維持し、システム性能を最適化することが望ましいです。もし負荷が継続的に CPU 数を超えた場合、システム内のプロセスを分析し、高負荷の原因を特定した上で、システムリソースの割り当て調整やプロセスの実行方法の最適化などの対策を講じる必要があるかもしれません。</p>
-<h3 id="負荷解析-mpstat">負荷解析 mpstat
-</h3><p>負荷解析の手順：</p>
+<p>負荷の意味は、システム内で待っているプロセスの数です。 もしこの数値がシステムのロジックCPU数よりも高い場合、システム負荷が高いことを示し、多くのプロセスがプロセッサーリソースを待っている状態であることを意味します。これにより、システムが遅延したり応答しなくなったりする可能性があります。これは、負荷の高さとシステムの構成および性能によって異なります。</p>
+<p>理想的には、負荷はシステムのロジックCPU数内に保たれるべきで、そのようにすればシステムの性能を最適化できます。負荷が継続してCPU数を超過する場合は、システム内のプロセスをさらに分析して、負荷の原因を特定し、適切な対策としてリソースの割り当てを調整したり、プロセスの実行方法を最適化したりする必要があります。</p>
+<h3 id="負荷分析---mpstat">負荷分析 - mpstat
+</h3><p><code>mpstat</code> コマンドは、個々のプロセッサまたは複数のプロセッサに関するさまざまな情報を報告するために使用されます。これには、平均負荷、CPU利用率、割り込み、およびコンテキスト切り替えなどが含まれます。 <code>sysstat</code> パッケージに含まれる <code>mpstat</code> は、システムの負荷状況を分析するための非常に便利なツールです。以下に、<code>mpstat</code> を使用した負荷分析の手順を示します。</p>
 <ol>
 <li>
-<p><strong>安装 sysstat</strong>:
-もし、あなたのシステムに <strong>INLINE_CODE_0</strong> がインストールされていない場合は、システムに適したパッケージ管理ツールでインストールしてください。</p>
+<p><strong>sysstat のインストール:</strong>
+システムに <code>sysstat</code> がインストールされていない場合は、お使いのシステムに適したパッケージマネージャを使用してインストールしてください。</p>
 </li>
 <li>
-<p><strong>运行 mpstat</strong>:
-使用リソースの使用状況を表示</p>
-<pre><code class="language-shell">01:32:33 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
-01:32:35 PM  all    0.00    0.00    0.26    0.00    3.73    0.26    0.00    0.00    0.00   95.76
-01:32:35 PM    0    0.00    0.00    0.51    0.00    3.57    0.00    0.00    0.00    0.00   95.92
-01:32:35 PM    1    0.00    0.00    0.00    0.00    3.59    0.51    0.00    0.00    0.00   95.90
-01:32:35 PM    2    0.00    0.00    0.00    0.00    4.15    0.00    0.00    0.00    0.00   95.85
-01:32:35 PM    3    0.00    0.00    0.52    0.00    3.61    0.52    0.00    0.00    0.00   95.36
-</code></pre>
+<p><strong>mpstat の実行:</strong>
+<code>mpstat</code> コマンドを実行して、CPUの使用状況と負荷を確認します。デフォルトでは、<code>mpstat</code> は1秒ごとにCPU使用率の平均値を表示します。出力頻度を調整するには、時間間隔を指定できます。 例：毎秒1回で <code>mpstat</code> を実行するには、次のコマンドを使用します: <code>mpstat -P ALL 2</code>、<code>irq</code> はリソース使用率を示します。</p>
 </li>
 <li>
-<p><strong>分析输出</strong>:
-出力には、各CPUの利用率とシステムの平均負荷が含まれます。平均負荷と各CPUの利用率に特に注意を払うことで、システムの負荷状況を把握できます。負荷が高い場合は、原因となっているプロセスやパフォーマンスボトルネックをさらに分析できます。</p>
-</li>
-<li>
-<p><strong>结合其他工具</strong>:
-様々なツールを用いてシステムパフォーマンスを総合的に分析します。複数のツールの出力を組み合わせることで、システムの負荷状況をより詳細に把握し、パフォーマンス問題の根本原因を特定できます。</p>
+<p><strong>出力の分析</strong>：
+<code>mpstat</code> の出力には、各 CPU の利用率とシステム全体の平均負荷が含まれます。特に平均負荷と各 CPU の利用率に注目することで、システムの負荷状況を把握できます。負荷が高い場合は、どのプロセスが原因となっているか、パフォーマンスボトルネックがないかをさらに分析する必要があります。</p>
 </li>
 </ol>
-<h3 id="中断">中断
-</h3><p>ここでは詳細な説明は省略します。
-推奨：<a class="link" href="https://www.codedump.info/post/20200522-sgfap-softirq/"  target="_blank" rel="noopener"
-    >《面向应用开发者的系统指南》CPU篇之软中断</a></p>
-<p>頻繁なソフト割り込みの発生は、システム負荷に現れる。</p>
-<h2 id="問題の切り分け">問題の切り分け
-</h2><p>CPUの観点だけで問題を特定できない場合、システムに異常が発生している可能性を疑うべきではないでしょうか？ Linuxオペレーティングシステムの負荷が高すぎて、VMwareが過剰なCPUリソースを消費しているのかもしれません。使用率（<code>mpstat</code>BOLD_3<code>irq</code>占用异常，单核接近25%，而在正常情况下，启动业务进程空跑时，<code>irq</code>）は約5%であるはずです。</p>
-<p>グループ内チームメイトの開発環境では、彼のCentOS 7はVMware上にデプロイされており、リソース使用率は正常に表示されている。一方、上海の開発環境では、同様にVMwareだが、ホストのCPUリソース状況を直接観察できない。この際、VMware仮想マシン、Linuxオペレーティングシステム、そしてGCCバージョンという複数の変数が存在する。</p>
-<p>深圳のテスト環境を分析すると、物理マシン上に古いバージョンのGCCコンパイルサービスが稼働しており、CentOS 8上で動作している。興味深いことに、深圳環境では <strong>INLINE_CODE_0</strong> の占有は正常である。</p>
-<p>問題の切り分けのため、より新しいバージョンの GCC でコンパイルしたプログラムを深セン環境にデプロイしてテストした結果、すべて正常でした。</p>
-<p>問題はより明確になりつつあり、オペレーティングシステムに問題があるのではないかと疑い始めています。結局のところ、CentOS 8 は公式サポートが終了しています。しかし、クリーンな CentOS 7 と CentOS 8 を再デプロイしても、問題は依然として存在します。</p>
-<p>今のところ、唯一の不確定要素であるVMware仮想マシンソフトウェアを疑い始めています。すると突然、Hyper-V技術が頭に浮かびました。以前にHyper-Vが有効になっていて、完全にシャットダウンされなかったためにこの問題が発生しているのでしょうか？結局のところ、ソフト割り込みも仮想マシンソフトウェアによって実現されます。異なる仮想化技術にバグは存在しないのでしょうか？これらの問題について深く考察し、調査する必要があります。</p>
+<h3 id="負荷の分析-mpstat">負荷の分析 mpstat
+</h3><ol start="4">
+<li><strong>他のツールとの組み合わせ</strong>：
+<code>mpstat</code> 以外にも、<code>sar</code>、<code>pidstat</code>、<code>iostat</code>などのツールを組み合わせて、システムパフォーマンスを総合的に分析できます。複数のツールの出力を組み合わせることで、より包括的にシステムの負荷状況を把握し、問題の原因を特定することができます。</li>
+</ol>
+<h3 id="割り込み">割り込み
+</h3><p>本内容は詳細に説明しないため、過度な説明は省略します。
+推奨: <a class="link" href="https://www.codedump.info/post/20200522-sgfap-softirq/"  target="_blank" rel="noopener"
+    >アプリケーション開発者向けシステムガイド CPU編 - ソフトウェア割り込み</a>
+頻繁にソフトウェア割り込みをトリガーすると、システム負荷にも反映されます。</p>
+<h2 id="問題のトラブルシューティング">問題のトラブルシューティング
+</h2><p>CPUのみから分析するだけでは問題の原因を特定できないため、システムに異常が発生していないか疑うべきでしょうか？ 可能性がありますそれは、Linuxオペレーティングシステムの負荷が高すぎることで、VMwareが過剰なCPUリソースを使用していることです。 <code>mpstat</code>を使用してローカル仮想マシンを分析したところ、<code>irq</code>の使用量が異常で、1つのコアが約25%に達しており、正常時にはビジネスプロセスを開始する際に空転する場合、<code>irq</code>の割合は約5%であるはずでした。</p>
+<p>グループ内の同僚の開発環境では、彼のCentOS 7がVMware上でデプロイされており、リソース使用量は正常です。 一方、上海の開発環境では、VMware上にありますが、ホストマシンのCPUリソース状況を直接観察することはできません。 このとき、当社は複数の変数に直面しています：VMware仮想マシン、Linuxオペレーティングシステム、およびGCCバージョン。 - テスト環境の分析へ移行し、深圳のテスト環境は物理マシン上に低バージョンのGCCコンパイルサービスを実行しており、CentOS 8上で動作している。興味深いことに、深圳環境では<code>irq</code>の占有率は正常だった。</p>
+<ul>
+<li>
+<p>GCCのバージョンに関連する問題の特定のため、高バージョンのGCCでコンパイルされたプログラムを深圳環境にデプロイしてテストを実施したが、結果も正常であった。</p>
+</li>
+<li>
+<p>問題がより明確になってきたため、オペレーティングシステムに問題があるのではないかと疑念が生じた。毕竟、CentOS 8はすでに公式サポートを受けていないからだ。しかし、純粋なCentOS 7とCentOS 8を再デプロイしても問題は解決しなかった。</p>
+</li>
+</ul>
+<h2 id="問題解決">問題解決
+</h2><p>この時、我々は唯一の不確実な要素、すなわちVMware仮想マシンのソフトウェアに疑念を抱き始める。突然、閃きを得て、Hyper-V技術を思いついた。以前にHyper-Vが有効になっていたものの、完全にシャットダウンしていなかったために、これが原因である可能性はないか？毕竟、ソフト中断も仮想マシンソフトウェアを通じて実現されているからだ。異なる仮想マシンの仮想化技術にはバグが存在する可能性があるのか。これらの問題は深く考える価値があるし、調査する必要がある。</p>
 <h2 id="結論">結論
-</h2><p>マイクロソフトの公式ドキュメントによると、ローカルのHyper-Vサービスを完全に停止したところ、VMwareがホスト上で正常に復旧しました。これで問題はついに解決しました。当初述べたように、この経験は紆余曲折があり、総合的な分析と判断が必要でした。また、今回初めて問題の切り分けを行い、仮想マシンレベルまで特定に至りました。</p>
-<pre><code class="language-shell">Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor
-bcdedit /set hypervisorlaunchtype off
-</code></pre>
+</h2><p>Microsoftの公式マニュアルに従い、本機のHyper-Vサービスを完全に停止した後、VMwareがホストマシン上で正常に動作することが確認されました。これで問題はついに解決に至りました。当初述べたように、この経験は曲折で困難なものであり、包括的な分析と判断が必要でした。また、今回初めて問題を調査し、仮想マシンというレベルまで特定することができました。</p>
 <ul>
 <li><a class="link" href="https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v"  target="_blank" rel="noopener"
     >https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v</a></li>
 </ul>
+
 </section>
 
 
@@ -489,7 +479,7 @@ bcdedit /set hypervisorlaunchtype off
         
             <a href="/ja/tags/vmware/">Vmware</a>
         
-            <a href="/ja/tags/%E5%95%8F%E9%A1%8C%E3%81%AE%E5%88%87%E3%82%8A%E5%88%86%E3%81%91/">問題の切り分け</a>
+            <a href="/ja/tags/%E3%83%88%E3%83%A9%E3%83%96%E3%83%AB%E3%82%B7%E3%83%A5%E3%83%BC%E3%83%86%E3%82%A3%E3%83%B3%E3%82%B0/">トラブルシューティング</a>
         
     </section>
 
@@ -532,7 +522,7 @@ bcdedit /set hypervisorlaunchtype off
 
 
         <span>
-            最終更新 2025年05月28日 09:47
+            最終更新 2025年06月02日 06:00
         </span>
     </section>
     
@@ -587,7 +577,7 @@ bcdedit /set hypervisorlaunchtype off
         
 
         <div class="article-details">
-            <h2 class="article-title">プロトバッファのゼロ値の落とし穴：デフォルト値がビジネスロジックを密かに破滅させる</h2>
+            <h2 class="article-title">Protobufのゼロ値問題：デフォルト値がビジネスロジックの影の殺し屋に</h2>
         </div>
     </a>
 </article>
@@ -600,7 +590,7 @@ bcdedit /set hypervisorlaunchtype off
         
 
         <div class="article-details">
-            <h2 class="article-title">バックエンドサービスTCP通信異常のトラブルシューティング</h2>
+            <h2 class="article-title">バックエンドサービス TCP 通信異常トラブルシューティング</h2>
         </div>
     </a>
 </article>
@@ -613,7 +603,7 @@ bcdedit /set hypervisorlaunchtype off
         
 
         <div class="article-details">
-            <h2 class="article-title">atopツールによるLinuxシステム指標の監視：インストール、設定と利用完全ガイド</h2>
+            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定と使い方完全ガイド</h2>
         </div>
     </a>
 </article>
@@ -626,7 +616,7 @@ bcdedit /set hypervisorlaunchtype off
         
 
         <div class="article-details">
-            <h2 class="article-title">Visual Studio で「非対応」の PDB ファイルを読み込む</h2>
+            <h2 class="article-title">Visual Studio が「不整合な」PDB ファイルをロードできません。</h2>
         </div>
     </a>
 </article>
@@ -639,7 +629,7 @@ bcdedit /set hypervisorlaunchtype off
         
 
         <div class="article-details">
-            <h2 class="article-title">Linuxバックエンドサービスにおける大量の文字列データ処理 - 効率が低い</h2>
+            <h2 class="article-title">Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</h2>
         </div>
     </a>
 </article>

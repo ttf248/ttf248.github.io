@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="It was the first time I saw this, and I hadn&rsquo;t noticed it before\n">
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="While reviewing the code, std::this_thread::yield() suddenly popped into my view, a syntax sugar from C11 that I’d used quite a bit, but hadn&rsquo;t noticed before.\n">
 <title>C11: sleep for vs yield</title>
 
 <link rel='canonical' href='https://ttf248.life/en/p/c11-sleep-for-vs-yield/'>
 
 <link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="C11: sleep for vs yield">
-<meta property='og:description' content="It was the first time I saw this, and I hadn&rsquo;t noticed it before\n">
+<meta property='og:description' content="While reviewing the code, std::this_thread::yield() suddenly popped into my view, a syntax sugar from C11 that I’d used quite a bit, but hadn&rsquo;t noticed before.\n">
 <meta property='og:url' content='https://ttf248.life/en/p/c11-sleep-for-vs-yield/'>
 <meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:published_time' content='2022-09-20T20:54:51&#43;08:00'/><meta property='article:modified_time' content='2025-05-28T09:47:38&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:published_time' content='2022-09-20T20:54:51&#43;08:00'/><meta property='article:modified_time' content='2025-06-01T15:38:14&#43;08:00'/>
 <meta name="twitter:title" content="C11: sleep for vs yield">
-<meta name="twitter:description" content="It was the first time I saw this, and I hadn&rsquo;t noticed it before\n">
+<meta name="twitter:description" content="While reviewing the code, std::this_thread::yield() suddenly popped into my view, a syntax sugar from C11 that I’d used quite a bit, but hadn&rsquo;t noticed before.\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
   
@@ -159,14 +159,6 @@
                                 
                                     <option value="https://ttf248.life/ja/" >日本語</option>
                                 
-                                    <option value="https://ttf248.life/ko/" >한국어</option>
-                                
-                                    <option value="https://ttf248.life/fr/" >Français</option>
-                                
-                                    <option value="https://ttf248.life/ru/" >Русский</option>
-                                
-                                    <option value="https://ttf248.life/hi/" >हिन्दी</option>
-                                
                             </select>
                         </li>
                     
@@ -220,14 +212,19 @@
         <div class="widget--toc">
             <nav id="TableOfContents">
   <ol>
-    <li><a href="#document">Document</a>
+    <li><a href="#documentation">Documentation</a>
       <ol>
         <li><a href="#yield">yield</a></li>
         <li><a href="#sleep_for">sleep_for</a></li>
         <li><a href="#analysis">Analysis</a></li>
+        <li><a href="#analysis-1">Analysis</a></li>
+        <li><a href="#analysis-2">Analysis</a></li>
+        <li><a href="#analysis-3">Analysis</a></li>
+        <li><a href="#analysis-4">Analysis</a></li>
+        <li><a href="#analysis-5">Analysis</a></li>
       </ol>
     </li>
-    <li><a href="#reference">Reference</a></li>
+    <li><a href="#references">References</a></li>
   </ol>
 </nav>
         </div>
@@ -318,7 +315,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
         
 
         
-        <h5 class="article-summary" style="display: none;"><p>It was the first time I saw this, and I hadn&rsquo;t noticed it before</p></h5>
+        <h5 class="article-summary" style="display: none;"><p>While reviewing the code, <code>std::this_thread::yield()</code> suddenly popped into my view, a syntax sugar from <code>C11</code> that I’d used quite a bit, but hadn&rsquo;t noticed before.</p></h5>
         <script>
             document.addEventListener("DOMContentLoaded", function() {
                 if (typeof isHomepage !== 'undefined' && isHomepage === true) {
@@ -361,7 +358,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
                 <time class="article-time--reading">
-                    1 minute read
+                    2 minute read
                 </time>
             </div>
         
@@ -387,8 +384,6 @@ document.addEventListener("DOMContentLoaded", (event) => {
                 
                     <a href="https://ttf248.life/ja/p/c11-sleep-for-vs-yield/" class="link">日本語</a>
                 
-                    <a href="https://ttf248.life/ko/p/c11-sleep-for-vs-yield/" class="link">한국어</a>
-                
             </div>
         </footer>
     
@@ -398,91 +393,72 @@ document.addEventListener("DOMContentLoaded", (event) => {
     <section class="article-content">
     
     
-    <p>It was the first time I saw this, and I hadn&rsquo;t noticed it before</p>
-<p>Without checking the manual, my first thought was whether it&rsquo;s related to asynchronicity. The term __INLINE_CODE_0__appears in the Boost library&rsquo;s coroutine implementation, but it certainly isn&rsquo;t related to coroutines here; the control logic is likely related to ordinary threads.</p>
-<h2 id="document">Document
+    <p>While reviewing the code, <code>std::this_thread::yield()</code> suddenly popped into my view, a syntax sugar from <code>C11</code> that I’d used quite a bit, but hadn&rsquo;t noticed before.</p>
+<p>I didn&rsquo;t consult the manual; first, I thought it had something to do with asynchronous operations – the word was used in the coroutine implementation of the Boost library.  Clearly, it wasn’t related to coroutines; it’s about controlling logic within a regular thread.</p>
+<h2 id="documentation">Documentation
 </h2><h3 id="yield">yield
-</h3><p>The accuracy of this function depends on the implementation, particularly the OS scheduler mechanism and system state. For example, a first-in, first-out real-time scheduler (such as Linux&rsquo;s SCHED_FIFO) will suspend the current thread and place it at the tail of the queue of threads with the same priority (and yield has no effect if there are no other threads at that priority).</p>
+</h3><p>The accuracy of this function depends on the implementation, particularly the OS scheduler mechanism and system state used. For example, the First-Come, First-Served (FCFS) real-time scheduler (Linux’s SCHED_FIFO) will suspend the current thread and place it at the end of the queue for other threads with the same priority that are ready to run (and has no effect if there are no other threads with the same priority).</p>
 <h3 id="sleep_for">sleep_for
-</h3><p>Blocks the current thread&rsquo;s execution for at least the specified sleep_duration
-This function may block for longer than sleep_duration due to scheduling or resource contention
-The standard library recommends measuring duration using a stable clock. If implemented with system time, wait times may also be sensitive to clock adjustments.</p>
+</h3><p>Blocks the current thread&rsquo;s execution for at least the specified <code>sleep_duration</code>.
+This function may block longer than <code>sleep_duration</code> due to scheduling or resource contention delays.
+The standard library recommends measuring durations using a monotonic clock. If implementing with system time instead, the wait time may be sensitive to clock adjustments.</p>
 <h3 id="analysis">Analysis
-</h3><p>Both functions release the current thread, and their effects depend on the platform. Still a bit unclear here; let&rsquo;s run the code to see the execution results.</p>
+</h3><p>Both functions are designed to release the current thread and its associated resources, with the actual effect depending on the platform. I’m still a bit unclear at this point, so let&rsquo;s run the code to see the execution results.</p>
 <blockquote>
-<p>ThinkPad laptop (Visual Studio Community 2022), Tencent Cloud S2 standard server (gcc8.5)</p>
+<p>ThinkPad laptop (Visual Studio Community 2022), Tencent Cloud S2 Standard Server (gcc8.5)</p>
 </blockquote>
-<div class="table-wrapper"><table>
+<h3 id="analysis-1">Analysis
+</h3><div class="table-wrapper"><table>
 <thead>
 <tr>
-<th>Runtime Platform</th>
+<th>Execution Platform</th>
 <th>Function</th>
-<th>First/μs</th>
-<th>Second/μs</th>
-<th>Third/μs</th>
+<th>First/us</th>
+<th>Second/us</th>
+<th>Third/us</th>
 </tr>
 </thead>
-<tbody>
-<tr>
-<td>Windows</td>
-<td>sleep_for</td>
-<td>9872</td>
-<td>1884</td>
-<td>11302</td>
-</tr>
-<tr>
-<td>Windows</td>
-<td>yield</td>
-<td>119</td>
-<td>100</td>
-<td>100</td>
-</tr>
-<tr>
-<td>Linux</td>
-<td>sleep_for</td>
-<td>171</td>
-<td>168</td>
-<td>167</td>
-</tr>
-<tr>
-<td>Linux</td>
-<td>yield</td>
-<td>101</td>
-<td>102</td>
-<td>101</td>
-</tr>
-</tbody>
 </table></div>
-<p>Given the operating system implementation, <strong>INLINE_CODE_0__稳定性差异巨大，如果想要高精度的休眠，使用__INLINE_CODE_1</strong> is more suitable for high-precision sleep</p>
-<p>The difference is not significant when time accuracy is improved to <strong>INLINE_CODE_0</strong></p>
-<pre><code class="language-c++">#include &lt;iostream&gt;
-#include &lt;chrono&gt;
-#include &lt;thread&gt;
- 
-// 建议其他线程运行一小段时间的“忙睡眠”
-void little_sleep(std::chrono::microseconds us)
-{
-    auto start = std::chrono::high_resolution_clock::now();
-    auto end = start + us;
-    do {
-        std::this_thread::yield();
-    } while (std::chrono::high_resolution_clock::now() &lt; end);
-}
- 
-int main()
-{
-    auto start = std::chrono::high_resolution_clock::now();
- 
-    little_sleep(std::chrono::microseconds(100));
-    std::this_thread::sleep_for(std::chrono::microseconds(100));
- 
-    auto elapsed = std::chrono::high_resolution_clock::now() - start;
-    std::cout &lt;&lt; &quot;waited for &quot;
-              &lt;&lt; std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(elapsed).count()
-              &lt;&lt; &quot; microseconds\n&quot;;
-}
-</code></pre>
-<h2 id="reference">Reference
+<h3 id="analysis-2">Analysis
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Execution Platform</th>
+<th>Function</th>
+<th>First Time / us</th>
+<th>Second Time / us</th>
+<th>Third Time / us</th>
+</tr>
+</thead>
+</table></div>
+<h3 id="analysis-3">Analysis
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Execution Platform</th>
+<th>Function</th>
+<th>First/us</th>
+<th>Second/us</th>
+<th>Third/us</th>
+</tr>
+</thead>
+</table></div>
+<h3 id="analysis-4">Analysis
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Execution Platform</th>
+<th>Function</th>
+<th>First/us</th>
+<th>Second/us</th>
+<th>Third/us</th>
+</tr>
+</thead>
+</table></div>
+<h3 id="analysis-5">Analysis
+</h3><p>From the running results, it’s not difficult to understand that due to differences in operating system implementations, the stability of high-precision sleep varies greatly. If you want high-precision sleep, using <code>yield</code> is more appropriate.</p>
+<p>When the time precision is increased to <code>ms</code>, the difference between them is no longer significant.</p>
+<h2 id="references">References
 </h2><ul>
 <li><a class="link" href="https://qingcms.gitee.io/cppreference/20210212/zh/cpp/header/thread.html"  target="_blank" rel="noopener"
     >https://qingcms.gitee.io/cppreference/20210212/zh/cpp/header/thread.html</a></li>
@@ -539,7 +515,7 @@ int main()
 
 
         <span>
-            Last updated on May 28, 2025 09:47
+            Last updated on Jun 01, 2025 15:38
         </span>
     </section>
     
@@ -594,7 +570,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">C&#43;&#43; Bitwise Operations Fundamentals: Bit Extraction and Flag Setting</h2>
+            <h2 class="article-title">C&#43;&#43; Bitwise Operations Fundamentals: Bitwise Extraction and Flag Setting</h2>
         </div>
     </a>
 </article>
@@ -607,7 +583,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">Understanding GCC, GLIBC, and C&#43;&#43; Program Compatibility Issues</h2>
+            <h2 class="article-title">Deeply understand GCC, GLIBC, and C&#43;&#43; program compatibility issues</h2>
         </div>
     </a>
 </article>
@@ -620,7 +596,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">Slow efficiency when processing large string data in Linux backend services</h2>
+            <h2 class="article-title">Linux backend services handling large volumes of string data – performance is slow.</h2>
         </div>
     </a>
 </article>
@@ -633,7 +609,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">Lambda expression parameter lifetime in C&#43;&#43;</h2>
+            <h2 class="article-title">C&#43;&#43; Lambda Expression Parameter Lifetimes</h2>
         </div>
     </a>
 </article>
@@ -646,7 +622,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">Upgrading GCC version leads to program crashes: Hidden dangers of non-compliant code</h2>
+            <h2 class="article-title">Upgrading the GCC version caused program crashes: hidden issues due to code non-compliance.</h2>
         </div>
     </a>
 </article>
