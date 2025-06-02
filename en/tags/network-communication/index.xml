@@ -6,7 +6,7 @@
         <description>Recent content in Network-Communication on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Mon, 02 Jun 2025 19:00:25 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/network-communication/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Mon, 02 Jun 2025 20:54:02 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/network-communication/index.xml" rel="self" type="application/rss+xml" /><item>
         <title>Background Service TCP Communication Anomaly Troubleshooting</title>
         <link>https://ttf248.life/en/p/backend-service-tcp-communication-troubleshooting/</link>
         <pubDate>Fri, 14 Feb 2025 22:54:13 +0800</pubDate>
@@ -14,16 +14,14 @@
         <guid>https://ttf248.life/en/p/backend-service-tcp-communication-troubleshooting/</guid>
         <description>&lt;p&gt;Business Model: The backend service establishes a connection with the group’s market data gateway using TCP. Each time a connection is established, it must first send an authorization request and then continuously send heartbeat packages to maintain the connection status.&lt;/p&gt;
 &lt;p&gt;However, one day, an alert message was received indicating that the service had disconnected. After carefully examining the logs, it was discovered that the backend service was continuously sending heartbeat packages, but the other party did not respond at all, yet the connection remained open.&lt;/p&gt;
-&lt;h2 id=&#34;on-site-summary&#34;&gt;On-Site Summary
-&lt;/h2&gt;&lt;p&gt;I was originally working late in the office to advance project progress when an alarm message suddenly popped up in our work group. At first glance, I thought it was just a recurring issue – likely due to network timeouts causing heartbeat failures, leading to service disconnection. However, after careful log examination, the actual situation turned out to be different. The backend had already sent authorization messages, but they were never acknowledged. Meanwhile, heartbeat packets continued to send persistently, yet the other party never responded with any heartbeat data. After in-depth analysis of the logs, several key issues were exposed:&lt;/p&gt;
+&lt;h2 id=&#34;field-summary&#34;&gt;Field Summary
+&lt;/h2&gt;&lt;p&gt;I was originally working in the office, pushing project progress, when an alarm message suddenly popped up in the company group. At first glance, I thought it was just a recurring issue – likely due to network timeouts causing heartbeat failures, leading to service disconnection. However, after careful log examination, the actual situation turned out to be different. The backend had sent an authorization login message, but hadn’t received a response; meanwhile, heartbeat packets continued to send persistently, yet the other party never replied with any heartbeat data. After in-depth analysis of the logs, several key issues were exposed:&lt;/p&gt;
 &lt;ol&gt;
-&lt;li&gt;Authorization message without response: This was likely due to the other system being in the process of restarting, which prevented the authorization message from being processed promptly.&lt;/li&gt;
-&lt;li&gt;Sending heartbeat data despite unsuccessful authorization: Upon investigation, it was found that this was a logical flaw in the program’s logic. - The judgment logic of the heartbeat sending function has a defect; it only checks the connection status but misses verifying the authorization status.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;No Response to Authorization Message:&lt;/strong&gt; This was likely due to the other system being in the process of restarting, preventing the authorization message from being processed promptly.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sending Heartbeat Data Without Successful Authorization:&lt;/strong&gt; Upon investigation, it was found that this was a logical flaw in the program’s logic. The heartbeat sending function&amp;rsquo;s judgment logic had a defect; it only checked the connection status but missed verifying the authorization status.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Service Did Not Disconnect:&lt;/strong&gt; If the service could have disconnected, it would have triggered a reconnection mechanism and re-sent the authorization message.&lt;/li&gt;
 &lt;/ol&gt;
-&lt;ul&gt;
-&lt;li&gt;If the service can disconnect, a reconnection mechanism can be triggered to resend the authorization message.&lt;/li&gt;
-&lt;li&gt;Currently, the last urgent problem is why the service hasn’t disconnected. Resolving this issue requires more in-depth and detailed troubleshooting work.&lt;/li&gt;
-&lt;/ul&gt;
+&lt;p&gt;Currently, there’s one remaining critical issue that needs to be resolved – why didn&amp;rsquo;t the service disconnect? Solving this problem requires more in-depth and detailed troubleshooting work.&lt;/p&gt;
 &lt;h2 id=&#34;analyzing-network-packets&#34;&gt;Analyzing Network Packets
 &lt;/h2&gt;&lt;p&gt;&lt;code&gt;tcpdump&lt;/code&gt; is a very powerful network packet capture tool that can be used to capture network packets. By analyzing network packets, we can gain a more intuitive understanding of the details of network communication. Here, we can use &lt;code&gt;tcpdump&lt;/code&gt; to capture network packets for further analysis.
 &lt;img src=&#34;https://ttf248.life/p/backend-service-tcp-communication-troubleshooting/20250220151952.png&#34;
@@ -40,35 +38,40 @@
 		data-flex-basis=&#34;1337px&#34;
 	
 &gt;
-Analyzing the data in the diagram, I see that the heartbeat is constantly sending normally, and the other server did not respond with any data, but sent an &lt;code&gt;ACK&lt;/code&gt;, which prevents the connection from disconnecting proactively.&lt;/p&gt;
-&lt;h2 id=&#34;common-flag-bit-explanation&#34;&gt;Common Flag Bit Explanation
+Analyzing the data in the diagram, I see that the heartbeat is constantly being sent normally, and the other server did not respond with any data, but it sent an &lt;code&gt;ACK&lt;/code&gt;, which prevents the connection from disconnecting proactively.&lt;/p&gt;
+&lt;h2 id=&#34;common-flag-bit-explanations&#34;&gt;Common Flag Bit Explanations
 &lt;/h2&gt;&lt;p&gt;In the TCP protocol, &lt;code&gt;PSH&lt;/code&gt; (Push) and &lt;code&gt;ACK&lt;/code&gt; (Acknowledgment) are two important flag bits used to control data transmission and traffic confirmation, respectively. Their functions are as follows:&lt;/p&gt;
 &lt;h3 id=&#34;1-psh-push-flag&#34;&gt;&lt;strong&gt;1. PSH (Push Flag)&lt;/strong&gt;
 &lt;/h3&gt;&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Function:&lt;/strong&gt; The &lt;code&gt;PSH&lt;/code&gt; flag serves to &lt;strong&gt;request that the receiver immediately push data from the buffer to the upper-layer application&lt;/strong&gt; (rather than waiting for the buffer to fill). This means that once a data segment with the &lt;code&gt;PSH&lt;/code&gt; flag is received, the receiver will process and transmit it as quickly as possible to the application, rather than storing it in an operating system buffer.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Function:&lt;/strong&gt; The &lt;code&gt;PSH&lt;/code&gt; flag’s purpose is to &lt;strong&gt;request that the receiver immediately push data from its buffer to the upper-layer application&lt;/strong&gt; (rather than waiting for the buffer to fill). This means that once a data segment with the &lt;code&gt;PSH&lt;/code&gt; flag is received, the receiver will process and transmit it as quickly as possible to the application, rather than storing it in an operating system buffer.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Typical Scenarios:&lt;/strong&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;HTTP/HTTPS Requests:&lt;/strong&gt; Clients setting &lt;code&gt;PSH&lt;/code&gt; when sending requests (e.g., &lt;code&gt;GET /index.html&lt;/code&gt;) to ensure immediate response from the server.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;SSH Protocol:&lt;/strong&gt; Each keystroke triggers &lt;code&gt;PSH&lt;/code&gt;, ensuring real-time transmission of input characters.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Real-Time Communication:&lt;/strong&gt; Low-latency scenarios like video streaming or online games may utilize &lt;code&gt;PSH&lt;/code&gt; to reduce latency. - &lt;strong&gt;Note:&lt;/strong&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;PSH&lt;/code&gt; is not mandatory; the receiver can choose to ignore this flag (but must still process the data correctly).&lt;/li&gt;
-&lt;li&gt;The sender may not set &lt;code&gt;PSH&lt;/code&gt;; in this case, the receiver will determine when to push data based on its own buffering policy.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/HTTPS Requests:&lt;/strong&gt; Clients setting the &lt;code&gt;PSH&lt;/code&gt; when sending requests (e.g., &lt;code&gt;GET /index.html&lt;/code&gt;) to ensure immediate response from the server.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSH Protocol:&lt;/strong&gt; Each keystroke triggers a &lt;code&gt;PSH&lt;/code&gt;, ensuring real-time transmission of input characters.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Real-Time Communication:&lt;/strong&gt; Low-latency scenarios like video streaming or online games may utilize &lt;code&gt;PSH&lt;/code&gt; to reduce latency.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Note:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;PSH&lt;/code&gt; is not mandatory; the receiver can choose to ignore this flag (but still process the data normally).&lt;/li&gt;
+&lt;li&gt;The sender may not set &lt;code&gt;PSH&lt;/code&gt;, in which case the receiver will determine when to push data based on its own buffering strategy.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
 &lt;h3 id=&#34;2-ack-acknowledgment-flag&#34;&gt;&lt;strong&gt;2. ACK (Acknowledgment Flag)&lt;/strong&gt;
 &lt;/h3&gt;&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Function:&lt;/strong&gt; The ACK flag indicates that the preceding data segment has been &lt;strong&gt;acknowledged as received correctly&lt;/strong&gt;. Each ACK contains an acknowledgment number (Acknowledgment Number), representing the expected next byte sequence number. It is the core mechanism of TCP reliable transmission.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Function:&lt;/strong&gt; The ACK flag indicates that &lt;strong&gt;the previous data segment has been correctly received&lt;/strong&gt;. Each ACK contains an acknowledgment number (Acknowledgment Number), which represents the next byte sequence expected to be received. It is the core mechanism of TCP reliable transmission.&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Working Principle:&lt;/strong&gt;
 &lt;ul&gt;
-&lt;li&gt;When the sender transmits a data segment, it carries the expected ACK value from the receiver (e.g., &lt;code&gt;ACK = Sequence Number + Data Length&lt;/code&gt;).&lt;/li&gt;
-&lt;li&gt;Upon receiving the data, the receiver generates an ACK message to acknowledge the received byte sequence number.&lt;/li&gt;
+&lt;li&gt;When the sender sends a data segment, it carries the expected ACK value from the receiver (e.g., &lt;code&gt;ACK = Sequence Number + Data Length&lt;/code&gt;).&lt;/li&gt;
+&lt;li&gt;Upon receiving the data, the receiver generates an ACK message to confirm the received byte sequence number.&lt;/li&gt;
 &lt;li&gt;The sender only retransmits unacknowledged data after receiving the corresponding ACK.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Example:&lt;/strong&gt;
 &lt;ul&gt;
-&lt;li&gt;If the sender transmits a data segment with sequence numbers &lt;code&gt;100~199&lt;/code&gt;, then the expected ACK from the receiver should be &lt;code&gt;200&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;If the sender sends a data segment with sequence numbers &lt;code&gt;100~199&lt;/code&gt;, then the expected ACK from the receiver should be &lt;code&gt;200&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;If the receiver has not received some of the data in &lt;code&gt;100~199&lt;/code&gt;, it will inform the sender to retransmit via &lt;code&gt;ACK=150&lt;/code&gt;.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
@@ -77,8 +80,8 @@ Analyzing the data in the diagram, I see that the heartbeat is constantly sendin
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;HTTP Request Response&lt;/strong&gt;:
 When a client sends a &lt;code&gt;POST&lt;/code&gt; request (including data), it sets both &lt;code&gt;PSH&lt;/code&gt; and &lt;code&gt;ACK&lt;/code&gt; (to acknowledge previous responses).&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Command Transmission after SSH Handshake&lt;/strong&gt;:
-After the client enters a command, it sends a data segment with &lt;code&gt;PSH&lt;/code&gt; and &lt;code&gt;ACK&lt;/code&gt;, ensuring that the command is immediately transmitted and processed by the server.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Command Transfer after SSH Handshake&lt;/strong&gt;:
+After the client enters a command, it sends a data segment with &lt;code&gt;PSH&lt;/code&gt; and &lt;code&gt;ACK&lt;/code&gt; to ensure that the command is immediately transmitted and processed by the server.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h3 id=&#34;4-other-flagged-associations&#34;&gt;&lt;strong&gt;4. Other Flagged Associations&lt;/strong&gt;
 &lt;/h3&gt;&lt;table&gt;

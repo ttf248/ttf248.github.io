@@ -10,7 +10,7 @@
 <meta property='og:description' content="Business Model: The backend service establishes a connection with the group’s market data gateway using TCP. Each time a connection is established, it must first send an authorization request and then continuously send heartbeat packages to maintain the connection status.\nHowever, one day, an alert message was received indicating that the service had disconnected. After carefully examining the logs, it was discovered that the backend service was continuously sending heartbeat packages, but the other party did not respond at all, yet the connection remained open.\n">
 <meta property='og:url' content='https://ttf248.life/en/p/backend-service-tcp-communication-troubleshooting/'>
 <meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='troubleshooting' /><meta property='article:tag' content='TCP' /><meta property='article:tag' content='network-communication' /><meta property='article:published_time' content='2025-02-14T22:54:13&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='troubleshooting' /><meta property='article:tag' content='TCP' /><meta property='article:tag' content='network-communication' /><meta property='article:published_time' content='2025-02-14T22:54:13&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T20:54:02&#43;08:00'/>
 <meta name="twitter:title" content="Background Service TCP Communication Anomaly Troubleshooting">
 <meta name="twitter:description" content="Business Model: The backend service establishes a connection with the group’s market data gateway using TCP. Each time a connection is established, it must first send an authorization request and then continuously send heartbeat packages to maintain the connection status.\nHowever, one day, an alert message was received indicating that the service had disconnected. After carefully examining the logs, it was discovered that the backend service was continuously sending heartbeat packages, but the other party did not respond at all, yet the connection remained open.\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -212,9 +212,9 @@
         <div class="widget--toc">
             <nav id="TableOfContents">
   <ol>
-    <li><a href="#on-site-summary">On-Site Summary</a></li>
+    <li><a href="#field-summary">Field Summary</a></li>
     <li><a href="#analyzing-network-packets">Analyzing Network Packets</a></li>
-    <li><a href="#common-flag-bit-explanation">Common Flag Bit Explanation</a>
+    <li><a href="#common-flag-bit-explanations">Common Flag Bit Explanations</a>
       <ol>
         <li><a href="#1-psh-push-flag"><strong>1. PSH (Push Flag)</strong></a></li>
         <li><a href="#2-ack-acknowledgment-flag"><strong>2. ACK (Acknowledgment Flag)</strong></a></li>
@@ -398,16 +398,14 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     <p>Business Model: The backend service establishes a connection with the group’s market data gateway using TCP. Each time a connection is established, it must first send an authorization request and then continuously send heartbeat packages to maintain the connection status.</p>
 <p>However, one day, an alert message was received indicating that the service had disconnected. After carefully examining the logs, it was discovered that the backend service was continuously sending heartbeat packages, but the other party did not respond at all, yet the connection remained open.</p>
-<h2 id="on-site-summary">On-Site Summary
-</h2><p>I was originally working late in the office to advance project progress when an alarm message suddenly popped up in our work group. At first glance, I thought it was just a recurring issue – likely due to network timeouts causing heartbeat failures, leading to service disconnection. However, after careful log examination, the actual situation turned out to be different. The backend had already sent authorization messages, but they were never acknowledged. Meanwhile, heartbeat packets continued to send persistently, yet the other party never responded with any heartbeat data. After in-depth analysis of the logs, several key issues were exposed:</p>
+<h2 id="field-summary">Field Summary
+</h2><p>I was originally working in the office, pushing project progress, when an alarm message suddenly popped up in the company group. At first glance, I thought it was just a recurring issue – likely due to network timeouts causing heartbeat failures, leading to service disconnection. However, after careful log examination, the actual situation turned out to be different. The backend had sent an authorization login message, but hadn’t received a response; meanwhile, heartbeat packets continued to send persistently, yet the other party never replied with any heartbeat data. After in-depth analysis of the logs, several key issues were exposed:</p>
 <ol>
-<li>Authorization message without response: This was likely due to the other system being in the process of restarting, which prevented the authorization message from being processed promptly.</li>
-<li>Sending heartbeat data despite unsuccessful authorization: Upon investigation, it was found that this was a logical flaw in the program’s logic. - The judgment logic of the heartbeat sending function has a defect; it only checks the connection status but misses verifying the authorization status.</li>
+<li><strong>No Response to Authorization Message:</strong> This was likely due to the other system being in the process of restarting, preventing the authorization message from being processed promptly.</li>
+<li><strong>Sending Heartbeat Data Without Successful Authorization:</strong> Upon investigation, it was found that this was a logical flaw in the program’s logic. The heartbeat sending function&rsquo;s judgment logic had a defect; it only checked the connection status but missed verifying the authorization status.</li>
+<li><strong>Service Did Not Disconnect:</strong> If the service could have disconnected, it would have triggered a reconnection mechanism and re-sent the authorization message.</li>
 </ol>
-<ul>
-<li>If the service can disconnect, a reconnection mechanism can be triggered to resend the authorization message.</li>
-<li>Currently, the last urgent problem is why the service hasn’t disconnected. Resolving this issue requires more in-depth and detailed troubleshooting work.</li>
-</ul>
+<p>Currently, there’s one remaining critical issue that needs to be resolved – why didn&rsquo;t the service disconnect? Solving this problem requires more in-depth and detailed troubleshooting work.</p>
 <h2 id="analyzing-network-packets">Analyzing Network Packets
 </h2><p><code>tcpdump</code> is a very powerful network packet capture tool that can be used to capture network packets. By analyzing network packets, we can gain a more intuitive understanding of the details of network communication. Here, we can use <code>tcpdump</code> to capture network packets for further analysis.
 <img src="/p/backend-service-tcp-communication-troubleshooting/20250220151952.png"
@@ -424,35 +422,40 @@ document.addEventListener("DOMContentLoaded", (event) => {
 		data-flex-basis="1337px"
 	
 >
-Analyzing the data in the diagram, I see that the heartbeat is constantly sending normally, and the other server did not respond with any data, but sent an <code>ACK</code>, which prevents the connection from disconnecting proactively.</p>
-<h2 id="common-flag-bit-explanation">Common Flag Bit Explanation
+Analyzing the data in the diagram, I see that the heartbeat is constantly being sent normally, and the other server did not respond with any data, but it sent an <code>ACK</code>, which prevents the connection from disconnecting proactively.</p>
+<h2 id="common-flag-bit-explanations">Common Flag Bit Explanations
 </h2><p>In the TCP protocol, <code>PSH</code> (Push) and <code>ACK</code> (Acknowledgment) are two important flag bits used to control data transmission and traffic confirmation, respectively. Their functions are as follows:</p>
 <h3 id="1-psh-push-flag"><strong>1. PSH (Push Flag)</strong>
 </h3><ul>
-<li><strong>Function:</strong> The <code>PSH</code> flag serves to <strong>request that the receiver immediately push data from the buffer to the upper-layer application</strong> (rather than waiting for the buffer to fill). This means that once a data segment with the <code>PSH</code> flag is received, the receiver will process and transmit it as quickly as possible to the application, rather than storing it in an operating system buffer.</li>
+<li><strong>Function:</strong> The <code>PSH</code> flag’s purpose is to <strong>request that the receiver immediately push data from its buffer to the upper-layer application</strong> (rather than waiting for the buffer to fill). This means that once a data segment with the <code>PSH</code> flag is received, the receiver will process and transmit it as quickly as possible to the application, rather than storing it in an operating system buffer.</li>
 <li><strong>Typical Scenarios:</strong>
 <ul>
-<li><strong>HTTP/HTTPS Requests:</strong> Clients setting <code>PSH</code> when sending requests (e.g., <code>GET /index.html</code>) to ensure immediate response from the server.</li>
-<li><strong>SSH Protocol:</strong> Each keystroke triggers <code>PSH</code>, ensuring real-time transmission of input characters.</li>
-<li><strong>Real-Time Communication:</strong> Low-latency scenarios like video streaming or online games may utilize <code>PSH</code> to reduce latency. - <strong>Note:</strong></li>
-<li><code>PSH</code> is not mandatory; the receiver can choose to ignore this flag (but must still process the data correctly).</li>
-<li>The sender may not set <code>PSH</code>; in this case, the receiver will determine when to push data based on its own buffering policy.</li>
+<li><strong>HTTP/HTTPS Requests:</strong> Clients setting the <code>PSH</code> when sending requests (e.g., <code>GET /index.html</code>) to ensure immediate response from the server.</li>
+<li><strong>SSH Protocol:</strong> Each keystroke triggers a <code>PSH</code>, ensuring real-time transmission of input characters.</li>
+<li><strong>Real-Time Communication:</strong> Low-latency scenarios like video streaming or online games may utilize <code>PSH</code> to reduce latency.</li>
+</ul>
+</li>
+<li><strong>Note:</strong>
+<ul>
+<li><code>PSH</code> is not mandatory; the receiver can choose to ignore this flag (but still process the data normally).</li>
+<li>The sender may not set <code>PSH</code>, in which case the receiver will determine when to push data based on its own buffering strategy.</li>
 </ul>
 </li>
 </ul>
 <h3 id="2-ack-acknowledgment-flag"><strong>2. ACK (Acknowledgment Flag)</strong>
 </h3><ul>
-<li><strong>Function:</strong> The ACK flag indicates that the preceding data segment has been <strong>acknowledged as received correctly</strong>. Each ACK contains an acknowledgment number (Acknowledgment Number), representing the expected next byte sequence number. It is the core mechanism of TCP reliable transmission.</li>
+<li><strong>Function:</strong> The ACK flag indicates that <strong>the previous data segment has been correctly received</strong>. Each ACK contains an acknowledgment number (Acknowledgment Number), which represents the next byte sequence expected to be received. It is the core mechanism of TCP reliable transmission.</li>
 <li><strong>Working Principle:</strong>
 <ul>
-<li>When the sender transmits a data segment, it carries the expected ACK value from the receiver (e.g., <code>ACK = Sequence Number + Data Length</code>).</li>
-<li>Upon receiving the data, the receiver generates an ACK message to acknowledge the received byte sequence number.</li>
+<li>When the sender sends a data segment, it carries the expected ACK value from the receiver (e.g., <code>ACK = Sequence Number + Data Length</code>).</li>
+<li>Upon receiving the data, the receiver generates an ACK message to confirm the received byte sequence number.</li>
 <li>The sender only retransmits unacknowledged data after receiving the corresponding ACK.</li>
 </ul>
 </li>
 <li><strong>Example:</strong>
 <ul>
-<li>If the sender transmits a data segment with sequence numbers <code>100~199</code>, then the expected ACK from the receiver should be <code>200</code>.</li>
+<li>If the sender sends a data segment with sequence numbers <code>100~199</code>, then the expected ACK from the receiver should be <code>200</code>.</li>
+<li>If the receiver has not received some of the data in <code>100~199</code>, it will inform the sender to retransmit via <code>ACK=150</code>.</li>
 </ul>
 </li>
 </ul>
@@ -461,8 +464,8 @@ Analyzing the data in the diagram, I see that the heartbeat is constantly sendin
 <ul>
 <li><strong>HTTP Request Response</strong>:
 When a client sends a <code>POST</code> request (including data), it sets both <code>PSH</code> and <code>ACK</code> (to acknowledge previous responses).</li>
-<li><strong>Command Transmission after SSH Handshake</strong>:
-After the client enters a command, it sends a data segment with <code>PSH</code> and <code>ACK</code>, ensuring that the command is immediately transmitted and processed by the server.</li>
+<li><strong>Command Transfer after SSH Handshake</strong>:
+After the client enters a command, it sends a data segment with <code>PSH</code> and <code>ACK</code> to ensure that the command is immediately transmitted and processed by the server.</li>
 </ul>
 <h3 id="4-other-flagged-associations"><strong>4. Other Flagged Associations</strong>
 </h3><div class="table-wrapper"><table>
@@ -593,7 +596,7 @@ After the client enters a command, it sends a data segment with <code>PSH</code>
 
 
         <span>
-            Last updated on Jun 02, 2025 19:00
+            Last updated on Jun 02, 2025 20:54
         </span>
     </section>
     

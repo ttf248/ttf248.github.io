@@ -2,16 +2,16 @@
 <html lang="ja" dir="ltr">
     <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="ソフトウェア開発および運用において、プロセスがフリーズしてしまう状況は頻繁に発生します。この状態はシステム性能の低下やサービスの停止を引き起">
-<title>pstackでプロセスの一時停止（フリーズ）の調査</title>
+<title>pstack でプロセスがフリーズしている原因を調査する</title>
 
 <link rel='canonical' href='https://ttf248.life/ja/p/pstack-troubleshooting-process-hangs/'>
 
-<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="pstackでプロセスの一時停止（フリーズ）の調査">
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="pstack でプロセスがフリーズしている原因を調査する">
 <meta property='og:description' content="ソフトウェア開発および運用において、プロセスがフリーズしてしまう状況は頻繁に発生します。この状態はシステム性能の低下やサービスの停止を引き起">
 <meta property='og:url' content='https://ttf248.life/ja/p/pstack-troubleshooting-process-hangs/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:published_time' content='2024-02-24T23:55:59&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
-<meta name="twitter:title" content="pstackでプロセスの一時停止（フリーズ）の調査">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:published_time' content='2024-02-24T23:55:59&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T20:54:02&#43;08:00'/>
+<meta name="twitter:title" content="pstack でプロセスがフリーズしている原因を調査する">
 <meta name="twitter:description" content="ソフトウェア開発および運用において、プロセスがフリーズしてしまう状況は頻繁に発生します。この状態はシステム性能の低下やサービスの停止を引き起">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
@@ -214,12 +214,7 @@
   <ol>
     <li><a href="#本文">本文</a></li>
     <li><a href="#ステップ">ステップ</a></li>
-    <li><a href="#ケース">ケース</a></li>
-    <li><a href="#ケース-1">ケース</a></li>
-    <li><a href="#ケース-2">ケース</a></li>
     <li><a href="#実行例">実行例</a></li>
-    <li><a href="#実行例-1">実行例</a></li>
-    <li><a href="#ケース-3">ケース</a></li>
   </ol>
 </nav>
         </div>
@@ -304,7 +299,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
     <div class="article-title-wrapper">
         <h2 class="article-title">
-            <a href="/ja/p/pstack-troubleshooting-process-hangs/">pstackでプロセスの一時停止（フリーズ）の調査</a>
+            <a href="/ja/p/pstack-troubleshooting-process-hangs/">pstack でプロセスがフリーズしている原因を調査する</a>
         </h2>
     
         
@@ -389,21 +384,21 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     
     <p>ソフトウェア開発および運用において、プロセスがフリーズしてしまう状況は頻繁に発生します。この状態はシステム性能の低下やサービスの停止を引き起こす可能性があります。本稿では、pstackツールを使用してプロセスフリーズの問題を診断する方法について解説します。プロセスのスタック情報を分析することで、問題の原因を特定し解決策を見つけ出すことができます。</p>
-<p>背景：リスク管理システムの子サービスでフリーズが発生し、リスク管理サービスが利用不可となりました。可用性監視の欠如により、プロセスフリーズの状態が早期に発見できず、システム全体が停止するという事態が発生しました。</p>
+<p>背景：リスク管理システムの子サービスでフリーズが発生し、リスク管理サービスが利用不可となりました。可用性監視の欠如により、プロセスフリーズの状態を早期に検知することができず、システム全体が停止するという事態に至りました。</p>
 <h2 id="本文">本文
-</h2><p>プロセスのフォジー（ゾンビプロセス）とは、プロセスが応答を停止しているにもかかわらず、終了していない状態を指します。この状況は、デッドロック、リソースの枯渇、例外など、さまざまな原因によって引き起こされる可能性があります。このような問題を解決するために、pstack ツールを使用してプロセスのスタック情報を分析し、問題の原因を特定することができます。</p>
+</h2><p>プロセスのフォジー（ゾンビプロセス）とは、プロセスが応答を停止しているにもかかわらず、終了していない状態を指します。この状況は、デッドロック、リソースの枯渇、例外など、さまざまな原因によって引き起こされる可能性があります。これらの問題に対処するためには、<code>pstack</code> ツールを使用してプロセスのスタック情報を分析し、根本原因を特定することができます。</p>
 <h2 id="ステップ">ステップ
-</h2><p>pstack は一般的なツールで、通常 gdb（GNU デバッガ）と一緒に提供されます。以下のコマンドでインストールできます：</p>
+</h2><p><code>pstack</code> は一般的なツールで、通常は <code>gdb</code> (GNU デバッガ) と共に提供されます。以下のコマンドでインストールできます：</p>
 <pre><code class="language-shell">sudo apt-get install gdb
 </code></pre>
-<p>プロセスのIDを取得する：まず、スタックされたプロセスのプロセスID (PID) を取得する必要があります。ps コマンドを使用してすべてのプロセスをリストし、調査対象のプロセスIDを見つけます。</p>
-<p>pstack ツールを使ってプロセスのスタックを分析します。プロセスIDを取得したら、以下のコマンドで pstack ツールを使用してそのプロセスのスタック情報を取得できます：</p>
+<p>プロセスのIDを取得する: まず、スタックされたプロセスのプロセスID (PID) を取得する必要があります。<code>ps</code> コマンドを使用してすべてのプロセスをリストし、調査対象のプロセスIDを見つけます。</p>
+<p><code>pstack</code> ツールを使ってプロセスのスタック情報を分析します。プロセスIDを取得したら、以下のコマンドを実行してスタック情報を取得できます：</p>
 <pre><code class="language-shell">pstack &lt;PID&gt;
 </code></pre>
-<p>これにより、現在の呼び出しシーケンスを実行している関数を含む、そのプロセスのスタック情報が出力されます。これらの情報を使って分析することで、プロセスが停止した場所を特定し、問題の解決に役立てることができます。</p>
-<p>スタック情報を分析する：スタック情報を調べて、プロセスがスタックされた原因を特定します。</p>
-<h2 id="ケース">ケース
-</h2><p>簡単なデモで、main関数が起動した後、新しい子スレッドを作成し、実際の関数を実行することで死ループが発生し、プログラムが正常に終了できず、偽りの停止状態になります。</p>
+<p>これにより、現在の呼び出しシーケンスで実行中の関数が示されたプロセスのスタック情報が出力されます。この情報を分析することで、プロセスが停止した場所を特定し、問題の診断に役立てることができます。</p>
+<p>スタック情報を分析する: スタック情報を確認することで、プロセスがスタック状に停止している原因を見つけることができます。ロックによる競合状態、無限ループ、またはその他の異常な状況などが見つかる可能性があります。具体的な状況に応じて、適切な対策（ロックの解放、コードロジックの修正など）を講じてください。</p>
+<h2 id="実行例">実行例
+</h2><p>簡単なデモで、<code>main</code>関数が起動した後、新しいスレッドを作成し、実際の関数を実行することで無限ループに陥り、プログラムが正常に終了できず、偽の停止状態になります。</p>
 <pre><code class="language-shell">cmake_minimum_required(VERSION 3.0.0)
 project(pstack_main VERSION 0.1.0 LANGUAGES C CXX)
 
@@ -415,51 +410,46 @@ find_package(Threads REQUIRED)
 
 add_executable(pstack_main main.cpp)
 
-# スレッドライブラリをリンク
+# スレッドライブラリへのリンク
 target_link_libraries(pstack_main PRIVATE Threads::Threads)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 include(CPack)
 </code></pre>
-<h2 id="ケース-1">ケース
-</h2><pre><code class="language-c++">#include &lt;iostream&gt;
+<pre><code class="language-c++">#include &lt;iostream&gt;
 #include &lt;thread&gt;
 #include &lt;chrono&gt;
 
 void infiniteLoop() {
     while (true) {
-        // メインスレッドが無限ループに入る
+        // メインスレッドが無限ループに陥る
     }
 }
 
 int main() {
-    std::thread thread(infiniteLoop); // スレッドを作成し、死ループ関数を実行する
+    std::thread thread(infiniteLoop); // 無限ループを実行する関数を持つスレッドを作成
     thread.join(); // スレッドの終了を待つ
     return 0;
 }
 </code></pre>
-<p>プログラムを開始して、pstack 結果を実行します：</p>
-<h2 id="ケース-2">ケース
-</h2><pre><code class="language-shell">スレッド2 (スレッド 0x7eff3619b700 (LWP 1315017)):
-#0 無限ループ () at /root/pstack/main.cpp:6
-#1 0x0000000000402ca9 in std::__invoke_impl&lt;void, void (*)()&gt; (__f=@0x2260eb8: 0x4029a6 &lt;infiniteLoop()&gt;) at /usr/include/c++/8/bits/invoke.h:60
-#2 0x0000000000402b02 in std::__invoke&lt;void (*)()&gt; (__fn=@0x2260eb8: 0x4029a6 &lt;infiniteLoop()&gt;) at /usr/include/c++/8/bits/invoke.h:95
-</code></pre>
-<h2 id="実行例">実行例
-</h2><p>#3  0x0000000000403150 in std::thread::_Invoker&lt;std::tuple&lt;void (<em>)()&gt; &gt;::_M_invoke&lt;0ul&gt; (this=0x2260eb8) at /usr/include/c++/8/thread:244
-#4  0x0000000000403126 in std::thread::_Invoker&lt;std::tuple&lt;void (</em>)()&gt; &gt;::operator() (this=0x2260eb8) at /usr/include/c++/8/thread:253
-#5  0x000000000040310a in std::thread::_State_impl&lt;std::thread::_Invoker&lt;std::tuple&lt;void (*)()&gt; &gt; &gt;::_M_run (this=0x2260eb0) at /usr/include/c++/8/thread:196</p>
-<h2 id="実行例-1">実行例
-</h2><p>#6  0x00007eff36bceb23 in execute_native_thread_routine () from /lib64/libstdc++.so.6
+<p>プログラムを実行し、<code>pstack</code>の結果を確認します。</p>
+<pre><code class="language-shell">Thread 2 (Thread 0x7eff3619b700 (LWP 1315017)):
+#0  infiniteLoop () at /root/pstack/main.cpp:6
+#1  0x0000000000402ca9 in std::__invoke_impl&lt;void, void (*)()&gt; (__f=@0x2260eb8: 0x4029a6 &lt;infiniteLoop()&gt;) at /usr/include/c++/8/bits/invoke.h:60
+#2  0x0000000000402b02 in std::__invoke&lt;void (*)()&gt; (__fn=@0x2260eb8: 0x4029a6 &lt;infiniteLoop()&gt;) at /usr/include/c++/8/bits/invoke.h:95
+#3  0x0000000000403150 in std::thread::_Invoker&lt;std::tuple&lt;void (*)()&gt; &gt;::_M_invoke&lt;0ul&gt; (this=0x2260eb8) at /usr/include/c++/8/thread:244
+#4  0x0000000000403126 in std::thread::_Invoker&lt;std::tuple&lt;void (*)()&gt; &gt;::operator() (this=0x2260eb8) at /usr/include/c++/8/thread:253
+#5  0x000000000040310a in std::thread::_State_impl&lt;std::thread::_Invoker&lt;std::tuple&lt;void (*)()&gt; &gt; &gt;::_M_run (this=0x2260eb0) at /usr/include/c++/8/thread:196
+#6  0x00007eff36bceb23 in execute_native_thread_routine () from /lib64/libstdc++.so.6
 #7  0x00007eff36ea91ca in start_thread () from /lib64/libpthread.so.0
 #8  0x00007eff361d58d3 in clone () from /lib64/libc.so.6
-スレッド 1 (スレッド 0x7eff372e1740 (LWP 1315016)):
+Thread 1 (Thread 0x7eff372e1740 (LWP 1315016)):
 #0  0x00007eff36eaa6cd in __pthread_timedjoin_ex () from /lib64/libpthread.so.0
 #1  0x00007eff36bceda7 in std::thread::join() () from /lib64/libstdc++.so.6
-#2  0x00000000004029d2 in main () at /root/pstack/main.cpp:13</p>
-<h2 id="ケース-3">ケース
-</h2><p>上記のように、プロセスのフリーズの原因は無限ループであり、メインスレッドが無限ループに入り、サブレースが終了できず、プロセスがフリーズする状態を引き起こします。</p>
+#2  0x00000000004029d2 in main () at /root/pstack/main.cpp:13
+</code></pre>
+<p>プロセスが偽の停止状態になっているのは、無限ループに入っているためで、メイン</p>
 
 </section>
 
@@ -511,7 +501,7 @@ int main() {
 
 
         <span>
-            最終更新 2025年06月02日 19:00
+            最終更新 2025年06月02日 20:54
         </span>
     </section>
     
@@ -592,7 +582,7 @@ int main() {
         
 
         <div class="article-details">
-            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定、および使用方法の完全ガイド</h2>
+            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定と使い方完全ガイド</h2>
         </div>
     </a>
 </article>
@@ -605,7 +595,7 @@ int main() {
         
 
         <div class="article-details">
-            <h2 class="article-title">Visual Studio が「不整合な」PDB ファイルを読み込みません。</h2>
+            <h2 class="article-title">Visual Studio が「不整合な」PDB ファイルをロードできません。</h2>
         </div>
     </a>
 </article>

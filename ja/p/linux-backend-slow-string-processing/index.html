@@ -10,7 +10,7 @@
 <meta property='og:description' content="C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していまし">
 <meta property='og:url' content='https://ttf248.life/ja/p/linux-backend-slow-string-processing/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T20:54:02&#43;08:00'/>
 <meta name="twitter:title" content="Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い">
 <meta name="twitter:description" content="C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していまし">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -215,23 +215,11 @@
     <li><a href="#問題の特定">問題の特定</a></li>
     <li><a href="#デモ検証">デモ検証</a>
       <ol>
+        <li><a href="#キーポイントの説明">キーポイントの説明</a></li>
         <li><a href="#主要ポイント">主要ポイント</a></li>
-        <li><a href="#主要ポイント-1">主要ポイント</a></li>
-        <li><a href="#主要ポイント-2">主要ポイント</a></li>
-        <li><a href="#主要ポイント-3">主要ポイント</a></li>
       </ol>
     </li>
-    <li><a href="#完全なコード">完全なコード</a></li>
-    <li><a href="#完全なコード-1">完全なコード</a></li>
-    <li><a href="#完全なコード-2">完全なコード</a></li>
     <li><a href="#完整コード">完整コード</a></li>
-    <li><a href="#完整コード-1">完整コード</a></li>
-    <li><a href="#完整コード-2">完整コード</a></li>
-    <li><a href="#完整コード-3">完整コード</a></li>
-    <li><a href="#完全なコード-3">完全なコード</a></li>
-    <li><a href="#完全なコード-4">完全なコード</a></li>
-    <li><a href="#完整コード-4">完整コード</a></li>
-    <li><a href="#完全なコード-5">完全なコード</a></li>
   </ol>
 </nav>
         </div>
@@ -365,7 +353,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
                 <time class="article-time--reading">
-                    読了時間: 7分
+                    読了時間: 5分
                 </time>
             </div>
         
@@ -402,41 +390,40 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     <p>C++開発の歴史的なプロジェクトにおいて、カスタムプロトコルを使用して通信を行っており、そのプロトコルは2次元配列のパターンを採用していました。大量データを処理する際に、プロトコル内部では配列を遍历し、シリアライズ操作を実行してログを生成しており、このため効率が低く、システムが高負荷時に顕著なフレーム落ち（カドゥ）を引き起こしました。事業部門からは、システムのフレーム落ちに関するフィードバックがありました。</p>
 <h2 id="問題の特定">問題の特定
-</h2><p>問題のトラブルシューティングにおいて、まずシステムに対してパフォーマンス分析を実施し、大量データを処理する際にCPU使用率が著しく増加し、システムの応答時間が長くなっていることを発見しました。ログを分析した結果、多数のシリアライズ操作が見られ、これらの操作は2次元配列を処理する際の効率が低いことが原因でシステムのパフォーマンス低下につながっていました。
+</h2><p>問題のトラブルシューティングにおいて、まずシステムに対してパフォーマンス分析を実施し、大量データを処理する際にCPU使用率が著しく増加し、システムの応答時間が長くなっていることを発見しました。ログを分析した結果、多数のシリアライズ操作が見られ、これらの操作は2次元配列を処理する際の効率が低いことが原因でシステム性能が低下していました。
 <code>pstack</code>ツールを使用してサービスのスレッド情報を取得し、ログスレッドが文字列の連結に大部分の時間を使用していることを特定しました。</p>
 <blockquote>
-<p>今日は重点的に取り組むべき点です。異なる累積方式では、その効率の違いは非常に大きいです。過去のコードでは &lsquo;+&rsquo; 演算子を使用しており、この方法は頻繁に一時オブジェクトを作成するため、非常に非効率的でした。それは、その非効率がどの程度であるかを知らない状況にあるようなものです。</p>
+<p>今日は重点的に取り組むべき点です。異なる累積方式では、その効率の違いは非常に大きいです。過去のコードでは &lsquo;+&rsquo; 演算子を使用しており、この方法は頻繁に一時オブジェクトを作成するため、非常に非効率的でした。それは、その非効率さがどの程度であるかを知らない状況にあるようなものです。</p>
 </blockquote>
 <h2 id="デモ検証">デモ検証
-</h2><p>プロジェクトコードに基づいて、ビジネスロジックを抽出し、文字列連結の効率に関する問題を検証するためのシンプルなデモを作成しました。Windows環境ではVisual Studio 2022コンパイラ、Linux環境ではgcc8.5コンパイラを使用し、Releaseモードでビルドして実行し、効率を比較します。</p>
-<h3 id="主要ポイント">主要ポイント
-</h3><p>このプロジェクトでは、方法四を使用し、テストデータを入手する前に、どの方法が最も効率的で、最も非効率かを読者に考えてもらうようにしました。結果を見たときは、自分でも驚きました。</p>
+</h2><p>プロジェクトコードに基づいて、ビジネスロジックを抽出し、文字列連結の効率に関する問題を検証するためのシンプルなデモを作成しました。Windows環境ではVisual Studio 2022コンパイラ、Linux環境ではgcc8.5コンパイラを使用し、Releaseモードでビルドして実行することで、効率を比較します。</p>
+<h3 id="キーポイントの説明">キーポイントの説明
+</h3><p>本プロジェクトで使用されたのは方法四であり、テストデータを入手する前に、どの方法が最も効率が良いか、最も効率が悪いかを読者が最初に考えてみるべきです。結果を見たときは、自分自身にとても驚きました。</p>
 <ol>
-<li><strong>方法 1 (<code>+=</code> 連結)</strong>：各フィールドを <code>+=</code> を使って文字列に直接連結します。</li>
-<li><strong>方法 2 (<code>std::ostringstream</code> 連結)</strong>：ストリーム（<code>std::ostringstream</code>）を使用して各フィールドを連結する方法で、特に大量のデータを連結する場合に効率的です。</li>
-<li><strong>方法 3（事前割り当てメモリの <code>+=</code> 連結）</strong>：<code>reserve</code> を使って文字列に十分なメモリを事前に割り当てることで、メモリ再割り当てのオーバーヘッドを減らし、パフォーマンスを向上させます。</li>
-<li><strong>方法4 (<code>bodys = bodys + body + &quot;\n&quot;</code>)</strong>: 各回の連結で新しい一時的な文字列オブジェクトが作成されるため、大規模な連結においてはパフォーマンスの低下を引き起こします。これは、各連結において新たなメモリ割り当てとコピーが必要となるためです。
-参照結果から、この方法が最も効率の悪いものとして選ばれていることがわかります。
-さらに詳しく分析すると、異なるプラットフォームコンパイラの最適化効率に違いが見られます。Microsoft の <code>Visual Studio</code> は一如既往に優れており、文字列の最適化効率は非常に高い一方、<code>gcc</code> コンパイラはその最適化効率がやや劣ります。</li>
+<li><strong>方法 1 (<code>+=</code> による連結)</strong>：各フィールドを <code>+=</code> を使って文字列に直接連結します。</li>
+<li><strong>方法 2 (<code>std::ostringstream</code> による連結)</strong>：ストリーム（<code>std::ostringstream</code>）を使用して各フィールドを連結する方法で、特に大量のデータを連結する場合に効率的です。</li>
+<li><strong>方法 3 (事前にメモリを割り当てる <code>+=</code> による連結)</strong>：<code>reserve</code> を使用して文字列に必要な十分なメモリを事前に割り当て、メモリ再割り当てのオーバーヘッドを削減することでパフォーマンスを向上させます。</li>
+<li><strong>方法 4 (<code>bodys = bodys + body + &quot;\n&quot;</code>)</strong>: 各連結で新しい一時的な文字列オブジェクトを作成するため、パフォーマンスが低下します。特に大規模な連結の場合、各連結において新しいメモリ割り当てとコピーが発生するためです。</li>
 </ol>
-<h3 id="主要ポイント-1">主要ポイント
-</h3><blockquote>
-<p>コードを異なるマシンで実行した場合、2つのデータ間で直接的な比較の意味がないため、異なるパッチング方法間の差分を比較することができます。</p>
+<p>参照結果から、プロジェクトはちょうど最も効率の悪い方法を選択していました。</p>
+<p>さらに詳しく分析すると、異なるプラットフォームコンパイラによる最適化効率を分析できます。Microsoft の <code>visual studio</code> は従来通り優れており、文字列の最適化効率は非常に高いですが、<code>gcc</code> コンパイラの最適化効率は少し劣ります。</p>
+<blockquote>
+<p>異なるマシンでコードを実行した場合、2つのデータセット間で直接比較する意味はありません。異なる連結方法間の差を比較できます。</p>
 </blockquote>
-<h3 id="主要ポイント-2">主要ポイント
+<h3 id="主要ポイント">主要ポイント
 </h3><pre><code class="language-shell">Windowsプラットフォーム下でのVisual Studio 2022コンパイラ
 
 ----------------------------------------
-データ生成時間: 0.054秒
+データ生成時間: 0.054秒。
 ----------------------------------------
 
 ----------------------------------------
 データマージパフォーマンス:
 ----------------------------------------
-+ データマージ (+=) にかかった時間: 0.053秒
-+ ostringstream データマージにかかった時間: 0.054秒
-+ 事前予約済みデータマージにかかった時間: 0.045秒
-+ データマージ (bodys = bodys + body + &quot;\n&quot;) にかかった時間: 16.108秒
++ データマージ (+=) にかかった時間: 0.053秒。
++ ostringstream データマージにかかった時間: 0.054秒。
++ 事前予約済みデータマージにかかった時間: 0.045秒。
++ データマージ (bodys = bodys + body + &quot;\n&quot;) にかかった時間: 16.108秒。
 
 ----------------------------------------
 データマージ完了。
@@ -444,19 +431,18 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 プログラム終了。
 </code></pre>
-<h3 id="主要ポイント-3">主要ポイント
-</h3><pre><code class="language-shell">Linuxプラットフォーム下 GCC8.5コンパイラ
+<pre><code class="language-shell">Linuxプラットフォーム下でのgcc8.5コンパイラ
 ----------------------------------------
-データ生成時間：0.108秒。
+データ生成時間: 0.108秒。
 ----------------------------------------
 
 ----------------------------------------
-データマージパフォーマンス：
+データマージパフォーマンス:
 ----------------------------------------
-+ データマージ (+=) にかかった時間：0.100秒。
-+ ostringstream データマージにかかった時間：0.083秒。
-+ 事前予約済みデータマージにかかった時間：0.057秒。
-+ データマージ (bodys = bodys + body + &quot;\n&quot;) にかかった時間：29.298秒。
++ データマージ (+=) にかかった時間: 0.100秒。
++ ostringstream データマージにかかった時間: 0.083秒。
++ 事前予約済みデータマージにかかった時間: 0.057秒。
++ データマージ (bodys = bodys + body + &quot;\n&quot;) にかかった時間: 29.298秒。
 
 ----------------------------------------
 データマージ完了。
@@ -464,7 +450,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 プログラム終了。
 </code></pre>
-<h2 id="完全なコード">完全なコード
+<h2 id="完整コード">完整コード
 </h2><pre><code class="language-cpp">#include &lt;iostream&gt;
 #include &lt;string&gt;
 #include &lt;vector&gt;
@@ -488,9 +474,8 @@ struct ResponsePackage
     std::string ExtraInfo2;
     DataGroup DataBody;
 };
-</code></pre>
-<pre><code class="language-markdown">## 完整コード
-// 指定された長さのランダム文字列を生成する
+
+// Generate specified length of random string
 std::string generateRandomString(size_t length)
 {
     const char charset[] = &quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&quot;;
@@ -501,187 +486,111 @@ std::string generateRandomString(size_t length)
     std::random_device rd;
     std::mt19937 generator(rd());
     std::uniform_int_distribution&lt;&gt; distribution(0, max_index);
-</code></pre>
-<p>// ランダム文字列を生成します。
-// 文字列の文字セットは、小文字と大文字のアルファベット、数字です。
-// 指定された長さのランダムな文字列を生成するために、乱数ジェネレータを使用して、文字セットからランダムに文字を選択します。</p>
-<pre><code>
-**注釈:**
 
-*   上記は日本語での完全な翻訳です。
-*   コードコメントも日本語で記述されています。
-*   Markdown形式を維持しています。
+    for (size_t i = 0; i &lt; length; ++i)
+    {
+        random_string += charset[distribution(generator)];
+    }
 
-## 完全なコード
-for (size_t i = 0; i &lt; length; ++i)
-{
-    random_string += charset[distribution(generator)];
-}
-
-return random_string;
+    return random_string;
 }
 
 void create_large_string()
 {
-    // 例：50フィールドを含むリクエストパッケージ
+    // Example request package with 50 fields
     ResponsePackage requestPackage;
 
-## 完整コード
-requestPackage.Head = {
-    &quot;Field1&quot;, &quot;Field2&quot;, &quot;Field3&quot;, &quot;Field4&quot;, &quot;Field5&quot;,
-    &quot;Field6&quot;, &quot;Field7&quot;, &quot;Field8&quot;, &quot;Field9&quot;, &quot;Field10&quot;,
-    &quot;Field11&quot;, &quot;Field12&quot;, &quot;Field13&quot;, &quot;Field14&quot;, &quot;Field15&quot;,
-    &quot;Field16&quot;, &quot;Field17&quot;, &quot;Field18&quot;, &quot;Field19&quot;, &quot;Field20&quot;,
-    &quot;Field21&quot;, &quot;Field22&quot;, &quot;Field23&quot;, &quot;Field24&quot;, &quot;Field25&quot;,
-    &quot;Field26&quot;, &quot;Field27&quot;, &quot;Field28&quot;, &quot;Field29&quot;, &quot;Field30&quot;,
-    &quot;Field31&quot;, &quot;Field32&quot;, &quot;Field33&quot;, &quot;Field34&quot;, &quot;Field35&quot;
-};
+    requestPackage.Head = {
+        &quot;Field1&quot;, &quot;Field2&quot;, &quot;Field3&quot;, &quot;Field4&quot;, &quot;Field5&quot;,
+        &quot;Field6&quot;, &quot;Field7&quot;, &quot;Field8&quot;, &quot;Field9&quot;, &quot;Field10&quot;,
+        &quot;Field11&quot;, &quot;Field12&quot;, &quot;Field13&quot;, &quot;Field14&quot;, &quot;Field15&quot;,
+        &quot;Field16&quot;, &quot;Field17&quot;, &quot;Field18&quot;, &quot;Field19&quot;, &quot;Field20&quot;,
+        &quot;Field21&quot;, &quot;Field22&quot;, &quot;Field23&quot;, &quot;Field24&quot;, &quot;Field25&quot;,
+        &quot;Field26&quot;, &quot;Field27&quot;, &quot;Field28&quot;, &quot;Field29&quot;, &quot;Field30&quot;,
+        &quot;Field31&quot;, &quot;Field32&quot;, &quot;Field33&quot;, &quot;Field34&quot;, &quot;Field35&quot;,
+        &quot;Field36&quot;, &quot;Field37&quot;, &quot;Field38&quot;, &quot;Field39&quot;, &quot;Field40&quot;,
+        &quot;Field41&quot;, &quot;Field42&quot;, &quot;Field43&quot;, &quot;Field44&quot;, &quot;Field45&quot;,
+        &quot;Field46&quot;, &quot;Field47&quot;, &quot;Field48&quot;, &quot;Field49&quot;, &quot;Field50&quot;
+    };
 
-## 完整コード
+    requestPackage.ClientId = &quot;ClientID&quot;;
+    requestPackage.UUID = &quot;UUID&quot;;
+    requestPackage.MsgID = &quot;MsgID&quot;;
+    requestPackage.SessionID = &quot;SessionID&quot;;
+    requestPackage.ExtraInfo1 = &quot;ExtraInfo1&quot;;
+    requestPackage.ExtraInfo2 = &quot;ExtraInfo2&quot;;
+
+    // Start timing for data generation
+    auto start_gen = std::chrono::high_resolution_clock::now();
+
+    // Generate 10,000 rows of data, each with 50 fields
+    for (size_t i = 0; i &lt; 10000; ++i)
+    {
+        DataRow dataRow(50, &quot;This is a test string&quot;);
+        requestPackage.DataBody.push_back(dataRow);
+    }
+
+    // End timing for data generation
+    auto end_gen = std::chrono::high_resolution_clock::now();
+    std::chrono::duration&lt;double&gt; duration_gen = end_gen - start_gen;
+
+    // Display result generation time
+    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
+    std::cout &lt;&lt; &quot;Data Generation Time: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_gen.count() &lt;&lt; &quot; seconds.\n&quot;;
+    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
+
+    // Data merging using different methods
+    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
+    std::cout &lt;&lt; &quot;Data Merging Performance:\n&quot;;
+    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
+
+    {
+        // Method 1: Using '+=' string concatenation
+        auto start_merge = std::chrono
+
+## 完全なコード
 ```json
 {
-  &quot;Field31&quot;: &quot;&quot;,
-  &quot;Field32&quot;: &quot;&quot;,
-  &quot;Field33&quot;: &quot;&quot;,
-  &quot;Field34&quot;: &quot;&quot;,
-  &quot;Field35&quot;: &quot;&quot;,
-  &quot;Field36&quot;: &quot;&quot;,
-  &quot;Field37&quot;: &quot;&quot;,
-  &quot;Field38&quot;: &quot;&quot;,
-  &quot;Field39&quot;: &quot;&quot;,
-  &quot;Field40&quot;: &quot;&quot;,
-  &quot;Field41&quot;: &quot;&quot;,
-  &quot;Field42&quot;: &quot;&quot;,
-  &quot;Field43&quot;: &quot;&quot;,
-  &quot;Field44&quot;: &quot;&quot;,
-  &quot;Field45&quot;: &quot;&quot;,
-  &quot;Field46&quot;: &quot;&quot;,
-  &quot;Field47&quot;: &quot;&quot;,
-  &quot;Field48&quot;: &quot;&quot;,
-  &quot;Field49&quot;: &quot;&quot;,
-  &quot;Field50&quot;: &quot;&quot;
-}
-</code></pre>
-<h2 id="完全なコード-1">完全なコード
-</h2><p>requestPackage.ClientId = &ldquo;ClientID&rdquo;;
-requestPackage.UUID = &ldquo;UUID&rdquo;;
-requestPackage.MsgID = &ldquo;MsgID&rdquo;;
-requestPackage.SessionID = &ldquo;SessionID&rdquo;;
-requestPackage.ExtraInfo1 = &ldquo;ExtraInfo1&rdquo;;
-requestPackage.ExtraInfo2 = &ldquo;ExtraInfo2&rdquo;;</p>
-<p>// データ生成の開始タイミングを記録
-auto start_gen = std::chrono::high_resolution_clock::now();</p>
-<h2 id="完全なコード-2">完全なコード
-</h2><p>// 50フィールドを持つ1万行のデータを生成する
-for (size_t i = 0; i &lt; 10000; ++i)
-{
-DataRow dataRow(50, &ldquo;This is a test string&rdquo;);
-requestPackage.DataBody.push_back(dataRow);
-}</p>
-<pre><code>// データ生成のタイミング終了
-auto end_gen = std::chrono::high_resolution_clock::now();
-std::chrono::duration&lt;double&gt; duration_gen = end_gen - start_gen;
-</code></pre>
-<h2 id="完整コード">完整コード
-</h2><p>// 結果生成時間表示
-std::cout &laquo; &ldquo;\n&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-\n&rdquo;;
-std::cout &laquo; &ldquo;データ生成時間: &quot; &laquo; std::fixed &laquo; std::setprecision(3) &laquo; duration_gen.count() &laquo; &quot; 秒.\n&rdquo;;
-std::cout &laquo; &ldquo;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;-\n&rdquo;;</p>
-<pre><code>// 異なる方法でデータマージのパフォーマンス
-std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
-std::cout &lt;&lt; &quot;データマージ性能:\n&quot;;
-std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
-</code></pre>
-<h2 id="完整コード-1">完整コード
-</h2><pre><code>// Method 1: Using '+=' string concatenation
-auto start_merge = std::chrono::high_resolution_clock::now();
-std::string bodys(&quot;&quot;);
-for (auto&amp; vec : requestPackage.DataBody)
-{
-    std::string body(&quot;This is a test string&quot;);
-    for (auto&amp; item : vec)
-    {
-        body += item + &quot; &quot;;
+        // Method 2: Using ostringstream
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::ostringstream bodys;
+        for (auto&amp; vec : requestPackage.DataBody)
+        {
+            std::ostringstream body;
+            body &lt;&lt; &quot;This is a test string&quot;;
+            for (auto&amp; item : vec)
+            {
+                body &lt;&lt; item &lt;&lt; &quot; &quot;;
+            }
+            bodys &lt;&lt; body.str() &lt;&lt; &quot;\n&quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+        std::cout &lt;&lt; &quot;+ ostringstream Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
     }
-    bodys += body + &quot;\n&quot;;
-}
-auto end_merge = std::chrono::high_resolution_clock::now();
-</code></pre>
-<p>// 方法1：使用&rsquo;+=&lsquo;文字列連結
-auto start_merge = std::chrono::high_resolution_clock::now();
-std::string bodys(&quot;&quot;);
-for (auto&amp; vec : requestPackage.DataBody)
-{
-std::string body(&ldquo;This is a test string&rdquo;);
-for (auto&amp; item : vec)
-{
-body += item + &quot; &ldquo;;
-}
-bodys += body + &ldquo;\n&rdquo;;
-}
-auto end_merge = std::chrono::high_resolution_clock::now();</p>
-<pre><code>
-```markdown
-## 完整コード
-}
-    auto end_merge = std::chrono::high_resolution_clock::now();
-    std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-    std::cout &lt;&lt; &quot;+ データマージ (+=) にかかりました: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; 秒。&quot; &lt;&lt; std::endl;
-</code></pre>
-<h2 id="完整コード-2">完整コード
-</h2><pre><code class="language-cpp">// Method 2: Using ostringstream
-auto start_merge = std::chrono::high_resolution_clock::now();
-std::ostringstream bodys;
-for (auto&amp; vec : requestPackage.DataBody)
-{
-    std::ostringstream body;
-    body &lt;&lt; &quot;This is a test string&quot;;
-    for (auto&amp; item : vec)
+
     {
-        body &lt;&lt; item &lt;&lt; &quot; &quot;;
+        // Method 3: Pre-allocated memory
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys;
+        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
+        for (auto&amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&quot;This is a test string&quot;);
+            body.reserve(50 * 20); // Pre-allocate memory for each row
+            for (auto&amp; item : vec)
+            {
+                body += item + &quot; &quot;;
+            }
+            bodys += body + &quot;\n&quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+        std::cout &lt;&lt; &quot;+ Pre-reserved Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
     }
-    bodys &lt;&lt; body.str() &lt;&lt; &quot;\n&quot;;
-}
-auto end_merge = std::chrono::high_resolution_clock::now();
-</code></pre>
-<pre><code class="language-cpp">## 完整コード
-}
-    auto end_merge = std::chrono::high_resolution_clock::now();
-    std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-    std::cout &lt;&lt; &quot;+ ostringstream Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
-</code></pre>
-<h2 id="完整コード-3">完整コード
-</h2><p>}
-auto end_merge = std::chrono::high_resolution_clock::now();
-std::chrono::duration<double> duration_merge = end_merge - start_merge;
-std::cout &laquo; &ldquo;+ ostringstream データマージに要した時間: &quot; &laquo; std::fixed &laquo; std::setprecision(3) &laquo; duration_merge.count() &laquo; &quot; 秒。&rdquo; &laquo; std::endl;</p>
-<h2 id="完全なコード-3">完全なコード
-</h2><pre><code class="language-c++">// Method 3: Pre-allocated memory
-auto start_merge = std::chrono::high_resolution_clock::now();
-std::string bodys;
-bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
-for (auto&amp; vec : requestPackage.DataBody)
-{
-    std::string body(&quot;This is a test string&quot;);
-    body.reserve(50 * 20); // Pre-allocate memory for each row
-    for (auto&amp; item : vec)
+
     {
-        body += item + &quot; &quot;;
-    }
-</code></pre>
-<h2 id="完全なコード-4">完全なコード
-</h2><pre><code class="language-c++">for (auto&amp; item : vec)
-{
-    body += item + &quot; &quot;;
-}
-bodys += body + &quot;\n&quot;;
-}
-auto end_merge = std::chrono::high_resolution_clock::now();
-std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-std::cout &lt;&lt; &quot;+ Pre-reserved Data merging took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
-</code></pre>
-<h2 id="完整コード-4">完整コード
-</h2><pre><code>        // Method 4: Using 'bodys = bodys + body + &quot;\n&quot;'
+        // Method 4: Using 'bodys = bodys + body + &quot;\n&quot;'
         auto start_merge = std::chrono::high_resolution_clock::now();
         std::string bodys(&quot;&quot;);
         for (auto&amp; vec : requestPackage.DataBody)
@@ -692,24 +601,15 @@ std::cout &lt;&lt; &quot;+ Pre-reserved Data merging took: &quot; &lt;&lt; std::
                 body = body + item + &quot; &quot;; // Note the use of 'body = body + item'
             }
             bodys = bodys + body + &quot;\n&quot;; // Again, using 'bodys = bodys + body'
-</code></pre>
-<pre><code class="language-markdown">## 完整コード
-}
-            bodys = bodys + body + &quot;\n&quot;; // Again, using 'bodys = bodys + body'
         }
         auto end_merge = std::chrono::high_resolution_clock::now();
         std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
-        std::cout &lt;&lt; &quot;+ データマージ (bodys = bodys + body + \&quot;\\n\&quot;) にかかりました: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; 秒。&quot; &lt;&lt; std::endl;
+        std::cout &lt;&lt; &quot;+ Data merging (bodys = bodys + body + \&quot;\\n\&quot;) took: &quot; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &quot; seconds.\n&quot;;
     }
-</code></pre>
-<h2 id="完全なコード-5">完全なコード
-</h2><pre><code class="language-cpp">#include &lt;iostream&gt;
-#include &lt;string&gt;
 
-void create_large_string() {
-  std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
-  std::cout &lt;&lt; &quot;Data Merging Complete.\n&quot;;
-  std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
+    std::cout &lt;&lt; &quot;\n----------------------------------------\n&quot;;
+    std::cout &lt;&lt; &quot;Data Merging Complete.\n&quot;;
+    std::cout &lt;&lt; &quot;----------------------------------------\n&quot;;
 }
 
 int main()
@@ -782,7 +682,7 @@ int main()
 
 
         <span>
-            最終更新 2025年06月02日 19:00
+            最終更新 2025年06月02日 20:54
         </span>
     </section>
     
@@ -837,7 +737,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました。コードの記述ルールの欠如による問題点です。</h2>
+            <h2 class="article-title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました：コードの非規整性による問題点</h2>
         </div>
     </a>
 </article>
@@ -889,7 +789,7 @@ int main()
         
 
         <div class="article-details">
-            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定、および使用方法の完全ガイド</h2>
+            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定と使い方完全ガイド</h2>
         </div>
     </a>
 </article>

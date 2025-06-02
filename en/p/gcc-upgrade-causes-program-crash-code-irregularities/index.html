@@ -10,7 +10,7 @@
 <meta property='og:description' content="In the same business code scenario, the program compiled and ran normally in a CentOS 7 environment. However, when switching to CentOS 8 and using an updated version of GCC for compilation, the program crashed. It’s worth noting that the issue only occurs in Release mode, while Debug mode does not exhibit any problems. This is the first time we&rsquo;ve encountered a situation like this; after three days of investigation, we finally identified the root cause.">
 <meta property='og:url' content='https://ttf248.life/en/p/gcc-upgrade-causes-program-crash-code-irregularities/'>
 <meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='troubleshooting' /><meta property='article:published_time' content='2024-03-10T23:19:06&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='linux' /><meta property='article:tag' content='troubleshooting' /><meta property='article:published_time' content='2024-03-10T23:19:06&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T20:54:02&#43;08:00'/>
 <meta name="twitter:title" content="Upgrading the GCC version caused program crashes: hidden issues due to code non-compliance.">
 <meta name="twitter:description" content="In the same business code scenario, the program compiled and ran normally in a CentOS 7 environment. However, when switching to CentOS 8 and using an updated version of GCC for compilation, the program crashed. It’s worth noting that the issue only occurs in Release mode, while Debug mode does not exhibit any problems. This is the first time we&rsquo;ve encountered a situation like this; after three days of investigation, we finally identified the root cause.">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -393,7 +393,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     <p>In the same business code scenario, the program compiled and ran normally in a CentOS 7 environment. However, when switching to CentOS 8 and using an updated version of GCC for compilation, the program crashed. It’s worth noting that the issue only occurs in <strong>Release mode</strong>, while <strong>Debug mode</strong> does not exhibit any problems. This is the first time we&rsquo;ve encountered a situation like this; after three days of investigation, we finally identified the root cause.</p>
 <h3 id="problem-identification">Problem Identification
-</h3><p>After investigation, the root cause of the issue was <strong>the function lacking a return value</strong>. In Release mode, new versions of GCC perform more optimizations, which caused an unknown logic to occur within the function that originally did not have an explicit return value during execution, ultimately triggering a crash. Our conclusion is that <strong>compiler warnings should not be ignored, especially in legacy projects where some warnings may be dismissed, but it’s also important to avoid suppressing all warnings.</strong></p>
+</h3><p>After investigation, the root cause of the issue was <strong>the function lacked a return value</strong>. In Release mode, new versions of GCC perform more optimizations, which caused an unknown logic to occur within the function that originally did not have an explicit return value during execution, ultimately triggering a crash. Our conclusion is that <strong>compiler warnings should not be ignored, especially in legacy projects where some warnings may be dismissed, but it’s also important to avoid suppressing all warnings.</strong></p>
 <h3 id="environment-details">Environment Details
 </h3><ul>
 <li><strong>CentOS 7 GCC Version:</strong></li>
@@ -413,7 +413,7 @@ Program terminated with signal SIGSEGV, Segmentation fault.
 </code></pre>
 <p>This stack doesn&rsquo;t appear intuitive; the crash function’s stack information shows a <code>??</code>, which makes troubleshooting even more complex.</p>
 <h3 id="code-example">Code Example
-</h3><p>To better understand the issue, here’s a minimal code example that reproduces the crash:</p>
+</h3><p>To better understand the issue, here is a minimal code example that reproduces the crash:</p>
 <pre><code class="language-cpp">#include &lt;iostream&gt;
 #include &lt;map&gt;
 
@@ -426,7 +426,7 @@ int main() {
     return 0;
 }
 </code></pre>
-<p>The <code>test()</code> function in this code clearly doesn&rsquo;t explicitly return a value, and its return type is <code>int</code>. According to the C++ standard, when a function is declared as an <code>int</code> type, it must have a return value, otherwise it may lead to undefined behavior.</p>
+<p>The <code>test()</code> function in this code clearly does not explicitly return a value, and its return type is <code>int</code>. According to the C++ standard, when a function is declared as an <code>int</code> type, it must have a return value, otherwise it may lead to undefined behavior.</p>
 <h3 id="compilation-warning">Compilation Warning
 </h3><p>In our project, the CMake script suppresses many compile-time warnings, including the following:</p>
 <pre><code class="language-shell">/root/pstack/main.cpp: In function ‘int test()’:
@@ -446,11 +446,11 @@ int main() {
 <p><strong>GCC 8.5.0 Generated Assembly Code:</strong></p>
 </li>
 <li>
-<p>The new version of GCC performed more optimizations, reducing the code volume. However, this optimization may have resulted in undefined behavior when calling functions without returning values, leading to program crashes.</p>
+<p>The new version of GCC performed more optimizations, reducing the code volume. However, this optimization may have resulted in unpredictable behavior when executing functions without returning values, leading to program crashes.</p>
 </li>
 </ul>
 <h3 id="conclusion">Conclusion
-</h3><p>Through this troubleshooting process, we deeply realized that in C++, <strong>function return values must be explicit</strong>, especially when a function is declared as <code>int</code>, a return value must be provided. When upgrading from older versions of compilers to newer versions of GCC, more optimization and stricter warning mechanisms may be encountered. Therefore, we recommend not suppressing all warnings during compilation, but rather selectively addressing them, particularly common issues such as function return values and type matching.
+</h3><p>Through this troubleshooting process, we deeply realized that in C++, <strong>function return values must be explicit</strong>, particularly when a function is declared as <code>int</code>, a return value must be provided. When upgrading from older versions of compilers to newer versions of GCC, more optimization and stricter warning mechanisms may be encountered. Therefore, we recommend not <strong>disabling all warnings</strong> during compilation, but rather selectively addressing them, especially common issues such as function return values and type matching.
 Ultimately, by adding a return value to the <code>test()</code> function, the problem was resolved, and the program returned to normal operation.</p>
 
 </section>
@@ -507,7 +507,7 @@ Ultimately, by adding a return value to the <code>test()</code> function, the pr
 
 
         <span>
-            Last updated on Jun 02, 2025 19:00
+            Last updated on Jun 02, 2025 20:54
         </span>
     </section>
     

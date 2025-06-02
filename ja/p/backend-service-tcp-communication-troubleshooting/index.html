@@ -10,7 +10,7 @@
 <meta property='og:description' content="ビジネスモデル：バックエンドサービスがTCPを通じてグループの行情ゲートウェイと接続します。接続ごとに、最初に権限リクエストを送信し、その後">
 <meta property='og:url' content='https://ttf248.life/ja/p/backend-service-tcp-communication-troubleshooting/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:tag' content='TCP' /><meta property='article:tag' content='ネットワーク通信' /><meta property='article:published_time' content='2025-02-14T22:54:13&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:tag' content='TCP' /><meta property='article:tag' content='ネットワーク通信' /><meta property='article:published_time' content='2025-02-14T22:54:13&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T20:54:02&#43;08:00'/>
 <meta name="twitter:title" content="バックエンドサービス TCP 通信異常トラブルシューティング">
 <meta name="twitter:description" content="ビジネスモデル：バックエンドサービスがTCPを通じてグループの行情ゲートウェイと接続します。接続ごとに、最初に権限リクエストを送信し、その後">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -216,7 +216,7 @@
     <li><a href="#ネットワークパケットの分析">ネットワークパケットの分析</a></li>
     <li><a href="#共通フラグの説明">共通フラグの説明</a>
       <ol>
-        <li><a href="#1-pshpush-flag"><strong>1. PSH（Push Flag）</strong></a></li>
+        <li><a href="#1-psh-push-flag"><strong>1. PSH (Push Flag)</strong></a></li>
         <li><a href="#2-ackacknowledgment-flag"><strong>2. ACK（Acknowledgment Flag）</strong></a></li>
         <li><a href="#3-psh-と-ack-の組み合わせ"><strong>3. PSH と ACK の組み合わせ</strong></a></li>
         <li><a href="#4-その他の関連を示すフラグ"><strong>4. その他の関連を示すフラグ</strong></a></li>
@@ -396,21 +396,15 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     
     <p>ビジネスモデル：バックエンドサービスがTCPを通じてグループの行情ゲートウェイと接続します。接続ごとに、最初に権限リクエストを送信し、その後継続的にハニーポットパケットを送信して接続状態を維持します。</p>
-<p>しかし、ある日、サービス切断警告の情報を受け取りました。詳細なログ調査の結果、バックエンドサービスは継続的にハニーポットパケットを送信していたにもかかわらず、相手からの応答はなく、接続が常に切断されませんでした。</p>
+<p>しかし、ある日、サービス切断警告の情報を受け取りました。詳細なログ調査の結果、バックエンドサービスは継続的にハニーポットパケットを送信していたにもかかわらず、相手からの応答が一切なく、接続自体が断続的に切断されていました。</p>
 <h2 id="現場要約">現場要約
-</h2><p>原本在会社でプロジェクトの進捗を推進していたところ、業務チャットに警報情報がポップアップされました。初めは、以前からのトラブルだと思っていましたが、おそらくネットワークタイムアウトにより心拍送信が失敗し、サービスが切断されたのだと推測しました。しかし、ログの詳細な調査の結果、実際にはそうではありませんでした。バックエンドから認証ログインメッセージを送信しましたが、応答を受信しませんでした。同時に、心拍パケットは継続的に送信され続けていましたが、相手側からは決して応答がありませんでした。ログの徹底的な分析により、以下の重要な問題が明らかになりました：</p>
+</h2><p>当初、社内プロジェクトの進捗をオフィスで作業中に、グループチャットに警報情報がポップアップした。一 glance で見ると、以前からの恒常的な問題だと思い、おそらくネットワークタイムアウトによって心拍送信が失敗し、その結果サービスが切断されたと推測した。しかし、ログの詳細な調査の結果、実際にはそうではなかったことが判明した。バックエンドで権限認証メッセージを送信したが、応答を受信せず、同時に心拍パケットは継続的に送信され続け、相手からは心拍データに対する応答が一切なかった。ログの徹底的な分析により、以下の重要な問題点が明らかになった：</p>
 <ol>
-<li>
-<p>認証メッセージへの応答なし：おそらく相手側のシステムが再起動しており、認証メッセージが適切に処理されていない可能性があります。</p>
-</li>
-<li>
-<p>認証失敗中に心拍パケットを送信：調査の結果、これはプログラムロジック上の脆弱性であることが判明しました。 心拍送信関数の判断ロジックに欠陥があり、接続状態のみを検証するだけで、権限状態の検証が抜け落ちていました。</p>
-</li>
-<li>
-<p>サービス未断開接続：サービスが断開可能であれば、再接続メカニズムをトリガーして、改めて認証メッセージを送信できます。</p>
-</li>
+<li>権限認証メッセージへの応答なし：おそらく相手側のシステムが再起動しており、その結果権限認証メッセージがタイムリーに処理されなかった可能性がある。</li>
+<li>権限認証失敗中に心拍パケット送信：調査の結果、これはプログラムロジック上の脆弱性であることが判明した。心拍送信関数の判断ロジックに欠陥があり、接続状態のみを検証し、権限状態の検証を省略していた。</li>
+<li>サービスが切断されなかったこと：もしサービスが切断可能であれば、再接続メカニズムをトリガーして権限認証メッセージを再送信することができた。
+現在、解決すべき最後の課題は、なぜサービスが切断されなかったのかである。この問題の解決には、より詳細で精緻な調査が必要となる。</li>
 </ol>
-<p>現在、解決すべき最後の課題は、なぜサービスが断開できないのかという点です。この問題の解決には、より詳細かつ綿密な調査が必要です。</p>
 <h2 id="ネットワークパケットの分析">ネットワークパケットの分析
 </h2><p><code>tcpdump</code> は非常に強力なネットワークパケットキャプチャツールであり、ネットワークパケットを捕捉するために使用できます。ネットワークパケットを分析することで、通信の詳細をより直感的に理解することができます。ここでは、<code>tcpdump</code> を使用してネットワークパケットをキャプチャし、さらに分析します。
 <img src="/p/backend-service-tcp-communication-troubleshooting/20250220151952.png"
@@ -427,42 +421,48 @@ document.addEventListener("DOMContentLoaded", (event) => {
 		data-flex-basis="1337px"
 	
 >
-分析図のデータから、心拍は正常に送信され続けており、相手側のサーバーからはデータが返ってきていませんが、<code>ACK</code> が送られていたため、接続は積極的に切断されませんでした。</p>
+分析図のデータから、心拍が正常に送信され続けていること、相手側のサーバーが応答していないこと、そして <code>ACK</code> が送られていることがわかります。これにより接続は積極的に切断されません。</p>
 <h2 id="共通フラグの説明">共通フラグの説明
 </h2><p>TCP プロトコルにおいて、<code>PSH</code> (Push) と <code>ACK</code> (Acknowledgment) は重要なフラグであり、それぞれデータ転送の制御とフロー制御に使用されます。その機能は以下のとおりです。</p>
-<h3 id="1-pshpush-flag"><strong>1. PSH（Push Flag）</strong>
+<h3 id="1-psh-push-flag"><strong>1. PSH (Push Flag)</strong>
 </h3><ul>
 <li><strong>機能:</strong>
-<code>PSH</code> フラグは、受信側がバッファ内のデータを上位のアプリケーションに<strong>即時送信するよう要求する</strong>ものです。（バッファが満杯で待つのではなく）。 つまり、<code>PSH</code> フラグが付いたデータ段を受信すると、受信側はできるだけ早く処理してアプリケーションに渡すのではなく、バッファー内に一時的に保存することなく、すぐに伝送します。</li>
+<code>PSH</code> フラグは、<strong>受信側がバッファ内のデータを上位のアプリケーションに即時送信するように要求する</strong> 役割を持ちます（バッファが満杯で待つのではなく）。 つまり、<code>PSH</code> フラグが付いたデータ段を受信すると、受信側はできるだけ早くそのデータをアプリケーションに処理して送信し、オペレーティングシステムのバッファに一時的に保存することはありません。</li>
 <li><strong>典型的なシナリオ:</strong>
 <ul>
 <li><strong>HTTP/HTTPS リクエスト:</strong> クライアントがリクエストを送信する際（例: <code>GET /index.html</code>）には <code>PSH</code> が設定され、サーバーから即時の応答を希望します。</li>
-<li><strong>SSH プロトコル:</strong> 毎回キーボード入力が発生すると <code>PSH</code> がトリガーされ、入力された文字をリアルタイムで転送することを保証します。</li>
-<li><strong>リアルタイム通信:</strong> ビデオストリームやオンラインゲームなど、低遅延のシナリオでは <code>PSH</code> を使用して遅延を減らす可能性があります。 - <strong>注意</strong>：</li>
-<li><code>PSH</code> は必須ではありません。受信側はフラグを無視することもできます（ただし、データは正常に処理する必要があります）。</li>
-<li>送信側が <code>PSH</code> を設定しない場合、受信側は自身のバッファリングポリシーに基づいてデータの送信タイミングを決定します。</li>
+<li><strong>SSH プロトコル:</strong> 毎回キーボード入力が発生すると <code>PSH</code> がトリガーされ、入力された文字をリアルタイムで転送します。</li>
+<li><strong>リアルタイム通信:</strong> ビデオストリームやオンラインゲームなど、低遅延のシナリオでは <code>PSH</code> を使用して遅延を減らすことがあります。</li>
+</ul>
+</li>
+<li><strong>注意:</strong>
+<ul>
+<li><code>PSH</code> は必須ではありません。受信側はフラグを無視することもできます（ただし、データを正常に処理する必要があります）。</li>
+<li>送信側が <code>PSH</code> を設定しない場合、受信側は自身のバッファリング戦略に基づいてデータ送信のタイミングを決定します。</li>
 </ul>
 </li>
 </ul>
+<hr>
 <h3 id="2-ackacknowledgment-flag"><strong>2. ACK（Acknowledgment Flag）</strong>
 </h3><ul>
-<li><strong>機能</strong>: <br>
-<code>ACK</code> 标志位は、<strong>前序データ段が正しく受信されたことを示す</strong>。各 <code>ACK</code> には確認番号（<code>Acknowledgment Number</code>）が含まれており、これは期待される次のバイトのシーケンス番号を表します。TCP の信頼性のある転送の中核メカニズムです。</li>
-<li><strong>動作原理</strong>:
+<li><strong>機能</strong>：
+<code>ACK</code> フラグは、<strong>前段のデータが正しく受信されたことを示す</strong>。各 <code>ACK</code> には確認番号（<code>Acknowledgment Number</code>）が含まれており、これは期待される次のバイトのシーケンス番号を表す。TCP の信頼性のある転送の中核メカニズムである。</li>
+<li><strong>動作原理</strong>：
 <ul>
-<li>送信側がデータ段を送信する際、期待される受信側の <code>ACK</code> 値（例えば <code>ACK = シーケンス番号 + データ長</code>）を付与します。</li>
-<li>受信側がデータを受信すると、受信したデータのシーケンス番号を確認するための <code>ACK</code> 報文段を生成します。</li>
-<li>送信側は、対応する <code>ACK</code> を受信するまで再送しません。</li>
+<li>送信側がデータ段を送信すると、期待する受信側の <code>ACK</code> 値（例えば <code>ACK = シーケンス番号 + データ長</code>）を付加する。</li>
+<li>受信側がデータを受信すると、受信したデータのシーケンス番号を確認するための <code>ACK</code> 報文段を生成する。</li>
+<li>送信側は、対応する <code>ACK</code> を受信するまで再送を行わない。</li>
 </ul>
 </li>
-<li><strong>例</strong>:
+<li><strong>例</strong>：
 <ul>
-<li>送信側が <code>100~199</code> のシーケンス番号のデータ段を送信した場合、期待される受信側の <code>ACK</code> は <code>200</code> になります。</li>
+<li>送信側がシリアル番号 <code>100～199</code> のデータ段を送信した場合、期待される受信側の <code>ACK</code> は <code>200</code> になる。</li>
+<li>受信側が <code>100～199</code> 内の特定のデータを受信しない場合、<code>ACK=150</code> を通じて送信側に再送を通知する。</li>
 </ul>
 </li>
 </ul>
 <h3 id="3-psh-と-ack-の組み合わせ"><strong>3. PSH と ACK の組み合わせ</strong>
-</h3><p>TCP 報文において、<code>PSH</code> (Push) と <code>ACK</code> (確認応答) は同時に出現することがあり、以下のような状況でよく見られます。</p>
+</h3><p>TCP 報文において、<code>PSH</code> (Push) と <code>ACK</code> (確認応答) は同時に出現することがあり、以下のようなシナリオでよく見られます。</p>
 <ul>
 <li><strong>HTTP リクエスト応答</strong>：<br>
 クライアントが <code>POST</code> リクエスト（データを含む）を送信する際、<code>PSH</code> と <code>ACK</code> を設定し、前の応答の確認を行います。</li>
@@ -516,7 +516,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 <tr>
 <td>RST</td>
 <td>リセット</td>
-<td>接続の強制終了 (異常状態)</td>
+<td>接続の強制終了 (異常状況)</td>
 </tr>
 </tbody>
 </table></div>
@@ -533,15 +533,15 @@ document.addEventListener("DOMContentLoaded", (event) => {
 <tr>
 <td>URG</td>
 <td>緊急</td>
-<td>緊急ポインタのマーキング（ほとんど使用されない）</td>
+<td>緊急ポインタのマーク (ほとんど使用されない)</td>
 </tr>
 </tbody>
 </table></div>
 <h3 id="4-その他の関連要素"><strong>4. その他の関連要素</strong>
 </h3><h3 id="まとめ"><strong>まとめ</strong>
 </h3><ul>
-<li><strong>PSH</strong> は、<strong>データのアプリケーション層への迅速な到達</strong> と低遅延に焦点を当てています。</li>
-<li><strong>ACK</strong> は、<strong>データの信頼性の高い伝送</strong> とパケットロスや乱数（順不同）の回避に焦点を当てています。
+<li><strong>PSH</strong> は、<strong>データのアプリケーション層への迅速な到達</strong> と遅延の低減に焦点を当てています。</li>
+<li><strong>ACK</strong> は、<strong>データの信頼性の高い伝送</strong> とパケットロスや乱数（順不同）を防ぐことに焦点を当てています。
 両者は連携して、TCP プロトコルの効率性と信頼性をバランスしています。</li>
 </ul>
 
@@ -599,7 +599,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
         <span>
-            最終更新 2025年06月02日 19:00
+            最終更新 2025年06月02日 20:54
         </span>
     </section>
     
@@ -667,7 +667,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
         
 
         <div class="article-details">
-            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定、および使用方法の完全ガイド</h2>
+            <h2 class="article-title">atopツールでLinuxシステム指標を監視する：インストール、設定と使い方完全ガイド</h2>
         </div>
     </a>
 </article>
@@ -680,7 +680,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
         
 
         <div class="article-details">
-            <h2 class="article-title">Visual Studio が「不整合な」PDB ファイルを読み込みません。</h2>
+            <h2 class="article-title">Visual Studio が「不整合な」PDB ファイルをロードできません。</h2>
         </div>
     </a>
 </article>
