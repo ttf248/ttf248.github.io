@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="Last year, an SDK was designed to handle encapsulating certain events and provide a class interface externally. During service initialization, the caller implements the corresponding classes and passes the object pointer to the module. Familiarity with C11 piqued my curiosity, leading me to explore what would happen if these interfaces were implemented using lambda function objects instead of pure virtual function definitions. Compared to the traditional interface definition method, it">
+<title>- Compiler
+- Callback Function
+- Performance Testing</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/compiler-callback-performance-testing/'>
+
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="- Compiler\n- Callback Function\n- Performance Testing">
+<meta property='og:description' content="Last year, an SDK was designed to handle encapsulating certain events and provide a class interface externally. During service initialization, the caller implements the corresponding classes and passes the object pointer to the module. Familiarity with C11 piqued my curiosity, leading me to explore what would happen if these interfaces were implemented using lambda function objects instead of pure virtual function definitions. Compared to the traditional interface definition method, it">
+<meta property='og:url' content='https://ttf248.life/en/p/compiler-callback-performance-testing/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2023-02-15T13:59:25&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
+<meta name="twitter:title" content="- Compiler\n- Callback Function\n- Performance Testing">
+<meta name="twitter:description" content="Last year, an SDK was designed to handle encapsulating certain events and provide a class interface externally. During service initialization, the caller implements the corresponding classes and passes the object pointer to the module. Familiarity with C11 piqued my curiosity, leading me to explore what would happen if these interfaces were implemented using lambda function objects instead of pure virtual function definitions. Compared to the traditional interface definition method, it">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#introduction">Introduction</a></li>
+    <li><a href="#body">Body</a></li>
+    <li><a href="#code">Code</a></li>
+    <li><a href="#code-1">Code</a></li>
+    <li><a href="#epilogue">Epilogue</a></li>
+    <li><a href="#epilogue-1">Epilogue</a></li>
+    <li><a href="#epilogue-2">Epilogue</a></li>
+    <li><a href="#epilogue-3">Epilogue</a></li>
+    <li><a href="#epilogue-4">Epilogue</a></li>
+    <li><a href="#epilogue-5">Epilogue</a></li>
+    <li><a href="#epilogue-6">Epilogue</a></li>
+  </ol>
+
+  <ol>
+    <li><a href="#epilogue-7">Epilogue</a></li>
+  </ol>
+
+  <ol>
+    <li><a href="#epilogue-8">Epilogue</a></li>
+    <li><a href="#epilogue-9">Epilogue</a></li>
+  </ol>
+
+  <ol>
+    <li><a href="#epilogue-10">Epilogue</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/compiler-callback-performance-testing/">- Compiler
+- Callback Function
+- Performance Testing</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;">Last year, an SDK was designed to handle encapsulating certain events and provide a class interface externally. During service initialization, the caller implements the corresponding classes and passes the object pointer to the module. Familiarity with C11 piqued my curiosity, leading me to explore what would happen if these interfaces were implemented using lambda function objects instead of pure virtual function definitions. Compared to the traditional interface definition method, it</h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Feb 15, 2023</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    3 minute read
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/compiler-callback-performance-testing/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/ja/p/compiler-callback-performance-testing/" class="link">日本語</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <ul>
+<li>Last year, an SDK was designed to handle encapsulating certain events and provide a class interface externally. During service initialization, the caller implements the corresponding classes and passes the object pointer to the module.</li>
+<li>Familiarity with C11 piqued my curiosity, leading me to explore what would happen if these interfaces were implemented using lambda function objects instead of pure virtual function definitions. Compared to the traditional interface definition method, it seemed more flexible.</li>
+<li>The question arose: with two different syntaxes, which one is faster from a performance perspective? Not understanding compiler principles, I decided to try out some code to find out.</li>
+</ul>
+<h2 id="introduction">Introduction
+</h2><p>Online website, allowing you to select different compilers, compilation parameters, run code on the <code>linux</code> platform, or view corresponding assembly code.</p>
+<ul>
+<li><a class="link" href="https://wandbox.org/"  target="_blank" rel="noopener"
+    >https://wandbox.org/</a> : Sometimes useful for technical verification; executing small snippets of code in a web browser is very convenient.</li>
+<li><a class="link" href="https://godbolt.org/"  target="_blank" rel="noopener"
+    >https://godbolt.org/</a> : Using different colors to distinguish the corresponding assembly code for each line, it’s more convenient than using a local debugger.</li>
+</ul>
+<h2 id="body">Body
+</h2><p>The Standards Committee established grammatical rules, and how these are implemented at the compilation level depends on each compiler vendor. It’s worth noting here that Microsoft&rsquo;s compiler is quite powerful. Syntactic sugar isn’t a panacea; callback interfaces aren’t abundant, using <code>lambda</code> expressions is more convenient and eliminates the need to define empty callback function interfaces. When callback interfaces become numerous, traditional virtual functions are advantageous for unifying business interface definitions.</p>
+<ul>
+<li>On the <code>windows</code> platform, performance is nearly identical, with little difference.</li>
+<li>On the <code>linux</code> platform, a comparison of virtual functions versus <code>lambda</code> reveals a 1.35ns overhead in one instance.</li>
+</ul>
+<p>In typical business system development, this level of performance degradation can be ignored; introducing <code>lambda</code> brings more convenience to the design. This is particularly noticeable when dealing with multi-signal processing, where underlying event triggers are used, and functions are needed to handle log entries for input objects. When more business processing interfaces are needed, the underlying layer uses <code>vector</code> to store <code>lambda</code> objects. When an event is triggered, it iterates through them sequentially and calls them one by one, similar to Qt&rsquo;s signals and slots. Logging, monitoring, Business 1, and Business 2 are completely decoupled from each other.</p>
+<h2 id="code">Code
+</h2><pre><code class="language-shell">Counter: 1000000
+Time: 3966us
+Counter: 1000000
+Time: 5316us
+</code></pre>
+<h2 id="code-1">Code
+</h2><pre><code class="language-c++">#include &lt;iostream&gt;
+#include &lt;chrono&gt;
+#include &lt;memory&gt;
+#include &lt;functional&gt;
+#include &lt;atomic&gt;
+#include &lt;string&gt;
+
+std::atomic_int64_t counter = 0;
+
+// Define callback interface
+class UserInterface
+{
+public:
+    virtual void name() = 0;
+    virtual void full_name() = 0;
+};
+
+class User : public UserInterface
+{
+public:
+    void name() {}
+    void full_name() { counter++; }
+};
+
+void to_string(UserInterface* user)
+{
+    user-&gt;name();
+    user-&gt;full_name();
+}
+</code></pre>
+<pre><code class="language-markdown">## Code
+void to_string(UserInterface* user)
+{
+    user-&gt;name();
+    user-&gt;full_name();
+}
+
+using name_handler = std::function&lt;void()&gt;;
+using full_name_handler = std::function&lt;void()&gt;;
+
+class Test
+{
+    name_handler name_;
+    full_name_handler full_name_;
+
+public:
+    void set_name_handler(name_handler name)
+    {
+        name_ = name;
+    }
+
+    void set_full_name_handler(full_name_handler full_name)
+    {
+        full_name_ = full_name;
+    }
+</code></pre>
+<pre><code class="language-markdown">## Code
+void to_string() {
+    name_();
+    full_name_();
+}
+};
+
+int main() {
+    User user;
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i &lt; 1000000; i++) {
+        to_string(&amp;user);
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout &lt;&lt; &quot;Counter: &quot; &lt;&lt; counter &lt;&lt; std::endl;
+    std::cout &lt;&lt; &quot;Time: &quot; &lt;&lt; std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(end - start).count() &lt;&lt; &quot;us&quot; &lt;&lt; std::endl;
+</code></pre>
+<pre><code class="language-markdown">## Code
+counter = 0;
+auto name = []() {};
+auto full_name = []() { counter++; };
+
+Test test;
+test.set_name_handler(name);
+test.set_full_name_handler(full_name);
+
+start = std::chrono::high_resolution_clock::now();
+
+for (int i = 0; i &lt; 1000000; i++)
+{
+    test.to_string();
+}
+</code></pre>
+<pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;chrono&gt;
+#include &lt;string&gt;
+
+int main() {
+  auto start = std::chrono::high_resolution_clock::now();
+  int counter = 0;
+
+  for (int i = 0; i &lt; 1000000; i++)
+    {
+        std::string test = &quot;&quot;;
+    }
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout &lt;&lt; &quot;Counter: &quot; &lt;&lt; counter &lt;&lt; std::endl;
+  std::cout &lt;&lt; &quot;Time: &quot; &lt;&lt; std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(end - start).count() &lt;&lt; &quot;us&quot; &lt;&lt; std::endl;
+
+  return 0;
+}
+</code></pre>
+<h2 id="epilogue">Epilogue
+</h2><p>While researching, I came across similar code snippets <a class="link" href="https://gist.githubusercontent.com/benloong/8050171/raw/fa577ec923b460862078b8b40233a42a1c619eeb/functionperformance.cpp"  target="_blank" rel="noopener"
+    >functionperformance.cpp</a></p>
+<h2 id="epilogue-1">Epilogue
+</h2><pre><code class="language-c++">#include &lt;iostream&gt;
+#include &lt;chrono&gt;
+#include &lt;memory&gt;
+#include &lt;functional&gt;
+
+using namespace std;
+using namespace std::chrono;
+
+class Base
+{
+public:
+    Base(){}
+    virtual ~Base(){}
+    virtual int func(int i) = 0;
+};
+
+class Derived : public Base
+{
+public:
+    Derived(int base = 10) : base{base}
+    {
+
+    }
+    ~Derived(){}
+
+    virtual int func(int i)
+    {
+        return i*base;
+    }
+private:
+    int base;
+};
+
+struct Func
+{
+    int base;
+    int operator()(int i)
+    {
+        return i*base;
+    }
+    Func(int base) : base {base}
+    {
+    }
+};
+</code></pre>
+<h2 id="epilogue-2">Epilogue
+</h2><pre><code class="language-c++">// Note: This is a translated version of the C++ code snippet.  The original Chinese text was &quot;后记&quot;.
+
+int calculate(int i)
+{
+	return 10 * i;
+}
+
+int main()
+{
+	const int num = 10000;
+	Base *p = new Derived{10};
+	int total = 0;
+	auto start = high_resolution_clock::now();
+	for (int i = 0; i &lt; num; ++i)
+	{
+		total += p-&gt;func(i);
+	}
+	auto end = high_resolution_clock::now();
+	std::cout&lt;&lt;&quot;result: &quot;&lt;&lt;total&lt;&lt;&quot;\nvirtual call elapsed: \t&quot;&lt;&lt;duration_cast&lt;nanoseconds&gt;(end-start).count()&lt;&lt;&quot; nanoseconds.\n&quot;&lt;&lt;std::endl;
+}
+</code></pre>
+<h2 id="epilogue-3">Epilogue
+</h2><pre><code class="language-c++">total = 0;
+    start = high_resolution_clock::now();
+    for (int i = 0; i &lt; num; ++i)
+    {
+        total += calculate(i);
+    }
+    end = high_resolution_clock::now();
+    std::cout &lt;&lt; &quot;result: &quot; &lt;&lt; total &lt;&lt; &quot;\n&quot;
+              &lt;&lt; &quot;direct function call elapsed: \t&quot; &lt;&lt; duration_cast&lt;nanoseconds&gt;(end - start).count() &lt;&lt; &quot; nanoseconds.\n&quot;
+              &lt;&lt; std::endl;
+</code></pre>
+<h2 id="epilogue-4">Epilogue
+</h2><p>Func functor{10};
+total = 0;
+start = high_resolution_clock::now();
+for (int i = 0; i &lt; num; ++i)
+{
+total += functor(i);
+}
+end = high_resolution_clock::now();
+std::cout&laquo;&ldquo;result: &ldquo;&laquo;total&laquo;&quot;\nfunctor call elapsed: \t&rdquo;&laquo;duration_cast<nanoseconds>(end-start).count()&laquo;&rdquo; nanoseconds.\n&quot;&laquo;std::endl;
+int base = 10;
+function&lt;int(int)&gt; lambda = [base](int i)
+{
+return i*base;
+};
+total = 0;
+start = high_resolution_clock::now();
+for (int i = 0; i &lt; num; ++i)
+{
+total += lambda(i);
+}</p>
+<h2 id="epilogue-5">Epilogue
+</h2><pre><code class="language-c++">auto start = high_resolution_clock::now();
+    for (int i = 0; i &lt; num; ++i)
+    {
+        total += lambda(i);
+    }
+    auto end = high_resolution_clock::now();
+    std::cout &lt;&lt; &quot;result: &quot; &lt;&lt; total &lt;&lt; &quot;\nlambda call elapsed: \t&quot; &lt;&lt; duration_cast&lt;nanoseconds&gt;(end - start).count() &lt;&lt; &quot; nanoseconds.\n&quot; &lt;&lt; std::endl;
+    return 0;
+}
+</code></pre>
+<h2 id="epilogue-6">Epilogue
+</h2><p>/*
+test on mac mini i7 2.7GHz
+clang++ -std=c++11 chronotest.cpp -O0
+output:
+result: 499950000
+virtual call elapsed: 	43171 nanoseconds.</p>
+<p>result: 499950000
+direct function call elapsed: 	31379 nanoseconds.</p>
+<p>result: 499950000
+functor call elapsed: 	41497 nanoseconds.</p>
+<h1 id="lambda-call-elapsed-207416-nanoseconds">result: 499950000
+lambda call elapsed: 	207416 nanoseconds.
+</h1><p>clang++ -std=c++11 chronotest.cpp -O1
+output:
+result: 499950000
+virtual call elapsed: 	26144 nanoseconds.</p>
+<h2 id="epilogue-7">Epilogue
+</h2><p>result: 499950000
+direct function call elapsed: 	22384 nanoseconds.</p>
+<p>result: 499950000
+functor call elapsed: 	33477 nanoseconds.</p>
+<h1 id="lambda-call-elapsed-55799-nanoseconds">result: 499950000
+lambda call elapsed: 	55799 nanoseconds.
+</h1><p>clang++ -std=c++11 chronotest.cpp -O2
+result: 499950000
+virtual call elapsed: 	22284 nanoseconds.</p>
+<p>result: 499950000
+direct function call elapsed: 	36 nanoseconds.</p>
+<p>result: 499950000
+functor call elapsed: 	30 nanoseconds.</p>
+<h2 id="epilogue-8">Epilogue
+</h2><p>result: 499950000
+functor call elapsed: 	30 nanoseconds.</p>
+<p>result: 499950000
+lambda call elapsed: 	28292 nanoseconds.</p>
+<p>===================================================
+clang++ -std=c++11 chronotest.cpp -O3
+result: 499950000
+virtual call elapsed: 	18975 nanoseconds.</p>
+<p>result: 499950000
+direct function call elapsed: 	29 nanoseconds.</p>
+<p>result: 499950000
+functor call elapsed: 	30 nanoseconds.</p>
+<h2 id="epilogue-9">Epilogue
+</h2><p>result: 499950000
+functor call elapsed: 30 nanoseconds.</p>
+<h1 id="lambda-call-elapsed-22542-nanoseconds">result: 499950000
+lambda call elapsed: 22542 nanoseconds.
+</h1><p>clang++ -std=c++11 chronotest.cpp -O4</p>
+<p>result: 499950000
+virtual call elapsed: 22141 nanoseconds.</p>
+<p>result: 499950000
+direct function call elapsed: 30 nanoseconds.</p>
+<p>result: 499950000
+functor call elapsed: 30 nanoseconds.</p>
+<p>result: 499950000
+lambda call elapsed: 22584 nanoseconds.
+*/</p>
+<h2 id="epilogue-10">Epilogue
+</h2><p>We’ve added two new modes, regular functions and functors, providing a comparison of callback interfaces versus direct calls, with performance losses representing orders-of-magnitude differences. Functors perform close to functions, and sometimes even outperform them. The compilation aspect here was largely a knowledge blind spot; I suspected it was due to the access of variable addresses and the function being adjacent, which would benefit <code>CPU</code> processing.</p>
+<p>Below is the <code>wandbox</code> output:</p>
+<pre><code class="language-shell">result: 499950000
+virtual call elapsed: 6143 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 30 nanoseconds.
+
+result: 499950000
+functor call elapsed: 31 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 15134 nanoseconds.
+</code></pre>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Jun 02, 2025 19:00
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -6,7 +6,7 @@
         <description>Recent content in Travis on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Sun, 01 Jun 2025 15:10:34 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/travis/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Mon, 02 Jun 2025 19:00:25 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/travis/index.xml" rel="self" type="application/rss+xml" /><item>
         <title>自動統合システム切り替え</title>
         <link>https://ttf248.life/ja/p/auto-integration-system-switch/</link>
         <pubDate>Sun, 29 Mar 2020 02:11:33 +0800</pubDate>
@@ -14,22 +14,78 @@
         <guid>https://ttf248.life/ja/p/auto-integration-system-switch/</guid>
         <description>&lt;p&gt;GitHub Actions を使用して、Hugo ブログを GitHub Pages および Gitee に自動でデプロイします。&lt;/p&gt;
 &lt;h4 id=&#34;背景説明&#34;&gt;背景説明
-&lt;/h4&gt;&lt;p&gt;昨日ブログを更新した際に、travisサービスが利用できないことを発見しました。travisのウェブサイトを確認すると、ソースコードの取得時に進捗が止まっていることがわかりました。そこで、以前GitHubで提供されていたactionサービスを思い出し、試してみるのはいかがでしょうか？
-当時忙しくしており、actionを利用するには申請が必要でしたが、現在は正式にリリースされており、週末に暇を持て余しているのですから、新しいおもちゃを試してみるのも良いでしょう？
-公式資料は各自ウェブサイトをご確認ください。本稿では詳細な転載は行いません。もしKubernetesをご利用経験がある場合、actionのYAMLファイル設定がKubernetesと似ていることに気づくかもしれません。
-入門チュートリアル、あるいは中国語での紹介資料については、&lt;strong&gt;阮一峰のブログ&lt;/strong&gt;を検索することをお勧めします。2つの記事があり、1つ目は基本的な構文の説明で、もう1つは実際のケーススタディです。&lt;/p&gt;
+&lt;/h4&gt;&lt;p&gt;昨日ブログを更新した際に、Travisサービスが利用できないことを発見しました。Travisのウェブサイトを確認すると、ソースコードの取得時に進捗が詰まっていることがわかりました。そこで、GitHubが以前に発表していたActionサービスを思いつきました。
+当時忙しくしており、Actionを利用するには申請が必要だったため、現在は正式にリリースされ、週末に暇を持て余している間に、新しいおもちゃを試してみようと思いましたか？
+公式資料は、ご自身でウェブサイトをご確認ください。本稿では、より多くの転載を行いません。もしKubernetesをご利用経験がある場合、ActionのYAMLファイル設定がKubernetesと非常に似ていることに気づくでしょう。
+入門チュートリアル、あるいは中国語の説明資料については、&lt;strong&gt;阮一峰のブログ&lt;/strong&gt;を検索することをお勧めします。2つの記事があり、1つ目は基本的な構文の紹介であり、もう1つは実際のケーススタディです。&lt;/p&gt;
 &lt;h4 id=&#34;本文&#34;&gt;本文
 &lt;/h4&gt;&lt;p&gt;必要な知識点&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;GitHub Secrets&lt;/li&gt;
 &lt;li&gt;Action の構文
-コアのジョブは既存のコンポーネントを使用して完了し、中国のGiteeにプッシュする場合はコマンドを使用します。コマンド部分はかなり粗暴で、強制プッシュのみを実装しており、Travisの使用ログを参考にしています。&lt;/li&gt;
+コアのジョブは既存のコンポーネントを使用して完了し、国内のGiteeにプッシュする場合はコマンドを実行します。このコマンド部分はかなり強引で、強制プッシュのみを実装しており、Travisを使用していた時のロジックを継承しています。&lt;/li&gt;
 &lt;/ul&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;名前: GitHub Pages と Gitee Pages
+
+on:
+  push:
+    branches:
+      - hugo
+
+jobs:
+  deploy:
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: &#39;latest&#39;
+          extended: true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 正文
+- name: Build Github and Gitee ## 单个step只能写一个run命令
+    run: hugo -b &amp;quot;https://www.xiangtianlong.com/&amp;quot; -d &amp;quot;github_public&amp;quot; &amp;amp;&amp;amp; hugo -b &amp;quot;https://www.xiangtianlong.com/&amp;quot; -d &amp;quot;gitee_public&amp;quot; &amp;amp;&amp;amp; ls
+
+  - name: Deploy Github
+    uses: peaceiris/actions-gh-pages@v3
+    with:
+      github_token: ${{ secrets.BLOG_TOKEN }}
+      publish_dir: ./github_public
+      publish_branch: master
+      cname: xiangtianlong.com
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Japanese Translation:&lt;/strong&gt;&lt;/p&gt;
+&lt;h4 id=&#34;正文&#34;&gt;正文
+&lt;/h4&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;name: Build Github and Gitee ## 単独のステップには1つのrunコマンドのみ記述可能
+run: hugo -b &amp;ldquo;&lt;a class=&#34;link&#34; href=&#34;https://www.xiangtianlong.com/%22&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://www.xiangtianlong.com/&#34;&lt;/a&gt; -d &amp;ldquo;github_public&amp;rdquo; &amp;amp;&amp;amp; hugo -b &amp;ldquo;&lt;a class=&#34;link&#34; href=&#34;https://www.xiangtianlong.com/%22&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://www.xiangtianlong.com/&#34;&lt;/a&gt; -d &amp;ldquo;gitee_public&amp;rdquo; &amp;amp;&amp;amp; ls&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;name: Deploy Github
+uses: peaceiris/actions-gh-pages@v3
+with:
+github_token: ${{ secrets.BLOG_TOKEN }}
+publish_dir: ./github_public
+publish_branch: master
+cname: xiangtianlong.com&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 正文
+- name: Deploy Gitee
+  run: cd ./gitee_public &amp;amp;&amp;amp; git init &amp;amp;&amp;amp; git config user.name &amp;quot;TianlongXiang&amp;quot; &amp;amp;&amp;amp; git config user.email &amp;quot;tianlongxiang51@gmail.com&amp;quot; &amp;amp;&amp;amp; git add . &amp;amp;&amp;amp; git commit -m &amp;quot;Update TianlongXiang&#39;s Blog&amp;quot; &amp;amp;&amp;amp; git push --force &amp;quot;https://xiangtianlong:${{ secrets.GITEE_PASSWORD }}@gitee.com/xiangtianlong/xiangtianlong.git&amp;quot; master:master
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h4 id=&#34;付録&#34;&gt;付録
-&lt;/h4&gt;&lt;p&gt;公式マーケットで提供されているactionを見ると、現在サポートされている遊び方が多く、Dockerイメージを構築すればDocker Hubのサービスへの依存もなくなります。
-Hugoのissueを調査すると、GitHub Actionを使ってgit pagesを自動デプロイする際に、最終的に公開されるウェブサイトがmasterブランチにある必要があることが判明しました。もし他のブランチにデプロイする場合は、設定画面でGitHubからウェブサイトに構文エラーがあると警告が表示されます。&lt;/p&gt;
-&lt;p&gt;これはHugoのソースファイルがmasterブランチに置かれているため、GitHubがjellyブログのソースコードとして検出し、構文チェックが通らない場合に発生するエラーであるというものです。
-解決策は簡単です。Hugoのソースファイルを他のブランチに配置し、静的ファイルをmasterブランチに出力します。&lt;/p&gt;
+&lt;/h4&gt;&lt;p&gt;公式マーケットで提供されているactionを見ると、現在サポートされている遊び方が多いようです。Dockerイメージを構築すれば、Docker Hubのサービスへの依存関係もなくなります。&lt;/p&gt;
+&lt;p&gt;Hugoのissueを調査すると、GitHub Actionを使ってgit pagesを自動デプロイする際に、最終的に公開されるウェブサイトがmasterブランチにある必要があることがわかります。もし他のブランチにデプロイする場合は、設定画面でGitHubからウェブサイトに構文エラーがあると警告が表示されます。&lt;/p&gt;
+&lt;p&gt;これは単にHugoのソースファイルがmasterブランチにあるため、GitHubがjellyブログのソースコードとして検出し、構文チェックが通らない場合に発生するエラーです。&lt;/p&gt;
+&lt;p&gt;解決策は簡単です。Hugoのソースファイルを他のブランチに配置し、静的ファイルをmasterブランチに出力します。&lt;/p&gt;
 </description>
         </item>
         

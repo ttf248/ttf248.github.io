@@ -6,11 +6,11 @@
 
 <link rel='canonical' href='https://ttf248.life/ja/p/program-optimization-dont-fight-hardware/'>
 
-<link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="プログラムの最適化は、ハードウェアと戦おうとするべきではありません。">
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="プログラムの最適化は、ハードウェアと戦おうとするべきではありません。">
 <meta property='og:description' content="one loop thread（単一ループスレッド）の実行時間がすでにマイクロ秒レベルで、サーバーを交換した結果、最大6万パケットまでバックログが積み重な">
 <meta property='og:url' content='https://ttf248.life/ja/p/program-optimization-dont-fight-hardware/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2023-04-07T16:30:15&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T05:33:00&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2023-04-07T16:30:15&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
 <meta name="twitter:title" content="プログラムの最適化は、ハードウェアと戦おうとするべきではありません。">
 <meta name="twitter:description" content="one loop thread（単一ループスレッド）の実行時間がすでにマイクロ秒レベルで、サーバーを交換した結果、最大6万パケットまでバックログが積み重な">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -214,6 +214,11 @@
   <ol>
     <li><a href="#シングルスレッド">シングルスレッド</a></li>
     <li><a href="#イベント">イベント</a></li>
+    <li><a href="#イベント-1">イベント</a></li>
+    <li><a href="#イベント-2">イベント</a></li>
+    <li><a href="#イベント-3">イベント</a></li>
+    <li><a href="#イベント-4">イベント</a></li>
+    <li><a href="#イベント-5">イベント</a></li>
     <li><a href="#openaiへの相談">OpenAIへの相談</a></li>
     <li><a href="#openaiへの相談-1">OpenAIへの相談</a></li>
     <li><a href="#ハードウェア情報">ハードウェア情報</a></li>
@@ -364,7 +369,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
                 <time class="article-time--reading">
-                    読了時間: 4分
+                    読了時間: 5分
                 </time>
             </div>
         
@@ -400,24 +405,97 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     
     <p><code>one loop thread</code>（単一ループスレッド）の実行時間がすでに<strong>マイクロ秒</strong>レベルで、サーバーを交換した結果、最大6万パケットまでバックログが積み重なるのをほぼゼロにすることができた。</p>
-<p>シングルスレッドでのループ処理でデータを扱う場合、CPUの性能はクロック周波数、キャッシュサイズ、命令セットアーキテクチャなどの要因によって決まる。一般的に、クロック周波数が高く、キャッシュサイズが大きい、そして命令セットアーキテクチャが高度なCPUほど、シングルスレッドでデータを処理する際の性能が良い。</p>
+<p>シングルスレッドでのループ処理でデータを扱う場合、CPUの性能はクロック周波数、キャッシュサイズ、命令セットアーキテクチャなどの要因によって決まる。一般的に、クロック周波数が高く、キャッシュサイズが大きい、命令セットアーキテクチャが高度なCPUほど、シングルスレッドでデータを処理する際の性能が良い。</p>
 <h2 id="シングルスレッド">シングルスレッド
 </h2><p>パフォーマンス向上のために、スレッドを追加することは必ずしも必要ではありません。プロジェクトのプロセスを整理し、時間がかかる箇所を特定し、シングルスレッドで要件を満たせるか検討します。シングルスレッドでは考慮すべき点が少なく、問題が発生する可能性も低くなります。</p>
 <blockquote>
-<p>最初からスレッドについて言及するのは、少し不自然です</p>
+<p>最初からスレッドについて言及するのは、多少不適切です</p>
 </blockquote>
 <h2 id="イベント">イベント
-</h2><p>処理しているのは<strong>市場データであり、遅延に敏感</strong>です。
-一晩中ひたすら加班し、新しい最適化版をリリースし、ローカルでインターフェースを剥離してテストを実施しました。速度はそれなりにあり、tps：4.2万
-サーバーにデプロイしましたが、tpsが急降下：2.1万。帰宅してデスクトップPCで試すと、tps：7.9万となり、グループ内のサービスVMが何か問題があるのではないかと疑い始めました。まずCPUのクロック周波数の違いを疑いました。家庭用デスクトップPCとサーバーの<code>CPU</code>では、クロック周波数が最も異なる点です。</p>
-<p>テストサーバーA
-テストサーバーB</p>
+</h2><p>取り扱っているのは<strong>市場データであり、遅延に敏感</strong>です。
+一晩中ひたすら加班し、新しい最適化版をリリースし、ローカルでインターフェースを剥離してテストを実施しましたが、速度はそれなりに良かった：tps 4.2万
+サーバーにデプロイすると、tpsが急降下：2.1万。帰宅してデスクトップPCで試すと、tps 7.9万となり、グループ内のサービスVMが何か問題があるのではないかと疑い始めました。まずCPUのクロック周波数差を疑いました。家庭用デスクトップPCとサーバーの<code>CPU</code>では、クロック周波数が最も異なる点です。
+テストサーバーA</p>
+<h2 id="イベント-1">イベント
+</h2><pre><code class="language-shell">processor：7
+vendor_id：GenuineIntel
+cpu family：6
+model：47
+model name：Intel(R) Xeon(R) CPU E7-4807 @ 1.87GHz
+stepping：2
+microcode：0x34
+cpu MHz：1866.733
+cache size：18432 KB
+physical id：1
+siblings：4
+core id：3
+cpu cores：4
+apicid：7
+initial apicid：7
+fpu：yes
+fpu_exception：yes
+cpuid level：11
+wp：yes
+</code></pre>
+<h2 id="イベント-2">イベント
+</h2><p>apicid: 7
+initial apicid: 7
+fpu: yes
+fpu_exception: yes
+cpuid level: 11
+wp: yes
+flags: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss ht syscall nx rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf pni pclmulqdq ssse3 cx16 sse4_1 sse4_2 popcnt aes hypervisor lahf_lm pti dtherm arat
+bugs: clflush_monitor cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit</p>
+<h2 id="イベント-3">イベント
+</h2><p>bogomips：3733.46
+clflush size：64
+cache_alignment：64
+アドレスサイズ：物理40ビット、仮想48ビット
+電力管理：</p>
+<h2 id="イベント-4">イベント
+</h2><p>テストサーバーB</p>
+<h2 id="イベント-5">イベント
+</h2><pre><code class="language-shell">processor：7
+vendor_id：GenuineIntel
+cpu family：6
+model：63
+model name：Intel(R) Xeon(R) CPU E5-2640 v3 @ 2.60GHz
+stepping：2
+microcode：0x3c
+cpu MHz：2599.998
+cache size：20480 KB
+physical id：14
+siblings：1
+core id：0
+cpu cores：1
+apicid：14
+initial apicid：14
+fpu：yes
+fpu_exception：yes
+cpuid level：15
+wp：yes
+
+## イベント
+fpu        : yes
+fpu_exception : yes
+cpuid level  : 15
+wp         : yes
+flags      : fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts mmx fxsr sse sse2 ss syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts nopl xtopology tsc_reliable nonstop_tsc cpuid aperfmperf pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cpuid_fault epb pti fsgsbase smep xsaveopt cqm_llc cqm_occup_llc dtherm ida arat pln pts
+
+## イベント
+bugs		: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit
+bogomips	: 5199.99
+clflush size	: 64
+cache_alignment	: 64
+address sizes	: 40 bits physical, 48 bits virtual
+power management:
+</code></pre>
 <h2 id="openaiへの相談">OpenAIへの相談
 </h2><p>まず、コア数とクロック周波数に関しては、Intel(R) Xeon(R) CPU E7-4807 @ 1.87GHzは6つの物理コアと12個の論理コアを持ち、クロック周波数は1.87GHzです。一方、Intel(R) Xeon(R) CPU E5-2640 v3 @ 2.60GHzは8つの物理コアと16個の論理コアを持ち、クロック周波数は2.60GHzです。したがって、コア数とクロック周波数という点では、E5-2640 v3がシングルスレッドでのデータ処理においては、E7-4807よりも有利であると考えられます。</p>
 <p>次に、キャッシュサイズに関しては、E7-4807のキャッシュサイズは12MBであり、E5-2640 v3のキャッシュサイズは20MBです。したがって、E5-2640 v3はより大きなキャッシュスペースを持ち、データのアクセス速度とキャッシュヒット率を向上させることができます。</p>
 <p>最後に、アーキテクチャに関しては、E5-2640 v3はより高度なHaswellアーキテクチャを採用しており、E7-4807は旧いNehalemアーキテクチャを採用しています。</p>
 <h2 id="openaiへの相談-1">OpenAIへの相談
-</h2><p>したがって、総合的に考慮すると、単一スレッドでループ処理を行うデータ処理のシナリオにおいては、E5-2640 v3の方がE7-4807よりも優れた性能を発揮する可能性があります。ただし、具体的な性能差は、アルゴリズム、メモリ帯域幅、システム負荷など、さまざまな要因によって影響を受けるため、個別の問題に対して具体的に分析する必要があります。</p>
+</h2><p>したがって、総合的に考慮すると、単一スレッドでループ処理を行うデータ処理のシナリオにおいては、E5-2640 v3の方がE7-4807よりも優れた性能を発揮する可能性があります。しかし、具体的な性能差は、アルゴリズム、メモリ帯域幅、システム負荷など、さまざまな要因によって影響を受けるため、個別の問題に対して具体的に分析する必要があります。</p>
 <h2 id="ハードウェア情報">ハードウェア情報
 </h2><p><a class="link" href="https://www.cpubenchmark.net/compare/3786.2vs2365.2/%5BDual-CPU%5D-Intel-Xeon-E7%e2%80%934807-vs-%5BDual-CPU%5D-Intel-Xeon-E5-2640-v3"  target="_blank" rel="noopener"
     >https://www.cpubenchmark.net/compare/3786.2vs2365.2/%5BDual-CPU%5D-Intel-Xeon-E7–4807-vs-%5BDual-CPU%5D-Intel-Xeon-E5-2640-v3</a>
@@ -621,7 +699,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
         <span>
-            最終更新 2025年06月02日 05:33
+            最終更新 2025年06月02日 19:00
         </span>
     </section>
     

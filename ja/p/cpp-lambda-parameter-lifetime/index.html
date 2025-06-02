@@ -6,11 +6,11 @@
 
 <link rel='canonical' href='https://ttf248.life/ja/p/cpp-lambda-parameter-lifetime/'>
 
-<link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="C++におけるラムダ式のパラメータのライフタイムについて">
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="C++におけるラムダ式のパラメータのライフタイムについて">
 <meta property='og:description' content="C++において、ラムダ式は便利な匿名関数であり、外部変数をキャプチャして内部で使用することができます。これにより、ラムダ式は柔軟なプログラミ">
 <meta property='og:url' content='https://ttf248.life/ja/p/cpp-lambda-parameter-lifetime/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2024-11-13T19:23:02&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T06:00:45&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2024-11-13T19:23:02&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
 <meta name="twitter:title" content="C++におけるラムダ式のパラメータのライフタイムについて">
 <meta name="twitter:description" content="C++において、ラムダ式は便利な匿名関数であり、外部変数をキャプチャして内部で使用することができます。これにより、ラムダ式は柔軟なプログラミ">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -218,12 +218,11 @@
         <li><a href="#2-パラメータのライフサイクルとの関係を捉える">2. パラメータのライフサイクルとの関係を捉える</a>
           <ol>
             <li><a href="#21-外部変数のキャプチャ">2.1 外部変数のキャプチャ</a></li>
-            <li><a href="#22-ラムダパラメータ">2.2 ラムダパラメータ</a></li>
           </ol>
         </li>
         <li><a href="#3-外部変数を捕捉する際のライフサイクルに関する問題">3. 外部変数を捕捉する際のライフサイクルに関する問題</a>
           <ol>
-            <li><a href="#31-捕捉された変数が出-lambda-の外で有効か">3.1 捕捉された変数が出 lambda の外で有効か</a></li>
+            <li><a href="#31-捕捉した変数が-lambda-外部で有効か">3.1 捕捉した変数が lambda 外部で有効か</a></li>
           </ol>
         </li>
       </ol>
@@ -403,26 +402,51 @@ document.addEventListener("DOMContentLoaded", (event) => {
 </h3><h4 id="21-外部変数のキャプチャ">2.1 外部変数のキャプチャ
 </h4><p>C++のラムダ式では、以下の2つの方法で外部変数 キャプチャできます。</p>
 <ul>
-<li><strong>値によるキャプチャ:</strong> 値によるキャプチャでは、外部変数の値がラムダ内部にコピーされ、ラムダ内のコピーのライフサイクルはラムダ自身のライフサイクルによって制御されます。</li>
-<li><strong>参照によるキャプチャ:</strong> 参照によるキャプチャでは、外部変数の参照が保持され、ラムダ内の参照が元の外部変数に指向します。ライフサイクルは外部変数のライフサイクルに依存します。</li>
+<li><strong>値によるキャプチャ:</strong> 値によるキャプチャでは、外部変数の値がラムダ内部にコピーされます。ラムダ内のコピーのライフサイクルは、ラムダ自身のライフサイクルによって制御されます。</li>
+<li><strong>参照によるキャプチャ:</strong> 参照によるキャプチャでは、外部変数の参照が保持され、ラムダ内の参照は元の外部変数に指向します。ライフサイクルは外部変数のライフサイクルに依存します。 ```cpp
+int x = 10;
+auto lambda_by_value = <a class="link" href="" >x</a> { std::cout &laquo; x &laquo; std::endl; };  // x のコピーをキャプチャ
+auto lambda_by_reference = <a class="link" href="" >&amp;x</a> { std::cout &laquo; x &laquo; std::endl; };  // x を参照でキャプチャ</li>
 </ul>
-<p>キャプチャされた変数については、以下のライフサイクルが適用されます。</p>
-<ul>
-<li><strong>値によるキャプチャ:</strong> キャプチャ時に外部変数の値がラムダにコピーされ、ラムダのライフサイクルが終了すると、コピーされたコピーが破棄されます。</li>
-<li><strong>参照によるキャプチャ:</strong> ラムダが外部変数の参照を保持し、<strong>外部変数はラムダの使用前に有効でなければなりません。そうでない場合、未定義動作が発生します。</strong></li>
-</ul>
-<h4 id="22-ラムダパラメータ">2.2 ラムダパラメータ
-</h4><p>ラムダパラメータは、通常の関数パラメータと同様に、そのライフサイクルはラムダ関数内のみに限られます。つまり、ラムダパラメータはラムダの呼び出し時に作成され、ラムダの呼び出しが終了するとパラメータのライフサイクルも終了します。</p>
-<p>この例では、<code>a</code> と <code>b</code> がラムダ式のパラメータであり、これらはラムダの呼び出し時に作成され、ラムダの実行後に破棄されます。</p>
+<p>lambda_by_value();  // 10 と出力
+lambda_by_reference();  // 10 と出力</p>
+<pre><code>
+**捕獲された変数について、ライフサイクルは以下のとおりです。**
+- **値によるキャプチャ:** lambda が生きている間、外部変数の値をコピーして lambda 内で保持します。lambda のライフサイクルが終了すると、このコピーが破棄されます。
+
+#### 2.1 外部変数の捕捉
+- **参照による捕捉**: lambdaは外部変数の参照を保持し、**外部変数はlambdaの使用前に有効でなければならない。そうでない場合、未定義の動作を引き起こす可能性があります**。
+
+#### 2.2 ラムダパラメータ
+
+ラムダのパラメータは、通常の関数パラメータと同様に、そのライフサイクルはラムダ関数体内のみに限られます。つまり、ラムダパラメータはラムダが呼び出されたときに作成され、ラムダが呼び出された後にパラメータのライフサイクルも終了します。
+
+```cpp
+auto lambda = [](int a, int b) {
+    std::cout &lt;&lt; a + b &lt;&lt; std::endl;
+};
+lambda(5, 10); // ここでaとbはラムダのパラメータ
+</code></pre>
+<p>この例では、<code>a</code> と <code>b</code> はラムダ式（ラムダ表現）のパラメータであり、ラムダが呼び出されたときに作成され、ラムダが実行後に破棄されます。</p>
 <h3 id="3-外部変数を捕捉する際のライフサイクルに関する問題">3. 外部変数を捕捉する際のライフサイクルに関する問題
-</h3><h4 id="31-捕捉された変数が出-lambda-の外で有効か">3.1 捕捉された変数が出 lambda の外で有効か
+</h3><h4 id="31-捕捉した変数が-lambda-外部で有効か">3.1 捕捉した変数が lambda 外部で有効か
 </h4><ul>
-<li><strong>値によるキャプチャ:</strong> 外部変数が lambda が呼び出された後に破棄されても、lambda 内にはその変数のコピーが保持されます。したがって、lambda 内のコピーは安全に使用でき、外部変数が存在しなくなっても問題ありません。</li>
-<li><strong>参照によるキャプチャ:</strong> 外部変数の参照を捕捉する場合、lambda 内でのその参照へのアクセスは外部変数のライフサイクルに依存します。外部変数が lambda の実行前に破棄された場合、空の参照が発生し、未定義動作を引き起こす可能性があります。</li>
+<li><strong>値によるキャプチャ</strong>: 外部変数（lambda が呼び出された後に破棄されても）が lambda 内部で参照されるコピーを保持するため、lambda 内部で安全に使用できます。外部変数が存在しなくなっても問題ありません。</li>
 </ul>
-<blockquote>
-<p>lambda の実行順序が不定である場合、捕捉する外部変数が lambda の実行時に有効であることを保証することが重要です。</p>
-</blockquote>
+<pre><code class="language-cpp">int x = 10;
+auto lambda = [x]() { std::cout &lt;&lt; x &lt;&lt; std::endl; };
+x = 20;  // x は lambda が呼び出された後に変更される
+lambda();  // 10 を出力する。これは x のコピーを参照しているため
+</code></pre>
+<ul>
+<li><strong>参照によるキャプチャ</strong>: 外部変数の参照をキャプチャする場合、lambda 内部で参照が使用される場合、外部変数のライフサイクルに依存します。外部変数が lambda が実行される前に破棄された場合、 dangling reference (空の参照) の問題が発生し、未定義動作を引き起こります。 ```cpp
+int x = 10;
+auto lambda = <a class="link" href="" >&amp;x</a> { std::cout &laquo; x &laquo; std::endl; };
+x = 20;  // x 在 lambda 调用前修改
+lambda();  // 打印 20，捕获的是 x 的引用</li>
+</ul>
+<pre><code>
+&gt; ラムダ関数の実行順序が不定である場合、キャプチャされた外部変数がラムダ関数実行時に有効であることを保証することが非常に重要です。</code></pre>
 
 </section>
 
@@ -476,7 +500,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
         <span>
-            最終更新 2025年06月02日 06:00
+            最終更新 2025年06月02日 19:00
         </span>
     </section>
     
@@ -526,7 +550,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
             
                 
 <article class="">
-    <a href="/ja/p/cpp-bitwise-operations-basics-flags/">
+    <a href="/ja/p/cpp-bitwise-operations-flags/">
         
         
 
@@ -539,7 +563,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
             
                 
 <article class="">
-    <a href="/ja/p/deep-understanding-gcc-glibc-cpp-compatibility-issues/">
+    <a href="/ja/p/gcc-glibc-cpp-compatibility/">
         
         
 
@@ -565,12 +589,12 @@ document.addEventListener("DOMContentLoaded", (event) => {
             
                 
 <article class="">
-    <a href="/ja/p/upgrade-gcc-version-causes-program-crash-code-irregularities/">
+    <a href="/ja/p/gcc-upgrade-causes-program-crash-code-irregularities/">
         
         
 
         <div class="article-details">
-            <h2 class="article-title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました：コードの非規整性による問題点</h2>
+            <h2 class="article-title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました。コードの記述ルールの欠如による問題点です。</h2>
         </div>
     </a>
 </article>

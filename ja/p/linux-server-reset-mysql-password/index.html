@@ -6,11 +6,11 @@
 
 <link rel='canonical' href='https://ttf248.life/ja/p/linux-server-reset-mysql-password/'>
 
-<link rel="stylesheet" href="/scss/style.min.7486eb3fa0b66fb8380218f953bb96171937655413ee727a30b3e8edf2364a1b.css"><meta property='og:title' content="Linuxサーバー、MySQLパスワードのリセット">
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="Linuxサーバー、MySQLパスワードのリセット">
 <meta property='og:description' content="闲置の腾讯クラウドサーバーがあり、年末に契約が満了し、更新も考えていなかったので、開発用のデータベースとしてMySQLをデプロイすることにした。システムを再構築する際に、手間を省いて、腾讯クラウドが提供している汎用イメージを選択した。すでにMySQLデータベースがインストールされていた。本来はシステム内にReadmeのようなファイルがあり、パスワードや設定ファイルの場所などを説明されているはずだと思っていた。\n">
 <meta property='og:url' content='https://ttf248.life/ja/p/linux-server-reset-mysql-password/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:published_time' content='2022-09-20T14:27:35&#43;08:00'/><meta property='article:modified_time' content='2025-06-01T15:38:14&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:published_time' content='2022-09-20T14:27:35&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
 <meta name="twitter:title" content="Linuxサーバー、MySQLパスワードのリセット">
 <meta name="twitter:description" content="闲置の腾讯クラウドサーバーがあり、年末に契約が満了し、更新も考えていなかったので、開発用のデータベースとしてMySQLをデプロイすることにした。システムを再構築する際に、手間を省いて、腾讯クラウドが提供している汎用イメージを選択した。すでにMySQLデータベースがインストールされていた。本来はシステム内にReadmeのようなファイルがあり、パスワードや設定ファイルの場所などを説明されているはずだと思っていた。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -384,11 +384,16 @@ document.addEventListener("DOMContentLoaded", (event) => {
     
     <p>闲置の腾讯クラウドサーバーがあり、年末に契約が満了し、更新も考えていなかったので、開発用のデータベースとしてMySQLをデプロイすることにした。システムを再構築する際に、手間を省いて、腾讯クラウドが提供している汎用イメージを選択した。すでにMySQLデータベースがインストールされていた。本来はシステム内にReadmeのようなファイルがあり、パスワードや設定ファイルの場所などを説明されているはずだと思っていた。</p>
 <p>腾讯クラウドのシステム再構築は非常に速く、1分ほどで通知が届いた。「完了」と表示されたのでログインし、<code>systemctl status mysql</code>コマンドを実行したところ、MySQLサービスが起動していた。パスワードを探し回ったがどこにも見つからず、次第に焦り始めた。</p>
-<p>そこで、サーバーにはすでにアクセスできる状態なので、root権限を使ってパスワードをリセットする方法があるはずだと考えた。資料を調べたり、阿里云フォーラムで情報を集めたりして、さらに試行錯誤を続けた。</p>
+<p>そこで、サーバーにアクセスできていること、root権限を持っていることを考えると、必ず何らかの方法でパスワードをリセットできるはずだと考えた。資料を調べたり、阿里云フォーラムの投稿を参考にしたりして、さらに試行錯誤を続けた。</p>
 <h2 id="パスワードのリセット">パスワードのリセット
-</h2><p>構成ファイル <code>vim /etc/my.cnf</code> を編集し、<code>mysqld</code> ノードに以下の設定を追加します：<code>skip-grant-tables</code> 、そしてコマンドを実行してデータベースを再起動します：<code>systemctl restart mysql</code></p>
-<p>その後、<code>mysql</code> を直接使用してデータベースにログインし、通常の操作が続行されます。 <code>root</code> ユーザーのパスワードをリセットし、同時にリモートログインを許可します。</p>
-<p>変更した構成ファイルをロールバックし、データベースを再起動することで完了です。</p>
+</h2><p>構成ファイル <code>vim /etc/my.cnf</code> を編集し、<code>mysqld</code> ノードに以下の設定を追加します：<code>skip-grant-tables</code> 、<code>systemctl restart mysql</code> コマンドを実行してデータベースを再起動します。
+その後、<code>mysql</code> を直接使用してデータベースにログインし、通常の操作が続行できます。 <code>root</code> ユーザーのパスワードをリセットし、同時にリモートログインを許可します。</p>
+<pre><code class="language-sql">USE mysql;
+UPDATE user SET authentication_string = password('pass') WHERE User = 'root';
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'pass' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+</code></pre>
+<p>変更した構成ファイルをロールバックし、データベースを再起動して完了です。</p>
 <h2 id="参照資料">参照資料
 </h2><ul>
 <li><a class="link" href="https://help.aliyun.com/document_detail/42520.html"  target="_blank" rel="noopener"
@@ -444,7 +449,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
 
 
         <span>
-            最終更新 2025年06月01日 15:38
+            最終更新 2025年06月02日 19:00
         </span>
     </section>
     

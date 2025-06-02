@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="昨年、SDKを設計し、イベントの処理や外部へのクラスインターフェース提供を担当しました。サービス初期化時に、呼び出し元が対応するクラスを実装し、オブジェクトポインタをモジュールに渡す仕組みでした。\nC11にも触れており、好奇心でλ関数オブジェクトによるコールバックの実装がどのような結果になるのか、また純粋仮想関数インターフェースとの比較として、より柔軟性があるのかどうか試してみたところ、疑問が生じました。\n異なる構文のどちらが性能面で優れているか、コンパイラ原理は理解していないので、コードを書いて試してみることにしました。\n">
+<title>- コンパイラ
+- コールバック関数
+- パフォーマンステスト</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/compiler-callback-performance-testing/'>
+
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="- コンパイラ\n- コールバック関数\n- パフォーマンステスト">
+<meta property='og:description' content="昨年、SDKを設計し、イベントの処理や外部へのクラスインターフェース提供を担当しました。サービス初期化時に、呼び出し元が対応するクラスを実装し、オブジェクトポインタをモジュールに渡す仕組みでした。\nC11にも触れており、好奇心でλ関数オブジェクトによるコールバックの実装がどのような結果になるのか、また純粋仮想関数インターフェースとの比較として、より柔軟性があるのかどうか試してみたところ、疑問が生じました。\n異なる構文のどちらが性能面で優れているか、コンパイラ原理は理解していないので、コードを書いて試してみることにしました。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/compiler-callback-performance-testing/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:published_time' content='2023-02-15T13:59:25&#43;08:00'/><meta property='article:modified_time' content='2025-06-02T19:00:25&#43;08:00'/>
+<meta name="twitter:title" content="- コンパイラ\n- コールバック関数\n- パフォーマンステスト">
+<meta name="twitter:description" content="昨年、SDKを設計し、イベントの処理や外部へのクラスインターフェース提供を担当しました。サービス初期化時に、呼び出し元が対応するクラスを実装し、オブジェクトポインタをモジュールに渡す仕組みでした。\nC11にも触れており、好奇心でλ関数オブジェクトによるコールバックの実装がどのような結果になるのか、また純粋仮想関数インターフェースとの比較として、より柔軟性があるのかどうか試してみたところ、疑問が生じました。\n異なる構文のどちらが性能面で優れているか、コンパイラ原理は理解していないので、コードを書いて試してみることにしました。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>ダークモード</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#はじめに">はじめに</a></li>
+    <li><a href="#本文">本文</a></li>
+    <li><a href="#コード">コード</a></li>
+    <li><a href="#コード-1">コード</a></li>
+    <li><a href="#コード-2">コード</a></li>
+    <li><a href="#コード-3">コード</a></li>
+    <li><a href="#コード-4">コード</a></li>
+    <li><a href="#付録">付録</a></li>
+    <li><a href="#付録-1">付録</a></li>
+    <li><a href="#付録-2">付録</a></li>
+    <li><a href="#付録-3">付録</a></li>
+    <li><a href="#付録-4">付録</a></li>
+    <li><a href="#付録-5">付録</a></li>
+  </ol>
+
+  <ol>
+    <li><a href="#付録-6">付録</a></li>
+  </ol>
+
+  <ol>
+    <li><a href="#付録-7">付録</a></li>
+    <li><a href="#付録-8">付録</a></li>
+  </ol>
+
+  <ol>
+    <li><a href="#付録-9">付録</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                コンピューター
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/compiler-callback-performance-testing/">- コンパイラ
+- コールバック関数
+- パフォーマンステスト</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>昨年、SDKを設計し、イベントの処理や外部へのクラスインターフェース提供を担当しました。サービス初期化時に、呼び出し元が対応するクラスを実装し、オブジェクトポインタをモジュールに渡す仕組みでした。</p>
+<p>C11にも触れており、好奇心でλ関数オブジェクトによるコールバックの実装がどのような結果になるのか、また純粋仮想関数インターフェースとの比較として、より柔軟性があるのかどうか試してみたところ、疑問が生じました。</p>
+<p>異なる構文のどちらが性能面で優れているか、コンパイラ原理は理解していないので、コードを書いて試してみることにしました。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2023年02月15日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    読了時間: 6分
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/compiler-callback-performance-testing/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/compiler-callback-performance-testing/" class="link">English</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>昨年、SDKを設計し、イベントの処理や外部へのクラスインターフェース提供を担当しました。サービス初期化時に、呼び出し元が対応するクラスを実装し、オブジェクトポインタをモジュールに渡す仕組みでした。</p>
+<p>C11にも触れており、好奇心でλ関数オブジェクトによるコールバックの実装がどのような結果になるのか、また純粋仮想関数インターフェースとの比較として、より柔軟性があるのかどうか試してみたところ、疑問が生じました。</p>
+<p>異なる構文のどちらが性能面で優れているか、コンパイラ原理は理解していないので、コードを書いて試してみることにしました。</p>
+<h2 id="はじめに">はじめに
+</h2><p>オンラインのURLで、異なるコンパイラを選択したり、コンパイルパラメータを設定したり、<code>linux</code>プラットフォーム上でコードを実行したり、対応するアセンブリコードを確認したりできます。</p>
+<ul>
+<li><a class="link" href="https://wandbox.org/"  target="_blank" rel="noopener"
+    >https://wandbox.org/</a>：時々技術検証のために、ウェブ上で小さなコードスニペットを実行するのは非常に便利です。</li>
+<li><a class="link" href="https://godbolt.org/"  target="_blank" rel="noopener"
+    >https://godbolt.org/</a>：異なる色でアセンブリコードと対応するコードを区別できるため、ローカルのデバッガよりも手間がかかりません。</li>
+</ul>
+<h2 id="本文">本文
+</h2><p>標準委員会は文法のルールを定め、コンパイルレベルにおいてそれがどのように実現されるかは、各社のコンパイラに依存します。この点については、特にお祝いすべきことなのですが、マイクロソフトのコンパイラは非常に素晴らしいです。文法糖衣は万能ではなく、コールバックインターフェースが少なく、ラムダ式を使用する方がより便利で、空のコールバック関数インターフェースを定義する必要もありません。コールバックインターフェースの種類が多い場合は、従来の仮想関数の方がビジネスインターフェースの一貫性を定義するのに有利です。</p>
+<ul>
+<li>Windowsプラットフォームでは、両者の性能はほぼ同じであり、大きな違いはありません。</li>
+<li>Linuxプラットフォームでは、仮想関数とラムダ式を比較すると、1回の処理で1.35ns増加します。
+通常のビジネスシステム開発においては、この程度のパフォーマンスの低下は無視できます。ラムダ式を使用することで、設計上の利便性が向上します。特に多信号処理において顕著であり、底层にはイベントトリガーがあり、ログ出力が必要な場合、ログオブジェクトへの入力関数を処理する関数です。 当より多くのビジネス処理インターフェースが必要な場合、その下位レイヤーでは <code>vector</code> に <code>lambda</code> オブジェクトを保存し、イベントがトリガーされる際に、順番にイテレーションして呼び出す。これは <code>QT</code> のシグナルとスロットに似ており、ログ、監視、ビジネス1、ビジネス2 などが完全に疎結合になっている。</li>
+</ul>
+<h2 id="コード">コード
+</h2><pre><code class="language-shell">カウンター：1000000
+時間：3966us
+カウンター：1000000
+時間：5316us
+</code></pre>
+<h2 id="コード-1">コード
+</h2><pre><code class="language-c++">#include &lt;iostream&gt;
+#include &lt;chrono&gt;
+#include &lt;memory&gt;
+#include &lt;functional&gt;
+#include &lt;atomic&gt;
+#include &lt;string&gt;
+
+std::atomic_int64_t counter = 0;
+
+// 回调接口定义
+class UserInterface
+{
+public:
+    virtual void name() = 0;
+    virtual void full_name() = 0;
+};
+
+class User : public UserInterface
+{
+public:
+    void name() {}
+    void full_name() { counter++; }
+};
+
+void to_string(UserInterface* user)
+{
+    user-&gt;name();
+    user-&gt;full_name();
+}
+</code></pre>
+<pre><code class="language-markdown">## コード
+void to_string(UserInterface* user)
+{
+    user-&gt;name();
+    user-&gt;full_name();
+}
+
+using name_handler = std::function&lt;void()&gt;;
+using full_name_handler = std::function&lt;void()&gt;;
+
+class Test
+{
+    name_handler name_;
+    full_name_handler full_name_;
+
+public:
+    void set_name_handler(name_handler name)
+    {
+        name_ = name;
+    }
+
+    void set_full_name_handler(full_name_handler full_name)
+    {
+        full_name_ = full_name;
+    }
+</code></pre>
+<h2 id="コード-2">コード
+</h2><p>void to_string(UserInterface* user)
+{
+user-&gt;name();
+user-&gt;full_name();
+}</p>
+<p>using name_handler = std::function&lt;void()&gt;;
+using full_name_handler = std::function&lt;void()&gt;;</p>
+<p>class Test
+{
+name_handler name_;
+full_name_handler full_name_;</p>
+<p>public:
+void set_name_handler(name_handler name)
+{
+name_ = name;
+}</p>
+<pre><code>void set_full_name_handler(full_name_handler full_name)
+{
+    full_name_ = full_name;
+}
+</code></pre>
+<pre><code>
+```cpp
+## コード
+void to_string() {
+    name_();
+    full_name_();
+}
+};
+
+int main() {
+    User user;
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i &lt; 1000000; i++) {
+        to_string(&amp;user);
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout &lt;&lt; &quot;Counter: &quot; &lt;&lt; counter &lt;&lt; std::endl;
+    std::cout &lt;&lt; &quot;Time: &quot; &lt;&lt; std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(end - start).count() &lt;&lt; &quot;us&quot; &lt;&lt; std::endl;
+}
+</code></pre>
+<h2 id="コード-3">コード
+</h2><pre><code class="language-c++">counter = 0;
+auto name = []() {};
+auto full_name = []() { counter++; };
+
+Test test;
+test.set_name_handler(name);
+test.set_full_name_handler(full_name);
+
+start = std::chrono::high_resolution_clock::now();
+
+for (int i = 0; i &lt; 1000000; i++)
+{
+    test.to_string();
+}
+</code></pre>
+<pre><code class="language-cpp">## コード
+for (int i = 0; i &lt; 1000000; i++)
+{
+    test.to_string();
+}
+
+end = std::chrono::high_resolution_clock::now();
+std::cout &lt;&lt; &quot;Counter: &quot; &lt;&lt; counter &lt;&lt; std::endl;
+std::cout &lt;&lt; &quot;Time: &quot; &lt;&lt; std::chrono::duration_cast&lt;std::chrono::microseconds&gt;(end - start).count() &lt;&lt; &quot;us&quot; &lt;&lt; std::endl;
+
+return 0;
+}
+</code></pre>
+<h2 id="コード-4">コード
+</h2><p>for (int i = 0; i &lt; 1000000; i++)
+{
+test.to_string();
+}</p>
+<p>end = std::chrono::high_resolution_clock::now();
+std::cout &laquo; &ldquo;Counter: &quot; &laquo; counter &laquo; std::endl;
+std::cout &laquo; &ldquo;Time: &quot; &laquo; std::chrono::duration_cast<a class="link" href="std::chrono::microseconds" >std::chrono::microseconds</a>(end - start).count() &laquo; &ldquo;us&rdquo; &laquo; std::endl;</p>
+<p>return 0;
+}</p>
+<h2 id="付録">付録
+</h2><p>資料を検索する際に見つけた類似したコードスニペット <a class="link" href="https://gist.githubusercontent.com/benloong/8050171/raw/fa577ec923b460862078b8b40233a42a1c619eeb/functionperformance.cpp"  target="_blank" rel="noopener"
+    >functionperformance.cpp</a></p>
+<ul>
+<li>付録</li>
+</ul>
+<pre><code class="language-c++">#include &lt;iostream&gt;
+#include &lt;chrono&gt;
+#include &lt;memory&gt;
+#include &lt;functional&gt;
+
+using namespace std;
+using namespace std::chrono;
+
+class Base
+{
+public:
+	Base(){}
+	virtual ~Base(){}
+	virtual int func(int i) = 0;
+};
+
+class Derived : public Base
+{
+public:
+	Derived(int base = 10) : base{base}
+	{
+
+	}
+	~Derived(){}
+
+	virtual int func(int i)
+	{
+		return i*base;
+	}
+private:
+	int base;
+};
+
+struct Func
+{
+	int base;
+	int operator()(int i)
+	{
+		return i*base;
+	}
+	Func(int base) : base {base}
+	{
+	}
+};
+
+int main()
+{
+	Derived d;
+	Func f(5);
+
+	cout &lt;&lt; d.func(2) &lt;&lt; endl;
+	cout &lt;&lt; f(3) &lt;&lt; endl;
+
+	return 0;
+}
+</code></pre>
+<h2 id="付録-1">付録
+</h2><pre><code class="language-c++">const int base = 10;
+int calculate(int i)
+{
+	return base*i;
+}
+
+int main()
+{
+	const int num = 10000;
+	Base *p = new Derived{10};
+	int total = 0;
+	auto start = high_resolution_clock::now();
+	for (int i = 0; i &lt; num; ++i)
+	{
+		total += p-&gt;func(i);
+	}
+	auto end = high_resolution_clock::now();
+	std::cout&lt;&lt;&quot;result: &quot;&lt;&lt;total&lt;&lt;&quot;\nvirtual call elapsed: \t&quot;&lt;&lt;duration_cast&lt;nanoseconds&gt;(end-start).count()&lt;&lt;&quot; nanoseconds.\n&quot;&lt;&lt;std::endl;
+</code></pre>
+<h2 id="付録-2">付録
+</h2><pre><code class="language-c++">total = 0;
+    start = high_resolution_clock::now();
+    for (int i = 0; i &lt; num; ++i)
+    {
+        total += calculate(i);
+    }
+    end = high_resolution_clock::now();
+    std::cout &lt;&lt; &quot;result: &quot; &lt;&lt; total &lt;&lt; &quot;\ndirect function call elapsed: \t&quot; &lt;&lt; duration_cast&lt;nanoseconds&gt;(end - start).count() &lt;&lt; &quot; nanoseconds.\n&quot; &lt;&lt; std::endl;
+</code></pre>
+<h2 id="付録-3">付録
+</h2><p>Func functor{10};
+total = 0;
+start = high_resolution_clock::now();
+for (int i = 0; i &lt; num; ++i)
+{
+total += functor(i);
+}
+end = high_resolution_clock::now();
+std::cout&laquo;&ldquo;result: &ldquo;&laquo;total&laquo;&quot;\nfunctor call elapsed: \t&rdquo;&laquo;duration_cast<nanoseconds>(end-start).count()&laquo;&rdquo; nanoseconds.\n&rdquo;&laquo;std::endl;
+int base = 10;
+function&lt;int(int)&gt; lambda = [base](int i)
+{
+return i*base;
+};
+total = 0;
+start = high_resolution_clock::now();
+for (int i = 0; i &lt; num; ++i)
+{
+total += lambda(i);
+}</p>
+<h2 id="付録-4">付録
+</h2><pre><code class="language-c++">#include &lt;iostream&gt;
+#include &lt;chrono&gt;
+
+int main() {
+  auto start = std::high_resolution_clock::now();
+  long long total = 0;
+  for (int i = 0; i &lt; num; ++i) {
+    total += lambda(i);
+  }
+  auto end = std::high_resolution_clock::now();
+  std::cout &lt;&lt; &quot;result: &quot; &lt;&lt; total &lt;&lt; &quot;\nlambda call elapsed: \t&quot; &lt;&lt; std::chrono::duration_cast&lt;std::chrono::nanoseconds&gt;(end - start).count() &lt;&lt; &quot; nanoseconds.\n&quot; &lt;&lt; std::endl;
+  return 0;
+}
+</code></pre>
+<h2 id="付録-5">付録
+</h2><p>/*
+mac mini i7 2.7GHz 上でのテスト
+clang++ -std=c++11 chronotest.cpp -O0
+出力：
+result: 499950000
+仮想呼び出し時間:	43171 ナノ秒。</p>
+<p>result: 499950000
+直接関数呼び出し時間:	31379 ナノ秒。</p>
+<p>result: 499950000
+関数呼び出し時間:	41497 ナノ秒。</p>
+<h1 id="ラムダ呼び出し時間207416-ナノ秒">result: 499950000
+ラムダ呼び出し時間:	207416 ナノ秒。
+</h1><p>clang++ -std=c++11 chronotest.cpp -O1
+出力：
+result: 499950000
+仮想呼び出し時間:	26144 ナノ秒。</p>
+<h2 id="付録-6">付録
+</h2><p>result: 499950000
+直接関数呼び出しにかかった時間: 22384 ナノ秒。</p>
+<p>result: 499950000
+ファンクタ呼び出しにかかった時間: 33477 ナノ秒。</p>
+<h1 id="ラムダ呼び出しにかかった時間-55799-ナノ秒">result: 499950000
+ラムダ呼び出しにかかった時間: 55799 ナノ秒。
+</h1><p>clang++ -std=c++11 chronotest.cpp -O2
+result: 499950000
+仮想関数呼び出しにかかった時間: 22284 ナノ秒。</p>
+<p>result: 499950000
+直接関数呼び出しにかかった時間: 36 ナノ秒。</p>
+<p>result: 499950000
+ファンクタ呼び出しにかかった時間: 30 ナノ秒。</p>
+<h2 id="付録-7">付録
+</h2><p>result: 499950000
+functor呼び出しにかかった時間: 	30 ナノ秒。</p>
+<p>result: 499950000
+lambda呼び出しにかかった時間: 	28292 ナノ秒。</p>
+<p>===================================================
+clang++ -std=c++11 chronotest.cpp -O3
+result: 499950000
+仮想関数呼び出しにかかった時間: 	18975 ナノ秒。</p>
+<p>result: 499950000
+直接関数呼び出しにかかった時間: 	29 ナノ秒。</p>
+<p>result: 499950000
+functor呼び出しにかかった時間: 	30 ナノ秒。</p>
+<h2 id="付録-8">付録
+</h2><p>result: 499950000
+functor call elapsed: 	30 ナノ秒。</p>
+<h1 id="lambda-call-elapsed-22542-ナノ秒">result: 499950000
+lambda call elapsed: 	22542 ナノ秒。
+</h1><p>clang++ -std=c++11 chronotest.cpp -O4</p>
+<p>result: 499950000
+virtual call elapsed: 	22141 ナノ秒。</p>
+<p>result: 499950000
+direct function call elapsed: 	30 ナノ秒。</p>
+<p>result: 499950000
+functor call elapsed: 	30 ナノ秒。</p>
+<p>result: 499950000
+lambda call elapsed: 	22584 ナノ秒。
+*/</p>
+<h2 id="付録-9">付録
+</h2><p>ここでは、通常の関数と汎関数という2つのモードが追加され、コールバックインターフェースの提供による比較と直接呼び出しによる比較が行われました。性能の低下は桁違いであり、汎関数は関数のパフォーマンスに近接し、場合によっては汎関数のパフォーマンスが優れています。コンパイラ原理に関しては、知識の盲区であると推測します。これは、アクセスされる変数のアドレスと関数が隣接しているため、<code>CPU</code>処理に有利だと考えられます。</p>
+<p>以下に <code>wandbox</code> の実行結果を示します。</p>
+<pre><code class="language-shell">result: 499950000
+virtual call elapsed: 6143 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 30 nanoseconds.
+
+result: 499950000
+functor call elapsed: 31 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 15134 nanoseconds.
+</code></pre>
+</section>
+
+
+    <footer class="article-footer">
+    
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年06月02日 19:00
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
