@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="Business systems designed monitoring metrics of type Summary, calculating the average duration: request_duration_milliseconds_sum / request_duration_milliseconds_count. Reviewing the data, a particular interface was found to have very high average duration, and when examining the time series chart, the average duration suddenly increased – effectively, one request took a long time, raising the overall average. The goal was to identify exactly when this request occurred, but due to the low number of requests within the period, the data retrieved remained empty.">
+<title>Prometheus Monitoring System Histogram and Summary</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/prometheus-monitoring-system-histogram-and-summary/'>
+
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="Prometheus Monitoring System Histogram and Summary">
+<meta property='og:description' content="Business systems designed monitoring metrics of type Summary, calculating the average duration: request_duration_milliseconds_sum / request_duration_milliseconds_count. Reviewing the data, a particular interface was found to have very high average duration, and when examining the time series chart, the average duration suddenly increased – effectively, one request took a long time, raising the overall average. The goal was to identify exactly when this request occurred, but due to the low number of requests within the period, the data retrieved remained empty.">
+<meta property='og:url' content='https://ttf248.life/en/p/prometheus-monitoring-system-histogram-and-summary/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='prometheus' /><meta property='article:tag' content='histogram' /><meta property='article:tag' content='summary' /><meta property='article:published_time' content='2025-06-04T19:00:28&#43;08:00'/><meta property='article:modified_time' content='2025-06-04T19:21:00&#43;08:00'/>
+<meta name="twitter:title" content="Prometheus Monitoring System Histogram and Summary">
+<meta name="twitter:description" content="Business systems designed monitoring metrics of type Summary, calculating the average duration: request_duration_milliseconds_sum / request_duration_milliseconds_count. Reviewing the data, a particular interface was found to have very high average duration, and when examining the time series chart, the average duration suddenly increased – effectively, one request took a long time, raising the overall average. The goal was to identify exactly when this request occurred, but due to the low number of requests within the period, the data retrieved remained empty.">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li>
+      <ol>
+        <li><a href="#-why-does-_sum-and-_count-have-data">✅ Why does <code>_sum</code> and <code>_count</code> have data?</a></li>
+        <li><a href="#-why-quantile099-might-not-display-in-a-time-series-chart">❌ Why <code>{quantile=&quot;0.99&quot;}</code> might <strong>not display</strong> in a Time Series Chart</a></li>
+        <li><a href="#histogram-and-summary-differences">Histogram and Summary Differences</a>
+          <ol>
+            <li><a href="#3-key-differences-comparison">3. <strong>Key Differences Comparison</strong></a></li>
+            <li><a href="#4-summary">4. <strong>Summary</strong></a></li>
+          </ol>
+        </li>
+        <li><a href="#sliding-window-concept-and-its-relationship-with-histograms-and-summaries">Sliding Window Concept and Its Relationship with Histograms and Summaries</a>
+          <ol>
+            <li><a href="#2-sliding-window-and-histogram-relationship">2. <strong>Sliding Window and Histogram Relationship</strong></a></li>
+            <li><a href="#3-sliding-window-and-summary-relationship">3. <strong>Sliding Window and Summary Relationship</strong></a></li>
+            <li><a href="#4-sliding-window-applicability">4. <strong>Sliding Window Applicability</strong></a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/prometheus-monitoring-system-histogram-and-summary/">Prometheus Monitoring System Histogram and Summary</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;">Business systems designed monitoring metrics of type Summary, calculating the average duration: request_duration_milliseconds_sum / request_duration_milliseconds_count.
+Reviewing the data, a particular interface was found to have very high average duration, and when examining the time series chart, the average duration suddenly increased – effectively, one request took a long time, raising the overall average. The goal was to identify exactly when this request occurred, but due to the low number of requests within the period, the data retrieved remained empty.</h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">Jun 04, 2025</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    6 minute read
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/prometheus-monitoring-system-histogram-and-summary/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/ja/p/prometheus-monitoring-system-histogram-and-summary/" class="link">日本語</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>Business systems designed monitoring metrics of type Summary, calculating the average duration: <code>request_duration_milliseconds_sum / request_duration_milliseconds_count</code>.</p>
+<p>Reviewing the data, a particular interface was found to have very high average duration, and when examining the time series chart, the average duration suddenly increased – effectively, one request took a long time, raising the overall average.  The goal was to identify exactly when this request occurred, but due to the low number of requests within the period, the data retrieved remained empty.</p>
+<h3 id="-why-does-_sum-and-_count-have-data">✅ Why does <code>_sum</code> and <code>_count</code> have data?
+</h3><ul>
+<li><code>_sum</code> and <code>_count</code> are the <strong>core metrics</strong> of the Summary type, and Prometheus always collects and records these values;</li>
+<li>They are <strong>cumulative counters</strong>, suitable for use with <code>rate()</code> or <code>increase()</code>;</li>
+<li>Regardless of request latency changes, as long as there are requests, <code>_sum</code> and <code>_count</code> will always have data.</li>
+</ul>
+<h3 id="-why-quantile099-might-not-display-in-a-time-series-chart">❌ Why <code>{quantile=&quot;0.99&quot;}</code> might <strong>not display</strong> in a Time Series Chart
+</h3><p>Even if Summary is configured with <code>quantile=&quot;0.99&quot;</code>, this time series may not exist or be missing:
+Metrics are definitely configured, and the data hasn&rsquo;t expired. 📉 The request volume is too small, preventing quantile calculation, due to the sliding window mechanism; after this period of time, it will no longer be included in the statistical range.
+Quantiles (such as p99) are calculated through sampling statistics:</p>
+<ul>
+<li>If the request count over a certain period is too low (e.g., 1~2 requests), the calculation of p99 is <strong>unstable or lacks representativeness</strong>;</li>
+<li>Prometheus <strong>client SDK will choose not to expose this quantile time series</strong> to avoid misleading;</li>
+<li>Therefore, you&rsquo;ll see <code>_sum</code> and <code>_count</code> accumulating normally, but <code>quantile=&quot;0.99&quot;</code> has no data.</li>
+</ul>
+<h3 id="histogram-and-summary-differences">Histogram and Summary Differences
+</h3><pre><code class="language-markdown">#### 1. **Histogram**
+- **How it Works:** A histogram will bucket data, recording the number of samples falling into each bucket.
+   For example, if buckets are defined as `[10ms, 50ms, 100ms, 500ms, 1s]`, each request latency would be assigned to the corresponding bucket.
+- **Advantages:**
+  - Can aggregate data from multiple instances (e.g., request latency distributions from multiple service nodes) within Prometheus.
+  - Suitable for calculating percentiles (such as P50, P95, P99) and observing latency distributions.
+  - Provides flexible querying capabilities, supporting dynamic percentile calculation using PromQL.
+- **Disadvantages:**
+  - Requires predefining the bucket range; an inappropriate selection can lead to uneven data distribution (e.g., all requests falling into a single bucket).
+  - The more buckets you define, the greater the storage and computational overhead.
+- **Suitable Scenarios:**
+  - Aggregating data from multiple instances.
+  - Dynamically adjusting percentiles or analyzing latency distributions.
+</code></pre>
+<pre><code class="language-markdown">## 2. Summary
+
+*   **How it Works:**
+    Summary calculates percentiles (such as P50, P95, P99) directly on the client and reports the results to Prometheus.
+    It also records the total number and sum of samples for calculating averages.
+
+*   **Advantages:**
+    *   Doesn't require predefined buckets; provides percentile results directly.
+    *   Suitable for single-instance precise percentile calculations.
+
+*   **Disadvantages:**
+    *   Percentile calculation is performed on the client, preventing aggregation of data from multiple instances in Prometheus.
+    *   Adjusting percentiles (e.g., changing from P95 to P99) requires modifying the code and redeploying.
+
+*   **Suitable Scenarios:**
+    *   Single-instance monitoring where precise percentile accuracy is a high priority.
+    *   When no aggregation of data from multiple instances is needed.
+</code></pre>
+<pre><code class="language-markdown">#### 3. **Key Difference Comparison**
+| Feature | Histogram | Summary |
+|---|---|---|
+| **Quantile Calculation** | Calculated dynamically within Prometheus | Calculated directly on the client side |
+</code></pre>
+<pre><code class="language-markdown">#### 3. **Key Difference Comparison**
+| Feature | Histogram | Summary |
+|---|---|---|
+| **Multi-Instance Aggregation** | Supported | Not Supported |
+</code></pre>
+<pre><code class="language-markdown">#### 3. **Key Differences Comparison**
+| Feature | Histogram | Summary |
+|---|---|---|
+| **Bucket Definition** | Requires pre-defined | Does not require |
+</code></pre>
+<pre><code class="language-markdown">#### 3. **Key Differences Comparison**
+| Feature | Histogram | Summary |
+|---|---|---|
+| **Storage Overhead** | Dependent on the number of buckets | Fixed overhead |
+</code></pre>
+<pre><code class="language-markdown">#### 3. **Key Differences Comparison**
+| Feature | Histogram | Summary |
+|---|---|---|
+| **Flexibility** | High (can dynamically adjust bins) | Low (requires code modification to adjust bins) |
+</code></pre>
+<h4 id="3-key-differences-comparison">3. <strong>Key Differences Comparison</strong>
+</h4><hr>
+<h4 id="4-summary">4. <strong>Summary</strong>
+</h4><ul>
+<li>If you need to aggregate data from multiple instances or require flexible quantile adjustments, choose <strong>Histogram</strong>.</li>
+<li>If you only need the precise quantiles for a single instance and the quantiles are fixed, choose <strong>Summary</strong>.</li>
+<li>In your scenario, given that the service is distributed, it’s recommended to prioritize using <strong>Histogram</strong> so that all instance data can be aggregated in Prometheus and dynamically calculate quantiles and distributions of latency.</li>
+</ul>
+<h3 id="sliding-window-concept-and-its-relationship-with-histograms-and-summaries">Sliding Window Concept and Its Relationship with Histograms and Summaries
+</h3><pre><code class="language-markdown">#### 1. **Sliding Window Concept**
+A sliding window is a time window mechanism used to track changes in data over a period of time. It dynamically reflects the real-time state of the system by continuously moving a temporal range. The characteristics of a sliding window are:
+- **Fixed Time Range:** The length of the window is fixed, such as the last 1 minute or 5 minutes.
+- **Real-Time Updates:** As time passes, the window slides, old data is removed from the window, and new data is added to the window.
+- **Common Uses:** Used for calculating real-time metrics (such as request rate, average, percentiles, etc.).
+In Prometheus, sliding windows are typically implemented through query functions (like `rate()`, `avg_over_time()` ).
+</code></pre>
+<h4 id="2-sliding-window-and-histogram-relationship">2. <strong>Sliding Window and Histogram Relationship</strong>
+</h4><ul>
+<li><strong>Histogram Data Structure:</strong> <br>
+Histograms will bucket sample data and record the count for each bucket. Prometheus periodically scrapes these counts.</li>
+<li><strong>Sliding Window Implementation:</strong><br>
+In Prometheus, sliding windows can be applied to Histogram data using query statements. For example:
+<ul>
+<li><code>rate(http_request_duration_seconds_bucket[5m])</code>: Calculates the request rate for each bucket over the past 5 minutes.</li>
+<li><code>histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))</code>: Calculates the 95th percentile value over the past 5 minutes.</li>
+</ul>
+</li>
+<li><strong>Advantages:</strong>
+<ul>
+<li>Sliding windows can dynamically reflect the request latency distribution for recent periods.</li>
+<li>The bucketting mechanism of Histograms combined with sliding windows can efficiently calculate percentiles and distributions.</li>
+</ul>
+</li>
+</ul>
+<h4 id="3-sliding-window-and-summary-relationship">3. <strong>Sliding Window and Summary Relationship</strong>
+</h4><ul>
+<li><strong>Summary Data Structure</strong>:
+Summary calculates percentiles directly on the client side and reports them to Prometheus. It also records the total sample count and sum.</li>
+<li><strong>Sliding Window Implementation</strong>:
+In Prometheus, sliding windows can be applied to Summary data using query statements. For example:
+<ul>
+<li><code>rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])</code>: Calculates the average request duration over the past 5 minutes.</li>
+</ul>
+</li>
+<li><strong>Limitations</strong>:
+<ul>
+<li>Summary percentiles are calculated on the client side and cannot be recalculated in Prometheus, so support for sliding windows with percentiles is limited.</li>
+<li>Sliding windows cannot directly operate on Summary percentiles when aggregating data from multiple instances.</li>
+</ul>
+</li>
+</ul>
+<h4 id="4-sliding-window-applicability">4. <strong>Sliding Window Applicability</strong>
+</h4><ul>
+<li><strong>Real-time Monitoring:</strong> Sliding windows are suitable for monitoring the real-time state of systems, such as request rates over the last minute or latency distributions.</li>
+<li><strong>Anomaly Detection:</strong> By using a sliding window, it’s possible to quickly identify short-term anomalies (e.g., sudden increase in request latency).</li>
+<li><strong>Dynamic Analysis:</strong> Sliding windows can dynamically reflect changes in system trends rather than static global statistics.</li>
+</ul>
+<pre><code class="language-markdown">#### 5. **Summary**
+
+- **Histogram** combined with a sliding window can dynamically calculate percentiles (such as P95, P99) and request latency distributions, suitable for monitoring distributed systems.
+- **Summary** combined with a sliding window can calculate simple metrics such as averages, but lacks flexibility when it comes to percentiles and does not support multi-instance aggregation.
+
+In your scenario, due to the need to monitor extreme request latencies (such as P99) and the average latency of most requests, we recommend using **Histogram** combined with a sliding window to dynamically analyze system performance.
+</code></pre>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/prometheus/">Prometheus</a>
+        
+            <a href="/en/tags/histogram/">Histogram</a>
+        
+            <a href="/en/tags/summary/">Summary</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang &amp;&amp; chatgpt
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Jun 04, 2025 19:21
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="ビジネスシステムは、要約タイプの監視指標を設計し、平均処理時間（request_duration_milliseconds_sum / requ">
+<title>Prometheus監視システムにおけるヒストグラムとサマリー</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/prometheus-monitoring-system-histogram-and-summary/'>
+
+<link rel="stylesheet" href="/scss/style.min.c6d59cc9323bb42df214d6927d9c0321b807f73689814a792bf2396a28eb8c00.css"><meta property='og:title' content="Prometheus監視システムにおけるヒストグラムとサマリー">
+<meta property='og:description' content="ビジネスシステムは、要約タイプの監視指標を設計し、平均処理時間（request_duration_milliseconds_sum / requ">
+<meta property='og:url' content='https://ttf248.life/ja/p/prometheus-monitoring-system-histogram-and-summary/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='prometheus' /><meta property='article:tag' content='histogram' /><meta property='article:tag' content='summary' /><meta property='article:published_time' content='2025-06-04T19:00:28&#43;08:00'/><meta property='article:modified_time' content='2025-06-04T19:21:00&#43;08:00'/>
+<meta name="twitter:title" content="Prometheus監視システムにおけるヒストグラムとサマリー">
+<meta name="twitter:description" content="ビジネスシステムは、要約タイプの監視指標を設計し、平均処理時間（request_duration_milliseconds_sum / requ">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>ダークモード</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li>
+      <ol>
+        <li><a href="#-なぜ-_sum-と-_count-にデータがあるのか">✅ なぜ <code>_sum</code> と <code>_count</code> にデータがあるのか</a></li>
+        <li><a href="#-quantile099-が時系列グラフで表示されない理由">❌ <code>{quantile=&quot;0.99&quot;}</code> が時系列グラフで表示されない理由</a></li>
+        <li><a href="#ヒストグラムとサマリーの違い">ヒストグラムとサマリーの違い</a>
+          <ol>
+            <li><a href="#1-ヒストグラム">1. <strong>ヒストグラム</strong></a></li>
+            <li><a href="#2-概要">2. <strong>概要</strong></a></li>
+            <li><a href="#3-主な違いの比較">3. <strong>主な違いの比較</strong></a></li>
+            <li><a href="#3-主な違いの比較-1">3. <strong>主な違いの比較</strong></a></li>
+            <li><a href="#3-主な違いの比較-2">3. <strong>主な違いの比較</strong></a></li>
+            <li><a href="#3-主な違いの比較-3">3. <strong>主な違いの比較</strong></a></li>
+            <li><a href="#3-主な違いの比較-4">3. <strong>主な違いの比較</strong></a></li>
+            <li><a href="#3-主な違いの比較-5">3. <strong>主な違いの比較</strong></a></li>
+            <li><a href="#4-まとめ">4. <strong>まとめ</strong></a></li>
+          </ol>
+        </li>
+        <li><a href="#スライディングウィンドウの概念とそのヒストグラムおよびサマリーとの関係">スライディングウィンドウの概念とそのヒストグラムおよびサマリーとの関係</a>
+          <ol>
+            <li><a href="#1-スライディングウィンドウの概念">1. <strong>スライディングウィンドウの概念</strong></a></li>
+            <li><a href="#2-スライディングウィンドウとヒストグラムの関係">2. <strong>スライディングウィンドウとヒストグラムの関係</strong></a></li>
+            <li><a href="#3-summary-とサマリーの関係">3. <strong>Summary とサマリーの関係</strong></a></li>
+            <li><a href="#4-スライディングウィンドウの適用場面">4. <strong>スライディングウィンドウの適用場面</strong></a></li>
+            <li><a href="#5-まとめ">5. <strong>まとめ</strong></a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+
+ 
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.code-container {
+    position: relative;
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", (event) => {
+    
+    document.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+    });
+
+    
+    document.querySelectorAll('pre code').forEach(function (block) {
+        const container = document.createElement("div");
+        container.classList.add("code-container");
+        block.parentNode.insertBefore(container, block);
+        container.appendChild(block);
+
+        const button = document.createElement("button");
+        button.classList.add("copy-btn");
+        button.innerText = "复制代码";
+        container.appendChild(button);
+
+        button.addEventListener("click", function () {
+            const code = block.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                button.innerText = "已复制";
+                setTimeout(() => (button.innerText = "复制代码"), 2000);
+            });
+        });
+    });
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                コンピューター
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/prometheus-monitoring-system-histogram-and-summary/">Prometheus監視システムにおけるヒストグラムとサマリー</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;">ビジネスシステムは、要約タイプの監視指標を設計し、平均処理時間（request_duration_milliseconds_sum / requ</h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2025年06月04日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    読了時間: 8分
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/prometheus-monitoring-system-histogram-and-summary/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/prometheus-monitoring-system-histogram-and-summary/" class="link">English</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>ビジネスシステムは、要約タイプの監視指標を設計し、平均処理時間（request_duration_milliseconds_sum / request_duration_milliseconds_count）を計算していました。</p>
+<p>データを確認したところ、あるインターフェースの平均処理時間が非常に高くなっていることが判明しました。時系列グラフを見ると、平均処理時間が突然増加しており、それは単一のリクエストの処理時間が長かったために引き起こされたもので、平均値を押し上げている状態でした。具体的にいつ発生したリクエストを特定したいのですが、その期間内のリクエスト数が少なく、結果データが常に空になってしまいます。</p>
+<h3 id="-なぜ-_sum-と-_count-にデータがあるのか">✅ なぜ <code>_sum</code> と <code>_count</code> にデータがあるのか
+</h3><ul>
+<li><code>_sum</code> と <code>_count</code> は Summary 型の<strong>コア指標</strong>であり、Prometheus は常にこれらの値を収集して記録します。</li>
+<li>どちらも<strong>累積型のカウンター</strong>であるため、<code>rate()</code> または <code>increase()</code> を使用するのに適しています。</li>
+<li>リクエスト遅延がどのように変化しても、リクエストが存在すれば必ず <code>_sum</code> と <code>_count</code> のデータがあります。</li>
+</ul>
+<h3 id="-quantile099-が時系列グラフで表示されない理由">❌ <code>{quantile=&quot;0.99&quot;}</code> が時系列グラフで表示されない理由
+</h3><p>Summary にも quantile=&ldquo;0.99&rdquo; を設定していても、この時間系列が存在しないか欠損している可能性があります：
+指標は確実に設定されており、データが期限切れでもありません。📉 リクエスト数が少ないため、quantile を計算できません。スライディングウィンドウメカニズムにより、この期間を過ぎると統計範囲に再含まれなくなります。
+分位数（例えば p99）はサンプリング統計によって計算されます：</p>
+<ul>
+<li>1～2 件程度のリクエストしかない期間では、p99 の計算が<strong>不安定または代表的ではありません</strong>。</li>
+<li>Prometheus <strong>クライアント SDK は、この quantile 時間系列を公開しないように選択します</strong>（誤解を避けるため）。</li>
+<li>その結果、<code>_sum</code>、<code>_count</code> が正常に累積されますが、<code>quantile=&quot;0.99&quot;</code> にデータが表示されません。</li>
+</ul>
+<h3 id="ヒストグラムとサマリーの違い">ヒストグラムとサマリーの違い
+</h3><h4 id="1-ヒストグラム">1. <strong>ヒストグラム</strong>
+</h4><ul>
+<li><strong>仕組み:</strong> ヒストグラムはデータをビン（バケット）に分割し、各ビンに該当するサンプル数（データ数）を記録します。
+例として、<code>[10ms, 50ms, 100ms, 500ms, 1s]</code> の範囲でビンを設定した場合、各リクエストのレイテンシ（遅延時間）は対応するビンに割り当てられます。</li>
+<li><strong>利点:</strong>
+<ul>
+<li>Prometheus で複数のインスタンス（例えば、複数のサービスノードのリクエストレイテンシ分布）からデータを集計できます。</li>
+<li>分位数（P50、P95、P99 など）を計算し、レイテンシの分布を観察するのに適しています。</li>
+<li>PromQL を使用して動的に分位数を計算するための柔軟なクエリ機能を提供します。</li>
+</ul>
+</li>
+<li><strong>欠点:</strong>
+<ul>
+<li>ビンの範囲を事前に定義する必要があり、選択が不適切だとデータ分布が偏る可能性があります（例えば、すべてのリクエストが 1 つのビンに集中する）。</li>
+<li>ビンの数が多いほど、ストレージと計算のオーバーヘッドが増加します。</li>
+</ul>
+</li>
+<li><strong>適用シナリオ:</strong>
+<ul>
+<li>複数のインスタンスからデータを集計する必要がある場合。</li>
+<li>分位数を動的に調整したり、レイテンシ分布を分析したりする場合。</li>
+</ul>
+</li>
+</ul>
+<h4 id="2-概要">2. <strong>概要</strong>
+</h4><ul>
+<li><strong>仕組み:</strong> Summary はクライアント側でパーセンタイル（P50、P95、P99 など）を直接計算し、その結果を Prometheus に報告します。
+また、サンプル全体の数と合計も記録し、平均値を計算するために使用します。</li>
+<li><strong>利点:</strong>
+<ul>
+<li>バケットを事前に定義する必要がなく、パーセンタイル結果を直接提供します。</li>
+<li>単一インスタンスでの正確なパーセンタイル計算に適しています。</li>
+</ul>
+</li>
+<li><strong>欠点:</strong>
+<ul>
+<li>パーセンタイルの計算はクライアント側で行われるため、Prometheus で複数のインスタンスのデータを集計できません。</li>
+<li>パーセンタイルを変更（例：P95 から P99 に）するには、コードを修正して再デプロイする必要があります。</li>
+</ul>
+</li>
+<li><strong>適用シナリオ:</strong>
+<ul>
+<li>単一インスタンスでの監視であり、パーセンタイルに対する正確性が高い場合。</li>
+<li>複数のインスタンスのデータを集計する必要がない場合。</li>
+</ul>
+</li>
+</ul>
+<h4 id="3-主な違いの比較">3. <strong>主な違いの比較</strong>
+</h4><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>ヒストグラム</th>
+<th>サマリー</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>分位数の計算</strong></td>
+<td>Prometheus内で動的に計算</td>
+<td>クライアントで直接計算</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="3-主な違いの比較-1">3. <strong>主な違いの比較</strong>
+</h4><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>ヒストグラム</th>
+<th>サマリー</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>複数インスタンスアグリゲーション</strong></td>
+<td>対応</td>
+<td>非対応</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="3-主な違いの比較-2">3. <strong>主な違いの比較</strong>
+</h4><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>ヒストグラム</th>
+<th>サマリー</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ビンの定義</strong></td>
+<td>事前に定義する必要がある</td>
+<td>不要</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="3-主な違いの比較-3">3. <strong>主な違いの比較</strong>
+</h4><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>ヒストグラム</th>
+<th>サマリー</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ストレージコスト</strong></td>
+<td>バーンの数に依存</td>
+<td>固定コスト</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="3-主な違いの比較-4">3. <strong>主な違いの比較</strong>
+</h4><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>特性</th>
+<th>ヒストグラム</th>
+<th>サマリー</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>柔軟性</strong></td>
+<td>高 (動的にビン数を調整可能)</td>
+<td>低 (コードを修正してビン数を調整する必要あり)</td>
+</tr>
+</tbody>
+</table></div>
+<h4 id="3-主な違いの比較-5">3. <strong>主な違いの比較</strong>
+</h4><hr>
+<h4 id="4-まとめ">4. <strong>まとめ</strong>
+</h4><ul>
+<li>複数のインスタンスのデータを集約したり、分位数を柔軟に調整する必要がある場合は、<strong>ヒストグラム</strong>を選択してください。</li>
+<li>単一インスタンスの正確な分位数が必要で、分位数が固定されている場合は、<strong>サマリー</strong>を選択してください。</li>
+<li>あなたのシナリオでは、サービスが分散しているため、Prometheus ですべてのインスタンスのデータを集約し、動的に分位数と経過時間分布を計算するために、<strong>ヒストグラム</strong>を使用することを優先することをお勧めします。</li>
+</ul>
+<h3 id="スライディングウィンドウの概念とそのヒストグラムおよびサマリーとの関係">スライディングウィンドウの概念とそのヒストグラムおよびサマリーとの関係
+</h3><h4 id="1-スライディングウィンドウの概念">1. <strong>スライディングウィンドウの概念</strong>
+</h4><p>スライディングウィンドウは、時間ウィンドウメカニズムであり、一定期間内のデータ変化を統計するために使用されます。それは、不断移動する時間範囲を通して、システムのリアルタイム状態を動的に反映します。スライディングウィンドウの特徴は以下のとおりです：</p>
+<ul>
+<li><strong>固定された時間範囲</strong>: ウィンドウの長さは固定されており、例えば最近1分、5分などがあります。</li>
+<li><strong>リアルタイム更新</strong>: 時間経過とともに、ウィンドウがスライドし、古いデータがウィンドウから削除され、新しいデータがウィンドウに追加されます。</li>
+<li><strong>一般的な用途</strong>: リアルタイム指標（リクエストレート、平均値、パーセンタイルなど）を計算するために使用されます。
+Prometheusでは、スライディングウィンドウは通常、クエリ関数（<code>rate()</code>、<code>avg_over_time()</code>など）によって実装されます。</li>
+</ul>
+<h4 id="2-スライディングウィンドウとヒストグラムの関係">2. <strong>スライディングウィンドウとヒストグラムの関係</strong>
+</h4><ul>
+<li><strong>ヒストグラムのデータ構造</strong>: <br>
+ヒストグラムは、サンプルデータをビンに分割し、各ビンのカウントを記録します。Prometheus は周期的にこれらのカウント値を収集します。</li>
+<li><strong>スライディングウィンドウの実装</strong>: <br>
+Prometheus では、クエリ文を使用してヒストグラムのデータに対してスライディングウィンドウを適用できます。例えば：
+<ul>
+<li><code>rate(http_request_duration_seconds_bucket[5m])</code>: 過去 5 分間の各ビンのリクエストレートを計算します。</li>
+<li><code>histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))</code>: 過去 5 分間の P95 分位数を計算します。</li>
+</ul>
+</li>
+<li><strong>利点</strong>:
+<ul>
+<li>スライディングウィンドウは、最近の時間の要求時間分布を動的に反映できます。</li>
+<li>ヒストグラムのビニングメカニズムとスライディングウィンドウを組み合わせることで、効率的に分位数や分布を計算できます。</li>
+</ul>
+</li>
+</ul>
+<h4 id="3-summary-とサマリーの関係">3. <strong>Summary とサマリーの関係</strong>
+</h4><ul>
+<li><strong>サマリーのデータ構造</strong>:
+サマリーはクライアント側でパーセンタイルを直接計算し、Prometheus へ送信します。また、サンプル総数と合計も記録します。</li>
+<li><strong>スライディングウィンドウの実装</strong>:
+Prometheus では、クエリ文を使用してサマリーのデータをスライディングウィンドウに適用できます。例えば：
+<ul>
+<li><code>rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])</code>: 過去 5 分間の平均リクエスト時間計算します。</li>
+</ul>
+</li>
+<li><strong>制限</strong>:
+<ul>
+<li>サマリーのパーセンタイルはクライアント側で計算されるため、Prometheus で再計算できません。したがって、スライディングウィンドウによるパーセンタイルのサポートは限られています。</li>
+<li>複数のインスタンスのデータを集計する必要がある場合、スライディングウィンドウはサマリーのパーセンタイルに直接作用しません。</li>
+</ul>
+</li>
+</ul>
+<h4 id="4-スライディングウィンドウの適用場面">4. <strong>スライディングウィンドウの適用場面</strong>
+</h4><ul>
+<li><strong>リアルタイム監視</strong>: スライディングウィンドウは、システムのリアルタイムな状態を監視するのに適しています。例えば、最近1分間のリクエストレートやレイテンシ分布などです。</li>
+<li><strong>異常検知</strong>: スライディングウィンドウを使用することで、短期間での異常事象（例えば、リクエストのレイテンシが急増するなど）を迅速に検出できます。</li>
+<li><strong>動的分析</strong>: スライディングウィンドウは、システムの変化傾向を動的に反映し、静的なグローバル統計とは異なります。</li>
+</ul>
+<h4 id="5-まとめ">5. <strong>まとめ</strong>
+</h4><ul>
+<li><strong>ヒストグラム</strong> とスライディングウィンドウを組み合わせることで、分位数（例：P95、P99）とリクエストの経過時間分布を動的に計算でき、分散システムでの監視に適しています。</li>
+<li><strong>サマリー</strong> はスライディングウィンドウと組み合わせて平均値などの単純な指標を計算できますが、分位数の柔軟性に欠け、多インスタンスアグリゲーションもサポートしていません。
+あなたのシナリオでは、極端なリクエストの経過時間（例：P99）と大部分のリクエストの平均値を監視する必要があるため、<strong>ヒストグラム</strong> を使用し、スライディングウィンドウを組み合わせてシステムのパフォーマンスを動的に分析することをお勧めします。</li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/prometheus/">Prometheus</a>
+        
+            <a href="/ja/tags/histogram/">Histogram</a>
+        
+            <a href="/ja/tags/summary/">Summary</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                tianlong.xiang &amp;&amp; chatgpt
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年06月04日 19:21
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
