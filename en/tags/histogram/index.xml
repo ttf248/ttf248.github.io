@@ -6,15 +6,16 @@
         <description>Recent content in Histogram on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Wed, 04 Jun 2025 19:21:00 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/histogram/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Fri, 06 Jun 2025 18:45:28 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/histogram/index.xml" rel="self" type="application/rss+xml" /><item>
         <title>Prometheus Monitoring System Histogram and Summary</title>
         <link>https://ttf248.life/en/p/prometheus-monitoring-system-histogram-and-summary/</link>
         <pubDate>Wed, 04 Jun 2025 19:00:28 +0800</pubDate>
         
         <guid>https://ttf248.life/en/p/prometheus-monitoring-system-histogram-and-summary/</guid>
         <description>&lt;p&gt;Business systems designed monitoring metrics of type Summary, calculating the average duration: &lt;code&gt;request_duration_milliseconds_sum / request_duration_milliseconds_count&lt;/code&gt;.&lt;/p&gt;
-&lt;p&gt;Reviewing the data, a particular interface was found to have very high average duration, and when examining the time series chart, the average duration suddenly increased – effectively, one request took a long time, raising the overall average.  The goal was to identify exactly when this request occurred, but due to the low number of requests within the period, the data retrieved remained empty.&lt;/p&gt;
-&lt;h3 id=&#34;-why-does-_sum-and-_count-have-data&#34;&gt;✅ Why does &lt;code&gt;_sum&lt;/code&gt; and &lt;code&gt;_count&lt;/code&gt; have data?
+&lt;p&gt;Reviewing the data, a particular interface was found to have very high average duration, and when examining the time series chart, the average duration suddenly increased – effectively, one request took a long time, which pulled up the overall average.  The goal was to identify exactly when this request occurred, but due to the low number of requests within the period, the data retrieved remained empty.&lt;/p&gt;
+&lt;h2 id=&#34;qa&#34;&gt;Q&amp;amp;A
+&lt;/h2&gt;&lt;h3 id=&#34;-why-does-_sum-and-_count-have-data&#34;&gt;✅ Why does &lt;code&gt;_sum&lt;/code&gt; and &lt;code&gt;_count&lt;/code&gt; have data?
 &lt;/h3&gt;&lt;ul&gt;
 &lt;li&gt;&lt;code&gt;_sum&lt;/code&gt; and &lt;code&gt;_count&lt;/code&gt; are the &lt;strong&gt;core metrics&lt;/strong&gt; of the Summary type, and Prometheus always collects and records these values;&lt;/li&gt;
 &lt;li&gt;They are &lt;strong&gt;cumulative counters&lt;/strong&gt;, suitable for use with &lt;code&gt;rate()&lt;/code&gt; or &lt;code&gt;increase()&lt;/code&gt;;&lt;/li&gt;
@@ -29,128 +30,203 @@ Quantiles (such as p99) are calculated through sampling statistics:&lt;/p&gt;
 &lt;li&gt;Prometheus &lt;strong&gt;client SDK will choose not to expose this quantile time series&lt;/strong&gt; to avoid misleading;&lt;/li&gt;
 &lt;li&gt;Therefore, you&amp;rsquo;ll see &lt;code&gt;_sum&lt;/code&gt; and &lt;code&gt;_count&lt;/code&gt; accumulating normally, but &lt;code&gt;quantile=&amp;quot;0.99&amp;quot;&lt;/code&gt; has no data.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h3 id=&#34;histogram-and-summary-differences&#34;&gt;Histogram and Summary Differences
-&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 1. **Histogram**
-- **How it Works:** A histogram will bucket data, recording the number of samples falling into each bucket.
-   For example, if buckets are defined as `[10ms, 50ms, 100ms, 500ms, 1s]`, each request latency would be assigned to the corresponding bucket.
-- **Advantages:**
-  - Can aggregate data from multiple instances (e.g., request latency distributions from multiple service nodes) within Prometheus.
-  - Suitable for calculating percentiles (such as P50, P95, P99) and observing latency distributions.
-  - Provides flexible querying capabilities, supporting dynamic percentile calculation using PromQL.
-- **Disadvantages:**
-  - Requires predefining the bucket range; an inappropriate selection can lead to uneven data distribution (e.g., all requests falling into a single bucket).
-  - The more buckets you define, the greater the storage and computational overhead.
-- **Suitable Scenarios:**
-  - Aggregating data from multiple instances.
-  - Dynamically adjusting percentiles or analyzing latency distributions.
-&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;## 2. Summary
-
-*   **How it Works:**
-    Summary calculates percentiles (such as P50, P95, P99) directly on the client and reports the results to Prometheus.
-    It also records the total number and sum of samples for calculating averages.
-
-*   **Advantages:**
-    *   Doesn&#39;t require predefined buckets; provides percentile results directly.
-    *   Suitable for single-instance precise percentile calculations.
-
-*   **Disadvantages:**
-    *   Percentile calculation is performed on the client, preventing aggregation of data from multiple instances in Prometheus.
-    *   Adjusting percentiles (e.g., changing from P95 to P99) requires modifying the code and redeploying.
-
-*   **Suitable Scenarios:**
-    *   Single-instance monitoring where precise percentile accuracy is a high priority.
-    *   When no aggregation of data from multiple instances is needed.
-&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 3. **Key Difference Comparison**
-| Feature | Histogram | Summary |
-|---|---|---|
-| **Quantile Calculation** | Calculated dynamically within Prometheus | Calculated directly on the client side |
-&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 3. **Key Difference Comparison**
-| Feature | Histogram | Summary |
-|---|---|---|
-| **Multi-Instance Aggregation** | Supported | Not Supported |
-&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 3. **Key Differences Comparison**
-| Feature | Histogram | Summary |
-|---|---|---|
-| **Bucket Definition** | Requires pre-defined | Does not require |
-&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 3. **Key Differences Comparison**
-| Feature | Histogram | Summary |
-|---|---|---|
-| **Storage Overhead** | Dependent on the number of buckets | Fixed overhead |
-&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 3. **Key Differences Comparison**
-| Feature | Histogram | Summary |
-|---|---|---|
-| **Flexibility** | High (can dynamically adjust bins) | Low (requires code modification to adjust bins) |
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h4 id=&#34;3-key-differences-comparison&#34;&gt;3. &lt;strong&gt;Key Differences Comparison&lt;/strong&gt;
-&lt;/h4&gt;&lt;hr&gt;
-&lt;h4 id=&#34;4-summary&#34;&gt;4. &lt;strong&gt;Summary&lt;/strong&gt;
-&lt;/h4&gt;&lt;ul&gt;
+&lt;h2 id=&#34;histogram-and-summary-differences&#34;&gt;Histogram and Summary Differences
+&lt;/h2&gt;&lt;h3 id=&#34;histogram&#34;&gt;&lt;strong&gt;Histogram&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;How it Works:&lt;/strong&gt;&lt;br&gt;
+A histogram will bucket data, recording the number of samples falling into each bucket.
+For example, if buckets are defined as &lt;code&gt;[10ms, 50ms, 100ms, 500ms, 1s]&lt;/code&gt;, each request latency would be assigned to the corresponding bucket.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Advantages:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Can aggregate data from multiple instances (e.g., multiple service node request latencies) in Prometheus.&lt;/li&gt;
+&lt;li&gt;Suitable for calculating percentiles (such as P50, P95, P99) and observing latency distributions.&lt;/li&gt;
+&lt;li&gt;Provides flexible querying capabilities, supporting dynamic percentile calculation through PromQL.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Disadvantages:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Requires predefining the bucket range; an inappropriate choice can lead to uneven data distribution (e.g., all requests falling into one bucket).&lt;/li&gt;
+&lt;li&gt;The more buckets you have, the greater the storage and computational overhead.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Suitable Scenarios:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Aggregating data from multiple instances.&lt;/li&gt;
+&lt;li&gt;Dynamically adjusting percentiles or analyzing latency distributions.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;summary&#34;&gt;&lt;strong&gt;Summary&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;How it Works:&lt;/strong&gt;
+The Summary component calculates percentiles (such as P50, P95, P99) directly on the client and reports the results to Prometheus.
+It also records the total number and sum of samples for calculating averages.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Advantages:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Does not require predefined buckets, providing percentile results directly.&lt;/li&gt;
+&lt;li&gt;Suitable for precise percentile calculations in single instances.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Disadvantages:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Percentile calculation is performed on the client side, preventing aggregation of data from multiple instances in Prometheus.&lt;/li&gt;
+&lt;li&gt;Adjusting percentiles (e.g., changing from P95 to P99) requires modifying the code and redeploying.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Use Cases:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Single instance monitoring where precise percentile accuracy is a high priority.&lt;/li&gt;
+&lt;li&gt;When aggregation of data from multiple instances is not required.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;key-difference-comparison&#34;&gt;&lt;strong&gt;Key Difference Comparison&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;Histogram&lt;/th&gt;
+&lt;th&gt;Summary&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Quantile Calculation&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Calculated dynamically within Prometheus&lt;/td&gt;
+&lt;td&gt;Calculated directly on the client side&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;key-differences-comparison&#34;&gt;&lt;strong&gt;Key Differences Comparison&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;Histogram&lt;/th&gt;
+&lt;th&gt;Summary&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Multi-Instance Aggregation&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Supported&lt;/td&gt;
+&lt;td&gt;Not Supported&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;key-differences-comparison-1&#34;&gt;&lt;strong&gt;Key Differences Comparison&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;Histogram&lt;/th&gt;
+&lt;th&gt;Summary&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Bin Definition&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Requires pre-defined&lt;/td&gt;
+&lt;td&gt;Does not require&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;key-differences-comparison-2&#34;&gt;&lt;strong&gt;Key Differences Comparison&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;Histogram&lt;/th&gt;
+&lt;th&gt;Summary&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Storage Overhead&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Depends on the number of buckets&lt;/td&gt;
+&lt;td&gt;Fixed overhead&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;key-differences-comparison-3&#34;&gt;&lt;strong&gt;Key Differences Comparison&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;Histogram&lt;/th&gt;
+&lt;th&gt;Summary&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Flexibility&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;High (dynamically adjustable bins)&lt;/td&gt;
+&lt;td&gt;Low (requires code modification to adjust bins)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;summary-1&#34;&gt;Summary
+&lt;/h3&gt;&lt;ul&gt;
 &lt;li&gt;If you need to aggregate data from multiple instances or require flexible quantile adjustments, choose &lt;strong&gt;Histogram&lt;/strong&gt;.&lt;/li&gt;
 &lt;li&gt;If you only need the precise quantiles for a single instance and the quantiles are fixed, choose &lt;strong&gt;Summary&lt;/strong&gt;.&lt;/li&gt;
 &lt;li&gt;In your scenario, given that the service is distributed, it’s recommended to prioritize using &lt;strong&gt;Histogram&lt;/strong&gt; so that all instance data can be aggregated in Prometheus and dynamically calculate quantiles and distributions of latency.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h3 id=&#34;sliding-window-concept-and-its-relationship-with-histograms-and-summaries&#34;&gt;Sliding Window Concept and Its Relationship with Histograms and Summaries
-&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 1. **Sliding Window Concept**
-A sliding window is a time window mechanism used to track changes in data over a period of time. It dynamically reflects the real-time state of the system by continuously moving a temporal range. The characteristics of a sliding window are:
-- **Fixed Time Range:** The length of the window is fixed, such as the last 1 minute or 5 minutes.
-- **Real-Time Updates:** As time passes, the window slides, old data is removed from the window, and new data is added to the window.
-- **Common Uses:** Used for calculating real-time metrics (such as request rate, average, percentiles, etc.).
-In Prometheus, sliding windows are typically implemented through query functions (like `rate()`, `avg_over_time()` ).
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h4 id=&#34;2-sliding-window-and-histogram-relationship&#34;&gt;2. &lt;strong&gt;Sliding Window and Histogram Relationship&lt;/strong&gt;
-&lt;/h4&gt;&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Histogram Data Structure:&lt;/strong&gt; &lt;br&gt;
-Histograms will bucket sample data and record the count for each bucket. Prometheus periodically scrapes these counts.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Sliding Window Implementation:&lt;/strong&gt;&lt;br&gt;
-In Prometheus, sliding windows can be applied to Histogram data using query statements. For example:
+&lt;h2 id=&#34;sliding-window-concept-and-its-relationship-with-histograms-and-summaries&#34;&gt;Sliding Window Concept and Its Relationship with Histograms and Summaries
+&lt;/h2&gt;&lt;h3 id=&#34;sliding-window-concept&#34;&gt;&lt;strong&gt;Sliding Window Concept&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;A sliding window is a time-windowing mechanism used to analyze changes in data over a period. It dynamically reflects the system&amp;rsquo;s real-time state by continuously moving a temporal range. The key characteristics of a sliding window are:&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;code&gt;rate(http_request_duration_seconds_bucket[5m])&lt;/code&gt;: Calculates the request rate for each bucket over the past 5 minutes.&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))&lt;/code&gt;: Calculates the 95th percentile value over the past 5 minutes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fixed Time Range:&lt;/strong&gt; The length of the window is fixed, such as the last 1 minute or 5 minutes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Real-Time Updates:&lt;/strong&gt; As time passes, the window slides, old data is removed from the window, and new data is added to the window.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Common Uses:&lt;/strong&gt; Used for calculating real-time metrics (such as request rates, averages, percentiles, etc.).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;In Prometheus, sliding windows are typically implemented using query functions (like &lt;code&gt;rate()&lt;/code&gt;, &lt;code&gt;avg_over_time()&lt;/code&gt;).&lt;/p&gt;
+&lt;h3 id=&#34;sliding-window-and-histogram-relationship&#34;&gt;&lt;strong&gt;Sliding Window and Histogram Relationship&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Histogram Data Structure:&lt;/strong&gt;
+A histogram will bin sample data and record the count for each bucket. Prometheus periodically scrapes these counts.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Sliding Window Implementation:&lt;/strong&gt;
+In Prometheus, sliding windows can be applied to histogram data using query statements. For example:
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;rate(http_request_duration_seconds_bucket[5m])&lt;/code&gt;: Calculates the request rate within each bucket over the past 5 minutes.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))&lt;/code&gt;: Calculates the 95th percentile of the request duration over the past 5 minutes.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Advantages:&lt;/strong&gt;
 &lt;ul&gt;
-&lt;li&gt;Sliding windows can dynamically reflect the request latency distribution for recent periods.&lt;/li&gt;
-&lt;li&gt;The bucketting mechanism of Histograms combined with sliding windows can efficiently calculate percentiles and distributions.&lt;/li&gt;
+&lt;li&gt;Sliding windows can dynamically reflect the recent request latency distribution.&lt;/li&gt;
+&lt;li&gt;The binning mechanism of histograms combined with sliding windows allows for efficient calculation of percentiles and distributions.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
-&lt;h4 id=&#34;3-sliding-window-and-summary-relationship&#34;&gt;3. &lt;strong&gt;Sliding Window and Summary Relationship&lt;/strong&gt;
-&lt;/h4&gt;&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Summary Data Structure&lt;/strong&gt;:
+&lt;h3 id=&#34;sliding-window-and-summary-relationship&#34;&gt;&lt;strong&gt;Sliding Window and Summary Relationship&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Summary Data Structure:&lt;/strong&gt;
 Summary calculates percentiles directly on the client side and reports them to Prometheus. It also records the total sample count and sum.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Sliding Window Implementation&lt;/strong&gt;:
+&lt;li&gt;&lt;strong&gt;Sliding Window Implementation:&lt;/strong&gt;
 In Prometheus, sliding windows can be applied to Summary data using query statements. For example:
 &lt;ul&gt;
 &lt;li&gt;&lt;code&gt;rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])&lt;/code&gt;: Calculates the average request duration over the past 5 minutes.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Limitations&lt;/strong&gt;:
+&lt;li&gt;&lt;strong&gt;Limitations:&lt;/strong&gt;
 &lt;ul&gt;
-&lt;li&gt;Summary percentiles are calculated on the client side and cannot be recalculated in Prometheus, so support for sliding windows with percentiles is limited.&lt;/li&gt;
+&lt;li&gt;Summary percentiles are calculated on the client side and cannot be recalculated in Prometheus, therefore support for sliding windows with percentiles is limited.&lt;/li&gt;
 &lt;li&gt;Sliding windows cannot directly operate on Summary percentiles when aggregating data from multiple instances.&lt;/li&gt;
 &lt;/ul&gt;
 &lt;/li&gt;
 &lt;/ul&gt;
-&lt;h4 id=&#34;4-sliding-window-applicability&#34;&gt;4. &lt;strong&gt;Sliding Window Applicability&lt;/strong&gt;
-&lt;/h4&gt;&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Real-time Monitoring:&lt;/strong&gt; Sliding windows are suitable for monitoring the real-time state of systems, such as request rates over the last minute or latency distributions.&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Anomaly Detection:&lt;/strong&gt; By using a sliding window, it’s possible to quickly identify short-term anomalies (e.g., sudden increase in request latency).&lt;/li&gt;
+&lt;h3 id=&#34;sliding-window-applicability&#34;&gt;&lt;strong&gt;Sliding Window Applicability&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Real-time Monitoring:&lt;/strong&gt; Sliding windows are suitable for monitoring system real-time status, such as request rates over the last minute and latency distributions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Anomaly Detection:&lt;/strong&gt;  By using a sliding window, it’s possible to quickly identify short-term anomalies (e.g., sudden increase in request latency).&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Dynamic Analysis:&lt;/strong&gt; Sliding windows can dynamically reflect changes in system trends rather than static global statistics.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;pre&gt;&lt;code class=&#34;language-markdown&#34;&gt;#### 5. **Summary**
-
-- **Histogram** combined with a sliding window can dynamically calculate percentiles (such as P95, P99) and request latency distributions, suitable for monitoring distributed systems.
-- **Summary** combined with a sliding window can calculate simple metrics such as averages, but lacks flexibility when it comes to percentiles and does not support multi-instance aggregation.
-
-In your scenario, due to the need to monitor extreme request latencies (such as P99) and the average latency of most requests, we recommend using **Histogram** combined with a sliding window to dynamically analyze system performance.
-&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;summary-2&#34;&gt;Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Histogram&lt;/strong&gt; combined with a sliding window can dynamically calculate percentiles (such as P95, P99) and request latency distributions, suitable for monitoring distributed systems.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Summary&lt;/strong&gt; combined with a sliding window can calculate simple metrics such as averages, but lacks flexibility regarding percentiles and does not support multi-instance aggregation.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;In your scenario, due to the need to monitor extreme request latencies (such as P99) and the average latency of most requests, it is recommended to use &lt;strong&gt;Histogram&lt;/strong&gt; and combine it with a sliding window query to dynamically analyze system performance.&lt;/p&gt;
 </description>
         </item>
         
