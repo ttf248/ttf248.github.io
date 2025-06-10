@@ -6,6 +6,105 @@
         <description>Recent content in c&#43;&#43; on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/cpp/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>内存布局和二进制兼容性</title>
+        <link>https://ttf248.life/p/memory-layout-and-binary-compatibility/</link>
+        <pubDate>Tue, 10 Jun 2025 18:53:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/memory-layout-and-binary-compatibility/</guid>
+        <description>&lt;p&gt;C++ Linux 服务发生崩溃。服务依赖于某个静态库进行编译。&lt;/p&gt;
+&lt;p&gt;静态库执行了修改，头文件增加了成员变量，重新发布了静态的二进制库文件&lt;/p&gt;
+&lt;p&gt;服务依赖新的二进制库文件，能正常编译，运行就会崩溃，崩溃的地方明显没问题，有点类似上次编译器升级的崩溃，未定义行为，崩溃的堆栈不可信。
+更新服务编译时依赖的头文件，能正常变异，运行也都正常&lt;/p&gt;
+&lt;p&gt;详细解释这是为什么，涉及到什么计算机的知识，我猜测和内存布局相关，举例进行详细说明。&lt;/p&gt;
+&lt;p&gt;这是一个典型的由于静态库的头文件和二进制库文件不匹配导致的崩溃问题，确实与内存布局相关。以下是详细解释：&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;问题分析&#34;&gt;问题分析
+&lt;/h2&gt;&lt;p&gt;静态库的头文件定义了类的结构（包括成员变量、方法等），而静态库的二进制文件包含了实现代码。在编译服务时，编译器会根据头文件中的类定义来生成代码，包括内存布局和访问方式。如果头文件和静态库的二进制文件不匹配，就可能导致运行时的未定义行为。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;关键知识点&#34;&gt;关键知识点
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;内存布局&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;C++ 中，类的成员变量在内存中的布局是由编译器根据头文件定义决定的。&lt;/li&gt;
+&lt;li&gt;如果头文件增加了成员变量，类的内存布局会发生变化。例如，新增成员变量可能会导致类的大小（&lt;code&gt;sizeof&lt;/code&gt;）增加，或者成员变量的偏移量发生变化。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;二进制兼容性&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;静态库的二进制文件是基于头文件生成的。如果服务编译时使用旧的头文件，而运行时链接的是新的静态库二进制文件，服务的代码会按照旧的内存布局访问类的成员变量，而静态库的实现代码则按照新的内存布局操作。这种不一致会导致未定义行为。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;未定义行为&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;未定义行为可能表现为崩溃、错误的堆栈信息、甚至程序运行结果异常。这是因为程序在访问内存时可能访问到错误的地址或未初始化的区域。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;举例说明&#34;&gt;举例说明
+&lt;/h2&gt;&lt;p&gt;假设静态库的头文件原来定义了以下类：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;静态库的二进制文件是基于上述定义编译的。&lt;/p&gt;
+&lt;p&gt;后来头文件被修改为：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    int b;  // 新增成员变量
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;新的静态库二进制文件是基于修改后的头文件编译的。&lt;/p&gt;
+&lt;p&gt;如果服务编译时仍然使用旧的头文件，以下问题可能发生：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;内存布局不一致&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;服务认为 &lt;code&gt;MyClass&lt;/code&gt; 的大小是 &lt;code&gt;sizeof(int)&lt;/code&gt;，而静态库认为它是 &lt;code&gt;sizeof(int) * 2&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;服务访问 &lt;code&gt;MyClass&lt;/code&gt; 的成员变量时，可能会访问到错误的内存地址。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;方法调用问题&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;如果静态库的实现代码依赖新增的成员变量（如 &lt;code&gt;b&lt;/code&gt;），而服务的代码没有正确初始化 &lt;code&gt;b&lt;/code&gt;，运行时可能会导致崩溃。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;解决方法&#34;&gt;解决方法
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;头文件和二进制文件保持一致&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;在服务编译时，确保使用与静态库二进制文件匹配的头文件。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;避免二进制不兼容修改&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;如果需要修改类的定义，尽量避免直接增加成员变量，可以通过继承或其他方式实现。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;重新编译所有依赖项&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;当静态库发生修改时，重新编译所有依赖该库的服务，确保头文件和二进制文件一致。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结
+&lt;/h2&gt;&lt;p&gt;这个问题的根本原因是头文件和二进制文件的不一致导致了内存布局的错误。C++ 的编译器在编译时根据头文件生成代码，而运行时的行为依赖于二进制文件。如果两者不匹配，就会导致未定义行为。通过确保头文件和二进制文件的一致性，可以避免类似问题。&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>C&#43;&#43; 位操作基础：按位取值与标志位设置</title>
         <link>https://ttf248.life/p/cpp-bitwise-operations-flags/</link>
         <pubDate>Fri, 17 Jan 2025 02:23:56 +0800</pubDate>

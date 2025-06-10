@@ -6,7 +6,98 @@
         <description>Recent content in Computer on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Fri, 06 Jun 2025 19:02:54 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/categories/computer/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Wed, 11 Jun 2025 00:28:57 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/categories/computer/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Memory Layout and Binary Compatibility</title>
+        <link>https://ttf248.life/en/p/memory-layout-and-binary-compatibility/</link>
+        <pubDate>Tue, 10 Jun 2025 18:53:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/memory-layout-and-binary-compatibility/</guid>
+        <description>&lt;p&gt;C++ service crashed. The service depends on a static library for compilation.
+The static library made modifications, adding members to the header file and re-publishing the binary static library file.
+The service relies on the new binary library file, compiles and runs normally, but then crashes. The crash point appears fine, similar to the crashes caused by compiler upgrades – undefined behavior, an untrustworthy stack trace.
+Updating the service’s dependent header files allows it to mutate correctly, and running also works normally.
+A detailed explanation is needed, involving computer science knowledge, I suspect it&amp;rsquo;s related to memory layout, with examples for a thorough explanation.&lt;/p&gt;
+&lt;p&gt;This is a typical crash caused by mismatches between static library header files and binary library files. It’s indeed related to memory layout. Here’s a detailed explanation:&lt;/p&gt;
+&lt;h2 id=&#34;problem-analysis&#34;&gt;Problem Analysis
+&lt;/h2&gt;&lt;p&gt;Static libraries’ header files define the structure of classes (including member variables and methods), while their binary files contain the implementation code. During compilation, the compiler generates code based on the class definitions in the header files, including memory layout and access patterns. If the header file and the static library&amp;rsquo;s binary file are not compatible, it can lead to undefined behavior at runtime.&lt;/p&gt;
+&lt;h2 id=&#34;key-concepts&#34;&gt;Key Concepts
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Memory Layout:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;In C++, the layout of class member variables in memory is determined by the compiler based on the header file definition.&lt;/li&gt;
+&lt;li&gt;If a header file adds member variables, the memory layout of the class will change. For example, adding a new member variable may increase the size ( &lt;code&gt;sizeof&lt;/code&gt; ) of the class or change the offset of the member variables.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Binary Compatibility:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Static library binary files are generated based on the header files. If a service is compiled using older header files and links to a new static library binary at runtime, the service&amp;rsquo;s code will access class member variables according to the old memory layout, while the implementation code of the static library operates on the new memory layout. This inconsistency leads to undefined behavior.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Undefined Behavior:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Undefined behavior may manifest as crashes, incorrect stack traces, or even abnormal program execution results. This is because when the program accesses memory, it may access an incorrect address or an uninitialized region.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;examples&#34;&gt;Examples
+&lt;/h2&gt;&lt;p&gt;Let&amp;rsquo;s consider a static library whose header file originally defined the following class:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The binary file of the static library is compiled based on this definition.
+Later, the header file was modified to:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    int b;  // Added member variable
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;A new static library binary file is compiled based on the modified header file.
+If the service compiles using the old header file, the following problems may occur:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Inconsistent Memory Layout:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;The service assumes that &lt;code&gt;MyClass&lt;/code&gt;&amp;rsquo;s size is &lt;code&gt;sizeof(int)&lt;/code&gt;, while the static library assumes it’s &lt;code&gt;sizeof(int) * 2&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;When accessing members of the &lt;code&gt;MyClass&lt;/code&gt; object, the service may access an incorrect memory address.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Method Call Issues:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;If the implementation code in the static library depends on the new member variable (e.g., &lt;code&gt;b&lt;/code&gt;), and the service&amp;rsquo;s code does not correctly initialize &lt;code&gt;b&lt;/code&gt;, a crash may occur at runtime.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;solutions&#34;&gt;Solutions
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Maintain Consistency Between Header Files and Binary Files:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;During service compilation, ensure you are using header files that match the binary file of the static library.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Avoid Incompatible Modifications to Binaries:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;When modifying class definitions, try to avoid directly adding member variables; instead, use inheritance or other methods.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Recompile All Dependent Components:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;When a static library is modified, recompile all services that depend on it to ensure consistency between the header files and binary files.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary
+&lt;/h2&gt;&lt;p&gt;The root cause of this issue is inconsistency between the header file and binary file, leading to errors in memory layout. The C++ compiler generates code based on the header file during compilation, while runtime behavior depends on the binary file. If these two don&amp;rsquo;t match, it results in undefined behavior. Ensuring consistency between the header file and binary file can prevent similar problems.&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>10.243.52.68 also belongs to the local area network.</title>
         <link>https://ttf248.life/en/p/102435268-also-belongs-to-the-local-area-network/</link>
         <pubDate>Fri, 06 Jun 2025 18:46:55 +0800</pubDate>

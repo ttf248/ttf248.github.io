@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>メモリ配置 on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/%E3%83%A1%E3%83%A2%E3%83%AA%E9%85%8D%E7%BD%AE/</link>
+        <description>Recent content in メモリ配置 on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Wed, 11 Jun 2025 00:28:57 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/%E3%83%A1%E3%83%A2%E3%83%AA%E9%85%8D%E7%BD%AE/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>メモリレイアウトとバイナリ互換性</title>
+        <link>https://ttf248.life/ja/p/memory-layout-and-binary-compatibility/</link>
+        <pubDate>Tue, 10 Jun 2025 18:53:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/memory-layout-and-binary-compatibility/</guid>
+        <description>&lt;p&gt;C++ Linux サービスでクラッシュが発生しました。そのサービスは、ある静的ライブラリを使用してコンパイルされています。
+静的ライブラリが変更され、ヘッダーファイルにメンバー変数が追加され、静的なバイナリライブラリが再リリースされました。
+サービスは新しいバイナリライブラリに依存しており、正常にコンパイル・実行されますがクラッシュします。クラッシュ箇所は明らかに問題ありません。以前のコンパイラアップグレード時の未定義動作や、信頼できないスタックトレースと類似しています。
+サービスを再コンパイルする際に、依存するヘッダーファイルを更新することで、正常にビルドおよび実行できるようになりました。
+これはなぜ発生したのか、どのようなコンピュータ知識が関係しているのかを詳しく説明します。メモリレイアウトに関連していると推測し、具体的な例を用いて詳細に説明します。&lt;/p&gt;
+&lt;p&gt;これは典型的な静的ライブラリのヘッダーファイルとバイナリライブラリの不一致によって引き起こされるクラッシュの問題です。確かにメモリレイアウトに関連しています。以下は詳細な説明です。&lt;/p&gt;
+&lt;h2 id=&#34;問題分析&#34;&gt;問題分析
+&lt;/h2&gt;&lt;p&gt;静的ライブラリのヘッダーファイルは、クラスの構造（メンバー変数やメソッドなど）を定義し、静的ライブラリのバイナリファイルには実装コードが含まれています。コンパイル時に、コンパイラはヘッダーファイル内のクラス定義に基づいてコードを生成します。このコードには、メモリレイアウトとアクセス方法も含まれます。ヘッダーファイルと静的ライブラリのバイナリファイルが一致しない場合、実行時の未定義動作を引き起こす可能性があります。&lt;/p&gt;
+&lt;h2 id=&#34;重要な知識点&#34;&gt;重要な知識点
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;メモリレイアウト&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;C++ において、クラスのメンバ変数はヘッダーファイルで定義された内容に基づいてメモリ上に配置されます。&lt;/li&gt;
+&lt;li&gt;ヘッダーファイルにメンバ変数を追加すると、クラスのメモリレイアウトが変化します。例えば、新しいメンバ変数を追加すると、クラスのサイズ（&lt;code&gt;sizeof&lt;/code&gt;）が増加したり、メンバ変数のオフセットが変わったりすることがあります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;二進数互換性&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;静的ライブラリのバイナリファイルはヘッダーファイルに基づいて生成されます。サービスが古いヘッダーファイルを使用してコンパイルし、実行時に新しい静的ライブラリのバイナリファイルをリンクすると、サービスのコードは古いメモリレイアウトでクラスのメンバ変数にアクセスしようとし、静的ライブラリの実装コードは新しいメモリレイアウトで操作します。この不一致により、未定義動作が発生する可能性があります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;未定義動作&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;未定義動作は、クラッシュ、誤ったスタック情報、またはプログラムの実行結果の異常などとして現れることがあります。これは、プログラムがメモリ上の不正なアドレスにアクセスしたり、初期化されていない領域にアクセスしたりする場合に発生します。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;例による説明&#34;&gt;例による説明
+&lt;/h2&gt;&lt;p&gt;以下の前提条件を仮定します。静的ライブラリのヘッダーファイルが以下のように定義されているとします。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;この静的ライブラリのバイナリファイルは、上記の定義に基づいてコンパイルされています。&lt;/p&gt;
+&lt;p&gt;その後、ヘッダーファイルが以下のように変更されます。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    int b;  // 新規メンバー変数
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;新しい静的ライブラリのバイナリファイルは、変更されたヘッダーファイルに基づいてコンパイルされています。&lt;/p&gt;
+&lt;p&gt;サービスがコンパイル時に依然として古いヘッダーファイルを使い続けると、以下の問題が発生する可能性があります。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;メモリレイアウトの一貫性のない問題&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;サービスは &lt;code&gt;MyClass&lt;/code&gt; のサイズを &lt;code&gt;sizeof(int)&lt;/code&gt; と想定し、静的ライブラリは &lt;code&gt;sizeof(int) * 2&lt;/code&gt; と想定します。&lt;/li&gt;
+&lt;li&gt;サービスが &lt;code&gt;MyClass&lt;/code&gt; のメンバー変数にアクセスしようとすると、誤ったメモリアドレスにアクセスする可能性があります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;メソッド呼び出しの問題&lt;/strong&gt;：
+&lt;ul&gt;
+&lt;li&gt;静的ライブラリの実装コードが新規のメンバー変数（例: &lt;code&gt;b&lt;/code&gt;）に依存している場合で、サービスのコードが正しく &lt;code&gt;b&lt;/code&gt; を初期化していない場合、実行時にクラッシュが発生する可能性があります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;解決策&#34;&gt;解決策
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;ヘッダーファイルとバイナリファイルを一致させる&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;サービスをコンパイルする際に、静的ライブラリのバイナリファイルに一致するヘッダーファイルを使用するようにしてください。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;バイナリファイルの互換性がない変更を避ける&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;クラスの定義を変更する必要がある場合は、直接メンバー変数を追加するのではなく、継承やその他の方法で実現することを検討してください。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;依存するすべてのコンポーネントを再コンパイルする&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;静的ライブラリが変更された場合、そのライブラリに依存するすべてのサービスを再コンパイルし、ヘッダーファイルとバイナリファイルを一致させるようにしてください。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;結論&#34;&gt;結論
+&lt;/h2&gt;&lt;p&gt;この問題の根本的な原因は、ヘッダーファイルとバイナリファイルの不一致によってメモリレイアウトが誤っていることである。C++ のコンパイラは、コンパイル時にヘッダーファイルに基づいてコードを生成し、実行時の動作はバイナリファイルに依存する。これらが一致しない場合、未定義の動作を引き起こす可能性がある。ヘッダーファイルとバイナリファイルの整合性を確保することで、同様の問題を防ぐことができる。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

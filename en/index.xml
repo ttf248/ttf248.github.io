@@ -6,7 +6,141 @@
         <description>Recent content on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Sun, 08 Jun 2025 19:03:54 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Wed, 11 Jun 2025 00:28:57 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Memory Layout and Binary Compatibility</title>
+        <link>https://ttf248.life/en/p/memory-layout-and-binary-compatibility/</link>
+        <pubDate>Tue, 10 Jun 2025 18:53:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/memory-layout-and-binary-compatibility/</guid>
+        <description>&lt;p&gt;C++ service crashed. The service depends on a static library for compilation.
+The static library made modifications, adding members to the header file and re-publishing the binary static library file.
+The service relies on the new binary library file, compiles and runs normally, but then crashes. The crash point appears fine, similar to the crashes caused by compiler upgrades – undefined behavior, an untrustworthy stack trace.
+Updating the service’s dependent header files allows it to mutate correctly, and running also works normally.
+A detailed explanation is needed, involving computer science knowledge, I suspect it&amp;rsquo;s related to memory layout, with examples for a thorough explanation.&lt;/p&gt;
+&lt;p&gt;This is a typical crash caused by mismatches between static library header files and binary library files. It’s indeed related to memory layout. Here’s a detailed explanation:&lt;/p&gt;
+&lt;h2 id=&#34;problem-analysis&#34;&gt;Problem Analysis
+&lt;/h2&gt;&lt;p&gt;Static libraries’ header files define the structure of classes (including member variables and methods), while their binary files contain the implementation code. During compilation, the compiler generates code based on the class definitions in the header files, including memory layout and access patterns. If the header file and the static library&amp;rsquo;s binary file are not compatible, it can lead to undefined behavior at runtime.&lt;/p&gt;
+&lt;h2 id=&#34;key-concepts&#34;&gt;Key Concepts
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Memory Layout:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;In C++, the layout of class member variables in memory is determined by the compiler based on the header file definition.&lt;/li&gt;
+&lt;li&gt;If a header file adds member variables, the memory layout of the class will change. For example, adding a new member variable may increase the size ( &lt;code&gt;sizeof&lt;/code&gt; ) of the class or change the offset of the member variables.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Binary Compatibility:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Static library binary files are generated based on the header files. If a service is compiled using older header files and links to a new static library binary at runtime, the service&amp;rsquo;s code will access class member variables according to the old memory layout, while the implementation code of the static library operates on the new memory layout. This inconsistency leads to undefined behavior.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Undefined Behavior:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Undefined behavior may manifest as crashes, incorrect stack traces, or even abnormal program execution results. This is because when the program accesses memory, it may access an incorrect address or an uninitialized region.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;examples&#34;&gt;Examples
+&lt;/h2&gt;&lt;p&gt;Let&amp;rsquo;s consider a static library whose header file originally defined the following class:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The binary file of the static library is compiled based on this definition.
+Later, the header file was modified to:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class MyClass {
+public:
+    int a;
+    int b;  // Added member variable
+    void func();
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;A new static library binary file is compiled based on the modified header file.
+If the service compiles using the old header file, the following problems may occur:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Inconsistent Memory Layout:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;The service assumes that &lt;code&gt;MyClass&lt;/code&gt;&amp;rsquo;s size is &lt;code&gt;sizeof(int)&lt;/code&gt;, while the static library assumes it’s &lt;code&gt;sizeof(int) * 2&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;When accessing members of the &lt;code&gt;MyClass&lt;/code&gt; object, the service may access an incorrect memory address.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Method Call Issues:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;If the implementation code in the static library depends on the new member variable (e.g., &lt;code&gt;b&lt;/code&gt;), and the service&amp;rsquo;s code does not correctly initialize &lt;code&gt;b&lt;/code&gt;, a crash may occur at runtime.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;solutions&#34;&gt;Solutions
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Maintain Consistency Between Header Files and Binary Files:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;During service compilation, ensure you are using header files that match the binary file of the static library.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Avoid Incompatible Modifications to Binaries:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;When modifying class definitions, try to avoid directly adding member variables; instead, use inheritance or other methods.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Recompile All Dependent Components:&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;When a static library is modified, recompile all services that depend on it to ensure consistency between the header files and binary files.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary
+&lt;/h2&gt;&lt;p&gt;The root cause of this issue is inconsistency between the header file and binary file, leading to errors in memory layout. The C++ compiler generates code based on the header file during compilation, while runtime behavior depends on the binary file. If these two don&amp;rsquo;t match, it results in undefined behavior. Ensuring consistency between the header file and binary file can prevent similar problems.&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>2025 Major Events</title>
+        <link>https://ttf248.life/en/p/2025-major-events/</link>
+        <pubDate>Sun, 08 Jun 2025 23:36:01 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/2025-major-events/</guid>
+        <description>&lt;p&gt;Record some scattered thoughts and fragments, so as not to need to write them up separately.&lt;/p&gt;
+&lt;p&gt;Inspired by friends, I also wanted to create a similar sharing page, and &lt;strong&gt;Notes&lt;/strong&gt; has already been developed. However, the homepage display and historical data processing all have minor issues, which led me to think about creating an annual article to achieve a similar effect, and subsequently &lt;strong&gt;AI&lt;/strong&gt; was developed to implement the article pinning function.&lt;/p&gt;
+&lt;h2 id=&#34;february-2025&#34;&gt;February 2025
+&lt;/h2&gt;&lt;h3 id=&#34;deepseek-goes-viral&#34;&gt;DeepSeek Goes Viral
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-02-07&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;On the eve of Chinese New Year, DeepSeek had become a hot topic, attracting widespread attention on social media in just a few days. This sudden surge in popularity was surprising and triggered a chain reaction in the market. Meanwhile, NVIDIA’s stock plummeted, raising concerns among many investors, who conducted large-scale short selling during this period, seemingly pointing to a “carefully orchestrated” situation.&lt;/p&gt;
+&lt;h3 id=&#34;analysis-of-political-elements-in-films-during-the-spring-festival&#34;&gt;Analysis of Political Elements in Films During the Spring Festival
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-02-10&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;It’s been a long time since I went to the Spring Festival film release for the crowds, and this time I watched two movies that felt quite different.&lt;/p&gt;
+&lt;p&gt;This article explores the new changes in 2025&amp;rsquo;s Spring Festival films, focusing on &lt;em&gt;Shanghai Detective 1900&lt;/em&gt; and &lt;em&gt;Nezha: The Devil’s Child&lt;/em&gt;. The former utilizes the backdrop of San Francisco Chinatown in 1900 to depict the discrimination and oppression faced by Chinese people, reflecting the social and political environment. The latter, as an animated film, employs rich metaphorical elements to subtly criticize the current international political landscape – such as the resemblance of Yu Huang Palace to the Pentagon mirroring the American political system, the dollar symbol on the Tian Yuan Ding symbolizing U.S. dollar hegemony, the jade amulet resembling an American green card representing status levels, and the Soul-Destroying Potion like a biochemical weapon reflecting malicious actions. Both films offer a new viewing experience and prompt reflection on the relationship between cinematic art and political expression.&lt;/p&gt;
+&lt;h3 id=&#34;online-vs-offline-movie-ticket-price-differences-were-astonishing&#34;&gt;Online vs. Offline Movie Ticket Price Differences Were Astonishing
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-02-11&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;During the Spring Festival, a family of seven or eight people wanted to see a movie and initially planned to purchase tickets on platforms like Tao Piao Piao and Maoyan. They saw prices of 60 yuan. Luckily, they had a cinema recharge card, which required them to buy tickets at the cinema&amp;rsquo;s front desk, so they asked the staff if there were any discounts available. Surprisingly, the same showtime cost only 35 yuan when purchased directly at the front desk – this price difference was truly astonishing.&lt;/p&gt;
+&lt;h3 id=&#34;nezha-goes-viral&#34;&gt;Nezha Goes Viral
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-02-15&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The explosive popularity of Nezha during the Spring Festival box office has evoked a strange sense of national pride, reminiscent of films like &amp;ldquo;Wolf Warrior&amp;rdquo; and patriotic themes. While there’s been significant progress, it hasn&amp;rsquo;t reached this level. As gamers, many aspects feel overly greasy, and the combat scenes heavily resemble those found in online games. There are already numerous reports of people buying movie tickets for Nezha but not watching the film.&lt;/p&gt;
+&lt;h2 id=&#34;march-2025&#34;&gt;March 2025
+&lt;/h2&gt;&lt;h3 id=&#34;trump-administration-imposes-tariffs-triggering-trade-turmoil&#34;&gt;Trump Administration Imposes Tariffs, Triggering Trade Turmoil
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-03-04&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The United States imposed 25% tariffs on goods from Mexico and Canada, triggering significant volatility in the North American trade chain. Canada announced retaliatory measures against U.S. goods worth $15.5 billion, while Mexico accelerated its signing of a free trade agreement with China to mitigate risks. This led to further diversification of global supply chains, presenting a window for Chinese steel companies to capitalize on domestic substitution of high-end steel materials.&lt;/p&gt;
+&lt;h2 id=&#34;may-2025&#34;&gt;May 2025
+&lt;/h2&gt;&lt;h3 id=&#34;the-tiangong-and-dong-xiyi-effect-a-butterfly-phenomenon&#34;&gt;The Tiangong and Dong Xiyi Effect: A Butterfly Phenomenon
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date:&lt;/strong&gt; 2025-05-07&lt;/p&gt;
+&lt;p&gt;The Peking Union Medical College “4+4” Project (4 years of non-medical undergraduate + 4 years of medical doctorate) focuses on interdisciplinary elite cultivation. In 2025, the Dong Xiyi incident exposed its use of family background (medical/scientific research lineage) to enter the project, with questions regarding the validity of its degrees and allegations of plagiarism in her thesis, exposing contradictions between its elite recruitment model and fairness, as well as unresolved issues surrounding shortened study periods and internship training.&lt;/p&gt;
+&lt;p&gt;Some say it’s a corner of Tiangong (the Space Palace), others claim it&amp;rsquo;s a case of class decline. Dong Xiyi didn’t need to be a doctor; it was her family’s unwillingness to settle for a life less than their own that led her to pursue the Peking Union College 4+4 project.&lt;/p&gt;
+&lt;h3 id=&#34;special-teacher-recruitment--a-sudden-decline&#34;&gt;Special Teacher Recruitment – A Sudden Decline
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-05-12&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The recruitment of special teachers in Jiangxi Province has shown a significant reduction trend from 2020-2025: the number of special teacher recruits plummeted from 6,617 to just 32 (a decrease of 99.5%), while the number of national cadre teachers decreased from 11,324 to 2,146 (a decrease of 81.1%). The proportion of core subjects (Chinese, Mathematics, and English) remained stable but declined in total numbers, while the proportions of music, art, and physical education increased but in limited absolute quantities (e.g., in 2025, they only recruited 2 people each). Policy changes have implemented “retire one, replenish one” personnel adjustments to tighten teacher resources, which are being directed towards vocational training and remote areas, leading to a significant reduction in traditional primary and secondary school positions. In 2025, some subjects planned for recruitment were zero.&lt;/p&gt;
+&lt;h3 id=&#34;the-trade-war-suddenly-paused&#34;&gt;The Trade War Suddenly Paused
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-05-12&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The trade war tariffs have followed a “escalation – retaliation – negotiation” cycle, with the US-China rivalry shifting from tariff confrontation to competition over rules. Although the short-term easing has alleviated market pressure, long-term uncertainty remains, and it’s crucial to monitor WTO rulings, supply chain adjustments, and geopolitical changes&amp;rsquo; sustained impact on the global economy.&lt;/p&gt;
+&lt;p&gt;Individuals aren’t making money beyond their own expectations; the stock market crash triggered by the initial trade war this year is now largely recovered, although countless small investors have been buried along the way.&lt;/p&gt;
+&lt;h2 id=&#34;june-2025&#34;&gt;June 2025
+&lt;/h2&gt;&lt;h3 id=&#34;super-hot-susuper-public-sports-economic-value-emerges&#34;&gt;Super Hot SuSuper: Public Sports Economic Value Emerges
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Date: 2025-06-09&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The Jiangsu Super League (SuSuper) third round of matches saw an average attendance of over 10,000 people, with the “Chu Han Clash” match in Xuzhou Olympic Center drawing 22,198 spectators, breaking the record for amateur events in China. Short videos on platforms like Douyin created buzz and drove cross-city consumption for over 180,000 people, boosting hotel occupancy rates by 20%-30%. Innovative sports commercialization models saw a surge in brand exposure for sponsors such as Jiangsu Bank and Jinshilu, validating the multiplier effect of “Sports + Tourism.”&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>10.243.52.68 also belongs to the local area network.</title>
         <link>https://ttf248.life/en/p/102435268-also-belongs-to-the-local-area-network/</link>
         <pubDate>Fri, 06 Jun 2025 18:46:55 +0800</pubDate>
