@@ -6,7 +6,117 @@
         <description>Recent content in C&#43;&#43; on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Wed, 11 Jun 2025 00:28:57 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/c-/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 19 Jun 2025 13:07:23 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/c-/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>マシン間計算の時間差 (Mashinkan tenkiho no jikanusa)</title>
+        <link>https://ttf248.life/ja/p/cross-machine-computation-time-difference/</link>
+        <pubDate>Thu, 19 Jun 2025 09:45:36 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/cross-machine-computation-time-difference/</guid>
+        <description>&lt;p&gt;既存のグループ内通信プロトコルでは、&lt;code&gt;steady_clock&lt;/code&gt; をタイムスタンプとして使用し、個々のノードの処理時間（レイテンシー）を計算しています。特定の特殊な状況において、メッセージパケット自身のタイムスタンプを使用しましたが、その&lt;strong&gt;自身のもつ&lt;/strong&gt;タイムスタンプは他のマシンから取得されており、結果的に計算されたレイテンシーが異常に大きくなってしまいました。&lt;/p&gt;
+&lt;p&gt;要約：Gemini 2.5 Pro は GPT-4 を完全に凌駕する可能性を秘めている。&lt;/p&gt;
+&lt;h2 id=&#34;問題のトラブルシューティング&#34;&gt;問題のトラブルシューティング
+&lt;/h2&gt;&lt;p&gt;開始当初、出力層のタイムスタンプ計算の問題に注意していなかったので、すべてのサービスを停止して、ローカルアクセスし、ログを分析することにした。あるサービスがずっと停止しないことに気づき、継続的に業務データを送信しているため、手段がなく、通信ポートでパケットキャプチャをして機器の位置を特定した。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;sudo tcpdump -nni any -B 4096 -s 0 -w tmp.pcap port 13100
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;内部ネットワークの状況は複雑で、メッセージがプロキシを経由して転送されていたため、まずローカルサービスでポート13100のパケットを&lt;code&gt;tcpdump&lt;/code&gt;でキャプチャした。次にプロキシサーバーに切り替えて、ポート13100のパケットをキャプチャした。&lt;/p&gt;
+&lt;p&gt;分析の結果、異常に時間がかかるリクエストはすべて深圳オフィスから来ていたため、問題のあるサービスを調査し、そのサービスは上海オフィスにデプロイされていたことがわかった。&lt;/p&gt;
+&lt;h2 id=&#34;steady_clock-と-system_clock-の違い&#34;&gt;steady_clock と system_clock の違い
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;std::steady_clock&lt;/code&gt; と &lt;code&gt;std::system_clock&lt;/code&gt; は、C++ で時間を扱うための主なクロックです。主な違いは以下のとおりです。&lt;/p&gt;
+&lt;h3 id=&#34;stdsystem_clock&#34;&gt;std::system_clock
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;「壁時計時間」 (Wall Clock Time) を表す&lt;/strong&gt;: これは、システム全体で現実世界の時間を指します。これはオペレーティングシステムがディスプレイしている時間と一致しています。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;調整可能&lt;/strong&gt;: このクロックの時間（時刻）は、ユーザーまたはシステムサービス（例：NTP ネットワークタイムプロトコル）によって前後に調整できます。たとえば、手動でシステム時刻を変更したり、システムをタイムサーバーに同期させたりすると、&lt;code&gt;system_clock&lt;/code&gt; の値が跳ね返ります。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;時間間隔の測定には不向き&lt;/strong&gt;: 向こう見えになる可能性があるため、2つの時間点間の時間差を計算するには、負の値や不正確な結果が得られる可能性があります。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;主な用途&lt;/strong&gt;: 現在の日付と時刻を取得し、現実世界の時間に対応する必要があるシナリオ（例：ログ記録用のタイムスタンプ）で使用されます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;stdsteady_clock&#34;&gt;std::steady_clock
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;単調増加クロック (Monotonic Clock)&lt;/strong&gt;: このクロックは、ある開始点から常に安定して前進し、決して減少することはありません。そのレートは固定されている場合もあれば、そうでない場合もあります（ただし通常は固定されています）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;調整不可 (Unadjustable)&lt;/strong&gt;: &lt;code&gt;steady_clock&lt;/code&gt; はシステム時間の変更の影響を受けません。つまり、ユーザーがシステム時間を変更しても、それは引き続き安定して前進し続けます。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;時間間隔の測定に最適 (Best for Measuring Time Intervals)&lt;/strong&gt;: その単調性により、コードの実行時間やタイムアウト待ちなどのシナリオにおける最適な選択肢となり、正確性を保証できます。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;開始点は不確実 (Uncertain Epoch)&lt;/strong&gt;: 周期（epoch）の開始時間は通常システム起動時ですが、これは標準によって保証されているわけではありません。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;異なるマシンで-steady_clock-は同じですか&#34;&gt;異なるマシンで &lt;code&gt;steady_clock&lt;/code&gt; は同じですか？
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;違います。&lt;/strong&gt;
+&lt;code&gt;steady_clock&lt;/code&gt; の値は、異なるマシン間では&lt;strong&gt;比較できません&lt;/strong&gt;。さらに、同一マシンの異なる起動セッション間でも、その値は一貫しません。
+なぜなら、それは&lt;strong&gt;単一のプログラム実行中に&lt;/strong&gt;時間間隔を正確に測定することを目的としており、絶対的な時間点を表すためのものではないからです。その開始点（epoch）は未定義であり、異なるシステムや起動セッションではほぼ常に異なります。&lt;/p&gt;
+&lt;h3 id=&#34;まとめ&#34;&gt;まとめ
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;system_clock&lt;/code&gt;&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;steady_clock&lt;/code&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;種類&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;壁時計&lt;/td&gt;
+&lt;td&gt;一致時計&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;まとめ-1&#34;&gt;まとめ
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;system_clock&lt;/code&gt;&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;steady_clock&lt;/code&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;調整可能か&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;はい、前後に進める&lt;/td&gt;
+&lt;td&gt;いいえ、前進のみ&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;まとめ-2&#34;&gt;まとめ
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;system_clock&lt;/code&gt;&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;steady_clock&lt;/code&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;主な用途&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;現在の日付と時刻を取得&lt;/td&gt;
+&lt;td&gt;時間間隔の測定、タイムアウト処理など&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;まとめ-3&#34;&gt;まとめ
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;system_clock&lt;/code&gt;&lt;/th&gt;
+&lt;th&gt;&lt;code&gt;steady_clock&lt;/code&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;複数マシン/再起動での比較&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;可能 (同期後に)&lt;/td&gt;
+&lt;td&gt;不可能&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;まとめ-4&#34;&gt;まとめ
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;簡単に言うと&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;「今、何時ですか？」を知りたい場合は、&lt;code&gt;system_clock&lt;/code&gt; を使用します。&lt;/li&gt;
+&lt;li&gt;「このコードは実行されてどれくらい時間がかかりましたか？」を知りたい場合は、&lt;code&gt;steady_clock&lt;/code&gt; を使用します。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
         <title>メモリレイアウトとバイナリ互換性</title>
         <link>https://ttf248.life/ja/p/memory-layout-and-binary-compatibility/</link>
         <pubDate>Tue, 10 Jun 2025 18:53:02 +0800</pubDate>
