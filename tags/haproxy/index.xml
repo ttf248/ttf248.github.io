@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>HAProxy on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/haproxy/</link>
+        <description>Recent content in HAProxy on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language><atom:link href="https://ttf248.life/tags/haproxy/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Keepalived&#43;HAProxy 搭建高可用负载均衡</title>
+        <link>https://ttf248.life/p/keepalived-haproxy-for-high-availability-load-balancing/</link>
+        <pubDate>Fri, 19 Sep 2025 09:45:55 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/keepalived-haproxy-for-high-availability-load-balancing/</guid>
+        <description>&lt;p&gt;在现代互联网架构中，高可用性是系统设计的重要考量。本文将详细介绍如何使用Keepalived和HAProxy搭建高可用负载均衡集群，确保服务的连续性和可靠性。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;实际配置部分没有落地验证，文章正文规划依赖AI完成&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/keepalived-haproxy-for-high-availability-load-balancing/20250919095219.png&#34;
+	width=&#34;566&#34;
+	height=&#34;452&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;任务规划&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;125&#34;
+		data-flex-basis=&#34;300px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;h2 id=&#34;技术简介&#34;&gt;技术简介
+&lt;/h2&gt;&lt;h3 id=&#34;keepalived-简介&#34;&gt;Keepalived 简介
+&lt;/h3&gt;&lt;p&gt;Keepalived是一个基于VRRP（Virtual Router Redundancy Protocol）协议的高可用解决方案，主要用于实现服务器的故障切换和负载均衡。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;主要特性：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;VRRP协议支持&lt;/strong&gt;：实现虚拟IP的主备切换&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;健康检查&lt;/strong&gt;：监控服务状态，自动故障转移&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;配置简单&lt;/strong&gt;：通过配置文件即可实现复杂的高可用架构&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;轻量级&lt;/strong&gt;：资源占用少，性能优异&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;工作原理：&lt;/strong&gt;
+Keepalived通过VRRP协议在多台服务器之间共享一个虚拟IP地址。正常情况下，主服务器持有虚拟IP并提供服务；当主服务器发生故障时，备用服务器会自动接管虚拟IP，确保服务不中断。&lt;/p&gt;
+&lt;h3 id=&#34;haproxy-简介&#34;&gt;HAProxy 简介
+&lt;/h3&gt;&lt;p&gt;HAProxy是一个高性能的负载均衡器和反向代理服务器，广泛应用于高并发场景。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;主要功能：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;负载均衡&lt;/strong&gt;：支持多种负载均衡算法&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;健康检查&lt;/strong&gt;：实时监控后端服务器状态&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSL终结&lt;/strong&gt;：支持HTTPS流量处理&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;统计监控&lt;/strong&gt;：提供详细的运行状态统计&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;应用场景：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Web服务负载均衡&lt;/li&gt;
+&lt;li&gt;数据库连接池&lt;/li&gt;
+&lt;li&gt;微服务网关&lt;/li&gt;
+&lt;li&gt;API接口代理&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;架构设计&#34;&gt;架构设计
+&lt;/h2&gt;&lt;h3 id=&#34;整体架构&#34;&gt;整体架构
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;                    ┌─────────────────┐
+                    │   Client        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  Virtual IP     │
+                    │  (VIP)          │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (Master)       │◄────────────►│   (Backup)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   Backend     │ │   Backend   │ │   Backend     │
+└───────────────┘ └─────────────┘ └───────────────┘
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;组件说明&#34;&gt;组件说明
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;虚拟IP (VIP)&lt;/strong&gt;：客户端访问的统一入口&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HAProxy主备节点&lt;/strong&gt;：提供负载均衡服务，通过Keepalived实现高可用&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;后端服务器&lt;/strong&gt;：实际提供服务的Web服务器&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;环境准备&#34;&gt;环境准备
+&lt;/h2&gt;&lt;h3 id=&#34;服务器规划&#34;&gt;服务器规划
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;角色&lt;/th&gt;
+&lt;th&gt;IP地址&lt;/th&gt;
+&lt;th&gt;主机名&lt;/th&gt;
+&lt;th&gt;服务&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;HAProxy主节点&lt;/td&gt;
+&lt;td&gt;192.168.1.10&lt;/td&gt;
+&lt;td&gt;lb-master&lt;/td&gt;
+&lt;td&gt;HAProxy + Keepalived&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;HAProxy备节点&lt;/td&gt;
+&lt;td&gt;192.168.1.11&lt;/td&gt;
+&lt;td&gt;lb-backup&lt;/td&gt;
+&lt;td&gt;HAProxy + Keepalived&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;虚拟IP&lt;/td&gt;
+&lt;td&gt;192.168.1.100&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;VIP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Web服务器1&lt;/td&gt;
+&lt;td&gt;192.168.1.20&lt;/td&gt;
+&lt;td&gt;web1&lt;/td&gt;
+&lt;td&gt;Nginx/Apache&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Web服务器2&lt;/td&gt;
+&lt;td&gt;192.168.1.21&lt;/td&gt;
+&lt;td&gt;web2&lt;/td&gt;
+&lt;td&gt;Nginx/Apache&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;Web服务器3&lt;/td&gt;
+&lt;td&gt;192.168.1.22&lt;/td&gt;
+&lt;td&gt;web3&lt;/td&gt;
+&lt;td&gt;Nginx/Apache&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;软件安装&#34;&gt;软件安装
+&lt;/h3&gt;&lt;p&gt;在HAProxy主备节点上安装必要软件：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# CentOS/RHEL
+yum install -y haproxy keepalived
+
+# Ubuntu/Debian
+apt-get update
+apt-get install -y haproxy keepalived
+
+# 启用服务开机自启
+systemctl enable haproxy keepalived
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;keepalived-配置&#34;&gt;Keepalived 配置
+&lt;/h2&gt;&lt;h3 id=&#34;主节点配置-lb-master&#34;&gt;主节点配置 (lb-master)
+&lt;/h3&gt;&lt;p&gt;创建配置文件 &lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! Configuration File for keepalived
+
+global_defs {
+    router_id LB_MASTER
+    script_user root
+    enable_script_security
+}
+
+# 检查HAProxy服务状态的脚本
+vrrp_script chk_haproxy {
+    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface eth0
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+    
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+    
+    track_script {
+        chk_haproxy
+    }
+    
+    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
+    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
+    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;备节点配置-lb-backup&#34;&gt;备节点配置 (lb-backup)
+&lt;/h3&gt;&lt;p&gt;创建配置文件 &lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! Configuration File for keepalived
+
+global_defs {
+    router_id LB_BACKUP
+    script_user root
+    enable_script_security
+}
+
+vrrp_script chk_haproxy {
+    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state BACKUP
+    interface eth0
+    virtual_router_id 51
+    priority 90
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+    
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+    
+    track_script {
+        chk_haproxy
+    }
+    
+    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
+    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
+    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;健康检查脚本&#34;&gt;健康检查脚本
+&lt;/h3&gt;&lt;p&gt;创建HAProxy健康检查脚本 &lt;code&gt;/etc/keepalived/check_haproxy.sh&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+# 检查HAProxy进程是否运行
+if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+    # 尝试启动HAProxy
+    systemctl start haproxy
+    sleep 2
+    
+    # 再次检查，如果还是没有运行则退出
+    if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+        exit 1
+    fi
+fi
+
+# 检查HAProxy端口是否监听
+if ! netstat -tuln | grep -q &amp;quot;:80 &amp;quot;; then
+    exit 1
+fi
+
+exit 0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;状态通知脚本&#34;&gt;状态通知脚本
+&lt;/h3&gt;&lt;p&gt;创建状态通知脚本 &lt;code&gt;/etc/keepalived/notify.sh&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+TYPE=$1
+NAME=$2
+STATE=$3
+
+case $STATE in
+    &amp;quot;MASTER&amp;quot;)
+        echo &amp;quot;$(date): Became MASTER&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    &amp;quot;BACKUP&amp;quot;)
+        echo &amp;quot;$(date): Became BACKUP&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    &amp;quot;FAULT&amp;quot;)
+        echo &amp;quot;$(date): Fault detected&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    *)
+        echo &amp;quot;$(date): Unknown state: $STATE&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+esac
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;设置脚本执行权限：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;chmod +x /etc/keepalived/check_haproxy.sh
+chmod +x /etc/keepalived/notify.sh
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;haproxy-配置&#34;&gt;HAProxy 配置
+&lt;/h2&gt;&lt;h3 id=&#34;主配置文件&#34;&gt;主配置文件
+&lt;/h3&gt;&lt;p&gt;在主备节点上创建相同的HAProxy配置文件 &lt;code&gt;/etc/haproxy/haproxy.cfg&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;global
+    log 127.0.0.1:514 local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+
+defaults
+    mode http
+    log global
+    option httplog
+    option dontlognull
+    option log-health-checks
+    option forwardfor except 127.0.0.0/8
+    option redispatch
+    retries 3
+    timeout http-request 10s
+    timeout queue 1m
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+    timeout http-keep-alive 10s
+    timeout check 10s
+    maxconn 3000
+
+# 统计页面配置
+listen stats
+    bind *:8080
+    stats enable
+    stats uri /stats
+    stats realm HAProxy\ Statistics
+    stats auth admin:password123
+    stats refresh 30s
+
+# 前端配置
+frontend web_frontend
+    bind *:80
+    default_backend web_servers
+
+# 后端服务器配置
+backend web_servers
+    balance roundrobin
+    option httpchk GET /health
+    
+    server web1 192.168.1.20:80 check inter 2000 rise 2 fall 3
+    server web2 192.168.1.21:80 check inter 2000 rise 2 fall 3
+    server web3 192.168.1.22:80 check inter 2000 rise 2 fall 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;配置说明&#34;&gt;配置说明
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;全局配置：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;log&lt;/code&gt;：日志配置&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;chroot&lt;/code&gt;：安全沙箱&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;stats socket&lt;/code&gt;：管理接口&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;daemon&lt;/code&gt;：后台运行&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;默认配置：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;mode http&lt;/code&gt;：HTTP模式&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;balance roundrobin&lt;/code&gt;：轮询负载均衡&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;option httpchk&lt;/code&gt;：HTTP健康检查&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;timeout&lt;/code&gt;：各种超时设置&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;后端服务器：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;check&lt;/code&gt;：启用健康检查&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;inter 2000&lt;/code&gt;：检查间隔2秒&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;rise 2&lt;/code&gt;：连续2次成功标记为可用&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;fall 3&lt;/code&gt;：连续3次失败标记为不可用&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;服务启动与测试&#34;&gt;服务启动与测试
+&lt;/h2&gt;&lt;h3 id=&#34;启动服务&#34;&gt;启动服务
+&lt;/h3&gt;&lt;p&gt;在主备节点上启动服务：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 启动HAProxy
+systemctl start haproxy
+systemctl status haproxy
+
+# 启动Keepalived
+systemctl start keepalived
+systemctl status keepalived
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;验证vip绑定&#34;&gt;验证VIP绑定
+&lt;/h3&gt;&lt;p&gt;检查虚拟IP是否正确绑定：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 在主节点查看IP地址
+ip addr show
+
+# 应该能看到类似输出：
+# eth0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0
+#     inet 192.168.1.100/24 scope global secondary eth0:0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;功能测试&#34;&gt;功能测试
+&lt;/h3&gt;&lt;h4 id=&#34;1-负载均衡测试&#34;&gt;1. 负载均衡测试
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 多次访问VIP，观察请求分发
+for i in {1..10}; do
+    curl -s http://192.168.1.100/ | grep &amp;quot;Server&amp;quot;
+done
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;2-故障切换测试&#34;&gt;2. 故障切换测试
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 在主节点停止HAProxy服务
+systemctl stop haproxy
+
+# 观察VIP是否切换到备节点
+ip addr show
+
+# 测试服务是否正常
+curl http://192.168.1.100/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;3-后端服务器故障测试&#34;&gt;3. 后端服务器故障测试
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 停止其中一台Web服务器
+# 在web1服务器上：
+systemctl stop nginx
+
+# 观察HAProxy统计页面
+curl http://192.168.1.100:8080/stats
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;监控与维护&#34;&gt;监控与维护
+&lt;/h2&gt;&lt;h3 id=&#34;日志监控&#34;&gt;日志监控
+&lt;/h3&gt;&lt;h4 id=&#34;haproxy日志&#34;&gt;HAProxy日志
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看HAProxy日志
+tail -f /var/log/haproxy.log
+
+# 查看访问统计
+grep &amp;quot;HTTP/1.1&amp;quot; /var/log/haproxy.log | tail -20
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;keepalived日志&#34;&gt;Keepalived日志
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看Keepalived日志
+tail -f /var/log/messages | grep keepalived
+
+# 查看状态变化日志
+tail -f /var/log/keepalived-state.log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;性能监控&#34;&gt;性能监控
+&lt;/h3&gt;&lt;h4 id=&#34;统计页面监控&#34;&gt;统计页面监控
+&lt;/h4&gt;&lt;p&gt;访问HAProxy统计页面：&lt;code&gt;http://192.168.1.100:8080/stats&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;关键指标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Session Rate&lt;/strong&gt;：会话速率&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Session Total&lt;/strong&gt;：总会话数&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Bytes In/Out&lt;/strong&gt;：流量统计&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Time&lt;/strong&gt;：响应时间&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Server Status&lt;/strong&gt;：服务器状态&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;命令行监控&#34;&gt;命令行监控
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看HAProxy进程状态
+ps aux | grep haproxy
+
+# 查看端口监听状态
+netstat -tuln | grep -E &amp;quot;(80|8080)&amp;quot;
+
+# 查看连接数
+ss -ant | grep :80 | wc -l
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;常见问题排查&#34;&gt;常见问题排查
+&lt;/h2&gt;&lt;h3 id=&#34;1-vip无法切换&#34;&gt;1. VIP无法切换
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;问题现象：&lt;/strong&gt;
+主节点故障后，VIP没有切换到备节点&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;排查步骤：&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 检查Keepalived配置
+keepalived -t -f /etc/keepalived/keepalived.conf
+
+# 查看VRRP通信
+tcpdump -i eth0 vrrp
+
+# 检查防火墙设置
+iptables -L | grep vrrp
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;确保VRRP协议通信正常&lt;/li&gt;
+&lt;li&gt;检查网络接口配置&lt;/li&gt;
+&lt;li&gt;验证认证密码一致性&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-健康检查失败&#34;&gt;2. 健康检查失败
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;问题现象：&lt;/strong&gt;
+后端服务器被标记为不可用&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;排查步骤：&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 手动执行健康检查
+curl -I http://192.168.1.20/health
+
+# 查看HAProxy日志
+grep &amp;quot;Health check&amp;quot; /var/log/haproxy.log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;确保健康检查URL可访问&lt;/li&gt;
+&lt;li&gt;调整检查间隔和阈值&lt;/li&gt;
+&lt;li&gt;检查后端服务器状态&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-负载不均衡&#34;&gt;3. 负载不均衡
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;问题现象：&lt;/strong&gt;
+请求没有均匀分发到后端服务器&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;排查步骤：&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看统计页面
+curl -s http://192.168.1.100:8080/stats
+
+# 分析访问日志
+awk &#39;{print $6}&#39; /var/log/haproxy.log | sort | uniq -c
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;检查负载均衡算法配置&lt;/li&gt;
+&lt;li&gt;验证服务器权重设置&lt;/li&gt;
+&lt;li&gt;考虑会话保持需求&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;优化建议&#34;&gt;优化建议
+&lt;/h2&gt;&lt;h3 id=&#34;1-性能优化&#34;&gt;1. 性能优化
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 调整系统参数
+echo &#39;net.core.somaxconn = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
+echo &#39;net.ipv4.tcp_max_syn_backlog = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
+sysctl -p
+
+# 优化HAProxy配置
+# 增加maxconn值
+# 调整timeout参数
+# 启用压缩功能
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;2-安全加固&#34;&gt;2. 安全加固
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 限制统计页面访问
+# 在haproxy.cfg中添加ACL规则
+acl allowed_ips src 192.168.1.0/24
+http-request deny if !allowed_ips
+
+# 启用SSL/TLS
+bind *:443 ssl crt /etc/ssl/certs/server.pem
+redirect scheme https if !{ ssl_fc }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;3-监控告警&#34;&gt;3. 监控告警
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 集成监控系统
+# 配置Prometheus监控
+# 设置Grafana仪表板
+# 配置告警规则
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结
+&lt;/h2&gt;&lt;p&gt;通过Keepalived和HAProxy的组合，我们成功构建了一个高可用的负载均衡集群。这个方案具有以下优势：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;高可用性&lt;/strong&gt;：通过VRRP协议实现自动故障切换&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;负载均衡&lt;/strong&gt;：智能分发请求，提高系统性能&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;健康检查&lt;/strong&gt;：实时监控服务状态，自动剔除故障节点&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;易于维护&lt;/strong&gt;：配置简单，管理方便&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;成本效益&lt;/strong&gt;：使用开源软件，降低运维成本&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;在生产环境中部署时，还需要考虑网络安全、监控告警、备份恢复等方面的完善，以确保系统的稳定可靠运行。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
