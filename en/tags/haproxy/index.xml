@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>HAProxy on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/haproxy/</link>
+        <description>Recent content in HAProxy on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Fri, 19 Sep 2025 10:05:47 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/haproxy/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Keepalived &#43; HAProxy for High Availability Load Balancing</title>
+        <link>https://ttf248.life/en/p/keepalived-haproxy-for-high-availability-load-balancing/</link>
+        <pubDate>Fri, 19 Sep 2025 09:45:55 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/keepalived-haproxy-for-high-availability-load-balancing/</guid>
+        <description>&lt;p&gt;In modern internet architectures, high availability is a crucial consideration in system design. This article will detail how to use Keepalived and HAProxy to build a highly available load balancing cluster, ensuring service continuity and reliability.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;The practical configuration section was not validated, and the article planning relies on AI completion&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/keepalived-haproxy-for-high-availability-load-balancing/20250919095219.png&#34;
+	width=&#34;566&#34;
+	height=&#34;452&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;Task Planning&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;125&#34;
+		data-flex-basis=&#34;300px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;(Since I cannot see the image, I&amp;rsquo;m simply repeating the markdown as it was provided.)&lt;/p&gt;
+&lt;h2 id=&#34;technical-overview&#34;&gt;Technical Overview
+&lt;/h2&gt;&lt;h3 id=&#34;keepalived-introduction&#34;&gt;Keepalived Introduction
+&lt;/h3&gt;&lt;p&gt;Keepalived is a high availability solution based on the VRRP (Virtual Router Redundancy Protocol) protocol, primarily used to implement server failover and load balancing.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Key Features:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;VRRP Protocol Support&lt;/strong&gt;: Enables virtual IP address master/slave switching&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Health Checks&lt;/strong&gt;: Monitors service status and automatically performs failover&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Simple Configuration&lt;/strong&gt;: Complex high availability architectures can be achieved through configuration files alone&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Lightweight&lt;/strong&gt;: Low resource consumption and excellent performance&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Working Principle:&lt;/strong&gt;
+Keepalived utilizes the VRRP protocol to share a virtual IP address across multiple servers. In normal operation, the master server holds the virtual IP and provides services; when the master server fails, the backup server automatically takes over the virtual IP, ensuring service continuity.&lt;/p&gt;
+&lt;h3 id=&#34;haproxy-overview&#34;&gt;HAProxy Overview
+&lt;/h3&gt;&lt;p&gt;HAProxy is a high-performance load balancer and reverse proxy server, widely used in high concurrency scenarios.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Key Features:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Load Balancing:&lt;/strong&gt; Supports various load balancing algorithms&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Health Checks:&lt;/strong&gt; Monitors backend server status in real-time&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSL Termination:&lt;/strong&gt; Supports HTTPS traffic handling&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Statistical Monitoring:&lt;/strong&gt; Provides detailed running state statistics&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Application Scenarios:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Web service load balancing&lt;/li&gt;
+&lt;li&gt;Database connection pooling&lt;/li&gt;
+&lt;li&gt;Microservice gateways&lt;/li&gt;
+&lt;li&gt;API interface proxy&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;architecture-design&#34;&gt;Architecture Design
+&lt;/h2&gt;&lt;h3 id=&#34;overall-architecture&#34;&gt;Overall Architecture
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;                    ┌─────────────────┐
+                    │   Client        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  Virtual IP     │
+                    │  (VIP)          │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (Master)       │◄────────────►│   (Backup)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   Backend     │ │   Backend   │ │   Backend     │
+└───────────────┘ └─────────────┘ └───────────────┘
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;component-description&#34;&gt;Component Description
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Virtual IP (VIP)&lt;/strong&gt;: A unified entry point for clients to access.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HAProxy Master-Backup Nodes&lt;/strong&gt;: Provides load balancing services and achieves high availability through Keepalived.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Backend Servers&lt;/strong&gt;: The actual web servers providing the service.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;environment-setup&#34;&gt;Environment Setup
+&lt;/h2&gt;&lt;h3 id=&#34;server-planning&#34;&gt;Server Planning
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Role&lt;/th&gt;
+&lt;th&gt;IP Address&lt;/th&gt;
+&lt;th&gt;Hostname&lt;/th&gt;
+&lt;th&gt;Service&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;HAProxy Master Node&lt;/td&gt;
+&lt;td&gt;192.168.1.10&lt;/td&gt;
+&lt;td&gt;lb-master&lt;/td&gt;
+&lt;td&gt;HAProxy + Keepalived&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;server-planning-1&#34;&gt;Server Planning
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Role&lt;/th&gt;
+&lt;th&gt;IP Address&lt;/th&gt;
+&lt;th&gt;Hostname&lt;/th&gt;
+&lt;th&gt;Service&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;HAProxy Backup Node&lt;/td&gt;
+&lt;td&gt;192.168.1.11&lt;/td&gt;
+&lt;td&gt;lb-backup&lt;/td&gt;
+&lt;td&gt;HAProxy + Keepalived&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;server-planning-2&#34;&gt;Server Planning
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Role&lt;/th&gt;
+&lt;th&gt;IP Address&lt;/th&gt;
+&lt;th&gt;Hostname&lt;/th&gt;
+&lt;th&gt;Service&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Virtual IP&lt;/td&gt;
+&lt;td&gt;192.168.1.100&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;VIP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;server-planning-3&#34;&gt;Server Planning
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Role&lt;/th&gt;
+&lt;th&gt;IP Address&lt;/th&gt;
+&lt;th&gt;Hostname&lt;/th&gt;
+&lt;th&gt;Service&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;server-planning-4&#34;&gt;Server Planning
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Role&lt;/th&gt;
+&lt;th&gt;IP Address&lt;/th&gt;
+&lt;th&gt;Hostname&lt;/th&gt;
+&lt;th&gt;Service&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;server-planning-5&#34;&gt;Server Planning
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Role&lt;/th&gt;
+&lt;th&gt;IP Address&lt;/th&gt;
+&lt;th&gt;Hostname&lt;/th&gt;
+&lt;th&gt;Service&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;software-installation&#34;&gt;Software Installation
+&lt;/h3&gt;&lt;p&gt;Install the necessary software on the HAProxy master and backup nodes:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# CentOS/RHEL
+yum install -y haproxy keepalived
+
+# Ubuntu/Debian
+apt-get update
+apt-get install -y haproxy keepalived
+
+# Enable services to start automatically on boot
+systemctl enable haproxy keepalived
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;keepalived-configuration&#34;&gt;Keepalived Configuration
+&lt;/h2&gt;&lt;h3 id=&#34;master-node-configuration-lb-master&#34;&gt;Master Node Configuration (lb-master)
+&lt;/h3&gt;&lt;p&gt;Create the configuration file &lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! Configuration File for keepalived
+
+global_defs {
+    router_id LB_MASTER
+    script_user root
+    enable_script_security
+}
+
+# Script to check HAProxy service status
+vrrp_script chk_haproxy {
+    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface eth0
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+
+    track_script {
+        chk_haproxy
+    }
+
+    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
+    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
+    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;lb-backup-configuration&#34;&gt;LB Backup Configuration
+&lt;/h3&gt;&lt;p&gt;Create the configuration file &lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! Configuration File for keepalived
+
+global_defs {
+    router_id LB_BACKUP
+    script_user root
+    enable_script_security
+}
+
+vrrp_script chk_haproxy {
+    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state BACKUP
+    interface eth0
+    virtual_router_id 51
+    priority 90
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+
+    track_script {
+        chk_haproxy
+    }
+
+    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
+    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
+    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;health-check-script&#34;&gt;Health Check Script
+&lt;/h3&gt;&lt;p&gt;Create the HAProxy health check script &lt;code&gt;/etc/keepalived/check_haproxy.sh&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+# Check if the haproxy process is running
+if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+    # Attempt to start HAProxy
+    systemctl start haproxy
+    sleep 2
+
+    # Check again, if it&#39;s still not running exit
+    if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+        exit 1
+    fi
+fi
+
+# Check if HAProxy port is listening
+if ! netstat -tuln | grep -q &amp;quot;:80 &amp;quot;; then
+    exit 1
+fi
+
+exit 0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;state-notification-script&#34;&gt;State Notification Script
+&lt;/h3&gt;&lt;p&gt;Create the state notification script &lt;code&gt;/etc/keepalived/notify.sh&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+TYPE=$1
+NAME=$2
+STATE=$3
+
+case $STATE in
+    &amp;quot;MASTER&amp;quot;)
+        echo &amp;quot;$(date): Became MASTER&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    &amp;quot;BACKUP&amp;quot;)
+        echo &amp;quot;$(date): Became BACKUP&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    &amp;quot;FAULT&amp;quot;)
+        echo &amp;quot;$(date): Fault detected&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    *)
+        echo &amp;quot;$(date): Unknown state: $STATE&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+esac
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Set script execution permissions:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;chmod +x /etc/keepalived/check_haproxy.sh
+chmod +x /etc/keepalived/notify.sh
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;haproxy-configuration&#34;&gt;HAProxy Configuration
+&lt;/h2&gt;&lt;h3 id=&#34;main-configuration&#34;&gt;Main Configuration
+&lt;/h3&gt;&lt;p&gt;Create the same HAProxy configuration file &lt;code&gt;/etc/haproxy/haproxy.cfg&lt;/code&gt; on the master node:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;global
+    log 127.0.0.1:514 local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+
+defaults
+    mode http
+    log global
+    option httplog
+    option dontlognull
+    option log-health-checks
+    option forwardfor except 127.0.0.0/8
+    option redispatch
+    retries 3
+    timeout http-request 10s
+    timeout queue 1m
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+    timeout http-keep-alive 10s
+    timeout check 10s
+    maxconn 3000
+
+# Statistics page configuration
+listen stats
+    bind *:8080
+    stats enable
+    stats uri /stats
+    stats realm HAProxy\ Statistics
+    stats auth admin:password123
+    stats refresh 30s
+
+# Frontend configuration
+frontend web_frontend
+    bind *:80
+    default_backend web_servers
+
+# Backend server configuration
+backend web_servers
+    balance roundrobin
+    option httpchk GET /health
+    
+    server web1 192.168.1.20:80 check inter 2000 rise 2 fall 3
+    server web2 192.168.1.21:80 check inter 2000 rise 2 fall 3
+    server web3 192.168.1.22:80 check inter 2000 rise 2 fall 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;configuration-instructions&#34;&gt;Configuration Instructions
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Global Configuration:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;log&lt;/code&gt;: Log configuration&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;chroot&lt;/code&gt;: Security sandbox&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;stats socket&lt;/code&gt;: Management interface&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;daemon&lt;/code&gt;: Background execution&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Default Configuration:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;mode http&lt;/code&gt;: HTTP mode&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;balance roundrobin&lt;/code&gt;: Round robin load balancing&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;option httpchk&lt;/code&gt;: HTTP health check&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;timeout&lt;/code&gt;: Various timeout settings&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;Backend Servers:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;check&lt;/code&gt;: Enable health checks&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;inter 2000&lt;/code&gt;: Check interval of 2 seconds&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;rise 2&lt;/code&gt;: Mark as available after 2 consecutive successful checks&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;fall 3&lt;/code&gt;: Mark as unavailable after 3 consecutive failed checks&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;service-startup-and-testing&#34;&gt;Service Startup and Testing
+&lt;/h2&gt;&lt;h3 id=&#34;start-service&#34;&gt;Start Service
+&lt;/h3&gt;&lt;p&gt;Start the service on the master and backup nodes:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Start HAProxy
+systemctl start haproxy
+systemctl status haproxy
+
+# Start Keepalived
+systemctl start keepalived
+systemctl status keepalived
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;verify-vip-binding&#34;&gt;Verify VIP Binding
+&lt;/h3&gt;&lt;p&gt;Check if the virtual IP is correctly bound:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# View IP address on the master node
+ip addr show
+
+# You should see output similar to:
+# eth0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0
+#     inet 192.168.1.100/24 scope global secondary eth0:0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;functional-testing&#34;&gt;Functional Testing
+&lt;/h3&gt;&lt;h4 id=&#34;1-load-balancing-testing&#34;&gt;1. Load Balancing Testing
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Repeatedly access the VIP and observe request distribution
+for i in {1..10}; do
+    curl -s http://192.168.1.100/ | grep &amp;quot;Server&amp;quot;
+done
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;2-failover-testing&#34;&gt;2. Failover Testing
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Stop the HAProxy service on the primary node
+systemctl stop haproxy
+
+# Observe if the VIP switches to the backup node
+ip addr show
+
+# Test if the service is working normally
+curl http://192.168.1.100/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;3-backend-server-failure-testing&#34;&gt;3. Backend Server Failure Testing
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Stop one of the web servers
+# On the web1 server:
+systemctl stop nginx
+
+# Observe the HAProxy statistics page
+curl http://192.168.1.100:8080/stats
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;monitoring-and-maintenance&#34;&gt;Monitoring and Maintenance
+&lt;/h2&gt;&lt;h3 id=&#34;log-monitoring&#34;&gt;Log Monitoring
+&lt;/h3&gt;&lt;h4 id=&#34;haproxy-logs&#34;&gt;HAProxy Logs
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# View HAProxy logs
+tail -f /var/log/haproxy.log
+
+# View access statistics
+grep &amp;quot;HTTP/1.1&amp;quot; /var/log/haproxy.log | tail -20
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;keepalived-logs&#34;&gt;Keepalived Logs
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# View Keepalived logs
+tail -f /var/log/messages | grep keepalived
+
+# View state change logs
+tail -f /var/log/keepalived-state.log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;performance-monitoring&#34;&gt;Performance Monitoring
+&lt;/h3&gt;&lt;h4 id=&#34;statistical-page-monitoring&#34;&gt;Statistical Page Monitoring
+&lt;/h4&gt;&lt;p&gt;Access the HAProxy statistics page: &lt;code&gt;http://192.168.1.100:8080/stats&lt;/code&gt;
+Key Metrics:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Session Rate&lt;/strong&gt;: Session rate&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Session Total&lt;/strong&gt;: Total number of sessions&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Bytes In/Out&lt;/strong&gt;: Traffic statistics&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Time&lt;/strong&gt;: Response time&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Server Status&lt;/strong&gt;: Server status&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;command-line-monitoring&#34;&gt;Command Line Monitoring
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Check HAProxy process status
+ps aux | grep haproxy
+
+# Check port listening status
+netstat -tuln | grep -E &amp;quot;(80|8080)&amp;quot;
+
+# Check connection count
+ss -ant | grep :80 | wc -l
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;troubleshooting-faqs&#34;&gt;Troubleshooting FAQs
+&lt;/h2&gt;&lt;h3 id=&#34;1-vip-cannot-be-switched&#34;&gt;1. VIP cannot be switched
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Problem Description:&lt;/strong&gt;
+After the master node fails, the VIP does not switch to the backup node.
+&lt;strong&gt;Troubleshooting Steps:&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Check Keepalived configuration
+keepalived -t -f /etc/keepalived/keepalived.conf
+
+# View VRRP communication
+tcpdump -i eth0 vrrp
+
+# Check firewall settings
+iptables -L | grep vrrp
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Solution:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Ensure that VRRP protocol communication is normal.&lt;/li&gt;
+&lt;li&gt;Check network interface configuration.&lt;/li&gt;
+&lt;li&gt;Verify authentication password consistency.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-health-check-failed&#34;&gt;2. Health Check Failed
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Problem Description:&lt;/strong&gt;
+Backend server marked as unavailable
+&lt;strong&gt;Troubleshooting Steps:&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Manually execute health check
+curl -I http://192.168.1.20/health
+
+# View HAProxy logs
+grep &amp;quot;Health check&amp;quot; /var/log/haproxy.log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Solution:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Ensure the health check URL is accessible&lt;/li&gt;
+&lt;li&gt;Adjust the check interval and thresholds&lt;/li&gt;
+&lt;li&gt;Check the backend server status&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-load-unbalance&#34;&gt;3. Load Unbalance
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Problem Description:&lt;/strong&gt;
+Requests are not evenly distributed to the backend servers.
+&lt;strong&gt;Troubleshooting Steps:&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# View statistics page
+curl -s http://192.168.1.100:8080/stats
+
+# Analyze access logs
+awk &#39;{print $6}&#39; /var/log/haproxy.log | sort | uniq -c
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Solution:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Check the load balancing algorithm configuration&lt;/li&gt;
+&lt;li&gt;Verify server weights settings&lt;/li&gt;
+&lt;li&gt;Consider session persistence requirements&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;optimization-suggestions&#34;&gt;Optimization Suggestions
+&lt;/h2&gt;&lt;h3 id=&#34;1-performance-optimization&#34;&gt;1. Performance Optimization
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Adjust system parameters
+echo &#39;net.core.somaxconn = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
+echo &#39;net.ipv4.tcp_max_syn_backlog = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
+sysctl -p
+
+# Optimize HAProxy configuration
+# Increase maxconn value
+# Adjust timeout parameters
+# Enable compression functionality
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;2-security-hardening&#34;&gt;2. Security Hardening
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Restrict access to the statistics page
+# Add ACL rules in haproxy.cfg
+acl allowed_ips src 192.168.1.0/24
+http-request deny if !allowed_ips
+
+# Enable SSL/TLS
+bind *:443 ssl crt /etc/ssl/certs/server.pem
+redirect scheme https if !{ ssl_fc }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;3-monitoring-and-alerts&#34;&gt;3. Monitoring and Alerts
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Integrate with a monitoring system
+# Configure Prometheus for monitoring
+# Set up Grafana dashboards
+# Define alert rules
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary
+&lt;/h2&gt;&lt;p&gt;By combining Keepalived and HAProxy, we successfully built a highly available load balancing cluster. This solution offers the following advantages:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;High Availability:&lt;/strong&gt; Achieved through VRRP protocol for automatic failover.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Load Balancing:&lt;/strong&gt; Intelligently distributes requests to improve system performance.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Health Checks:&lt;/strong&gt; Real-time monitoring of service status, automatically removing faulty nodes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Ease of Maintenance:&lt;/strong&gt; Simple configuration and convenient management.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cost Effectiveness:&lt;/strong&gt; Utilizing open-source software to reduce operational costs.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;When deploying in a production environment, it’s also necessary to consider comprehensive aspects such as network security, monitoring and alerts, and backup/restore procedures to ensure stable and reliable operation of the system.&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

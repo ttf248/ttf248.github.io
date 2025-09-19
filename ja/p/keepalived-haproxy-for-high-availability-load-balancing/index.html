@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。\n">
+<title>Keepalived &#43; HAProxy を用いた高可用ロードバランシングの構築</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/keepalived-haproxy-for-high-availability-load-balancing/'>
+
+<link rel="stylesheet" href="/scss/style.min.a2714c9632013309acc13e941c4a637a771eba1d2e2e25f24d7bda75c48da2d2.css"><meta property='og:title' content="Keepalived + HAProxy を用いた高可用ロードバランシングの構築">
+<meta property='og:description' content="現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/keepalived-haproxy-for-high-availability-load-balancing/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='ロードバランシング' /><meta property='article:tag' content='高可用性 (Kōyūyō)' /><meta property='article:tag' content='Keepalived' /><meta property='article:tag' content='HAProxy' /><meta property='article:tag' content='クラスタリング' /><meta property='article:tag' content='運用 (Un&#39;yō)' /><meta property='article:published_time' content='2025-09-19T09:45:55&#43;08:00'/><meta property='article:modified_time' content='2025-09-19T10:05:47&#43;08:00'/>
+<meta name="twitter:title" content="Keepalived + HAProxy を用いた高可用ロードバランシングの構築">
+<meta name="twitter:description" content="現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>ダークモード</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#技術概要">技術概要</a>
+      <ol>
+        <li><a href="#keepalived-の概要">Keepalived の概要</a></li>
+        <li><a href="#haproxy-の概要">HAProxy の概要</a></li>
+      </ol>
+    </li>
+    <li><a href="#アーキテクチャ設計">アーキテクチャ設計</a>
+      <ol>
+        <li><a href="#全体アーキテクチャ">全体アーキテクチャ</a></li>
+        <li><a href="#全体アーキテクチャ-1">全体アーキテクチャ</a></li>
+        <li><a href="#コンポーネントの説明">コンポーネントの説明</a></li>
+      </ol>
+    </li>
+    <li><a href="#環境準備">環境準備</a>
+      <ol>
+        <li><a href="#サーバ計画">サーバ計画</a></li>
+        <li><a href="#サーバ計画-1">サーバ計画</a></li>
+        <li><a href="#サーバー構成">サーバー構成</a></li>
+        <li><a href="#サーバー計画">サーバー計画</a></li>
+        <li><a href="#サーバー構成-1">サーバー構成</a></li>
+        <li><a href="#サーバー計画-1">サーバー計画</a></li>
+        <li><a href="#ソフトウェアのインストール">ソフトウェアのインストール</a></li>
+      </ol>
+    </li>
+    <li><a href="#keepalived-設定">Keepalived 設定</a>
+      <ol>
+        <li><a href="#主ノード設定-lb-master">主ノード設定 (lb-master)</a></li>
+        <li><a href="#備中节点配置-lb-backup">備中节点配置 (lb-backup)</a></li>
+        <li><a href="#haproxy健康チェックスクリプト">HAProxy健康チェックスクリプト</a></li>
+        <li><a href="#状態通知スクリプト">状態通知スクリプト</a></li>
+      </ol>
+    </li>
+    <li><a href="#haproxy-設定">HAProxy 設定</a>
+      <ol>
+        <li><a href="#メイン設定ファイル">メイン設定ファイル</a></li>
+        <li><a href="#設定手順">設定手順</a></li>
+      </ol>
+    </li>
+    <li><a href="#サービス開始とテスト">サービス開始とテスト</a>
+      <ol>
+        <li><a href="#サービスの起動">サービスの起動</a></li>
+        <li><a href="#vip認証の確認">VIP認証の確認</a></li>
+        <li><a href="#機能テスト">機能テスト</a>
+          <ol>
+            <li><a href="#1-負荷分散テスト">1. 負荷分散テスト</a></li>
+            <li><a href="#2-フェイルオーバーテスト">2. フェイルオーバーテスト</a></li>
+            <li><a href="#3-バックエンドサーバー障害テスト">3. バックエンドサーバー障害テスト</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#モニタリングとメンテナンス">モニタリングとメンテナンス</a>
+      <ol>
+        <li><a href="#ロギング監視">ロギング監視</a>
+          <ol>
+            <li><a href="#haproxyログ">HAProxyログ</a></li>
+            <li><a href="#keepalivedログ">Keepalivedログ</a></li>
+          </ol>
+        </li>
+        <li><a href="#パフォーマンス監視">パフォーマンス監視</a>
+          <ol>
+            <li><a href="#統計ページ監視">統計ページ監視</a></li>
+            <li><a href="#コマンドライン監視">コマンドライン監視</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#よくあるトラブルシューティング">よくあるトラブルシューティング</a>
+      <ol>
+        <li><a href="#1-vipの切り替え不可">1. VIPの切り替え不可</a></li>
+        <li><a href="#2-健康チェック失敗">2. 健康チェック失敗</a></li>
+        <li><a href="#3-負荷分散の不均衡">3. 負荷分散の不均衡</a></li>
+      </ol>
+    </li>
+    <li><a href="#オプティマイズの提案">オプティマイズの提案</a>
+      <ol>
+        <li><a href="#1-パフォーマンス最適化">1. パフォーマンス最適化</a></li>
+        <li><a href="#2-セキュリティ強化">2. セキュリティ強化</a></li>
+        <li><a href="#3-モニタリングとアラート">3. モニタリングとアラート</a></li>
+      </ol>
+    </li>
+    <li><a href="#結論">結論</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: #4CAF50;
+    --copy-btn-hover-bg: #45a049;
+    --copy-btn-success-bg: #2196F3;
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 6px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1rem 0;
+}
+
+.code-container pre {
+    margin: 0;
+    border-radius: var(--copy-btn-border-radius);
+    overflow-x: auto;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 6px 12px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: none;
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0.8;
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 0.8em;
+        padding: 4px 8px;
+        top: 4px;
+        right: 4px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 1;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.initializeHighlighting();
+        this.addCopyButtons();
+    }
+
+    initializeHighlighting() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/" >
+                AI霊感衝突坊
+            </a>
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                コンピューター
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/keepalived-haproxy-for-high-availability-load-balancing/">Keepalived &#43; HAProxy を用いた高可用ロードバランシングの構築</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2025年09月19日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    読了時間: 10分
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/keepalived-haproxy-for-high-availability-load-balancing/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/keepalived-haproxy-for-high-availability-load-balancing/" class="link">English</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。</p>
+<blockquote>
+<p>実際の構成部分が検証されていないため、本文の構成はAIによって作成されています</p>
+</blockquote>
+<p>この画像は「タスク計画」というタイトルで、おそらくタスクのスケジュールやリストを示していると思われます。詳細な翻訳のためには画像の具体的な内容を確認する必要がありますが、一般的な表現として以下のように記述できます。</p>
+<p>タスク計画 (Tasukku Keikaku) - 任務計画 (Tanmoku Keikaku)</p>
+<h2 id="技術概要">技術概要
+</h2><h3 id="keepalived-の概要">Keepalived の概要
+</h3><p>Keepalived は、VRRP（Virtual Router Redundancy Protocol）プロトコルを基盤とした高可用性ソリューションであり、主にサーバーのフェイルオーバーとロードバランシングを実現するために使用されます。</p>
+<p><strong>主な特徴：</strong></p>
+<ul>
+<li><strong>VRRP プロトコル対応:</strong> 仮想IPアドレスの主/備切り替えの実装</li>
+<li><strong>健康チェック:</strong> サービスの状態を監視し、自動的に故障トランスファーを実行</li>
+<li><strong>設定の簡素化:</strong> 設定ファイルのみで複雑な高可用性アーキテクチャを実現</li>
+<li><strong>軽量:</strong> リソース消費量が少なく、性能に優れている</li>
+</ul>
+<p><strong>動作原理：</strong>
+Keepalived は、VRRP プロトコルを通じて複数のサーバー間で仮想IPアドレスを共有します。正常時には、主サーバーが仮想IPアドレスを持ちサービスを提供し、主サーバーが故障した場合、備サーバーが自動的に仮想IPアドレスを接管し、サービスの停止を防ぎます。</p>
+<h3 id="haproxy-の概要">HAProxy の概要
+</h3><p>HAProxy は、高性能なロードバランサーおよびリバースプロキシサーバーであり、高負荷環境で広く利用されています。
+<strong>主な機能：</strong></p>
+<ul>
+<li><strong>ロードバランシング:</strong> 複数のロードバランシングアルゴリズムをサポート</li>
+<li><strong>ヘルスチェック:</strong> バックエンドサーバーの状態をリアルタイムに監視</li>
+<li><strong>SSL終端:</strong> HTTPS トラフィックの処理をサポート</li>
+<li><strong>統計モニタリング:</strong> 詳細な実行状態の統計情報を提供
+<strong>利用シーン：</strong></li>
+<li>Web サービス のロードバランシング</li>
+<li>データベース接続プーリング</li>
+<li>マイクロサービスゲートウェイ</li>
+<li>API インターフェース のプロキシ</li>
+</ul>
+<h2 id="アーキテクチャ設計">アーキテクチャ設計
+</h2><h3 id="全体アーキテクチャ">全体アーキテクチャ
+</h3><pre><code>                    ┌─────────────────┐
+                    │   Client        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  Virtual IP     │
+                    │  (VIP)          │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (Master)       │◄────────────►│   (Backup)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   Backend     │ │   Backend   │ │   Backend     │
+└───────────────┘ └─────────────┘ └───────────────┘
+</code></pre>
+<h3 id="全体アーキテクチャ-1">全体アーキテクチャ
+</h3><pre><code>                    ┌─────────────────┐
+                    │   クライアント        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  仮想IP (VIP)       │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (マスター)       │◄────────────►│   (バックアップ)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   バックエンド     │ │   バックエンド   │ │   バックエンド     │
+└───────────────┘ └─────────────┘ └───────────────┘
+</code></pre>
+<h3 id="コンポーネントの説明">コンポーネントの説明
+</h3><ul>
+<li><strong>仮想IP (VIP)</strong>: 顧客がアクセスする統一的なエントリポイント</li>
+<li><strong>HAProxy 主備ノード</strong>: ロードバランシングサービスを提供し、Keepalivedを使用して高可用性を実現します</li>
+<li><strong>バックエンドサーバー</strong>: 実際にサービスを提供するWebサーバー</li>
+</ul>
+<h2 id="環境準備">環境準備
+</h2><h3 id="サーバ計画">サーバ計画
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>役割</th>
+<th>IPアドレス</th>
+<th>ホスト名</th>
+<th>サービス</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HAProxy 主ノード</td>
+<td>192.168.1.10</td>
+<td>lb-master</td>
+<td>HAProxy + Keepalived</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="サーバ計画-1">サーバ計画
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>役割</th>
+<th>IPアドレス</th>
+<th>ホスト名</th>
+<th>サービス</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HAProxy 備後端</td>
+<td>192.168.1.11</td>
+<td>lb-backup</td>
+<td>HAProxy + Keepalived</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="サーバー構成">サーバー構成
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>ロール</th>
+<th>IPアドレス</th>
+<th>ホスト名</th>
+<th>サービス</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仮想IP</td>
+<td>192.168.1.100</td>
+<td>-</td>
+<td>VIP</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="サーバー計画">サーバー計画
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>役割</th>
+<th>IPアドレス</th>
+<th>ホスト名</th>
+<th>サービス</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Webサーバー1</td>
+<td>192.168.1.20</td>
+<td>web1</td>
+<td>Nginx/Apache</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="サーバー構成-1">サーバー構成
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>ロール</th>
+<th>IPアドレス</th>
+<th>ホスト名</th>
+<th>サービス</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Webサーバー2</td>
+<td>192.168.1.21</td>
+<td>web2</td>
+<td>Nginx/Apache</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="サーバー計画-1">サーバー計画
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>ロール</th>
+<th>IPアドレス</th>
+<th>ホスト名</th>
+<th>サービス</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Webサーバー3</td>
+<td>192.168.1.22</td>
+<td>web3</td>
+<td>Nginx/Apache</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="ソフトウェアのインストール">ソフトウェアのインストール
+</h3><p>HAProxy主備サーバに必要ソフトウェアをインストールします：</p>
+<pre><code class="language-bash"># CentOS/RHEL
+yum install -y haproxy keepalived
+
+# Ubuntu/Debian
+apt-get update
+apt-get install -y haproxy keepalived
+
+# サービスを起動時に自動開始にする
+systemctl enable haproxy keepalived
+</code></pre>
+<h2 id="keepalived-設定">Keepalived 設定
+</h2><h3 id="主ノード設定-lb-master">主ノード設定 (lb-master)
+</h3><p><code>/etc/keepalived/keepalived.conf</code> ファイルを作成します：</p>
+<pre><code class="language-bash">! Configuration File for keepalived
+
+global_defs {
+    router_id LB_MASTER
+    script_user root
+    enable_script_security
+}
+
+# HAProxyサービスのステータスを確認するスクリプト
+vrrp_script chk_haproxy {
+    script &quot;/etc/keepalived/check_haproxy.sh&quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface eth0
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+
+    track_script {
+        chk_haproxy
+    }
+
+    notify_master &quot;/etc/keepalived/notify.sh master&quot;
+    notify_backup &quot;/etc/keepalived/notify.sh backup&quot;
+    notify_fault &quot;/etc/keepalived/notify.sh fault&quot;
+}
+</code></pre>
+<h3 id="備中节点配置-lb-backup">備中节点配置 (lb-backup)
+</h3><p><code>/etc/keepalived/keepalived.conf</code> ファイルを作成します：</p>
+<pre><code class="language-bash">! keepalived の構成ファイル
+
+global_defs {
+    router_id LB_BACKUP
+    script_user root
+    enable_script_security
+}
+
+vrrp_script chk_haproxy {
+    script &quot;/etc/keepalived/check_haproxy.sh&quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state BACKUP
+    interface eth0
+    virtual_router_id 51
+    priority 90
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+
+    track_script {
+        chk_haproxy
+    }
+
+    notify_master &quot;/etc/keepalived/notify.sh master&quot;
+    notify_backup &quot;/etc/keepalived/notify.sh backup&quot;
+    notify_fault &quot;/etc/keepalived/notify.sh fault&quot;
+}
+</code></pre>
+<h3 id="haproxy健康チェックスクリプト">HAProxy健康チェックスクリプト
+</h3><p><code>/etc/keepalived/check_haproxy.sh</code>というHAProxyの健康チェックスクリプトを作成します：</p>
+<pre><code class="language-bash">#!/bin/bash
+
+# HAProxyプロセスが実行中か確認
+if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+    # HAProxyを起動を試行
+    systemctl start haproxy
+    sleep 2
+
+    # 再度チェックし、まだ実行されていない場合は終了
+    if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+        exit 1
+    fi
+fi
+
+# HAProxyポートがリッスン中か確認
+if ! netstat -tuln | grep -q &quot;:80 &quot;; then
+    exit 1
+fi
+
+exit 0
+</code></pre>
+<h3 id="状態通知スクリプト">状態通知スクリプト
+</h3><p><code>/etc/keepalived/notify.sh</code> という状態通知スクリプトを作成します：</p>
+<pre><code class="language-bash">#!/bin/bash
+
+TYPE=$1
+NAME=$2
+STATE=$3
+
+case $STATE in
+    &quot;MASTER&quot;)
+        echo &quot;$(date): Became MASTER&quot; &gt;&gt; /var/log/keepalived-state.log
+        ;;
+    &quot;BACKUP&quot;)
+        echo &quot;$(date): Became BACKUP&quot; &gt;&gt; /var/log/keepalived-state.log
+        ;;
+    &quot;FAULT&quot;)
+        echo &quot;$(date): Fault detected&quot; &gt;&gt; /var/log/keepalived-state.log
+        ;;
+    *)
+        echo &quot;$(date): Unknown state: $STATE&quot; &gt;&gt; /var/log/keepalived-state.log
+        ;;
+esac
+</code></pre>
+<p>スクリプトの実行権限を設定します：</p>
+<pre><code class="language-bash">chmod +x /etc/keepalived/check_haproxy.sh
+chmod +x /etc/keepalived/notify.sh
+</code></pre>
+<h2 id="haproxy-設定">HAProxy 設定
+</h2><h3 id="メイン設定ファイル">メイン設定ファイル
+</h3><p>主備ノード上で同じHAProxyの設定ファイル <code>/etc/haproxy/haproxy.cfg</code> を作成します：</p>
+<pre><code class="language-bash">global
+    log 127.0.0.1:514 local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+
+defaults
+    mode http
+    log global
+    option httplog
+    option dontlognull
+    option log-health-checks
+    option forwardfor except 127.0.0.0/8
+    option redispatch
+    retries 3
+    timeout http-request 10s
+    timeout queue 1m
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+    timeout http-keep-alive 10s
+    timeout check 10s
+    maxconn 3000
+
+# ページ設定の統計
+listen stats
+    bind *:8080
+    stats enable
+    stats uri /stats
+    stats realm HAProxy\ Statistics
+    stats auth admin:password123
+    stats refresh 30s
+
+# 前端設定
+frontend web_frontend
+    bind *:80
+    default_backend web_servers
+
+# 後端サーバー設定
+backend web_servers
+    balance roundrobin
+    option httpchk GET /health
+    
+    server web1 192.168.1.20:80 check inter 2000 rise 2 fall 3
+    server web2 192.168.1.21:80 check inter 2000 rise 2 fall 3
+    server web3 192.168.1.22:80 check inter 2000 rise 2 fall 3
+</code></pre>
+<h3 id="設定手順">設定手順
+</h3><p><strong>グローバル設定:</strong></p>
+<ul>
+<li><code>log</code>: 日志設定</li>
+<li><code>chroot</code>: セーフティサンドボックス</li>
+<li><code>stats socket</code>: 管理インターフェース</li>
+<li><code>daemon</code>: バックグラウンド実行
+<strong>デフォルト設定:</strong></li>
+<li><code>mode http</code>: HTTPモード</li>
+<li><code>balance roundrobin</code>: ラウンドロビンバランシング</li>
+<li><code>option httpchk</code>: HTTPヘルスチェック</li>
+<li><code>timeout</code>: 様々なタイムアウト設定
+<strong>バックエンドサーバー:</strong></li>
+<li><code>check</code>: ヘルスチェックを有効にする</li>
+<li><code>inter 2000</code>: チェック間隔2秒</li>
+<li><code>rise 2</code>: 連続2回成功した場合に可用とマークする</li>
+<li><code>fall 3</code>: 連続3回失敗した場合に不可用とマークする</li>
+</ul>
+<h2 id="サービス開始とテスト">サービス開始とテスト
+</h2><h3 id="サービスの起動">サービスの起動
+</h3><p>主節点および副節点上でサービスを起動します：</p>
+<pre><code class="language-bash"># HAProxyの起動
+systemctl start haproxy
+systemctl status haproxy
+
+# Keepalivedの起動
+systemctl start keepalived
+systemctl status keepalived
+</code></pre>
+<h3 id="vip認証の確認">VIP認証の確認
+</h3><p>仮想IPが正しくバインドされているかを確認します：</p>
+<pre><code class="language-bash"># 主ノードでIPアドレスを表示
+ip addr show
+
+# 以下の様な出力が表示されるはずです：
+# eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0
+#     inet 192.168.1.100/24 scope global secondary eth0:0
+</code></pre>
+<h3 id="機能テスト">機能テスト
+</h3><h4 id="1-負荷分散テスト">1. 負荷分散テスト
+</h4><pre><code class="language-bash"># VIPに複数回アクセスし、リクエストの分配状況を監視
+for i in {1..10}; do
+    curl -s http://192.168.1.100/ | grep &quot;Server&quot;
+done
+</code></pre>
+<h4 id="2-フェイルオーバーテスト">2. フェイルオーバーテスト
+</h4><pre><code class="language-bash"># 主ノードでHAProxyサービスを停止する
+systemctl stop haproxy
+
+# VIPがバックノードに切り替わるのを監視する
+ip addr show
+
+# サービスの正常性を確認する
+curl http://192.168.1.100/
+</code></pre>
+<h4 id="3-バックエンドサーバー障害テスト">3. バックエンドサーバー障害テスト
+</h4><pre><code class="language-bash"># 一台のWebサーバーを停止する
+# web1サーバーで：
+systemctl stop nginx
+
+# HAProxy統計ページを監視する
+curl http://192.168.1.100:8080/stats
+</code></pre>
+<h2 id="モニタリングとメンテナンス">モニタリングとメンテナンス
+</h2><h3 id="ロギング監視">ロギング監視
+</h3><h4 id="haproxyログ">HAProxyログ
+</h4><pre><code class="language-bash"># HAProxyログの確認
+tail -f /var/log/haproxy.log
+
+# アクセス統計の確認
+grep &quot;HTTP/1.1&quot; /var/log/haproxy.log | tail -20
+</code></pre>
+<h4 id="keepalivedログ">Keepalivedログ
+</h4><pre><code class="language-bash"># Keepalivedログの確認
+tail -f /var/log/messages | grep keepalived
+
+# 状態変化ログの確認
+tail -f /var/log/keepalived-state.log
+</code></pre>
+<h3 id="パフォーマンス監視">パフォーマンス監視
+</h3><h4 id="統計ページ監視">統計ページ監視
+</h4><p>HAProxyの統計ページへのアクセス: <code>http://192.168.1.100:8080/stats</code>
+主要指標:</p>
+<ul>
+<li><strong>Session Rate</strong>: 会話レート</li>
+<li><strong>Session Total</strong>: 総会話数</li>
+<li><strong>Bytes In/Out</strong>: 流量統計</li>
+<li><strong>Response Time</strong>: 応答時間</li>
+<li><strong>Server Status</strong>: サーバー状態</li>
+</ul>
+<h4 id="コマンドライン監視">コマンドライン監視
+</h4><pre><code class="language-bash"># HAProxyプロセスの状態を確認
+ps aux | grep haproxy
+
+# ポートのリスニング状態を確認
+netstat -tuln | grep -E &quot;(80|8080)&quot;
+
+# 接続数を確認
+ss -ant | grep :80 | wc -l
+</code></pre>
+<h2 id="よくあるトラブルシューティング">よくあるトラブルシューティング
+</h2><h3 id="1-vipの切り替え不可">1. VIPの切り替え不可
+</h3><p><strong>問題現象:</strong>
+主ノード故障後、VIPがバックアップノードに切り替わらない
+<strong>トラブルシューティング手順:</strong></p>
+<pre><code class="language-bash"># Keepalived設定を確認
+keepalived -t -f /etc/keepalived/keepalived.conf
+
+# VRRP通信を監視
+tcpdump -i eth0 vrrp
+
+# ファイアウォール設定を確認
+iptables -L | grep vrrp
+</code></pre>
+<p><strong>解決策:</strong></p>
+<ul>
+<li>VRRPプロトコル通信が正常であることを確認</li>
+<li>ネットワークインターフェースの設定を確認</li>
+<li>認証パスワードの一致性を検証</li>
+</ul>
+<h3 id="2-健康チェック失敗">2. 健康チェック失敗
+</h3><p><strong>問題現象:</strong>
+バックエンドサーバーが利用不可としてマークされている
+<strong>トラブルシューティング手順:</strong></p>
+<pre><code class="language-bash"># 手動で健康チェックを実行
+curl -I http://192.168.1.20/health
+
+# HAProxyログを確認
+grep &quot;Health check&quot; /var/log/haproxy.log
+</code></pre>
+<p><strong>解決策:</strong></p>
+<ul>
+<li>健康チェックURLにアクセス可能であることを確認</li>
+<li>チェック間隔と閾値を調整</li>
+<li>バックエンドサーバーの状態を確認</li>
+</ul>
+<h3 id="3-負荷分散の不均衡">3. 負荷分散の不均衡
+</h3><p><strong>問題現象:</strong>
+リクエストがバックエンドサーバーに均等に分散されない
+<strong>トラブルシューティング手順:</strong></p>
+<pre><code class="language-bash"># 統計ページを確認
+curl -s http://192.168.1.100:8080/stats
+
+# アクセスログを分析
+awk '{print $6}' /var/log/haproxy.log | sort | uniq -c
+</code></pre>
+<p><strong>解決策:</strong></p>
+<ul>
+<li>負荷分散アルゴリズムの設定を確認</li>
+<li>サーバーの重み設定を検証</li>
+<li>セッション保持の要件を考慮</li>
+</ul>
+<h2 id="オプティマイズの提案">オプティマイズの提案
+</h2><h3 id="1-パフォーマンス最適化">1. パフォーマンス最適化
+</h3><pre><code class="language-bash"># システムパラメータの調整
+echo 'net.core.somaxconn = 65535' &gt;&gt; /etc/sysctl.conf
+echo 'net.ipv4.tcp_max_syn_backlog = 65535' &gt;&gt; /etc/sysctl.conf
+sysctl -p
+
+# HAProxy設定の最適化
+# maxconn値を増やす
+# timeoutパラメータを調整する
+# 圧縮機能を有効にする
+</code></pre>
+<h3 id="2-セキュリティ強化">2. セキュリティ強化
+</h3><pre><code class="language-bash"># 統計ページへのアクセス制限
+# haproxy.cfg に ACL ルールを追加
+acl allowed_ips src 192.168.1.0/24
+http-request deny if !allowed_ips
+
+# SSL/TLS の有効化
+bind *:443 ssl crt /etc/ssl/certs/server.pem
+redirect scheme https if !{ ssl_fc }
+</code></pre>
+<h3 id="3-モニタリングとアラート">3. モニタリングとアラート
+</h3><pre><code class="language-bash"># 統合監視システム
+# Prometheusによる監視設定
+# Grafanaダッシュボードの設定
+# アラートルールを設定
+</code></pre>
+<h2 id="結論">結論
+</h2><p>KeepalivedとHAProxyの組み合わせにより、高可用性を持つロードバランシングクラスタを構築しました。この構成には以下の利点があります。</p>
+<ol>
+<li><strong>高可用性:</strong> VRRPプロトコルによる自動フェイルオーバーを実現</li>
+<li><strong>ロードバランシング:</strong> スマートなリクエスト分散により、システム性能を向上</li>
+<li><strong>健康チェック:</strong> リアルタイムでサービスの状態を監視し、故障ノードを自動的に除外</li>
+<li><strong>メンテナンスの容易さ:</strong> 設定が簡単で、管理も容易</li>
+<li><strong>コスト効率:</strong> オープンソースソフトウェアを使用することで、運用コストを削減
+本番環境へのデプロイ時には、ネットワークセキュリティ、監視アラート、バックアップとリカバリなどの面での整備が必要であり、システムの安定性と信頼性を確保します。</li>
+</ol>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/%E3%83%AD%E3%83%BC%E3%83%89%E3%83%90%E3%83%A9%E3%83%B3%E3%82%B7%E3%83%B3%E3%82%B0/">ロードバランシング</a>
+        
+            <a href="/ja/tags/%E9%AB%98%E5%8F%AF%E7%94%A8%E6%80%A7-k%C5%8Dy%C5%ABy%C5%8D/">高可用性 (Kōyūyō)</a>
+        
+            <a href="/ja/tags/keepalived/">Keepalived</a>
+        
+            <a href="/ja/tags/haproxy/">HAProxy</a>
+        
+            <a href="/ja/tags/%E3%82%AF%E3%83%A9%E3%82%B9%E3%82%BF%E3%83%AA%E3%83%B3%E3%82%B0/">クラスタリング</a>
+        
+            <a href="/ja/tags/%E9%81%8B%E7%94%A8-uny%C5%8D/">運用 (Un&#39;yō)</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                claude-4-sonnet
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年09月19日 10:05
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

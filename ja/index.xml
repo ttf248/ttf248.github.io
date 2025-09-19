@@ -6,7 +6,613 @@
         <description>Recent content on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Thu, 18 Sep 2025 19:37:44 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Fri, 19 Sep 2025 10:05:47 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Keepalived &#43; HAProxy を用いた高可用ロードバランシングの構築</title>
+        <link>https://ttf248.life/ja/p/keepalived-haproxy-for-high-availability-load-balancing/</link>
+        <pubDate>Fri, 19 Sep 2025 09:45:55 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/keepalived-haproxy-for-high-availability-load-balancing/</guid>
+        <description>&lt;p&gt;現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;実際の構成部分が検証されていないため、本文の構成はAIによって作成されています&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;この画像は「タスク計画」というタイトルで、おそらくタスクのスケジュールやリストを示していると思われます。詳細な翻訳のためには画像の具体的な内容を確認する必要がありますが、一般的な表現として以下のように記述できます。&lt;/p&gt;
+&lt;p&gt;タスク計画 (Tasukku Keikaku) - 任務計画 (Tanmoku Keikaku)&lt;/p&gt;
+&lt;h2 id=&#34;技術概要&#34;&gt;技術概要
+&lt;/h2&gt;&lt;h3 id=&#34;keepalived-の概要&#34;&gt;Keepalived の概要
+&lt;/h3&gt;&lt;p&gt;Keepalived は、VRRP（Virtual Router Redundancy Protocol）プロトコルを基盤とした高可用性ソリューションであり、主にサーバーのフェイルオーバーとロードバランシングを実現するために使用されます。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;主な特徴：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;VRRP プロトコル対応:&lt;/strong&gt; 仮想IPアドレスの主/備切り替えの実装&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;健康チェック:&lt;/strong&gt; サービスの状態を監視し、自動的に故障トランスファーを実行&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;設定の簡素化:&lt;/strong&gt; 設定ファイルのみで複雑な高可用性アーキテクチャを実現&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;軽量:&lt;/strong&gt; リソース消費量が少なく、性能に優れている&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;動作原理：&lt;/strong&gt;
+Keepalived は、VRRP プロトコルを通じて複数のサーバー間で仮想IPアドレスを共有します。正常時には、主サーバーが仮想IPアドレスを持ちサービスを提供し、主サーバーが故障した場合、備サーバーが自動的に仮想IPアドレスを接管し、サービスの停止を防ぎます。&lt;/p&gt;
+&lt;h3 id=&#34;haproxy-の概要&#34;&gt;HAProxy の概要
+&lt;/h3&gt;&lt;p&gt;HAProxy は、高性能なロードバランサーおよびリバースプロキシサーバーであり、高負荷環境で広く利用されています。
+&lt;strong&gt;主な機能：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;ロードバランシング:&lt;/strong&gt; 複数のロードバランシングアルゴリズムをサポート&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ヘルスチェック:&lt;/strong&gt; バックエンドサーバーの状態をリアルタイムに監視&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSL終端:&lt;/strong&gt; HTTPS トラフィックの処理をサポート&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;統計モニタリング:&lt;/strong&gt; 詳細な実行状態の統計情報を提供
+&lt;strong&gt;利用シーン：&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;Web サービス のロードバランシング&lt;/li&gt;
+&lt;li&gt;データベース接続プーリング&lt;/li&gt;
+&lt;li&gt;マイクロサービスゲートウェイ&lt;/li&gt;
+&lt;li&gt;API インターフェース のプロキシ&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;アーキテクチャ設計&#34;&gt;アーキテクチャ設計
+&lt;/h2&gt;&lt;h3 id=&#34;全体アーキテクチャ&#34;&gt;全体アーキテクチャ
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;                    ┌─────────────────┐
+                    │   Client        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  Virtual IP     │
+                    │  (VIP)          │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (Master)       │◄────────────►│   (Backup)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   Backend     │ │   Backend   │ │   Backend     │
+└───────────────┘ └─────────────┘ └───────────────┘
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;全体アーキテクチャ-1&#34;&gt;全体アーキテクチャ
+&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;                    ┌─────────────────┐
+                    │   クライアント        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  仮想IP (VIP)       │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (マスター)       │◄────────────►│   (バックアップ)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   バックエンド     │ │   バックエンド   │ │   バックエンド     │
+└───────────────┘ └─────────────┘ └───────────────┘
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;コンポーネントの説明&#34;&gt;コンポーネントの説明
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;仮想IP (VIP)&lt;/strong&gt;: 顧客がアクセスする統一的なエントリポイント&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;HAProxy 主備ノード&lt;/strong&gt;: ロードバランシングサービスを提供し、Keepalivedを使用して高可用性を実現します&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;バックエンドサーバー&lt;/strong&gt;: 実際にサービスを提供するWebサーバー&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;環境準備&#34;&gt;環境準備
+&lt;/h2&gt;&lt;h3 id=&#34;サーバ計画&#34;&gt;サーバ計画
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;役割&lt;/th&gt;
+&lt;th&gt;IPアドレス&lt;/th&gt;
+&lt;th&gt;ホスト名&lt;/th&gt;
+&lt;th&gt;サービス&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;HAProxy 主ノード&lt;/td&gt;
+&lt;td&gt;192.168.1.10&lt;/td&gt;
+&lt;td&gt;lb-master&lt;/td&gt;
+&lt;td&gt;HAProxy + Keepalived&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;サーバ計画-1&#34;&gt;サーバ計画
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;役割&lt;/th&gt;
+&lt;th&gt;IPアドレス&lt;/th&gt;
+&lt;th&gt;ホスト名&lt;/th&gt;
+&lt;th&gt;サービス&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;HAProxy 備後端&lt;/td&gt;
+&lt;td&gt;192.168.1.11&lt;/td&gt;
+&lt;td&gt;lb-backup&lt;/td&gt;
+&lt;td&gt;HAProxy + Keepalived&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;サーバー構成&#34;&gt;サーバー構成
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;ロール&lt;/th&gt;
+&lt;th&gt;IPアドレス&lt;/th&gt;
+&lt;th&gt;ホスト名&lt;/th&gt;
+&lt;th&gt;サービス&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;仮想IP&lt;/td&gt;
+&lt;td&gt;192.168.1.100&lt;/td&gt;
+&lt;td&gt;-&lt;/td&gt;
+&lt;td&gt;VIP&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;サーバー計画&#34;&gt;サーバー計画
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;役割&lt;/th&gt;
+&lt;th&gt;IPアドレス&lt;/th&gt;
+&lt;th&gt;ホスト名&lt;/th&gt;
+&lt;th&gt;サービス&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Webサーバー1&lt;/td&gt;
+&lt;td&gt;192.168.1.20&lt;/td&gt;
+&lt;td&gt;web1&lt;/td&gt;
+&lt;td&gt;Nginx/Apache&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;サーバー構成-1&#34;&gt;サーバー構成
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;ロール&lt;/th&gt;
+&lt;th&gt;IPアドレス&lt;/th&gt;
+&lt;th&gt;ホスト名&lt;/th&gt;
+&lt;th&gt;サービス&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Webサーバー2&lt;/td&gt;
+&lt;td&gt;192.168.1.21&lt;/td&gt;
+&lt;td&gt;web2&lt;/td&gt;
+&lt;td&gt;Nginx/Apache&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;サーバー計画-1&#34;&gt;サーバー計画
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;ロール&lt;/th&gt;
+&lt;th&gt;IPアドレス&lt;/th&gt;
+&lt;th&gt;ホスト名&lt;/th&gt;
+&lt;th&gt;サービス&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;Webサーバー3&lt;/td&gt;
+&lt;td&gt;192.168.1.22&lt;/td&gt;
+&lt;td&gt;web3&lt;/td&gt;
+&lt;td&gt;Nginx/Apache&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;ソフトウェアのインストール&#34;&gt;ソフトウェアのインストール
+&lt;/h3&gt;&lt;p&gt;HAProxy主備サーバに必要ソフトウェアをインストールします：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# CentOS/RHEL
+yum install -y haproxy keepalived
+
+# Ubuntu/Debian
+apt-get update
+apt-get install -y haproxy keepalived
+
+# サービスを起動時に自動開始にする
+systemctl enable haproxy keepalived
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;keepalived-設定&#34;&gt;Keepalived 設定
+&lt;/h2&gt;&lt;h3 id=&#34;主ノード設定-lb-master&#34;&gt;主ノード設定 (lb-master)
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt; ファイルを作成します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! Configuration File for keepalived
+
+global_defs {
+    router_id LB_MASTER
+    script_user root
+    enable_script_security
+}
+
+# HAProxyサービスのステータスを確認するスクリプト
+vrrp_script chk_haproxy {
+    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface eth0
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+
+    track_script {
+        chk_haproxy
+    }
+
+    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
+    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
+    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;備中节点配置-lb-backup&#34;&gt;備中节点配置 (lb-backup)
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt; ファイルを作成します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! keepalived の構成ファイル
+
+global_defs {
+    router_id LB_BACKUP
+    script_user root
+    enable_script_security
+}
+
+vrrp_script chk_haproxy {
+    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
+    interval 2
+    weight -2
+    fall 3
+    rise 2
+}
+
+vrrp_instance VI_1 {
+    state BACKUP
+    interface eth0
+    virtual_router_id 51
+    priority 90
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass mypassword123
+    }
+
+    virtual_ipaddress {
+        192.168.1.100/24
+    }
+
+    track_script {
+        chk_haproxy
+    }
+
+    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
+    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
+    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;haproxy健康チェックスクリプト&#34;&gt;HAProxy健康チェックスクリプト
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;/etc/keepalived/check_haproxy.sh&lt;/code&gt;というHAProxyの健康チェックスクリプトを作成します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+# HAProxyプロセスが実行中か確認
+if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+    # HAProxyを起動を試行
+    systemctl start haproxy
+    sleep 2
+
+    # 再度チェックし、まだ実行されていない場合は終了
+    if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
+        exit 1
+    fi
+fi
+
+# HAProxyポートがリッスン中か確認
+if ! netstat -tuln | grep -q &amp;quot;:80 &amp;quot;; then
+    exit 1
+fi
+
+exit 0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;状態通知スクリプト&#34;&gt;状態通知スクリプト
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;/etc/keepalived/notify.sh&lt;/code&gt; という状態通知スクリプトを作成します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
+
+TYPE=$1
+NAME=$2
+STATE=$3
+
+case $STATE in
+    &amp;quot;MASTER&amp;quot;)
+        echo &amp;quot;$(date): Became MASTER&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    &amp;quot;BACKUP&amp;quot;)
+        echo &amp;quot;$(date): Became BACKUP&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    &amp;quot;FAULT&amp;quot;)
+        echo &amp;quot;$(date): Fault detected&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+    *)
+        echo &amp;quot;$(date): Unknown state: $STATE&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+        ;;
+esac
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;スクリプトの実行権限を設定します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;chmod +x /etc/keepalived/check_haproxy.sh
+chmod +x /etc/keepalived/notify.sh
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;haproxy-設定&#34;&gt;HAProxy 設定
+&lt;/h2&gt;&lt;h3 id=&#34;メイン設定ファイル&#34;&gt;メイン設定ファイル
+&lt;/h3&gt;&lt;p&gt;主備ノード上で同じHAProxyの設定ファイル &lt;code&gt;/etc/haproxy/haproxy.cfg&lt;/code&gt; を作成します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;global
+    log 127.0.0.1:514 local0
+    chroot /var/lib/haproxy
+    stats socket /run/haproxy/admin.sock mode 660 level admin
+    stats timeout 30s
+    user haproxy
+    group haproxy
+    daemon
+
+defaults
+    mode http
+    log global
+    option httplog
+    option dontlognull
+    option log-health-checks
+    option forwardfor except 127.0.0.0/8
+    option redispatch
+    retries 3
+    timeout http-request 10s
+    timeout queue 1m
+    timeout connect 10s
+    timeout client 1m
+    timeout server 1m
+    timeout http-keep-alive 10s
+    timeout check 10s
+    maxconn 3000
+
+# ページ設定の統計
+listen stats
+    bind *:8080
+    stats enable
+    stats uri /stats
+    stats realm HAProxy\ Statistics
+    stats auth admin:password123
+    stats refresh 30s
+
+# 前端設定
+frontend web_frontend
+    bind *:80
+    default_backend web_servers
+
+# 後端サーバー設定
+backend web_servers
+    balance roundrobin
+    option httpchk GET /health
+    
+    server web1 192.168.1.20:80 check inter 2000 rise 2 fall 3
+    server web2 192.168.1.21:80 check inter 2000 rise 2 fall 3
+    server web3 192.168.1.22:80 check inter 2000 rise 2 fall 3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;設定手順&#34;&gt;設定手順
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;グローバル設定:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;log&lt;/code&gt;: 日志設定&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;chroot&lt;/code&gt;: セーフティサンドボックス&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;stats socket&lt;/code&gt;: 管理インターフェース&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;daemon&lt;/code&gt;: バックグラウンド実行
+&lt;strong&gt;デフォルト設定:&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;mode http&lt;/code&gt;: HTTPモード&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;balance roundrobin&lt;/code&gt;: ラウンドロビンバランシング&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;option httpchk&lt;/code&gt;: HTTPヘルスチェック&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;timeout&lt;/code&gt;: 様々なタイムアウト設定
+&lt;strong&gt;バックエンドサーバー:&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;check&lt;/code&gt;: ヘルスチェックを有効にする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;inter 2000&lt;/code&gt;: チェック間隔2秒&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;rise 2&lt;/code&gt;: 連続2回成功した場合に可用とマークする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;fall 3&lt;/code&gt;: 連続3回失敗した場合に不可用とマークする&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;サービス開始とテスト&#34;&gt;サービス開始とテスト
+&lt;/h2&gt;&lt;h3 id=&#34;サービスの起動&#34;&gt;サービスの起動
+&lt;/h3&gt;&lt;p&gt;主節点および副節点上でサービスを起動します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# HAProxyの起動
+systemctl start haproxy
+systemctl status haproxy
+
+# Keepalivedの起動
+systemctl start keepalived
+systemctl status keepalived
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;vip認証の確認&#34;&gt;VIP認証の確認
+&lt;/h3&gt;&lt;p&gt;仮想IPが正しくバインドされているかを確認します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 主ノードでIPアドレスを表示
+ip addr show
+
+# 以下の様な出力が表示されるはずです：
+# eth0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0
+#     inet 192.168.1.100/24 scope global secondary eth0:0
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;機能テスト&#34;&gt;機能テスト
+&lt;/h3&gt;&lt;h4 id=&#34;1-負荷分散テスト&#34;&gt;1. 負荷分散テスト
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# VIPに複数回アクセスし、リクエストの分配状況を監視
+for i in {1..10}; do
+    curl -s http://192.168.1.100/ | grep &amp;quot;Server&amp;quot;
+done
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;2-フェイルオーバーテスト&#34;&gt;2. フェイルオーバーテスト
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 主ノードでHAProxyサービスを停止する
+systemctl stop haproxy
+
+# VIPがバックノードに切り替わるのを監視する
+ip addr show
+
+# サービスの正常性を確認する
+curl http://192.168.1.100/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;3-バックエンドサーバー障害テスト&#34;&gt;3. バックエンドサーバー障害テスト
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 一台のWebサーバーを停止する
+# web1サーバーで：
+systemctl stop nginx
+
+# HAProxy統計ページを監視する
+curl http://192.168.1.100:8080/stats
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;モニタリングとメンテナンス&#34;&gt;モニタリングとメンテナンス
+&lt;/h2&gt;&lt;h3 id=&#34;ロギング監視&#34;&gt;ロギング監視
+&lt;/h3&gt;&lt;h4 id=&#34;haproxyログ&#34;&gt;HAProxyログ
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# HAProxyログの確認
+tail -f /var/log/haproxy.log
+
+# アクセス統計の確認
+grep &amp;quot;HTTP/1.1&amp;quot; /var/log/haproxy.log | tail -20
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4 id=&#34;keepalivedログ&#34;&gt;Keepalivedログ
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Keepalivedログの確認
+tail -f /var/log/messages | grep keepalived
+
+# 状態変化ログの確認
+tail -f /var/log/keepalived-state.log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;パフォーマンス監視&#34;&gt;パフォーマンス監視
+&lt;/h3&gt;&lt;h4 id=&#34;統計ページ監視&#34;&gt;統計ページ監視
+&lt;/h4&gt;&lt;p&gt;HAProxyの統計ページへのアクセス: &lt;code&gt;http://192.168.1.100:8080/stats&lt;/code&gt;
+主要指標:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Session Rate&lt;/strong&gt;: 会話レート&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Session Total&lt;/strong&gt;: 総会話数&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Bytes In/Out&lt;/strong&gt;: 流量統計&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Response Time&lt;/strong&gt;: 応答時間&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Server Status&lt;/strong&gt;: サーバー状態&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4 id=&#34;コマンドライン監視&#34;&gt;コマンドライン監視
+&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# HAProxyプロセスの状態を確認
+ps aux | grep haproxy
+
+# ポートのリスニング状態を確認
+netstat -tuln | grep -E &amp;quot;(80|8080)&amp;quot;
+
+# 接続数を確認
+ss -ant | grep :80 | wc -l
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;よくあるトラブルシューティング&#34;&gt;よくあるトラブルシューティング
+&lt;/h2&gt;&lt;h3 id=&#34;1-vipの切り替え不可&#34;&gt;1. VIPの切り替え不可
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;問題現象:&lt;/strong&gt;
+主ノード故障後、VIPがバックアップノードに切り替わらない
+&lt;strong&gt;トラブルシューティング手順:&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# Keepalived設定を確認
+keepalived -t -f /etc/keepalived/keepalived.conf
+
+# VRRP通信を監視
+tcpdump -i eth0 vrrp
+
+# ファイアウォール設定を確認
+iptables -L | grep vrrp
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;解決策:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;VRRPプロトコル通信が正常であることを確認&lt;/li&gt;
+&lt;li&gt;ネットワークインターフェースの設定を確認&lt;/li&gt;
+&lt;li&gt;認証パスワードの一致性を検証&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-健康チェック失敗&#34;&gt;2. 健康チェック失敗
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;問題現象:&lt;/strong&gt;
+バックエンドサーバーが利用不可としてマークされている
+&lt;strong&gt;トラブルシューティング手順:&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 手動で健康チェックを実行
+curl -I http://192.168.1.20/health
+
+# HAProxyログを確認
+grep &amp;quot;Health check&amp;quot; /var/log/haproxy.log
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;解決策:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;健康チェックURLにアクセス可能であることを確認&lt;/li&gt;
+&lt;li&gt;チェック間隔と閾値を調整&lt;/li&gt;
+&lt;li&gt;バックエンドサーバーの状態を確認&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-負荷分散の不均衡&#34;&gt;3. 負荷分散の不均衡
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;問題現象:&lt;/strong&gt;
+リクエストがバックエンドサーバーに均等に分散されない
+&lt;strong&gt;トラブルシューティング手順:&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 統計ページを確認
+curl -s http://192.168.1.100:8080/stats
+
+# アクセスログを分析
+awk &#39;{print $6}&#39; /var/log/haproxy.log | sort | uniq -c
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;解決策:&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;負荷分散アルゴリズムの設定を確認&lt;/li&gt;
+&lt;li&gt;サーバーの重み設定を検証&lt;/li&gt;
+&lt;li&gt;セッション保持の要件を考慮&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;オプティマイズの提案&#34;&gt;オプティマイズの提案
+&lt;/h2&gt;&lt;h3 id=&#34;1-パフォーマンス最適化&#34;&gt;1. パフォーマンス最適化
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# システムパラメータの調整
+echo &#39;net.core.somaxconn = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
+echo &#39;net.ipv4.tcp_max_syn_backlog = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
+sysctl -p
+
+# HAProxy設定の最適化
+# maxconn値を増やす
+# timeoutパラメータを調整する
+# 圧縮機能を有効にする
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;2-セキュリティ強化&#34;&gt;2. セキュリティ強化
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 統計ページへのアクセス制限
+# haproxy.cfg に ACL ルールを追加
+acl allowed_ips src 192.168.1.0/24
+http-request deny if !allowed_ips
+
+# SSL/TLS の有効化
+bind *:443 ssl crt /etc/ssl/certs/server.pem
+redirect scheme https if !{ ssl_fc }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;3-モニタリングとアラート&#34;&gt;3. モニタリングとアラート
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 統合監視システム
+# Prometheusによる監視設定
+# Grafanaダッシュボードの設定
+# アラートルールを設定
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;結論&#34;&gt;結論
+&lt;/h2&gt;&lt;p&gt;KeepalivedとHAProxyの組み合わせにより、高可用性を持つロードバランシングクラスタを構築しました。この構成には以下の利点があります。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;高可用性:&lt;/strong&gt; VRRPプロトコルによる自動フェイルオーバーを実現&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ロードバランシング:&lt;/strong&gt; スマートなリクエスト分散により、システム性能を向上&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;健康チェック:&lt;/strong&gt; リアルタイムでサービスの状態を監視し、故障ノードを自動的に除外&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;メンテナンスの容易さ:&lt;/strong&gt; 設定が簡単で、管理も容易&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;コスト効率:&lt;/strong&gt; オープンソースソフトウェアを使用することで、運用コストを削減
+本番環境へのデプロイ時には、ネットワークセキュリティ、監視アラート、バックアップとリカバリなどの面での整備が必要であり、システムの安定性と信頼性を確保します。&lt;/li&gt;
+&lt;/ol&gt;</description>
+        </item>
+        <item>
         <title>美团の赤字から債券ミスマッチへ (Meitan no akiji kara kaibon mismatch he)</title>
         <link>https://ttf248.life/ja/p/from-meituans-losses-to-bond-mismatch/</link>
         <pubDate>Thu, 18 Sep 2025 19:19:10 +0800</pubDate>
