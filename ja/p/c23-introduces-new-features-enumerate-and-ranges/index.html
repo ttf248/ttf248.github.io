@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="あるホットな関数におけるパフォーマンス最適化で、内部ループがボトルネックとなり、AIからの提案としてenumerateとrangesが利用可能になったため、関連資料を調査した。\n">
+<title>C&#43;&#43;23 で導入された新機能である enumerate と ranges</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/c23-introduces-new-features-enumerate-and-ranges/'>
+
+<link rel="stylesheet" href="/scss/style.min.a2714c9632013309acc13e941c4a637a771eba1d2e2e25f24d7bda75c48da2d2.css"><meta property='og:title' content="C++23 で導入された新機能である enumerate と ranges">
+<meta property='og:description' content="あるホットな関数におけるパフォーマンス最適化で、内部ループがボトルネックとなり、AIからの提案としてenumerateとrangesが利用可能になったため、関連資料を調査した。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/c23-introduces-new-features-enumerate-and-ranges/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='構文シュガー' /><meta property='article:published_time' content='2025-10-09T19:08:07&#43;08:00'/><meta property='article:modified_time' content='2025-10-09T19:33:42&#43;08:00'/>
+<meta name="twitter:title" content="C++23 で導入された新機能である enumerate と ranges">
+<meta name="twitter:description" content="あるホットな関数におけるパフォーマンス最適化で、内部ループがボトルネックとなり、AIからの提案としてenumerateとrangesが利用可能になったため、関連資料を調査した。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+  
+    
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    
+  
+
+
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>ダークモード</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#stdviewsenumerate-パターンの詳細解説"><code>std::views::enumerate</code> パターンの詳細解説</a></li>
+    <li><a href="#完全実行可能なテストデモ-c23">完全実行可能なテストデモ (C++23)</a></li>
+    <li><a href="#完全実行可能なテストデモc23">完全実行可能なテストデモ（C++23）</a></li>
+    <li><a href="#完全実行可能なテストデモc23-1">完全実行可能なテストデモ（C++23）</a></li>
+    <li><a href="#パフォーマンス差異分析と結論">パフォーマンス差異分析と結論</a>
+      <ol>
+        <li><a href="#理論分析">理論分析</a></li>
+        <li><a href="#実際テスト結果">実際テスト結果</a></li>
+        <li><a href="#実験結果の結論">実験結果の結論</a></li>
+        <li><a href="#実験結果の結論-1">実験結果の結論</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: #4CAF50;
+    --copy-btn-hover-bg: #45a049;
+    --copy-btn-success-bg: #2196F3;
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 6px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1rem 0;
+}
+
+.code-container pre {
+    margin: 0;
+    border-radius: var(--copy-btn-border-radius);
+    overflow-x: auto;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 6px 12px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: none;
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0.8;
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 0.8em;
+        padding: 4px 8px;
+        top: 4px;
+        right: 4px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 1;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.initializeHighlighting();
+        this.addCopyButtons();
+    }
+
+    initializeHighlighting() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                コンピューター
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/c23-introduces-new-features-enumerate-and-ranges/">C&#43;&#43;23 で導入された新機能である enumerate と ranges</a>
+        </h2>
+    
+        
+
+        
+        <h5 class="article-summary" style="display: none;"><p>あるホットな関数におけるパフォーマンス最適化で、内部ループがボトルネックとなり、AIからの提案として<code>enumerate</code>と<code>ranges</code>が利用可能になったため、関連資料を調査した。</p></h5>
+        <script>
+            document.addEventListener("DOMContentLoaded", function() {
+                if (typeof isHomepage !== 'undefined' && isHomepage === true) {
+                    document.querySelectorAll(".article-summary").forEach(function(element) {
+                        element.style.display = "block";
+                    });
+                }
+            });
+        </script>
+    </div>
+
+    
+    
+    
+    
+    <footer class="article-time">
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                <time class="article-time--published">2025年10月09日</time>
+            </div>
+        
+
+        
+            <div>
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                <time class="article-time--reading">
+                    読了時間: 8分
+                </time>
+            </div>
+        
+    </footer>
+    
+
+    
+        <footer class="article-translations">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+            <div>
+                
+                    <a href="https://ttf248.life/p/c23-introduces-new-features-enumerate-and-ranges/" class="link">中文</a>
+                
+                    <a href="https://ttf248.life/en/p/c23-introduces-new-features-enumerate-and-ranges/" class="link">English</a>
+                
+            </div>
+        </footer>
+    
+</div>
+</header>
+
+    <section class="article-content">
+    
+    
+    <p>あるホットな関数におけるパフォーマンス最適化で、内部ループがボトルネックとなり、AIからの提案として<code>enumerate</code>と<code>ranges</code>が利用可能になったため、関連資料を調査した。</p>
+<p>文章の主体部分はAIによって生成され、筆者はコードをテストし、いくつかの補足説明を加えた。
+<a class="link" href="https://wandbox.org/"  target="_blank" rel="noopener"
+    >オンラインコンパイラ</a>でC++コードをテストする際には、やはり馴染み深い老友だちである。
+gcc13上で動作した場合、従来のforループが<code>std::views::enumerate</code>よりもわずかに高速であり、実質的には無視できる程度だった。
+gcc16上で動作した場合、両者のパフォーマンスはほぼ完全に同じだった。</p>
+<blockquote>
+<p>デバッグモード下では、従来のforループの方が顕著に速い。ほぼ2倍の速度だった。</p>
+</blockquote>
+<hr>
+<p>これは素晴らしい質問です。<code>std::views::enumerate</code> は C++23 で導入された <strong>Ranges</strong> ライブラリの一部であり、コンテナをより簡潔かつ安全にイテレートしつつ、要素の<strong>インデックス</strong>を取得することを目的としています。
+C++ の設計哲学に基づき、**<code>std::views::enumerate</code> (および Ranges ライブラリのほとんどの View) はパフォーマンスにおいて、従来のインデックスループやイテレータループと同等、あるいは特定のコンパイラ最適化下ではわずかに優れているはずです。これは、より高度な意味情報を提供するためです。コンパイラは通常、<strong>ゼロオーバーヘッド抽象 (Zero-Overhead Abstraction)</strong> の原則により、<code>std::views::enumerate</code> の高度な構造を、手書きのループと同じ機械コードに最適化できます。
+以下では、<code>enumerate</code> パターンについて詳しく説明し、そのパフォーマンスの違いを比較するための完全な C++ テストデモを示します。</p>
+<hr>
+<h2 id="stdviewsenumerate-パターンの詳細解説"><code>std::views::enumerate</code> パターンの詳細解説
+</h2><p><code>std::views::enumerate</code> は、<strong>ビューアダプター (View Adaptor)</strong> であり、Range（例えば <code>std::vector</code>）を受け取り、新しい Range を生成します。</p>
+<ul>
+<li><strong>新しい Range の要素の型:</strong> 新しい Range 内の各要素は、構造化バインディング (Structured Binding) でアンパック可能な <strong>タプル (tuple-like)</strong> オブジェクトであり、2 つの部分を含みます。
+<ol>
+<li><strong>インデックス (Index):</strong> 要素のゼロベースのインデックス (<code>std::size_t</code>)。</li>
+<li><strong>値/参照 (Value/Reference):</strong> 原始 Range 内の対応する要素への参照（通常は <code>const auto&amp;</code> または <code>auto&amp;</code>）です。</li>
+</ol>
+</li>
+</ul>
+<ol>
+<li><strong>使用方法:</strong> 通常、C++17 で導入された <strong>構造化バインディング</strong> と組み合わせて使用され、コードをより簡潔で読みやすくします。これは Python の <code>enumerate()</code> に似ています。</li>
+<li><strong>利点:</strong></li>
+</ol>
+<ul>
+<li><strong>可読性の向上:</strong> インデックスと要素値をループのヘッダー部分で分離することで、一目で理解できます。</li>
+<li><strong>インデックスの明示的な管理を回避:</strong> ループ外部でインデックス変数を宣言したり、ループ内部でインデックスが漏れることを心配する必要はありません。</li>
+<li><strong>Range-based For Loop の意味を保持:</strong> Range-based For Loop の簡潔さと、従来の For 循環におけるインデックスへの要求を組み合わせます。</li>
+</ul>
+<hr>
+<h2 id="完全実行可能なテストデモ-c23">完全実行可能なテストデモ (C++23)
+</h2><p>公平な性能比較を行うため、両方のモードが大量のデータを処理する際の時間を測定するために、<strong>高精度タイマー</strong>を使用します。
+<strong>注意:</strong> このコードを実行するには、<strong>C++23</strong> をサポートするコンパイラが必要です (<code>std::views::enumerate</code> は C++23 標準の一部です)。</p>
+<h2 id="完全実行可能なテストデモc23">完全実行可能なテストデモ（C++23）
+</h2><pre><code class="language-cpp">#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;chrono&gt;
+#include &lt;numeric&gt;
+#include &lt;ranges&gt;
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;functional&gt;
+
+// 別名簡略化
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+
+// 定数定義：テストデータ量
+constexpr size_t DATA_SIZE = 50000000; // 5000万個要素
+constexpr int TEST_ITERATIONS = 5;      // 5回実行して平均を取る
+
+/**
+ * @brief 大規模なベクトルを作成し、テストに使用。
+ */
+std::vector&lt;int&gt; create_test_data() {
+    std::vector&lt;int&gt; data(DATA_SIZE);
+    std::iota(data.begin(), data.end(), 1); // 1, 2, 3, ... を要素として埋める
+    return data;
+}
+
+/**
+ * @brief 伝統的なパターン：インデックス付きの for ループを使用。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long traditional_loop(const std::vector&lt;int&gt;&amp; data) {
+    long long sum = 0;
+    // std::size_t を使用して、signed/unsigned の警告を回避
+    for (std::size_t idx = 0; idx &lt; data.size(); ++idx) {
+        const int item = data[idx];
+        // シミュレーションされた複雑な計算：要素値 + インデックスの平方根（コンパイラがループ全体を最適化しないように）
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief Enumerate パターン：std::views::enumerate を使用。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long enumerate_loop(const std::vector&lt;int&gt;&amp; data) {
+    long long sum = 0;
+    // 構造束 [idx, item] を使用
+    for (const auto&amp; [idx, item] : std::views::enumerate(data)) {
+        // idx はインデックス (std::size_t)
+        // item は要素の参照 (const int&amp;)
+        // シミュレーションされた複雑な計算：要素値 + インデックスの平方根
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief 実行性能テストを実行し、結果を出力。
+ * * @param name テスト名。
+ * @param func テストするループ関数。
+ * @param data 処理するデータ。
+ * @return long long 実行時間（ミリ秒）。
+ */
+long long run_test(const std::string&amp; name, 
+                   std::function&lt;long long(const std::vector&lt;int&gt;&amp;)&gt; func,
+                   const std::vector&lt;int&gt;&amp; data) {
+    
+    std::cout &lt;&lt; &quot;--- &quot; &lt;&lt; name &lt;&lt; &quot; ---\n&quot;;
+    long long total_duration_ms = 0;
+
+    for (int i = 0; i &lt; TEST_ITERATIONS; ++i) {
+        auto start = high_resolution_clock::now();
+        
+        // コンパイラが関数呼び出しを最適化しないようにする
+        volatile long long result = func(data); 
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast&lt;milliseconds&gt;(end - start);
+        total_duration_ms += duration.count();
+        
+        // 結果が使用されることを確認し、最適化を回避しながら、2つのモードの結果の一致を確認
+        if (i == 0) {
+            std::cout &lt;&lt; &quot;  [結果のチェック]: &quot; &lt;&lt; result &lt;&lt; &quot;\n&quot;;
+        }
+        std::cout &lt;&lt; &quot;  Iteration &quot; &lt;&lt; i + 1 &lt;&lt; &quot; Time: &quot; &lt;&lt; duration.count() &lt;&lt; &quot; ms\n&quot;;
+    }
+
+    long long avg_duration_ms = total_duration_ms / TEST_ITERATIONS;
+    std::cout &lt;&lt; &quot;  平均時間: &quot; &lt;&lt; avg_duration_ms &lt;&lt; &quot; ms\n&quot;;
+    return まとめ比較
+    std::cout &lt;&lt; &quot;\n==============================\n&quot;;
+    std::cout &lt;&lt; &quot;最終パフォーマンス比較\n&quot;;
+    std::cout &lt;&lt; &quot;==============================\n&quot;;
+    std::cout &lt;&lt; &quot;伝統的なループ平均時間: &quot; &lt;&lt; traditional_time &lt;&lt; &quot; ms\n&quot;;
+    std::cout &lt;&lt; &quot;enumerateループ平均時間:   &quot; &lt;&lt; enumerate_time &lt;&lt; &quot; ms\n&quot;; ## 完全実行可能なテストデモ（C++23）
+```cpp
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;chrono&gt;
+#include &lt;numeric&gt;
+#include &lt;ranges&gt;
+#include &lt;algorithm&gt;
+#include &lt;cmath&gt;
+#include &lt;functional&gt;
+
+// 別名簡略化
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+
+// 定数定義：テストデータ量
+constexpr size_t DATA_SIZE = 50000000; // 5000万個要素
+constexpr int TEST_ITERATIONS = 5;      // 5回実行して平均を取る
+
+/**
+ * @brief テスト用の大きなベクトルを作成します。
+ */
+std::vector&lt;int&gt; create_test_data() {
+    std::vector&lt;int&gt; data(DATA_SIZE);
+    std::iota(data.begin(), data.end(), 1); // 1, 2, 3, ... を埋める
+    return data;
+}
+
+/**
+ * @brief 伝統的なパターン：インデックス付きの for ループを使用します。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long traditional_loop(const std::vector&lt;int&gt;&amp; data) {
+    long long sum = 0;
+    // std::size_t を使用して、signed/unsigned の警告を回避
+    for (std::size_t idx = 0; idx &lt; data.size(); ++idx) {
+        const int item = data[idx];
+        // 複雑な計算をシミュレーション：要素値 + インデックスの平方根（コンパイラがループ全体を最適化しないように）
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief Enumerate パターン：std::views::enumerate を使用します。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long enumerate_loop(const std::vector&lt;int&gt;&amp; data) {
+    long long sum = 0;
+    // 構造化バインディング [idx, item] を使用
+    for (const auto&amp; [idx, item] : std::views::enumerate(data)) {
+        // idx はインデックス (std::size_t)
+        // item は要素の参照 (const int&amp;)
+        // 複雑な計算をシミュレーション：要素値 + インデックスの平方根
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief パフォーマンステストを実行し、結果を出力します。
+ * * @param name テスト名。
+ * @param func 実行するループ関数。
+ * @param data 処理するデータ。
+ * @return long long 実行時間（ミリ秒）。
+ */
+long long run_test(const std::string&amp; name, 
+                   std::function&lt;long long(const std::vector&lt;int&gt;&amp;)&gt; func,
+                   const std::vector&lt;int&gt;&amp; data) {
+    
+    std::cout &lt;&lt; &quot;--- &quot; &lt;&lt; name &lt;&lt; &quot; ---\n&quot;;
+    long long total_duration_ms = 0;
+
+    for (int i = 0; i &lt; TEST_ITERATIONS; ++i) {
+        auto start = high_resolution_clock::now();
+        
+        // コンパイラが関数呼び出しを最適化しないようにする
+        volatile long long result = func(data); 
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast&lt;milliseconds&gt;(end - start);
+        total_duration_ms += duration.count();
+        
+        // 結果が使用されることを確認し、最適化を回避しながら、2つのモードの結果の一致を確認
+        if (i == 0) {
+            std::cout &lt;&lt; &quot;  [結果のチェック]: &quot; &lt;&lt; result &lt;&lt; &quot;\n&quot;;
+        }
+        std::cout &lt;&lt; &quot;  Iteration &quot; &lt;&lt; i + 1 &lt;&lt; &quot; Time: &quot; &lt;&lt; duration.count() &lt;&lt; &quot; ms\n&quot;;
+    }
+
+    long long avg_duration_ms = total_duration_ms / TEST_ITERATIONS;
+    std::cout &lt;&lt; &quot;  平均時間: &quot; &lt;&lt; avg_duration_ms &lt;&lt; &quot; ms\n&quot;;
+
+## 完全実行可能なテストデモ (C++23)
+```cpp
+if (traditional_time &lt; enumerate_time) {
+        std::cout &lt;&lt; &quot;\n結論: Traditional Loop がわずかに速かった。\n&quot;;
+        double diff = (double)(enumerate_time - traditional_time) / traditional_time * 100.0;
+        std::cout &lt;&lt; &quot;差分: enumerate モードで &quot; &lt;&lt; diff &lt;&lt; &quot;% 遅い。\n&quot;;
+    } else if (enumerate_time &lt; traditional_time) {
+        std::cout &lt;&lt; &quot;\n結論: Enumerate Loop がわずかに速かった。\n&quot;;
+        double diff = (double)(traditional_time - enumerate_time) / enumerate_time * 100.0;
+        std::cout &lt;&lt; &quot;差分: traditional モードで &quot; &lt;&lt; diff &lt;&lt; &quot;% 遅い。\n&quot;;
+    } else {
+        std::cout &lt;&lt; &quot;\n結論: 両方のモードがほぼ同じパフォーマンスを示した。\n&quot;;
+    }
+
+    return 0;
+}
+</code></pre>
+<h2 id="完全実行可能なテストデモc23-1">完全実行可能なテストデモ（C++23）
+</h2><h2 id="パフォーマンス差異分析と結論">パフォーマンス差異分析と結論
+</h2><h3 id="理論分析">理論分析
+</h3><p>C++ において、<strong>性能差の根本原因はコンパイラがゼロオーバーヘッド抽象 (Zero-Overhead Abstraction) を実現できるかどうかにあります。</strong></p>
+<ul>
+<li><strong>伝統的なループ:</strong> メモリのアドレスとインデックスを直接操作する方法であり、最も低レベルで効率的です。</li>
+<li><strong><code>std::views::enumerate</code> ループ:</strong> <code>enumerate_view</code> という抽象層を導入します。内部では、イテレータを使用してインデックスと値をペア化します。
+現代の高度に最適化されたコンパイラ (GCC/Clang で O2/O3 オプティマイズを有効にした場合など) は、<strong>インライン化 (inline)</strong> して <code>enumerate_view</code> とそのイテレータの操作を実行し、<strong>ループアンローリング (loop unrolling)</strong> などの最適化を行います。最終的に、<code>std::views::enumerate</code> ループが生成するアセンブリコードは、<strong>伝統的なインデックスループが生成するアセンブリコードとほぼ同じ</strong>になります。</li>
+</ul>
+<h3 id="実際テスト結果">実際テスト結果
+</h3><p>実機実行デモの結果（O2/O3最適化を使用）に基づくと：
+| <strong>伝統的インデックスループ</strong> | X (ベースライン) | 約0% | 低：インデックスを手動で管理する必要があり、エラーが発生しやすい |</p>
+<h3 id="実験結果の結論">実験結果の結論
+</h3><div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>パターン</th>
+<th>平均時間 (ms)</th>
+<th>性能差</th>
+<th>可読性/安全性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>std::views::enumerate</code></td>
+<td>X ± 極小変動</td>
+<td>≈ 0%</td>
+<td><strong>高：</strong> 自動インデックス、簡潔で安全</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="実験結果の結論-1">実験結果の結論
+</h3><p><strong>結論：</strong>
+コンパイラ最適化を使用した場合、<code>std::views::enumerate</code> パターンと従来のインデックスループパターンは、パフォーマンスにおいてほぼ差がありません。したがって、その性能は<strong>同等</strong>であると言えます。
+そのため、C++23 以降では、<code>std::views::enumerate</code> パターンを推奨します。これは、性能を犠牲にすることなく、コードの<strong>可読性、簡潔性、安全性</strong>を大幅に向上させるためです。</p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/c-/">C&#43;&#43;</a>
+        
+            <a href="/ja/tags/%E6%A7%8B%E6%96%87%E3%82%B7%E3%83%A5%E3%82%AC%E3%83%BC/">構文シュガー</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                gemini-2.5-flash
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2025年10月09日 19:33
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">関連するコンテンツ</h2>
+    <div class="related-content">
+        <div class="flex article-list--tile">
+            
+                
+<article class="">
+    <a href="/ja/p/cross-machine-computation-time-difference/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">マシン間計算の時間差 (Mashinkan tenkiho no jikanusa)</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/memory-layout-and-binary-compatibility/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">メモリレイアウトとバイナリ互換性</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/cpp-bitwise-operations-flags/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">C&#43;&#43; ビット演算の基礎：ビットごとのANDとフラグ設定</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/linux-backend-slow-string-processing/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</h2>
+        </div>
+    </a>
+</article>
+
+            
+                
+<article class="">
+    <a href="/ja/p/cpp-lambda-parameter-lifetime/">
+        
+        
+
+        <div class="article-details">
+            <h2 class="article-title">C&#43;&#43;におけるラムダ式のパラメータのライフタイムについて</h2>
+        </div>
+    </a>
+</article>
+
+            
+        </div>
+    </div>
+</aside>
+
+     
+    
+        
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2025 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

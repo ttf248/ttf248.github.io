@@ -6,7 +6,298 @@
         <description>Recent content on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Fri, 26 Sep 2025 20:39:28 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 09 Oct 2025 19:33:42 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>C&#43;&#43;23 で導入された新機能である enumerate と ranges</title>
+        <link>https://ttf248.life/ja/p/c23-introduces-new-features-enumerate-and-ranges/</link>
+        <pubDate>Thu, 09 Oct 2025 19:08:07 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/c23-introduces-new-features-enumerate-and-ranges/</guid>
+        <description>&lt;p&gt;あるホットな関数におけるパフォーマンス最適化で、内部ループがボトルネックとなり、AIからの提案として&lt;code&gt;enumerate&lt;/code&gt;と&lt;code&gt;ranges&lt;/code&gt;が利用可能になったため、関連資料を調査した。&lt;/p&gt;
+&lt;p&gt;文章の主体部分はAIによって生成され、筆者はコードをテストし、いくつかの補足説明を加えた。
+&lt;a class=&#34;link&#34; href=&#34;https://wandbox.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;オンラインコンパイラ&lt;/a&gt;でC++コードをテストする際には、やはり馴染み深い老友だちである。
+gcc13上で動作した場合、従来のforループが&lt;code&gt;std::views::enumerate&lt;/code&gt;よりもわずかに高速であり、実質的には無視できる程度だった。
+gcc16上で動作した場合、両者のパフォーマンスはほぼ完全に同じだった。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;デバッグモード下では、従来のforループの方が顕著に速い。ほぼ2倍の速度だった。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;p&gt;これは素晴らしい質問です。&lt;code&gt;std::views::enumerate&lt;/code&gt; は C++23 で導入された &lt;strong&gt;Ranges&lt;/strong&gt; ライブラリの一部であり、コンテナをより簡潔かつ安全にイテレートしつつ、要素の&lt;strong&gt;インデックス&lt;/strong&gt;を取得することを目的としています。
+C++ の設計哲学に基づき、**&lt;code&gt;std::views::enumerate&lt;/code&gt; (および Ranges ライブラリのほとんどの View) はパフォーマンスにおいて、従来のインデックスループやイテレータループと同等、あるいは特定のコンパイラ最適化下ではわずかに優れているはずです。これは、より高度な意味情報を提供するためです。コンパイラは通常、&lt;strong&gt;ゼロオーバーヘッド抽象 (Zero-Overhead Abstraction)&lt;/strong&gt; の原則により、&lt;code&gt;std::views::enumerate&lt;/code&gt; の高度な構造を、手書きのループと同じ機械コードに最適化できます。
+以下では、&lt;code&gt;enumerate&lt;/code&gt; パターンについて詳しく説明し、そのパフォーマンスの違いを比較するための完全な C++ テストデモを示します。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;stdviewsenumerate-パターンの詳細解説&#34;&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; パターンの詳細解説
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; は、&lt;strong&gt;ビューアダプター (View Adaptor)&lt;/strong&gt; であり、Range（例えば &lt;code&gt;std::vector&lt;/code&gt;）を受け取り、新しい Range を生成します。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;新しい Range の要素の型:&lt;/strong&gt; 新しい Range 内の各要素は、構造化バインディング (Structured Binding) でアンパック可能な &lt;strong&gt;タプル (tuple-like)&lt;/strong&gt; オブジェクトであり、2 つの部分を含みます。
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;インデックス (Index):&lt;/strong&gt; 要素のゼロベースのインデックス (&lt;code&gt;std::size_t&lt;/code&gt;)。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;値/参照 (Value/Reference):&lt;/strong&gt; 原始 Range 内の対応する要素への参照（通常は &lt;code&gt;const auto&amp;amp;&lt;/code&gt; または &lt;code&gt;auto&amp;amp;&lt;/code&gt;）です。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;使用方法:&lt;/strong&gt; 通常、C++17 で導入された &lt;strong&gt;構造化バインディング&lt;/strong&gt; と組み合わせて使用され、コードをより簡潔で読みやすくします。これは Python の &lt;code&gt;enumerate()&lt;/code&gt; に似ています。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;利点:&lt;/strong&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;可読性の向上:&lt;/strong&gt; インデックスと要素値をループのヘッダー部分で分離することで、一目で理解できます。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;インデックスの明示的な管理を回避:&lt;/strong&gt; ループ外部でインデックス変数を宣言したり、ループ内部でインデックスが漏れることを心配する必要はありません。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Range-based For Loop の意味を保持:&lt;/strong&gt; Range-based For Loop の簡潔さと、従来の For 循環におけるインデックスへの要求を組み合わせます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;完全実行可能なテストデモ-c23&#34;&gt;完全実行可能なテストデモ (C++23)
+&lt;/h2&gt;&lt;p&gt;公平な性能比較を行うため、両方のモードが大量のデータを処理する際の時間を測定するために、&lt;strong&gt;高精度タイマー&lt;/strong&gt;を使用します。
+&lt;strong&gt;注意:&lt;/strong&gt; このコードを実行するには、&lt;strong&gt;C++23&lt;/strong&gt; をサポートするコンパイラが必要です (&lt;code&gt;std::views::enumerate&lt;/code&gt; は C++23 標準の一部です)。&lt;/p&gt;
+&lt;h2 id=&#34;完全実行可能なテストデモc23&#34;&gt;完全実行可能なテストデモ（C++23）
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;numeric&amp;gt;
+#include &amp;lt;ranges&amp;gt;
+#include &amp;lt;algorithm&amp;gt;
+#include &amp;lt;cmath&amp;gt;
+#include &amp;lt;functional&amp;gt;
+
+// 別名簡略化
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+
+// 定数定義：テストデータ量
+constexpr size_t DATA_SIZE = 50000000; // 5000万個要素
+constexpr int TEST_ITERATIONS = 5;      // 5回実行して平均を取る
+
+/**
+ * @brief 大規模なベクトルを作成し、テストに使用。
+ */
+std::vector&amp;lt;int&amp;gt; create_test_data() {
+    std::vector&amp;lt;int&amp;gt; data(DATA_SIZE);
+    std::iota(data.begin(), data.end(), 1); // 1, 2, 3, ... を要素として埋める
+    return data;
+}
+
+/**
+ * @brief 伝統的なパターン：インデックス付きの for ループを使用。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long traditional_loop(const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    long long sum = 0;
+    // std::size_t を使用して、signed/unsigned の警告を回避
+    for (std::size_t idx = 0; idx &amp;lt; data.size(); ++idx) {
+        const int item = data[idx];
+        // シミュレーションされた複雑な計算：要素値 + インデックスの平方根（コンパイラがループ全体を最適化しないように）
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief Enumerate パターン：std::views::enumerate を使用。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long enumerate_loop(const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    long long sum = 0;
+    // 構造束 [idx, item] を使用
+    for (const auto&amp;amp; [idx, item] : std::views::enumerate(data)) {
+        // idx はインデックス (std::size_t)
+        // item は要素の参照 (const int&amp;amp;)
+        // シミュレーションされた複雑な計算：要素値 + インデックスの平方根
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief 実行性能テストを実行し、結果を出力。
+ * * @param name テスト名。
+ * @param func テストするループ関数。
+ * @param data 処理するデータ。
+ * @return long long 実行時間（ミリ秒）。
+ */
+long long run_test(const std::string&amp;amp; name, 
+                   std::function&amp;lt;long long(const std::vector&amp;lt;int&amp;gt;&amp;amp;)&amp;gt; func,
+                   const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    
+    std::cout &amp;lt;&amp;lt; &amp;quot;--- &amp;quot; &amp;lt;&amp;lt; name &amp;lt;&amp;lt; &amp;quot; ---\n&amp;quot;;
+    long long total_duration_ms = 0;
+
+    for (int i = 0; i &amp;lt; TEST_ITERATIONS; ++i) {
+        auto start = high_resolution_clock::now();
+        
+        // コンパイラが関数呼び出しを最適化しないようにする
+        volatile long long result = func(data); 
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast&amp;lt;milliseconds&amp;gt;(end - start);
+        total_duration_ms += duration.count();
+        
+        // 結果が使用されることを確認し、最適化を回避しながら、2つのモードの結果の一致を確認
+        if (i == 0) {
+            std::cout &amp;lt;&amp;lt; &amp;quot;  [結果のチェック]: &amp;quot; &amp;lt;&amp;lt; result &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        std::cout &amp;lt;&amp;lt; &amp;quot;  Iteration &amp;quot; &amp;lt;&amp;lt; i + 1 &amp;lt;&amp;lt; &amp;quot; Time: &amp;quot; &amp;lt;&amp;lt; duration.count() &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+    }
+
+    long long avg_duration_ms = total_duration_ms / TEST_ITERATIONS;
+    std::cout &amp;lt;&amp;lt; &amp;quot;  平均時間: &amp;quot; &amp;lt;&amp;lt; avg_duration_ms &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+    return まとめ比較
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n==============================\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;最終パフォーマンス比較\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;==============================\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;伝統的なループ平均時間: &amp;quot; &amp;lt;&amp;lt; traditional_time &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;enumerateループ平均時間:   &amp;quot; &amp;lt;&amp;lt; enumerate_time &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;; ## 完全実行可能なテストデモ（C++23）
+```cpp
+#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;numeric&amp;gt;
+#include &amp;lt;ranges&amp;gt;
+#include &amp;lt;algorithm&amp;gt;
+#include &amp;lt;cmath&amp;gt;
+#include &amp;lt;functional&amp;gt;
+
+// 別名簡略化
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+
+// 定数定義：テストデータ量
+constexpr size_t DATA_SIZE = 50000000; // 5000万個要素
+constexpr int TEST_ITERATIONS = 5;      // 5回実行して平均を取る
+
+/**
+ * @brief テスト用の大きなベクトルを作成します。
+ */
+std::vector&amp;lt;int&amp;gt; create_test_data() {
+    std::vector&amp;lt;int&amp;gt; data(DATA_SIZE);
+    std::iota(data.begin(), data.end(), 1); // 1, 2, 3, ... を埋める
+    return data;
+}
+
+/**
+ * @brief 伝統的なパターン：インデックス付きの for ループを使用します。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long traditional_loop(const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    long long sum = 0;
+    // std::size_t を使用して、signed/unsigned の警告を回避
+    for (std::size_t idx = 0; idx &amp;lt; data.size(); ++idx) {
+        const int item = data[idx];
+        // 複雑な計算をシミュレーション：要素値 + インデックスの平方根（コンパイラがループ全体を最適化しないように）
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief Enumerate パターン：std::views::enumerate を使用します。
+ * * @param data 探索するベクトル。
+ * @return long long シミュレーションされた計算結果。
+ */
+long long enumerate_loop(const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    long long sum = 0;
+    // 構造化バインディング [idx, item] を使用
+    for (const auto&amp;amp; [idx, item] : std::views::enumerate(data)) {
+        // idx はインデックス (std::size_t)
+        // item は要素の参照 (const int&amp;amp;)
+        // 複雑な計算をシミュレーション：要素値 + インデックスの平方根
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief パフォーマンステストを実行し、結果を出力します。
+ * * @param name テスト名。
+ * @param func 実行するループ関数。
+ * @param data 処理するデータ。
+ * @return long long 実行時間（ミリ秒）。
+ */
+long long run_test(const std::string&amp;amp; name, 
+                   std::function&amp;lt;long long(const std::vector&amp;lt;int&amp;gt;&amp;amp;)&amp;gt; func,
+                   const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    
+    std::cout &amp;lt;&amp;lt; &amp;quot;--- &amp;quot; &amp;lt;&amp;lt; name &amp;lt;&amp;lt; &amp;quot; ---\n&amp;quot;;
+    long long total_duration_ms = 0;
+
+    for (int i = 0; i &amp;lt; TEST_ITERATIONS; ++i) {
+        auto start = high_resolution_clock::now();
+        
+        // コンパイラが関数呼び出しを最適化しないようにする
+        volatile long long result = func(data); 
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast&amp;lt;milliseconds&amp;gt;(end - start);
+        total_duration_ms += duration.count();
+        
+        // 結果が使用されることを確認し、最適化を回避しながら、2つのモードの結果の一致を確認
+        if (i == 0) {
+            std::cout &amp;lt;&amp;lt; &amp;quot;  [結果のチェック]: &amp;quot; &amp;lt;&amp;lt; result &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        std::cout &amp;lt;&amp;lt; &amp;quot;  Iteration &amp;quot; &amp;lt;&amp;lt; i + 1 &amp;lt;&amp;lt; &amp;quot; Time: &amp;quot; &amp;lt;&amp;lt; duration.count() &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+    }
+
+    long long avg_duration_ms = total_duration_ms / TEST_ITERATIONS;
+    std::cout &amp;lt;&amp;lt; &amp;quot;  平均時間: &amp;quot; &amp;lt;&amp;lt; avg_duration_ms &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+
+## 完全実行可能なテストデモ (C++23)
+```cpp
+if (traditional_time &amp;lt; enumerate_time) {
+        std::cout &amp;lt;&amp;lt; &amp;quot;\n結論: Traditional Loop がわずかに速かった。\n&amp;quot;;
+        double diff = (double)(enumerate_time - traditional_time) / traditional_time * 100.0;
+        std::cout &amp;lt;&amp;lt; &amp;quot;差分: enumerate モードで &amp;quot; &amp;lt;&amp;lt; diff &amp;lt;&amp;lt; &amp;quot;% 遅い。\n&amp;quot;;
+    } else if (enumerate_time &amp;lt; traditional_time) {
+        std::cout &amp;lt;&amp;lt; &amp;quot;\n結論: Enumerate Loop がわずかに速かった。\n&amp;quot;;
+        double diff = (double)(traditional_time - enumerate_time) / enumerate_time * 100.0;
+        std::cout &amp;lt;&amp;lt; &amp;quot;差分: traditional モードで &amp;quot; &amp;lt;&amp;lt; diff &amp;lt;&amp;lt; &amp;quot;% 遅い。\n&amp;quot;;
+    } else {
+        std::cout &amp;lt;&amp;lt; &amp;quot;\n結論: 両方のモードがほぼ同じパフォーマンスを示した。\n&amp;quot;;
+    }
+
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;完全実行可能なテストデモc23-1&#34;&gt;完全実行可能なテストデモ（C++23）
+&lt;/h2&gt;&lt;h2 id=&#34;パフォーマンス差異分析と結論&#34;&gt;パフォーマンス差異分析と結論
+&lt;/h2&gt;&lt;h3 id=&#34;理論分析&#34;&gt;理論分析
+&lt;/h3&gt;&lt;p&gt;C++ において、&lt;strong&gt;性能差の根本原因はコンパイラがゼロオーバーヘッド抽象 (Zero-Overhead Abstraction) を実現できるかどうかにあります。&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;伝統的なループ:&lt;/strong&gt; メモリのアドレスとインデックスを直接操作する方法であり、最も低レベルで効率的です。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; ループ:&lt;/strong&gt; &lt;code&gt;enumerate_view&lt;/code&gt; という抽象層を導入します。内部では、イテレータを使用してインデックスと値をペア化します。
+現代の高度に最適化されたコンパイラ (GCC/Clang で O2/O3 オプティマイズを有効にした場合など) は、&lt;strong&gt;インライン化 (inline)&lt;/strong&gt; して &lt;code&gt;enumerate_view&lt;/code&gt; とそのイテレータの操作を実行し、&lt;strong&gt;ループアンローリング (loop unrolling)&lt;/strong&gt; などの最適化を行います。最終的に、&lt;code&gt;std::views::enumerate&lt;/code&gt; ループが生成するアセンブリコードは、&lt;strong&gt;伝統的なインデックスループが生成するアセンブリコードとほぼ同じ&lt;/strong&gt;になります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;実際テスト結果&#34;&gt;実際テスト結果
+&lt;/h3&gt;&lt;p&gt;実機実行デモの結果（O2/O3最適化を使用）に基づくと：
+| &lt;strong&gt;伝統的インデックスループ&lt;/strong&gt; | X (ベースライン) | 約0% | 低：インデックスを手動で管理する必要があり、エラーが発生しやすい |&lt;/p&gt;
+&lt;h3 id=&#34;実験結果の結論&#34;&gt;実験結果の結論
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;パターン&lt;/th&gt;
+&lt;th&gt;平均時間 (ms)&lt;/th&gt;
+&lt;th&gt;性能差&lt;/th&gt;
+&lt;th&gt;可読性/安全性&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt;&lt;/td&gt;
+&lt;td&gt;X ± 極小変動&lt;/td&gt;
+&lt;td&gt;≈ 0%&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;高：&lt;/strong&gt; 自動インデックス、簡潔で安全&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;実験結果の結論-1&#34;&gt;実験結果の結論
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;結論：&lt;/strong&gt;
+コンパイラ最適化を使用した場合、&lt;code&gt;std::views::enumerate&lt;/code&gt; パターンと従来のインデックスループパターンは、パフォーマンスにおいてほぼ差がありません。したがって、その性能は&lt;strong&gt;同等&lt;/strong&gt;であると言えます。
+そのため、C++23 以降では、&lt;code&gt;std::views::enumerate&lt;/code&gt; パターンを推奨します。これは、性能を犠牲にすることなく、コードの&lt;strong&gt;可読性、簡潔性、安全性&lt;/strong&gt;を大幅に向上させるためです。&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>製品力とマーケティング力</title>
         <link>https://ttf248.life/ja/p/productivity-and-marketing/</link>
         <pubDate>Fri, 26 Sep 2025 19:15:06 +0800</pubDate>
