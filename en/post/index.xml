@@ -6,7 +6,68 @@
         <description>Recent content in Posts on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Thu, 06 Nov 2025 01:40:10 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Sat, 08 Nov 2025 16:48:55 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Local Development Pain: Why Can&#39;t You Delete `nul` Files? A Solution to the “Composite” File System Problem</title>
+        <link>https://ttf248.life/en/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/</link>
+        <pubDate>Sat, 08 Nov 2025 16:37:46 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/</guid>
+        <description>&lt;p&gt;In the daily work of software development, we often encounter tricky “minor issues” that seem simple but can consume us hours of valuable time. One such “disaster zone” is deleting specific files – particularly those generated unexpectedly by toolchains.&lt;/p&gt;
+&lt;p&gt;I encountered a “level-boss” problem: during local development, a file named &lt;code&gt;nul&lt;/code&gt; inexplicably appeared in my project. I tried Windows Explorer, the CMD command line, but the system displayed &amp;ldquo;File not found&amp;rdquo; or &amp;ldquo;Cannot delete.&amp;rdquo; This file was like a ghost, stubbornly residing in my project directory.&lt;/p&gt;
+&lt;h2 id=&#34;phase-one-routine-attempts-and-the-ineffective-solution-of-standard-approaches&#34;&gt;Phase One: Routine Attempts and the Ineffective Solution of “Standard” Approaches
+&lt;/h2&gt;&lt;p&gt;When I encounter this problem, my first instinct is to create a &lt;code&gt;nul&lt;/code&gt; file.
+&lt;strong&gt;Why is &lt;code&gt;nul&lt;/code&gt; special?&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Developers familiar with Windows history may know that &lt;code&gt;nul&lt;/code&gt; is a &amp;ldquo;trap.&amp;rdquo; In Windows (and earlier DOS) systems, &lt;code&gt;NUL&lt;/code&gt;, &lt;code&gt;CON&lt;/code&gt;, &lt;code&gt;PRN&lt;/code&gt;, &lt;code&gt;AUX&lt;/code&gt;, etc., are reserved device names. &lt;code&gt;NUL&lt;/code&gt; represents the “null device” (similar to Unix/Linux’s &lt;code&gt;/dev/null&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;When the Windows file system API sees you trying to operate a “file” named &lt;code&gt;nul&lt;/code&gt;, it treats it as an operation on this “null device,” rather than a filename with the same name. Therefore, all standard file operations (such as deleting or renaming) fail.
+&lt;strong&gt;How are &lt;code&gt;nul&lt;/code&gt; files created?&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;This is usually the fault of cross-platform development tools (like Git, Node.js scripts, Python scripts, etc.). These tools may be based on POSIX (Unix-like) standards, in which case &lt;code&gt;nul&lt;/code&gt; is simply a regular filename to them. When they run on Windows, they sometimes bypass standard APIs and create this “Windows-unfriendly” file.
+&lt;strong&gt;“Standard” Solutions Recommended Online&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;I quickly searched the web and found that I wasn’t the first person to encounter this problem. The community offered several “advanced” solutions that were widely accepted:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Use the &lt;code&gt;\\.\&lt;/code&gt; syntax:&lt;/strong&gt; In CMD, use the special &amp;ldquo;long path&amp;rdquo; syntax to bypass Windows name checking.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;del \\.\C:\your\project\path\nul
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Use Git Bash:&lt;/strong&gt; Git Bash provides a lightweight Unix environment, which doesn’t treat &lt;code&gt;nul&lt;/code&gt; as a special device.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;rm nul
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Use WSL (Windows Subsystem for Linux):&lt;/strong&gt; Enter WSL, mount the Windows disk, and use the Linux &lt;code&gt;rm&lt;/code&gt; command to delete.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;rm /mnt/c/your/project/path/nul
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;However, &lt;strong&gt;none of these methods worked for me!&lt;/strong&gt; Whether it was WSL or Git Bash, when I tried &lt;code&gt;rm nul&lt;/code&gt;, the system reported a &amp;ldquo;No such file or directory&amp;rdquo; error. This led me to ponder the problem seemed more complex than I initially thought.&lt;/p&gt;
+&lt;h2 id=&#34;stage-two-a-flash-of-insight--is-it-multiple-problem-overlapping&#34;&gt;Stage Two: A Flash of Insight – Is it “Multiple Problem Overlapping”?
+&lt;/h2&gt;&lt;p&gt;If the &lt;code&gt;nul&lt;/code&gt; file actually existed, why were even Unix tools saying &amp;ldquo;cannot find&amp;rdquo; it?&lt;/p&gt;
+&lt;p&gt;I began to suspect that &lt;strong&gt;the problem wasn&amp;rsquo;t just with the &lt;code&gt;nul&lt;/code&gt; file itself, but also with its “habitat” – the directory where it was located?&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;I immediately opened Git Bash (this was key, because Windows Explorer might not display anomalies), navigated to the directory containing the &lt;code&gt;nul&lt;/code&gt; file, and then executed &lt;code&gt;ls -la&lt;/code&gt; (list all files, including hidden ones, and show detailed information).&lt;/p&gt;
+&lt;p&gt;That’s when I finally discovered the “blind spot”: &lt;strong&gt;the directory where the &lt;code&gt;nul&lt;/code&gt; file was stored actually contained an illegal character within its name!&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;stage-two-a-flash-of-insight--is-it-multiple-problem-overlap&#34;&gt;Stage Two: A Flash of Insight – Is it “Multiple Problem Overlap”?
+&lt;/h2&gt;&lt;p&gt;In my case, this directory name might be one ending with a space or a period (&lt;code&gt;.&lt;/code&gt;) or containing special characters (like &lt;code&gt;?&lt;/code&gt;, &lt;code&gt;*&lt;/code&gt;, &lt;code&gt;:&lt;/code&gt;) that development tools “carry along” when syncing across platforms—these are all equally problematic.&lt;/p&gt;
+&lt;p&gt;For example, a directory displayed in Git Bash as &lt;code&gt;&amp;quot;my-app &amp;quot;&lt;/code&gt; (note the trailing space) or &lt;code&gt;&amp;quot;my-app.&amp;quot;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;That’s where the problem lies!&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Problem A:&lt;/strong&gt; I have an “illegal” file named &lt;code&gt;nul&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Problem B:&lt;/strong&gt; I have an “illegal” directory named &lt;code&gt;&amp;quot;my-app &amp;quot;&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;When I try &lt;code&gt;rm /path/to/&amp;quot;my-app &amp;quot;/nul&lt;/code&gt;, both the Windows system and Unix tools are “confused.” The Windows API cannot correctly parse this path containing illegal characters; while Git Bash or WSL might “see” this illegal directory, it may fail to access its internal &lt;code&gt;nul&lt;/code&gt; file due to complex path parsing issues.&lt;/p&gt;
+&lt;h2 id=&#34;phase-three-cutting-off-the-root--targeting-the-path-eliminating-everything-in-one-go&#34;&gt;Phase Three: Cutting Off the Root – Targeting the Path, Eliminating Everything in One Go
+&lt;/h2&gt;&lt;p&gt;Now that we’ve confirmed it was a problem with both “file path” and “filename,” the solution became clear: &lt;strong&gt;don&amp;rsquo;t try to delete that &lt;code&gt;nul&lt;/code&gt; file; instead, directly delete that “illegitimate” parent directory!&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;My final resolution steps were as follows:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Open Git Bash:&lt;/strong&gt; This is the only tool capable of correctly “seeing” and handling these illegal names.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Navigate to the parent directory of the “problem directory”:&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Verify the true name of the “problem directory”:&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Execute the “Ultimate Delete”:&lt;/strong&gt; Using the &lt;code&gt;rm&lt;/code&gt; command with the &lt;code&gt;-r&lt;/code&gt; (recursive) and &lt;code&gt;-f&lt;/code&gt; (force) options, combined with &lt;strong&gt;quotes&lt;/strong&gt;, to delete the entire directory.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;After executing the command, the troublesome directory containing the &lt;code&gt;nul&lt;/code&gt; file, which itself had an invalid name, was finally completely removed from my filesystem.&lt;/p&gt;
+</description>
+        </item>
+        <item>
         <title>Command-line AI Coding Interaction</title>
         <link>https://ttf248.life/en/p/command-line-ai-coding-interaction/</link>
         <pubDate>Wed, 05 Nov 2025 14:12:46 +0800</pubDate>
