@@ -6,7 +6,113 @@
         <description>Recent content in AI霊感衝突坊 on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Tue, 18 Nov 2025 22:17:50 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Tue, 18 Nov 2025 22:36:12 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>MySQL のギャップロックを理解する：原理から金融レベルの選定まで</title>
+        <link>https://ttf248.life/ja/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</link>
+        <pubDate>Tue, 18 Nov 2025 22:29:25 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</guid>
+        <description>&lt;p&gt;システムサービス間のデータ同期において、最近の変更により特定のインターフェースのデータ量が増加し、頻繁に死鎖が発生しました。同僚による調査の結果、間隙ロックが原因であることが判明しました。MySQL の利用は少ないため、記録として残します。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;MySQL の間隙ロック、背景、原理、間隙ロックを閉じる方法、閉じた際の注意点；あなたは経験豊富なデータベース DBA として、私の問題に対して拡張的な分析と補足情報を提供してください。幻読とは何ですか？ 主流の大手企業は RC モードか RR モードを選択しますか？ 私は金融業界の券商システムを担当しており、あなたはそのようなシステムに最適なソリューションを提案してください。上記の質問を整理し、ドキュメントを作成してください。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;MySQL において、特に高負荷環境下では、「ロック」を回避することはできません。ギャップロックは InnoDB エンジンにおける重要な特性ですが、同時にパフォーマンスボトルネックや死鎖の根源となることもあります。&lt;/p&gt;
+&lt;p&gt;この記事では、ギャップロックの核心、利点・欠点を迅速に整理し、あなた（特に金融業界）に対して明確なアーキテクチャ選定のアドバイスを提供します。&lt;/p&gt;
+&lt;h2 id=&#34;幻読とギャップロックとは何か&#34;&gt;幻読とギャップロックとは何か？
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;幻読 (Phantom Read):&lt;/strong&gt;
+トランザクション中に、例えば &lt;code&gt;ID &amp;gt; 100&lt;/code&gt; の範囲を最初に検索し、10件のデータを取得する。その後、別のトランザクションが &lt;code&gt;ID=101&lt;/code&gt; を挿入してコミットすると、2回目の検索で11件に増加してしまう。この「幻のような」追加されたデータが、その名も「幻読」と呼ばれる。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;ギャップロック (Gap Lock):&lt;/strong&gt;
+MySQL は &lt;strong&gt;RR（可繰り返し読み）&lt;/strong&gt; 隔離レベル下において、「幻読」の問題を解決するために発明された。行自体をロックするのではなく、データの間の「隙間」をロックする。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;作用:&lt;/strong&gt; 他のトランザクションがその「隙間」に &lt;code&gt;INSERT&lt;/code&gt; を実行できないように防止する。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;コスト:&lt;/strong&gt; ロック範囲が広がり、コンカレンシー能力が低下し、死鎖を引き起こす可能性がある。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;間隙ロックを閉じる方法&#34;&gt;間隙ロックを「閉じる」方法
+&lt;/h2&gt;&lt;p&gt;最も直接的な方法は、&lt;strong&gt;データベースの分離レベルをRR (Repeatable Read) からRC (Read Committed) に降下させること&lt;/strong&gt;です。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- 現在のセッションの分離レベルをRCに設定
+SET SESSION transaction_isolation = &#39;READ-COMMITTED&#39;;
+
+-- 永続的に変更（my.cnf を修正し、mysqld を再起動する必要があります）
+-- [mysqld]
+-- transaction-isolation = READ-COMMITTED
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;-关闭の影響即-rc-レベルの特性&#34;&gt;⚠️ 关闭の影響（即 RC レベルの特性）
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;パフォーマンス向上:&lt;/strong&gt; ギャップロックがなくなるため、ロック粒度が細かくなり、同時スループットが大幅に向上します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;死鎖減少:&lt;/strong&gt; ほとんどのギャップロックによる死鎖は解消されます。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;幻読/不整合な読みが発生する:&lt;/strong&gt; これは RC レベルの「特性」であり、トランザクション内で二回クエリを実行しても結果が一致しない可能性があります。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;【必須要件】ROW形式のBinlogとの併用が必要:&lt;/strong&gt;
+RC レベルを使用する場合、&lt;strong&gt;必ず&lt;/strong&gt; &lt;code&gt;binlog_format&lt;/code&gt; を &lt;code&gt;ROW&lt;/code&gt; に設定する必要があります。そうしないと、ギャップロックの保護がないため、主従レプリケーション中に主従データが不整合になる可能性があります。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;主要ベンダーの選択rc-または-rr&#34;&gt;主要ベンダーの選択：RC または RR？
+&lt;/h2&gt;&lt;p&gt;&lt;strong&gt;回答：ほとんどの主要なインターネット企業は RC (Read Committed) + ROW Binlog モードを選択しています。&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;理由：&lt;/strong&gt; インターネットビジネス（例：eコマース、ソーシャル）は、極めて高い同時性を追求します。RR のロックスロットによる頻繁なロック待ちや死鎖に耐えられません。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;トレードオフ：&lt;/strong&gt; データベースレベルでの「読み取り追跡可能」を放棄し、代わりに&lt;strong&gt;アプリケーション層&lt;/strong&gt;でオプティミスティックロック（バージョン番号、CAS など）などの方法を用いて、重要なビジネス（例：在庫、残高）の論理的一貫性を保証します。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;金融業界証券会社における選択の指針&#34;&gt;金融業界（証券会社）における選択の指針
+&lt;/h2&gt;&lt;p&gt;データの一貫性要件が極めて高い証券会社システムの場合、&lt;strong&gt;シナリオ別対応&lt;/strong&gt;を推奨します：&lt;/p&gt;
+&lt;h3 id=&#34;方案一コア取引システム高同時多接続低遅延&#34;&gt;方案一：コア取引システム（高同時多接続、低遅延）
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;推奨：RC (Read Committed) + ROW Binlog + アプリケーション層のオプティミスティックロック&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;シナリオ：&lt;/strong&gt; 注文撮合、注文、資金決済。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由：&lt;/strong&gt; 取引システムの同時アクセス負荷は、秒殺サイトに匹敵する。RR の間隙ロックが性能ボトルネックとなり、深刻なロック競合や死鎖を引き起こすことは、取引システムでは容認できない。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;対策：&lt;/strong&gt; RC を使用して高性能を確保し、アプリケーションコード（例: Java）で &lt;code&gt;UPDATE ... WHERE balance &amp;gt; ?&lt;/code&gt; または CAS バージョン番号メカニズムを使用して資金の安全性を保証し、オーバーサブスクリプションを防ぐ。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;方案二清算対帳システムバッチ処理高整合性&#34;&gt;方案二：清算対帳システム（バッチ処理、高整合性）
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;推奨：RR (Repeatable Read)&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;シナリオ:&lt;/strong&gt; 期末バッチ対帳、レポート生成、日終清算。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由:&lt;/strong&gt; バッチ処理タスクは、「絶対的な整合性」のあるデータスナップショット上で実行する必要があります。それは RR レベルが提供する能力を必要とし、統計プロセス全体を通して「幻読」が発生しないことを保証し、最終勘定帳が正確であることを確認します。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;まとめ&#34;&gt;まとめ
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;レベル&lt;/th&gt;
+&lt;th&gt;メリット&lt;/th&gt;
+&lt;th&gt;デメリット&lt;/th&gt;
+&lt;th&gt;適用シナリオ&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;RR (デフォルト)&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;幻読を解決し、データの一貫性が高い&lt;/td&gt;
+&lt;td&gt;并行性が低い、死鎖しやすい（ギャップロック）&lt;/td&gt;
+&lt;td&gt;レポート、決済、データの一貫性要求が極高く、並行性が少ないシナリオ&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;まとめ-1&#34;&gt;まとめ
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;レベル&lt;/th&gt;
+&lt;th&gt;メリット&lt;/th&gt;
+&lt;th&gt;デメリット&lt;/th&gt;
+&lt;th&gt;適用シナリオ&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;RC&lt;/td&gt;
+&lt;td&gt;并行性が高く、死鎖が少ない&lt;/td&gt;
+&lt;td&gt;ファントム読み、不整合な読みが得られる&lt;/td&gt;
+&lt;td&gt;高い同時性を持つコアビジネス（例：ECサイト、金融取引）で、ROW Binlogと組み合わせて使用&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;まとめ-2&#34;&gt;まとめ
+&lt;/h2&gt;&lt;p&gt;証券会社のコアシステムにおいて、&lt;strong&gt;RC + ROW Binlog&lt;/strong&gt; はパフォーマンスと整合性を両立させる主要なアーキテクチャソリューションですが、データ整合性の保証をアプリケーション層でより多く担うことを要求します。&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>アリババの大規模言語モデル戦略</title>
         <link>https://ttf248.life/ja/p/alibaba-large-model-strategy/</link>
         <pubDate>Tue, 18 Nov 2025 22:07:10 +0800</pubDate>

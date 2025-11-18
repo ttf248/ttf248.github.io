@@ -6,7 +6,121 @@
         <description>Recent content on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Tue, 18 Nov 2025 22:17:50 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Tue, 18 Nov 2025 22:36:12 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Understanding MySQL Gaps Locks: From Principles to Enterprise-Grade Selection</title>
+        <link>https://ttf248.life/en/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</link>
+        <pubDate>Tue, 18 Nov 2025 22:29:25 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</guid>
+        <description>&lt;p&gt;System data synchronization between systems, recently when changes occurred, the data volume of a certain interface increased, frequent deadlocks happened. After colleagues investigated, they found that it was caused by gap locks. MySQL is not used much, so I’ll record it down.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;mysql gap locks, background, principle, how to disable gap locks, what problems will occur if disabled; you are a senior database DBA, provide an extended analysis and supplement for my problem. What is phantom read? Which RC or RR mode do mainstream large factories choose? I am in the financial industry, securities system, which scheme do you recommend me to use? Compile the above questions and output documentation.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;In MySQL, especially in high-concurrency scenarios, “locks” are a topic that cannot be avoided. Gap Locks are a core feature of the InnoDB engine, but they are also often the root cause of performance bottlenecks and deadlocks.&lt;/p&gt;
+&lt;p&gt;This article will help you quickly understand the core, pros and cons of gap locks, and provide you (especially those in the financial industry) with clear architectural selection recommendations.&lt;/p&gt;
+&lt;h2 id=&#34;what-are-phantom-reads-and-gap-locks&#34;&gt;What are Phantom Reads and Gap Locks?
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Phantom Read:&lt;/strong&gt;
+In a transaction, you initially read a range of data (e.g., &lt;code&gt;ID &amp;gt; 100&lt;/code&gt;) returning 10 records. After another transaction inserts a record with &lt;code&gt;ID=101&lt;/code&gt; and commits, when you re-read the same range, it now returns 11 records. This &amp;ldquo;extra&amp;rdquo; new record is like an illusion, hence the name &amp;ldquo;Phantom Read.&amp;rdquo;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Gap Lock:&lt;/strong&gt;
+MySQL introduces the Gap Lock in the &lt;strong&gt;RR (Repeatable Read)&lt;/strong&gt; isolation level to address the issue of &amp;ldquo;Phantom Reads.&amp;rdquo; It doesn&amp;rsquo;t lock individual data rows; instead, it locks the &amp;ldquo;gaps&amp;rdquo; between data.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Purpose:&lt;/strong&gt; To prevent other transactions from inserting new data into these &amp;ldquo;gaps.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cost:&lt;/strong&gt; The scope of the lock expands, reducing concurrency and increasing the risk of deadlocks.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;how-to-close-gap-locks&#34;&gt;How to &amp;ldquo;Close&amp;rdquo; Gap Locks?
+&lt;/h2&gt;&lt;p&gt;The most direct method is to &lt;strong&gt;lower the database isolation level from RR (Repeatable Read) to RC (Read Committed)&lt;/strong&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- Set the current session isolation level to RC
+SET SESSION transaction_isolation = &#39;READ-COMMITTED&#39;;
+
+-- Permanent modification (requires modifying my.cnf and restarting)
+-- [mysqld]
+-- transaction-isolation = READ-COMMITTED
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;-consequences-of-closure-ie-rc-level-features&#34;&gt;⚠️ Consequences of Closure (i.e., RC-level Features)
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Performance Improvement:&lt;/strong&gt; Without gap locks, the granularity of locks is smaller, resulting in a significant increase in concurrency throughput.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Reduced Deadlocks:&lt;/strong&gt; Most deadlocks caused by gap locks will disappear.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Phantom Reads/Non-Repeatable Reads:&lt;/strong&gt; This is a “feature” of RC-level features – results of two queries within a transaction may be inconsistent.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;[Core Requirement] Must Be Used with ROW Format Binlog:&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;If using RC-level, &lt;strong&gt;it’s mandatory&lt;/strong&gt; to set &lt;code&gt;binlog_format&lt;/code&gt; to &lt;code&gt;ROW&lt;/code&gt;. Otherwise, due to the lack of gap lock protection during master-slave replication, data inconsistency will occur between the master and slave.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;mainstream-factory-choices-rc-or-rr&#34;&gt;Mainstream Factory Choices: RC or RR?
+&lt;/h2&gt;&lt;p&gt;&lt;strong&gt;Answer:&lt;/strong&gt; The vast majority of leading internet companies choose RC (Read Committed) + ROW Binlog mode.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Reason:&lt;/strong&gt; Internet businesses (such as e-commerce and social media) pursue extreme high concurrency. They cannot tolerate the frequent lock waiting and deadlocks caused by RR gap locks.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Trade-off:&lt;/strong&gt; They choose to abandon database-level “repeatable read,” instead relying on optimistic locking (such as version numbers, CAS) at the application layer to ensure the logical consistency of key business areas (such as inventory and balance).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;how-should-the-financial-industry-brokerage-firms-choose&#34;&gt;How Should the Financial Industry (Brokerage Firms) Choose?
+&lt;/h2&gt;&lt;p&gt;For brokerage systems with extremely high data consistency requirements, it is recommended to &lt;strong&gt;implement scenario-based governance&lt;/strong&gt;:&lt;/p&gt;
+&lt;h3 id=&#34;option-1-core-trading-system-high-concurrency-low-latency&#34;&gt;Option 1: Core Trading System (High Concurrency, Low Latency)
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Recommendation:&lt;/strong&gt; RC (Read Committed) + ROW Binlog + Application-Level Optimistic Locking&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Scenario:&lt;/strong&gt; Order Matching, Placing Orders, Funds Deduction.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Reasoning:&lt;/strong&gt; The concurrency pressure of trading systems is comparable to that of flash sales on the internet. RR’s gap locking will become a performance bottleneck, leading to severe lock competition and even deadlocks – something a trading system cannot tolerate.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Countermeasures:&lt;/strong&gt; Use RC to guarantee high performance while ensuring financial security within application code (e.g., in Java) through &lt;code&gt;UPDATE ... WHERE balance &amp;gt; ?&lt;/code&gt; or using CAS version number mechanisms to prevent overselling.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;option-two-clearing-and-reconciliation-system-batch-processing-high-consistency&#34;&gt;Option Two: Clearing and Reconciliation System (Batch Processing, High Consistency)
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;Recommendation:&lt;/strong&gt; RR (Repeatable Read)&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Scenario:&lt;/strong&gt; Post-settlement bulk reconciliation, report generation, daily final settlement.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Reasoning:&lt;/strong&gt; Batch processing tasks require a “consistent snapshot” to run on. It needs the capabilities provided by RR level, ensuring that data does not experience “phantom reads” throughout the entire statistical process, guaranteeing the general ledger is accurate.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;summary&#34;&gt;Summary
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Isolation Level&lt;/th&gt;
+&lt;th&gt;Advantages&lt;/th&gt;
+&lt;th&gt;Disadvantages&lt;/th&gt;
+&lt;th&gt;Suitable Scenarios&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;RR (Default)&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Solves phantom reads, high data consistency&lt;/td&gt;
+&lt;td&gt;Low concurrency, prone to deadlocks (gap locks)&lt;/td&gt;
+&lt;td&gt;Reporting, clearing, scenarios with extremely high data consistency requirements and low concurrency&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;summary-1&#34;&gt;Summary
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Isolation Level&lt;/th&gt;
+&lt;th&gt;Advantages&lt;/th&gt;
+&lt;th&gt;Disadvantages&lt;/th&gt;
+&lt;th&gt;Use Cases&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;RC&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;High Concurrency, Fewer Deadlocks&lt;/td&gt;
+&lt;td&gt;Phantom Reads, Non-Repeatable Reads&lt;/td&gt;
+&lt;td&gt;High Concurrency Core Business (e.g., E-commerce, Financial Transactions), Combined with ROW Binlog&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;summary-2&#34;&gt;Summary
+&lt;/h2&gt;&lt;p&gt;For securities broker core systems, &lt;strong&gt;RC + ROW Binlog&lt;/strong&gt; is the mainstream architecture solution that balances performance and consistency; however, it requires the development team to take on more responsibility for ensuring data consistency at the application layer.&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>Alibaba Large Model Strategy</title>
         <link>https://ttf248.life/en/p/alibaba-large-model-strategy/</link>
         <pubDate>Tue, 18 Nov 2025 22:07:10 +0800</pubDate>
