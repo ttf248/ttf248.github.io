@@ -6,7 +6,166 @@
         <description>Recent content in Stress-Testing on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Mon, 02 Jun 2025 20:54:02 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/stress-testing/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Fri, 19 Dec 2025 01:19:51 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/stress-testing/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>wrk vs. JMeter deep benchmarking</title>
+        <link>https://ttf248.life/en/p/wrk-vs-jmeter-deep-benchmarking/</link>
+        <pubDate>Fri, 19 Dec 2025 01:14:49 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/wrk-vs-jmeter-deep-benchmarking/</guid>
+        <description>&lt;p&gt;In internet system stress testing, we frequently encounter two tools with vastly different styles: one is extremely lightweight, pursuing extreme throughput—wrk; the other is feature-rich and simulates real business flows—JMeter.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Prompt: Outline the core ideas and write a科普 article (explanatory article): HTTP stress testing tools, wrk vs JMeter – what are the differences? What I know, wrk tends to use one thread with multiple connections for testing, while JMeter primarily employs a short connection mode, which can be adjusted via configuration to enable long polling.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;core-architecture-multi-threaded-vs-event-driven&#34;&gt;Core Architecture: Multi-Threaded vs. Event-Driven
+&lt;/h2&gt;&lt;p&gt;This is the fundamental reason for the performance gap between them.&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeter-the-one-person-one-job-thread-per-request-model&#34;&gt;1. JMeter: The “One Person, One Job” (Thread-per-Request) Model
+&lt;/h3&gt;&lt;p&gt;JMeter is developed in Java and utilizes the classic &lt;strong&gt;multi-threaded model&lt;/strong&gt;.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Logic:&lt;/strong&gt; Each concurrent user (Virtual User) corresponds to a physical thread within the JVM.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Cost:&lt;/strong&gt; Threads are an expensive resource. As concurrency increases to several thousand, context switching and memory consumption will significantly slow down the test machine itself, leading to the phenomenon of “the load generator collapsing first before it can actually crush the server.”&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrk-the-modern-multi-hand-system-event-driven&#34;&gt;2. wrk: The Modern “Multi-Hand” System (Event-driven)
+&lt;/h3&gt;&lt;p&gt;wrk is written in C and its core logic relies on Redis’s &lt;code&gt;ae&lt;/code&gt; event loop framework (utilizing &lt;code&gt;epoll/kqueue&lt;/code&gt;).&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Logic:&lt;/strong&gt; wrk doesn&amp;rsquo;t create a thread for each connection. It only starts a small number of threads (typically equal to the number of your CPU cores), and each thread manages thousands upon thousands of connections simultaneously through &lt;strong&gt;non-blocking I/O&lt;/strong&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Advantages:&lt;/strong&gt; This is what you referred to as “one thread, multiple connections.” It drastically reduces thread switching overhead, allowing single machines to achieve millions of RPS (Requests Per Second).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;connection-models-skip-connections-vs-dense-connections&#34;&gt;Connection Models: Skip Connections vs. Dense Connections
+&lt;/h2&gt;&lt;p&gt;Regarding the connection patterns you mentioned, here’s a deeper level of detail:&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeters-heavy-and-light&#34;&gt;1. JMeter’s “Heavy” and “Light”
+&lt;/h3&gt;&lt;p&gt;JMeter defaults to simulating real user behavior.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Short Connection Bias:&lt;/strong&gt; In default configurations, some older versions or specific configurations of JMeter may not actively reuse connections, leading to numerous TCP handshakes.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tunability:&lt;/strong&gt; You can enable long connection by checking the &lt;strong&gt;“KeepAlive”&lt;/strong&gt; option in the &lt;code&gt;HTTP Request&lt;/code&gt; or adjusting connection pool parameters in the &lt;code&gt;user.properties&lt;/code&gt; file. However, even with long connections, limited by its thread model, it struggles to maintain tens of thousands of concurrent long connections.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrks-speed-and-power&#34;&gt;2. wrk’s “Speed” and “Power”
+&lt;/h3&gt;&lt;p&gt;wrk was designed with the intention of testing the performance of &lt;strong&gt;HTTP Keep-Alive&lt;/strong&gt;.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Long Connection Strategy:&lt;/strong&gt; wrk establishes a specified number of connections at the start of the test (&lt;code&gt;-c&lt;/code&gt; parameter) and attempts to reuse these connections throughout the entire test.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Application Scenarios:&lt;/strong&gt; It’s particularly well-suited for testing the throughput limits of Nginx, gateways (Gateways), or high-concurrency APIs under extreme long connection pressure.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;deep-comparison-table&#34;&gt;Deep Comparison Table
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Development Language&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;C/Lua (Scripting)&lt;/td&gt;
+&lt;td&gt;Java (GUI)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;deep-comparison-table-1&#34;&gt;Deep Comparison Table
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Concurrency Model&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Event Driven (epoll/kqueue)&lt;/td&gt;
+&lt;td&gt;Multi-threaded (Thread-per-User)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;deep-comparison-table-2&#34;&gt;Deep Comparison Table
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Resource Consumption&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Extremely Low, Huge Throughput on a Single Machine&lt;/td&gt;
+&lt;td&gt;Higher, Requires Distributed Cluster for High Concurrency&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;deep-comparison-table-3&#34;&gt;Deep Comparison Table
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Business Complexity&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Low, primarily for single URLs&lt;/td&gt;
+&lt;td&gt;High, supports multi-step scripts, assertions, and extractors&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;deep-comparison-table-4&#34;&gt;Deep Comparison Table
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Test Scenarios&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Static API Load Testing, Capacity Assessment&lt;/td&gt;
+&lt;td&gt;Complex Business Link Simulations, Functional Regression Testing&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;deep-comparison-table-5&#34;&gt;Deep Comparison Table
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;Feature&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;Reporting Capabilities&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;Only text summaries&lt;/td&gt;
+&lt;td&gt;Extremely rich, supports various charts and HTML reports&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;summary-which-one-should-i-choose&#34;&gt;Summary: Which one should I choose?
+&lt;/h2&gt;&lt;p&gt;These two tools are complementary rather than substitutional relationships:&lt;/p&gt;
+&lt;h3 id=&#34;select-work&#34;&gt;Select Work
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Want to test the &lt;strong&gt;maximum throughput&lt;/strong&gt; (RPS) of the server.&lt;/li&gt;
+&lt;li&gt;The testing object is a single API or static resource.&lt;/li&gt;
+&lt;li&gt;Aim to push the largest traffic using the fewest test servers.&lt;/li&gt;
+&lt;li&gt;Familiar with Lua scripting to customize requests.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;choose-jmeter&#34;&gt;Choose JMeter
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Requires simulating &lt;strong&gt;complex business processes&lt;/strong&gt; (such as: Login -&amp;gt; Search Products -&amp;gt; Place Order -&amp;gt; Payment).&lt;/li&gt;
+&lt;li&gt;Needs a visual interface to observe response time distributions, error rates, and other detailed metrics.&lt;/li&gt;
+&lt;li&gt;Testing requires handling dynamic parameters (such as extracting a Token from the previous interface and passing it to the next interface).&lt;/li&gt;
+&lt;li&gt;The team is more accustomed to using graphical tools rather than command-line interfaces.&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
         <title>Linux Setup JMeter Test Environment</title>
         <link>https://ttf248.life/en/p/linux-setup-jmeter-testing-environment/</link>
         <pubDate>Tue, 22 Dec 2020 10:12:50 +0800</pubDate>

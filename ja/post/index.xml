@@ -6,7 +6,166 @@
         <description>Recent content in Posts on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Fri, 19 Dec 2025 00:36:20 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Fri, 19 Dec 2025 01:19:51 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>wrk と JMeter の負荷テスト (または パフォーマンス測定)</title>
+        <link>https://ttf248.life/ja/p/wrk-vs-jmeter-deep-benchmarking/</link>
+        <pubDate>Fri, 19 Dec 2025 01:14:49 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/wrk-vs-jmeter-deep-benchmarking/</guid>
+        <description>&lt;p&gt;インターネットシステムにおける負荷テストにおいて、しばしば対照的なスタイルを持つ2つのツールに遭遇します。1つは極めて軽量で、最大限の帯域幅を追求するwrkであり、もう1つは機能が豊富で、実際のビジネスフローをシミュレートするJMeterです。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;提示：コアなアイデアを整理し、科普記事を作成：HTTP 負荷テストツール、wrk vs Jmeter の違いについて、私が知っていること、wrk は 1 つの スレッドで複数の接続を行うテストに偏っており、Jmeter はより短接続モードに重点を置いており、設定によって長接続モードにも調整可能です。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;コアアーキテクチャマルチスレッド-vs-イベント駆動&#34;&gt;コアアーキテクチャ：マルチスレッド vs イベント駆動
+&lt;/h2&gt;&lt;p&gt;これは両者のパフォーマンス差の根本的な原因です。&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeter-伝統的な一人一岗制-thread-per-request&#34;&gt;1. JMeter: 伝統的な「一人一岗」制 (Thread-per-Request)
+&lt;/h3&gt;&lt;p&gt;JMeter は Java で開発されており、古典的な &lt;strong&gt;マルチスレッドモデル&lt;/strong&gt; を採用しています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;ロジック:&lt;/strong&gt; 各コンカレントユーザー（Virtual User）は、JVM 内の物理的なスレッドに対応します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;コスト:&lt;/strong&gt; スレッドは非常に高価なリソースです。同時数があっという間に数千に達すると、コンテキストスイッチング (Context Switch) とメモリ消費がテストマシン自体を著しく遅延させ、「ロードマシンがサーバーを押し倒す前に、自分自身が崩壊する」といった現象を引き起こします。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrk現代的な多面手制-イベント駆動型&#34;&gt;2. wrk：現代的な「多面手」制 (イベント駆動型)
+&lt;/h3&gt;&lt;p&gt;wrk は C 言語で記述されており、コアとなるロジックは Redis と同じ &lt;code&gt;ae&lt;/code&gt; イベントループフレームワークを利用しています（&lt;code&gt;epoll/kqueue&lt;/code&gt; を使用）。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;ロジック:&lt;/strong&gt; wrk は各接続ごとにスレッドを作成しません。代わりに、極少数のスレッド (通常は CPU コア数に相当) のみ起動し、それぞれのスレッド内部で&lt;strong&gt;ノンブロッキング I/O&lt;/strong&gt; を通じて成千もの接続を同時に管理します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;利点:&lt;/strong&gt; これが「一つのスレッドで複数の接続」という表現です。スレッド切り替えのオーバーヘッドを大幅に削減し、単一マシンで百万レベルの RPS (リクエスト毎秒) を実現できます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;连接モデル短接続と長接続&#34;&gt;连接モデル：短接続と長接続
+&lt;/h2&gt;&lt;p&gt;ご指摘の接続パターンについて、より詳細な情報をご提供します。&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeter-の重と軽&#34;&gt;1. JMeter の「重」と「軽」
+&lt;/h3&gt;&lt;p&gt;JMeter はデフォルトで、実際のユーザーの行動をシミュレートする傾向があります。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;短接続への偏り：&lt;/strong&gt; デフォルト設定では、JMeter の古いバージョンや特定の構成によっては、積極的に接続を再利用せず、多数の TCP 握手が発生することがあります。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;調整可能性：&lt;/strong&gt; 「KeepAlive」を HTTP Request 中にチェックボックスで選択するか、&lt;code&gt;user.properties&lt;/code&gt; ファイルで接続プールパラメータを調整することで、長接続を有効化できます。しかし、たとえ長接続を有効化したとしても、スレッドモデルの制限により、数十万レベルの同時長接続を維持することは困難です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrk-の快と狠&#34;&gt;2. wrk の「快」と「狠」
+&lt;/h3&gt;&lt;p&gt;wrk が設計されたのは、&lt;strong&gt;HTTP Keep-Alive&lt;/strong&gt; の性能をテストするためです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;長接続戦略：&lt;/strong&gt; wrk はテスト開始時に指定した接続数を確立（&lt;code&gt;-c&lt;/code&gt; オプションを使用）し、テスト中に可能な限りこれらの接続を再利用します。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;適用場面：&lt;/strong&gt; Nginx やゲートウェイ（Gateway）、高負荷 API が極端な長接続ストレス下でスループットの限界をテストするのに非常に適しています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;比較表&#34;&gt;比較表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;開発言語&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;C/Lua (スクリプト)&lt;/td&gt;
+&lt;td&gt;Java (GUI)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;比較表-1&#34;&gt;比較表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;並行モデル&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;イベント駆動 (epoll/kqueue)&lt;/td&gt;
+&lt;td&gt;マルチスレッド (ユーザーあたりスレッド)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;比較表-2&#34;&gt;比較表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;リソース消費&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;極低、単機スループット巨大&lt;/td&gt;
+&lt;td&gt;比較的高い、大規模同時接続には分散クラスタが必要&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;比較表-3&#34;&gt;比較表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;ビジネス複雑度&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;低い。主に単一URLに焦点を当てている&lt;/td&gt;
+&lt;td&gt;極めて高い。複数ステップスクリプト、アサーション、エクストラクターをサポート&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;比較表-4&#34;&gt;比較表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;テストシナリオ&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;静的API負荷テスト、容量評価&lt;/td&gt;
+&lt;td&gt;複雑なビジネス連携の負荷テスト、機能回帰テスト&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;深層比較表&#34;&gt;深層比較表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;レポート機能&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;テキストのみの要約&lt;/td&gt;
+&lt;td&gt;非常に豊富、各種グラフやHTMLレポートをサポート&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;まとめどちらを選ぶべきか&#34;&gt;まとめ：どちらを選ぶべきか？
+&lt;/h2&gt;&lt;p&gt;これらのツールは代替関係ではなく、補完関係にある：&lt;/p&gt;
+&lt;h3 id=&#34;選ぶワーク&#34;&gt;選ぶワーク
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;サーバーの&lt;strong&gt;最大スループット&lt;/strong&gt; (RPS) をテストしたい。&lt;/li&gt;
+&lt;li&gt;テスト対象は単一の API または静的リソース。&lt;/li&gt;
+&lt;li&gt;最小限のテストサーバーで最大のトラフィックを発生させたい。&lt;/li&gt;
+&lt;li&gt;Lua スクリプトを使ってリクエストをカスタマイズする経験がある。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;jmeter-を選択する&#34;&gt;JMeter を選択する
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;複雑なビジネスフロー（例：ログイン → 商品検索 → 購入 → 決済）をシミュレートする必要がある。&lt;/li&gt;
+&lt;li&gt;レスポンスタイム分布、エラー率などの詳細な指標を観察するための可視化されたインターフェースが必要である。&lt;/li&gt;
+&lt;li&gt;テストでは動的パラメータ（例：前のインタフェースから取得したトークンを次のインタフェースに渡す）を処理する必要がある。&lt;/li&gt;
+&lt;li&gt;チームはコマンドラインよりもグラフィカルツールに慣れている。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
         <title>アリペイ（支付宝）の個人年金との連携に関する考察 (Aripei (ZhiFoo) no kojin nenkin to no rienkai ni kansuru kousatsu)</title>
         <link>https://ttf248.life/ja/p/the-considerations-surrounding-alipays-personal-pension-binding/</link>
         <pubDate>Thu, 18 Dec 2025 23:08:38 +0800</pubDate>
