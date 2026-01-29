@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>隔离级别 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/</link>
+        <description>Recent content in 隔离级别 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 29 Jan 2026 22:52:12 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>搞懂 MySQL 间隙锁：从原理到金融级选型</title>
+        <link>https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</link>
+        <pubDate>Tue, 18 Nov 2025 22:29:25 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</guid>
+        <description>&lt;p&gt;系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁，同事排查后，发现是由于间隙锁导致，MySQL 用的不多，记录下。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;mysql 间隙锁，背景、原理，如何关闭间隙锁、关闭了会有什么问题；你是资深数据库 DBA，针对我的问题进行扩展分析补充。幻读是什么？主流大厂是选择 RC 还是 RR模式？我是金融行业，券商系统，你更建议我用什么方案？整理上述问题，输出文档。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;在 MySQL 中，尤其是高并发场景下，“锁”是绕不过去的话题。间隙锁（Gap Lock）是 InnoDB 引擎中的一个核心特性，但也常常是性能瓶颈和死锁的根源。&lt;/p&gt;
+&lt;p&gt;这篇文章将帮你快速梳理间隙锁的核心、利弊，并为你（特别是金融行业）提供清晰的架构选型建议。&lt;/p&gt;
+&lt;h2 id=&#34;什么是间隙锁与幻读&#34;&gt;什么是间隙锁与幻读？
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;幻读 (Phantom Read)：&lt;/strong&gt;
+在一个事务中，你第一次查某范围（如 &lt;code&gt;ID &amp;gt; 100&lt;/code&gt;）有 10 条数据，别人插入一条 &lt;code&gt;ID=101&lt;/code&gt; 并提交后，你第二次查，发现变成了 11 条。这条“多出来的”新数据就像幻觉，故称“幻读”。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;间隙锁 (Gap Lock)：&lt;/strong&gt;
+MySQL 在 &lt;strong&gt;RR（可重复读）&lt;/strong&gt; 隔离级别下，为了解决“幻读”问题而发明的。它不锁数据行，而是&lt;strong&gt;锁住数据之间的“缝隙”&lt;/strong&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;作用：&lt;/strong&gt; 防止其他事务在这个“缝隙”中 &lt;code&gt;INSERT&lt;/code&gt; 新数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;代价：&lt;/strong&gt; 锁的范围变大，并发能力下降，容易死锁。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;如何关闭间隙锁&#34;&gt;如何“关闭”间隙锁？
+&lt;/h2&gt;&lt;p&gt;最直接的方法是&lt;strong&gt;将数据库隔离级别从 RR (Repeatable Read) 降为 RC (Read Committed)&lt;/strong&gt;。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- 将当前会话隔离级别设为 RC
+SET SESSION transaction_isolation = &#39;READ-COMMITTED&#39;;
+
+-- 永久修改（需改 my.cnf 并重启）
+-- [mysqld]
+-- transaction-isolation = READ-COMMITTED
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;-关闭的后果即-rc-级别的特性&#34;&gt;⚠️ 关闭的后果（即 RC 级别的特性）
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;性能提升：&lt;/strong&gt; 没有了间隙锁，锁的粒度更小，并发吞吐量大幅提升。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;死锁减少：&lt;/strong&gt; 绝大多数由间隙锁导致的死锁都会消失。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;出现幻读/不可重复读：&lt;/strong&gt; 这是 RC 级别的“特性”，事务中两次查询的结果可能会不一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;【核心要求】必须配合 ROW 格式 Binlog：&lt;/strong&gt;
+如果使用 RC 级别，&lt;strong&gt;必须&lt;/strong&gt;将 &lt;code&gt;binlog_format&lt;/code&gt; 设置为 &lt;code&gt;ROW&lt;/code&gt;。否则，在主从复制时会因为缺少间隙锁的保护而导致主从数据不一致。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;主流大厂选择rc-还是-rr&#34;&gt;主流大厂选择：RC 还是 RR？
+&lt;/h2&gt;&lt;p&gt;&lt;strong&gt;答案：绝大多数一线互联网大厂都选择 RC (Read Committed) + ROW Binlog 模式。&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;原因：&lt;/strong&gt; 互联网业务（如电商、社交）极端追求高并发。它们无法忍受 RR 间隙锁带来的频繁锁等待和死锁。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;权衡：&lt;/strong&gt; 它们选择放弃数据库层面的“可重复读”，转而在&lt;strong&gt;应用层&lt;/strong&gt;通过乐观锁（如版本号、CAS）等方式来保证关键业务（如库存、余额）的逻辑一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;金融行业券商如何选择&#34;&gt;金融行业（券商）如何选择？
+&lt;/h2&gt;&lt;p&gt;对于数据一致性要求极高的券商系统，建议&lt;strong&gt;分场景治理&lt;/strong&gt;：&lt;/p&gt;
+&lt;h3 id=&#34;方案一核心交易系统高并发低延迟&#34;&gt;方案一：核心交易系统（高并发、低延迟）
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;建议：RC (Read Committed) + ROW Binlog + 应用层乐观锁&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;场景：&lt;/strong&gt; 订单撮合、下单、资金扣减。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由：&lt;/strong&gt; 交易系统的并发压力不亚于互联网秒杀。RR 的间隙锁会成为性能瓶颈，导致严重的锁竞争甚至死锁，这是交易系统无法接受的。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;对策：&lt;/strong&gt; 使用 RC 保证高性能，同时在应用代码中（如 Java）通过 &lt;code&gt;UPDATE ... WHERE balance &amp;gt; ?&lt;/code&gt; 或 CAS 版本号机制来保证资金安全，防止超卖。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;方案二清算对账系统批处理高一致性&#34;&gt;方案二：清算对账系统（批处理、高一致性）
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;建议：RR (Repeatable Read)&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;场景：&lt;/strong&gt; 盘后批量对账、生成报表、日终清算。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由：&lt;/strong&gt; 批处理任务需要在一个“绝对一致”的数据快照上运行。它需要 RR 级别提供的能力，保证在整个统计过程中，数据不会发生“幻读”，确保总账能对平。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;隔离级别&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;优点&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;缺点&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;适用场景&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;RR (默认)&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;解决幻读，数据一致性高&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;并发低，易死锁 (间隙锁)&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;报表、清算、对数据一致性要求极高且并发不大的场景&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;RC&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;并发高，死锁少&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;会幻读、不可重复读&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;高并发核心业务&lt;/strong&gt; (如电商、金融交易)，需配合 ROW Binlog&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;对于券商核心系统，&lt;strong&gt;RC + ROW Binlog&lt;/strong&gt; 是兼顾性能与一致性的主流架构方案，但它要求开发团队在应用层承担更多保障数据一致性的责任。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

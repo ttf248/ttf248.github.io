@@ -6,6 +6,611 @@
         <description>Recent content in 性能优化 on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/performance-optimization/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>wrk 与 JMeter 的深度较量</title>
+        <link>https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/</link>
+        <pubDate>Fri, 19 Dec 2025 01:14:49 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/</guid>
+        <description>&lt;p&gt;在互联网系统的压力测试中，我们经常会遇到两款风格迥异的工具：一个是极其轻量、追求极致吞吐量的 wrk；另一个是功能大而全、模拟真实业务流的 JMeter。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;提示词：梳理核心思路，撰写科普文章：http 压力测试工具，wrk vs Jmeter 有什么不同，我了解到的，wrk 倾向于 一个线程多个 connect 进行测试，Jmeter 更多是短连接模式，能通过配置调整为长联机&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;核心架构多线程-vs-事件驱动&#34;&gt;核心架构：多线程 vs 事件驱动
+&lt;/h2&gt;&lt;p&gt;这是两者性能差距的根本原因。&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeter传统的一人一岗制-thread-per-request&#34;&gt;1. JMeter：传统的“一人一岗”制 (Thread-per-Request)
+&lt;/h3&gt;&lt;p&gt;JMeter 基于 Java 开发，采用的是经典的&lt;strong&gt;多线程模型&lt;/strong&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;逻辑：&lt;/strong&gt; 每一个并发用户（Virtual User）都对应 JVM 中的一个物理线程。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;代价：&lt;/strong&gt; 线程是非常昂贵的资源。当并发数达到几千时，上下文切换（Context Switch）和内存消耗会显著拖慢测试机本身，导致“压测机还没把服务器压死，自己先崩了”的现象。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrk现代的多面手制-event-driven&#34;&gt;2. wrk：现代的“多面手”制 (Event-driven)
+&lt;/h3&gt;&lt;p&gt;wrk 采用 C 语言编写，核心逻辑基于 Redis 同款的 &lt;code&gt;ae&lt;/code&gt; 事件循环框架（利用 &lt;code&gt;epoll/kqueue&lt;/code&gt;）。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;逻辑：&lt;/strong&gt; wrk 并不为每个连接创建线程。它只启动极少数的线程（通常等于你的 CPU 核心数），每个线程内部通过&lt;strong&gt;非阻塞 I/O&lt;/strong&gt; 同时管理成千上万个连接。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;优势：&lt;/strong&gt; 这就是你提到的“一个线程多个 connection”。它极大地减少了线程切换开销，单机即可跑出百万级别的 RPS（每秒请求数）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;连接模型短连接-vs-长连接&#34;&gt;连接模型：短连接 vs 长连接
+&lt;/h2&gt;&lt;p&gt;关于你提到的连接模式，这里有更深层的细节：&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeter-的重与灵&#34;&gt;1. JMeter 的“重”与“灵”
+&lt;/h3&gt;&lt;p&gt;JMeter 默认确实更倾向于模拟真实用户的行为。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;短连接倾向：&lt;/strong&gt; 在默认配置下，JMeter 的某些旧版本或特定配置可能不会积极复用连接，导致大量的 TCP 握手。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可调校性：&lt;/strong&gt; 你可以通过在 &lt;code&gt;HTTP Request&lt;/code&gt; 中勾选 &lt;strong&gt;&amp;ldquo;KeepAlive&amp;rdquo;&lt;/strong&gt;，或者在 &lt;code&gt;user.properties&lt;/code&gt; 中调整连接池参数来开启长连接。但即便是长连接，受限于线程模型，它也难以维持数十万级别的并发长连接。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrk-的快与狠&#34;&gt;2. wrk 的“快”与“狠”
+&lt;/h3&gt;&lt;p&gt;wrk 设计的初衷就是为了测试 &lt;strong&gt;HTTP Keep-Alive&lt;/strong&gt; 的性能。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;长连接策略：&lt;/strong&gt; wrk 在测试开始时会建立好指定的连接数（&lt;code&gt;-c&lt;/code&gt; 参数），并在整个测试过程中尽可能复用这些连接。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;应用场景：&lt;/strong&gt; 它非常适合测试 Nginx、网关（Gateway）或高并发 API 在极端长连接压力下的吞吐极限。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;深度对比表&#34;&gt;深度对比表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;开发语言&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;C / Lua (脚本)&lt;/td&gt;
+&lt;td&gt;Java (GUI)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;并发模型&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;事件驱动 (epoll/kqueue)&lt;/td&gt;
+&lt;td&gt;多线程 (Thread-per-user)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;资源消耗&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;极低，单机吞吐量巨大&lt;/td&gt;
+&lt;td&gt;较高，大并发需分布式集群&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;业务复杂度&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;较低，主要针对单个 URL&lt;/td&gt;
+&lt;td&gt;极高，支持多步脚本、断言、提取器&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;测试场景&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;静态 API 压测、容量评估&lt;/td&gt;
+&lt;td&gt;复杂业务链路、功能回归压测&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;报表能力&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;仅文本摘要&lt;/td&gt;
+&lt;td&gt;极丰富，支持各类图表和 HTML 报告&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;总结我该选哪一个&#34;&gt;总结：我该选哪一个？
+&lt;/h2&gt;&lt;p&gt;这两款工具并不是替代关系，而是互补关系：&lt;/p&gt;
+&lt;h3 id=&#34;选-wrk&#34;&gt;选 wrk
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;想要测试服务器的&lt;strong&gt;极限吞吐量&lt;/strong&gt;（RPS）。&lt;/li&gt;
+&lt;li&gt;测试对象是单一的 API 或静态资源。&lt;/li&gt;
+&lt;li&gt;希望用最少的测试服务器压出最大的流量。&lt;/li&gt;
+&lt;li&gt;熟悉 Lua 脚本来定制化请求。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;选-jmeter&#34;&gt;选 JMeter
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;需要模拟&lt;strong&gt;复杂的业务流程&lt;/strong&gt;（如：登录 -&amp;gt; 搜商品 -&amp;gt; 下单 -&amp;gt; 支付）。&lt;/li&gt;
+&lt;li&gt;需要可视化的界面来观察响应时间分布、错误率等详细指标。&lt;/li&gt;
+&lt;li&gt;测试需要处理动态参数（如从上一个接口提取 Token 传递给下一个接口）。&lt;/li&gt;
+&lt;li&gt;团队更习惯使用图形化工具而非命令行。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>搞懂 MySQL 间隙锁：从原理到金融级选型</title>
+        <link>https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</link>
+        <pubDate>Tue, 18 Nov 2025 22:29:25 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</guid>
+        <description>&lt;p&gt;系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁，同事排查后，发现是由于间隙锁导致，MySQL 用的不多，记录下。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;mysql 间隙锁，背景、原理，如何关闭间隙锁、关闭了会有什么问题；你是资深数据库 DBA，针对我的问题进行扩展分析补充。幻读是什么？主流大厂是选择 RC 还是 RR模式？我是金融行业，券商系统，你更建议我用什么方案？整理上述问题，输出文档。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;在 MySQL 中，尤其是高并发场景下，“锁”是绕不过去的话题。间隙锁（Gap Lock）是 InnoDB 引擎中的一个核心特性，但也常常是性能瓶颈和死锁的根源。&lt;/p&gt;
+&lt;p&gt;这篇文章将帮你快速梳理间隙锁的核心、利弊，并为你（特别是金融行业）提供清晰的架构选型建议。&lt;/p&gt;
+&lt;h2 id=&#34;什么是间隙锁与幻读&#34;&gt;什么是间隙锁与幻读？
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;幻读 (Phantom Read)：&lt;/strong&gt;
+在一个事务中，你第一次查某范围（如 &lt;code&gt;ID &amp;gt; 100&lt;/code&gt;）有 10 条数据，别人插入一条 &lt;code&gt;ID=101&lt;/code&gt; 并提交后，你第二次查，发现变成了 11 条。这条“多出来的”新数据就像幻觉，故称“幻读”。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;间隙锁 (Gap Lock)：&lt;/strong&gt;
+MySQL 在 &lt;strong&gt;RR（可重复读）&lt;/strong&gt; 隔离级别下，为了解决“幻读”问题而发明的。它不锁数据行，而是&lt;strong&gt;锁住数据之间的“缝隙”&lt;/strong&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;作用：&lt;/strong&gt; 防止其他事务在这个“缝隙”中 &lt;code&gt;INSERT&lt;/code&gt; 新数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;代价：&lt;/strong&gt; 锁的范围变大，并发能力下降，容易死锁。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;如何关闭间隙锁&#34;&gt;如何“关闭”间隙锁？
+&lt;/h2&gt;&lt;p&gt;最直接的方法是&lt;strong&gt;将数据库隔离级别从 RR (Repeatable Read) 降为 RC (Read Committed)&lt;/strong&gt;。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;-- 将当前会话隔离级别设为 RC
+SET SESSION transaction_isolation = &#39;READ-COMMITTED&#39;;
+
+-- 永久修改（需改 my.cnf 并重启）
+-- [mysqld]
+-- transaction-isolation = READ-COMMITTED
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;-关闭的后果即-rc-级别的特性&#34;&gt;⚠️ 关闭的后果（即 RC 级别的特性）
+&lt;/h3&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;性能提升：&lt;/strong&gt; 没有了间隙锁，锁的粒度更小，并发吞吐量大幅提升。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;死锁减少：&lt;/strong&gt; 绝大多数由间隙锁导致的死锁都会消失。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;出现幻读/不可重复读：&lt;/strong&gt; 这是 RC 级别的“特性”，事务中两次查询的结果可能会不一致。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;【核心要求】必须配合 ROW 格式 Binlog：&lt;/strong&gt;
+如果使用 RC 级别，&lt;strong&gt;必须&lt;/strong&gt;将 &lt;code&gt;binlog_format&lt;/code&gt; 设置为 &lt;code&gt;ROW&lt;/code&gt;。否则，在主从复制时会因为缺少间隙锁的保护而导致主从数据不一致。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;主流大厂选择rc-还是-rr&#34;&gt;主流大厂选择：RC 还是 RR？
+&lt;/h2&gt;&lt;p&gt;&lt;strong&gt;答案：绝大多数一线互联网大厂都选择 RC (Read Committed) + ROW Binlog 模式。&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;原因：&lt;/strong&gt; 互联网业务（如电商、社交）极端追求高并发。它们无法忍受 RR 间隙锁带来的频繁锁等待和死锁。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;权衡：&lt;/strong&gt; 它们选择放弃数据库层面的“可重复读”，转而在&lt;strong&gt;应用层&lt;/strong&gt;通过乐观锁（如版本号、CAS）等方式来保证关键业务（如库存、余额）的逻辑一致性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;金融行业券商如何选择&#34;&gt;金融行业（券商）如何选择？
+&lt;/h2&gt;&lt;p&gt;对于数据一致性要求极高的券商系统，建议&lt;strong&gt;分场景治理&lt;/strong&gt;：&lt;/p&gt;
+&lt;h3 id=&#34;方案一核心交易系统高并发低延迟&#34;&gt;方案一：核心交易系统（高并发、低延迟）
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;建议：RC (Read Committed) + ROW Binlog + 应用层乐观锁&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;场景：&lt;/strong&gt; 订单撮合、下单、资金扣减。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由：&lt;/strong&gt; 交易系统的并发压力不亚于互联网秒杀。RR 的间隙锁会成为性能瓶颈，导致严重的锁竞争甚至死锁，这是交易系统无法接受的。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;对策：&lt;/strong&gt; 使用 RC 保证高性能，同时在应用代码中（如 Java）通过 &lt;code&gt;UPDATE ... WHERE balance &amp;gt; ?&lt;/code&gt; 或 CAS 版本号机制来保证资金安全，防止超卖。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;方案二清算对账系统批处理高一致性&#34;&gt;方案二：清算对账系统（批处理、高一致性）
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;建议：RR (Repeatable Read)&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;场景：&lt;/strong&gt; 盘后批量对账、生成报表、日终清算。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;理由：&lt;/strong&gt; 批处理任务需要在一个“绝对一致”的数据快照上运行。它需要 RR 级别提供的能力，保证在整个统计过程中，数据不会发生“幻读”，确保总账能对平。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;总结&#34;&gt;总结
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;隔离级别&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;优点&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;缺点&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;适用场景&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;RR (默认)&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;解决幻读，数据一致性高&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;并发低，易死锁 (间隙锁)&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;报表、清算、对数据一致性要求极高且并发不大的场景&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;RC&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;并发高，死锁少&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;会幻读、不可重复读&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;高并发核心业务&lt;/strong&gt; (如电商、金融交易)，需配合 ROW Binlog&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;对于券商核心系统，&lt;strong&gt;RC + ROW Binlog&lt;/strong&gt; 是兼顾性能与一致性的主流架构方案，但它要求开发团队在应用层承担更多保障数据一致性的责任。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>linux后端服务处理大量字符串数据-效率很慢</title>
+        <link>https://ttf248.life/p/linux-backend-slow-string-processing/</link>
+        <pubDate>Wed, 13 Nov 2024 19:42:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/linux-backend-slow-string-processing/</guid>
+        <description>&lt;p&gt;在C++开发的历史项目中，我们使用自定义协议进行通信，协议采用了二维数组的模式。在处理大量数据时，协议内部需要遍历数组并进行序列化操作以生成日志，由于效率较低，导致了系统在高负载下出现明显的卡顿，业务部门反馈系统卡顿。&lt;/p&gt;
+&lt;h2 id=&#34;问题定位&#34;&gt;问题定位
+&lt;/h2&gt;&lt;p&gt;在排查问题时，我们首先对系统进行了性能分析，发现系统在处理大量数据时，CPU 占用率明显增加，且系统响应时间变长。通过分析系统的日志，我们发现了大量的序列化操作，这些操作在处理二维数组时效率较低，导致了系统性能下降。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;pstack&lt;/code&gt;工具截取服务的线程信息，定位到日志线程大部分时间都在处理字符串的拼接。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;这里是今天的重点，不同的累加方式，效率差别巨大。历史代码中使用的是 &lt;code&gt;+&lt;/code&gt; 运算符，这种方式会频繁的创建临时对象，效率很低。你知道它效率很差，但你不知道它效率有多差的那种。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;demo-验证&#34;&gt;demo 验证
+&lt;/h2&gt;&lt;p&gt;基于项目代码，我们抽离业务逻辑，编写了一个简单的 demo，用于验证字符串拼接的效率问题。&lt;code&gt;windows&lt;/code&gt; 下的 &lt;code&gt;vs2022&lt;/code&gt; 编译器，&lt;code&gt;linux&lt;/code&gt; 下的 &lt;code&gt;gcc8.5&lt;/code&gt; 编译器，&lt;code&gt;Release&lt;/code&gt;模式下编译运行，对比效率。&lt;/p&gt;
+&lt;h3 id=&#34;关键点说明&#34;&gt;关键点说明
+&lt;/h3&gt;&lt;p&gt;项目使用的是方法四，在尚未拿到测试数据的时候，读者可以先思考一下，哪种方式效率最高？哪种方式效率最低？看到结果的时候，我还是很惊讶的。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;方法 1 (&lt;code&gt;+=&lt;/code&gt; 拼接)&lt;/strong&gt;：直接通过 &lt;code&gt;+=&lt;/code&gt; 将每个字段拼接到字符串中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 2 (&lt;code&gt;std::ostringstream&lt;/code&gt; 拼接)&lt;/strong&gt;：使用流（&lt;code&gt;std::ostringstream&lt;/code&gt;）来拼接每个字段，这种方法更高效，特别是对于大量数据拼接时。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 3（预分配内存的 &lt;code&gt;+=&lt;/code&gt; 拼接）&lt;/strong&gt;：通过 &lt;code&gt;reserve&lt;/code&gt; 提前为字符串分配足够的内存，减少了内存重新分配的开销，从而提升了性能。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 4 (&lt;code&gt;bodys = bodys + body + &amp;quot;\n&amp;quot;&lt;/code&gt;)&lt;/strong&gt;：每次拼接都创建一个新的临时字符串对象，这会导致性能下降，尤其是在大规模拼接时，因为每次拼接都会涉及一次新的内存分配和复制。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;参考结果，我们可以看到，项目刚好选中了效率最差的方式。&lt;/p&gt;
+&lt;p&gt;再进一步，我们来分析不同平台编译器的优化效率，微软的 &lt;code&gt;visual studio&lt;/code&gt; 一如既往的优秀，针对字符串的优化效率很高，而 &lt;code&gt;gcc&lt;/code&gt; 编译器在这方面的优化效率就差了一些。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;代码在不同的机器执行，两份数据没有直接的对比意义，可以分别对比不同拼接方法之间的差值。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;windows 平台下的 vs2022 编译器
+
+----------------------------------------
+Data Generation Time: 0.054 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.053 seconds.
++ ostringstream Data merging took: 0.054 seconds.
++ Pre-reserved Data merging took: 0.045 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 16.108 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;linux 平台下的 gcc8.5 编译器
+----------------------------------------
+Data Generation Time: 0.108 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.100 seconds.
++ ostringstream Data merging took: 0.083 seconds.
++ Pre-reserved Data merging took: 0.057 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 29.298 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;完整代码&#34;&gt;完整代码
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;string&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;random&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;sstream&amp;gt;
+#include &amp;lt;iomanip&amp;gt;
+
+typedef std::vector&amp;lt;std::string&amp;gt; DataRow;
+typedef std::vector&amp;lt;DataRow&amp;gt; DataGroup;
+
+struct ResponsePackage
+{
+    std::string ErrorInfo;
+    DataRow Head;
+    std::string ClientId;
+    std::string UUID;
+    std::string MsgID;
+    std::string SessionID;
+    std::string ExtraInfo1;
+    std::string ExtraInfo2;
+    DataGroup DataBody;
+};
+
+// Generate specified length of random string
+std::string generateRandomString(size_t length)
+{
+    const char charset[] = &amp;quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&amp;quot;;
+    const size_t max_index = sizeof(charset) - 1;
+    std::string random_string;
+    random_string.reserve(length);
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution&amp;lt;&amp;gt; distribution(0, max_index);
+
+    for (size_t i = 0; i &amp;lt; length; ++i)
+    {
+        random_string += charset[distribution(generator)];
+    }
+
+    return random_string;
+}
+
+void create_large_string()
+{
+    // Example request package with 50 fields
+    ResponsePackage requestPackage;
+
+    requestPackage.Head = {
+        &amp;quot;Field1&amp;quot;, &amp;quot;Field2&amp;quot;, &amp;quot;Field3&amp;quot;, &amp;quot;Field4&amp;quot;, &amp;quot;Field5&amp;quot;,
+        &amp;quot;Field6&amp;quot;, &amp;quot;Field7&amp;quot;, &amp;quot;Field8&amp;quot;, &amp;quot;Field9&amp;quot;, &amp;quot;Field10&amp;quot;,
+        &amp;quot;Field11&amp;quot;, &amp;quot;Field12&amp;quot;, &amp;quot;Field13&amp;quot;, &amp;quot;Field14&amp;quot;, &amp;quot;Field15&amp;quot;,
+        &amp;quot;Field16&amp;quot;, &amp;quot;Field17&amp;quot;, &amp;quot;Field18&amp;quot;, &amp;quot;Field19&amp;quot;, &amp;quot;Field20&amp;quot;,
+        &amp;quot;Field21&amp;quot;, &amp;quot;Field22&amp;quot;, &amp;quot;Field23&amp;quot;, &amp;quot;Field24&amp;quot;, &amp;quot;Field25&amp;quot;,
+        &amp;quot;Field26&amp;quot;, &amp;quot;Field27&amp;quot;, &amp;quot;Field28&amp;quot;, &amp;quot;Field29&amp;quot;, &amp;quot;Field30&amp;quot;,
+        &amp;quot;Field31&amp;quot;, &amp;quot;Field32&amp;quot;, &amp;quot;Field33&amp;quot;, &amp;quot;Field34&amp;quot;, &amp;quot;Field35&amp;quot;,
+        &amp;quot;Field36&amp;quot;, &amp;quot;Field37&amp;quot;, &amp;quot;Field38&amp;quot;, &amp;quot;Field39&amp;quot;, &amp;quot;Field40&amp;quot;,
+        &amp;quot;Field41&amp;quot;, &amp;quot;Field42&amp;quot;, &amp;quot;Field43&amp;quot;, &amp;quot;Field44&amp;quot;, &amp;quot;Field45&amp;quot;,
+        &amp;quot;Field46&amp;quot;, &amp;quot;Field47&amp;quot;, &amp;quot;Field48&amp;quot;, &amp;quot;Field49&amp;quot;, &amp;quot;Field50&amp;quot;
+    };
+
+    requestPackage.ClientId = &amp;quot;ClientID&amp;quot;;
+    requestPackage.UUID = &amp;quot;UUID&amp;quot;;
+    requestPackage.MsgID = &amp;quot;MsgID&amp;quot;;
+    requestPackage.SessionID = &amp;quot;SessionID&amp;quot;;
+    requestPackage.ExtraInfo1 = &amp;quot;ExtraInfo1&amp;quot;;
+    requestPackage.ExtraInfo2 = &amp;quot;ExtraInfo2&amp;quot;;
+
+    // Start timing for data generation
+    auto start_gen = std::chrono::high_resolution_clock::now();
+
+    // Generate 10,000 rows of data, each with 50 fields
+    for (size_t i = 0; i &amp;lt; 10000; ++i)
+    {
+        DataRow dataRow(50, &amp;quot;This is a test string&amp;quot;);
+        requestPackage.DataBody.push_back(dataRow);
+    }
+
+    // End timing for data generation
+    auto end_gen = std::chrono::high_resolution_clock::now();
+    std::chrono::duration&amp;lt;double&amp;gt; duration_gen = end_gen - start_gen;
+
+    // Display result generation time
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Generation Time: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_gen.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    // Data merging using different methods
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Performance:\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    {
+        // Method 1: Using &#39;+=&#39; string concatenation
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (+=) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 2: Using ostringstream
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::ostringstream bodys;
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::ostringstream body;
+            body &amp;lt;&amp;lt; &amp;quot;This is a test string&amp;quot;;
+            for (auto&amp;amp; item : vec)
+            {
+                body &amp;lt;&amp;lt; item &amp;lt;&amp;lt; &amp;quot; &amp;quot;;
+            }
+            bodys &amp;lt;&amp;lt; body.str() &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ ostringstream Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 3: Pre-allocated memory
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys;
+        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            body.reserve(50 * 20); // Pre-allocate memory for each row
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Pre-reserved Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 4: Using &#39;bodys = bodys + body + &amp;quot;\n&amp;quot;&#39;
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body = body + item + &amp;quot; &amp;quot;; // Note the use of &#39;body = body + item&#39;
+            }
+            bodys = bodys + body + &amp;quot;\n&amp;quot;; // Again, using &#39;bodys = bodys + body&#39;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (bodys = bodys + body + \&amp;quot;\\n\&amp;quot;) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Complete.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+}
+
+int main()
+{
+    try
+    {
+        create_large_string();
+    }
+    catch (const std::exception&amp;amp; e)
+    {
+        std::cerr &amp;lt;&amp;lt; &amp;quot;Caught exception: &amp;quot; &amp;lt;&amp;lt; e.what() &amp;lt;&amp;lt; std::endl;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\nProgram finished.\n&amp;quot;;
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
+        <title>WPF中的UI线程与卡顿问题及其解决方案</title>
+        <link>https://ttf248.life/p/wpf-ui-thread-and-freezing-solutions/</link>
+        <pubDate>Tue, 12 Mar 2024 07:12:21 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/wpf-ui-thread-and-freezing-solutions/</guid>
+        <description>&lt;p&gt;在开发桌面应用程序时，特别是在使用Windows Presentation Foundation (WPF)框架构建富客户端应用时，正确处理用户界面（UI）线程对于保证应用的流畅性和响应性至关重要。UI线程，又称为主线程，是负责处理窗口和控件事件、布局计算以及绘制界面的核心线程。任何与UI元素交互的操作都应当在UI线程上执行，这是WPF以及其他大多数GUI框架遵循的基本原则。&lt;/p&gt;
+&lt;h2 id=&#34;什么是ui线程&#34;&gt;什么是UI线程？
+&lt;/h2&gt;&lt;p&gt;UI线程在WPF应用启动时由操作系统创建，并初始化应用程序主窗口。它是应用程序中唯一能够直接访问和修改UI组件的状态的线程。这意味着诸如按钮点击、文本框输入、窗口尺寸变化等所有用户交互产生的事件都在这个线程上下文中处理。同时，WPF的依赖属性系统、数据绑定机制以及布局逻辑也都在UI线程上同步执行。&lt;/p&gt;
+&lt;h2 id=&#34;卡顿现象及其原因&#34;&gt;卡顿现象及其原因
+&lt;/h2&gt;&lt;p&gt;当UI线程被长时间占用或阻塞时，例如执行耗时的计算、大量数据加载、数据库查询或其他I/O密集型任务时，会导致UI线程无法及时响应用户的交互请求，进而表现为界面无响应（Freeze），也就是我们常说的“卡顿”。这种情况下，用户会明显感觉到应用的延迟和不流畅，严重时甚至会出现“Application Not Responding”（ANR）警告。&lt;/p&gt;
+&lt;h2 id=&#34;ui线程的两条基本规则&#34;&gt;UI线程的两条基本规则
+&lt;/h2&gt;&lt;p&gt;为了避免上述情况的发生，WPF开发者应遵循以下两条关键规则：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;不要在UI线程上执行耗时操作&lt;/strong&gt;：任何可能导致UI线程挂起的操作都应尽可能地移至后台线程执行，以确保UI线程能及时响应用户的输入和渲染屏幕的变化。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不要在非UI线程直接更新UI元素&lt;/strong&gt;：由于WPF的安全机制设计，只有UI线程有权对UI元素进行修改。试图从其他线程直接更改UI状态将会抛出异常。因此，即使在后台线程完成了计算或数据准备，也需要通过适当的跨线程通信机制将结果显示到UI上。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;解决方案异步编程与线程安全更新&#34;&gt;解决方案：异步编程与线程安全更新
+&lt;/h2&gt;&lt;p&gt;为了在保持UI流畅的同时又能执行耗时任务，WPF提供了多种异步编程模型和工具来协助开发者实现这一目标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Dispatcher对象&lt;/strong&gt;：WPF的Dispatcher类允许你将工作项安排到UI线程的任务队列中执行。你可以使用&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;或&lt;code&gt;Dispatcher.BeginInvoke&lt;/code&gt;方法从后台线程安全地更新UI。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;async/await关键字&lt;/strong&gt;：利用C#语言的异步特性，可以编写异步方法并在其中使用&lt;code&gt;await&lt;/code&gt;关键字等待后台任务完成，完成后自动回到UI线程执行后续的UI更新代码。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;案例&#34;&gt;案例
+&lt;/h2&gt;&lt;h3 id=&#34;使用dispatcherinvoke方法更新ui&#34;&gt;使用&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;方法更新UI
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-csharp&#34;&gt;private void Button_Click(object sender, RoutedEventArgs e)
+{
+    // 假设这是一个耗时操作
+    Task.Run(() =&amp;gt;
+    {
+        var result = LongRunningOperation(); // 这里是模拟一个耗时计算的方法
+        
+        // 当耗时操作完成后，在UI线程上更新UI
+        Application.Current.Dispatcher.Invoke(() =&amp;gt;
+        {
+            LabelStatus.Text = $&amp;quot;计算结果: {result}&amp;quot;;
+        });
+    });
+}
+
+private string LongRunningOperation()
+{
+    // 模拟耗时操作
+    Thread.Sleep(5000);
+    return &amp;quot;已完成&amp;quot;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;使用asyncawait关键字配合taskrun&#34;&gt;使用&lt;code&gt;async/await&lt;/code&gt;关键字配合&lt;code&gt;Task.Run&lt;/code&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-csharp&#34;&gt;private async void Button_ClickAsync(object sender, RoutedEventArgs e)
+{
+    Button button = sender as Button;
+    button.IsEnabled = false; // 防止用户重复点击
+
+    try
+    {
+        // 开启后台任务
+        var result = await Task.Run(() =&amp;gt; LongRunningOperation());
+
+        // 在后台任务完成后，自动切换回UI线程更新UI
+        LabelStatus.Text = $&amp;quot;计算结果: {result}&amp;quot;;
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($&amp;quot;发生错误: {ex.Message}&amp;quot;);
+    }
+    finally
+    {
+        button.IsEnabled = true; // 重新启用按钮
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
+        <title>vmware虚拟机cpu资源占用异常</title>
+        <link>https://ttf248.life/p/vmware-virtual-machine-cpu-usage-anomaly/</link>
+        <pubDate>Sun, 10 Mar 2024 22:14:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/vmware-virtual-machine-cpu-usage-anomaly/</guid>
+        <description>&lt;p&gt;背景：本地机器部署 windows 版本的业务系统，cpu 资源占用 5% 左右。vmware安装的 centos8 中部署 linux 版本业务系统，资源占用异常。&lt;/p&gt;
+&lt;h2 id=&#34;问题描述&#34;&gt;问题描述
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;宿主机：win10 企业版&lt;/li&gt;
+&lt;li&gt;vmware：17.5&lt;/li&gt;
+&lt;li&gt;虚拟机：centos8&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;虚拟机资源分配为&lt;code&gt;4C8GB&lt;/code&gt;，启动业务系统。业务系统部署在虚拟机Linux系统中，虚拟机内部 top 命令观察系统资源占用，cpu 占用并不高，外层 windows 系统，任务管理器观察到的CPU资源占用很高，查看进程发现，vmware 进程占用CPU资源很高。&lt;/p&gt;
+&lt;p&gt;+&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+
+|         Windows           |
+|                           |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|   |      VMware        |  |
+|   |      Program       |  |
+|   +&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;ndash;+  |
+|                           |
++&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;&amp;mdash;+&lt;/p&gt;
+&lt;h2 id=&#34;知识点&#34;&gt;知识点
+&lt;/h2&gt;&lt;p&gt;此问题的排查，并不顺利，由于导火索并不是业务系统本身，而是虚拟机本身的问题。如何将思路从常规的业务代码转移到系统负载，再从负载数据的异常，定位到软中断，最后来到关键点，什么东西会影响 Vmware 软中断的工作效率？本文将先科普各个知识点，最后给出解决方案。&lt;/p&gt;
+&lt;h3 id=&#34;hyper-v&#34;&gt;hyper-v
+&lt;/h3&gt;&lt;p&gt;Windows操作系统的虚拟化技术经历了一次重大变革。在微软首次发布WSL时，启用Hyper-V服务会导致无法同时使用VMware虚拟机。直到后续版本，VMware才能与Hyper-V服务兼容。&lt;/p&gt;
+&lt;h3 id=&#34;系统负载&#34;&gt;系统负载
+&lt;/h3&gt;&lt;p&gt;在Linux系统中，&amp;ldquo;负载&amp;rdquo;（load）是指系统中正在运行或等待执行的进程的数量。负载通常由三个数字表示，分别是1分钟、5分钟和15分钟内运行队列中的平均进程数量。这些数字可以通过运行&amp;quot;uptime&amp;quot;命令或&amp;quot;top&amp;quot;命令来查看。&lt;/p&gt;
+&lt;p&gt;具体来说，这三个数字分别代表：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;1分钟负载&lt;/strong&gt;：系统在过去1分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;5分钟负载&lt;/strong&gt;：系统在过去5分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;15分钟负载&lt;/strong&gt;：系统在过去15分钟内运行队列中的平均进程数量。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;负载的含义是在系统中等待运行的进程数。如果这个数字高于系统的逻辑CPU数量，表明系统负载很高，意味着有许多进程正在等待处理器资源。这可能会导致系统变得缓慢或不响应，具体取决于负载的高低程度以及系统的配置和性能。&lt;/p&gt;
+&lt;p&gt;在理想情况下，负载应该保持在系统的逻辑CPU数量范围内，这样系统的性能就能够得到最优化。如果负载持续高于CPU数量，可能需要进一步分析系统中的进程，找出导致负载高的原因，并采取相应的措施来调整系统资源分配或优化进程的运行方式。&lt;/p&gt;
+&lt;h3 id=&#34;分析负载-mpstat&#34;&gt;分析负载 mpstat
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;mpstat&lt;/code&gt; 命令用于报告单个或多个处理器的多个信息，包括平均负载、CPU利用率、中断和上下文切换等。在 &lt;code&gt;sysstat&lt;/code&gt; 包中，&lt;code&gt;mpstat&lt;/code&gt; 是非常有用的工具，可以用来分析系统的负载情况。下面是使用 &lt;code&gt;mpstat&lt;/code&gt; 进行负载分析的步骤：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;安装 sysstat&lt;/strong&gt;：
+如果您的系统上没有安装 &lt;code&gt;sysstat&lt;/code&gt;，可以使用适合您系统的包管理工具进行安装。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;运行 mpstat&lt;/strong&gt;：
+使用 &lt;code&gt;mpstat&lt;/code&gt; 命令查看 CPU 的使用情况和负载。默认情况下，&lt;code&gt;mpstat&lt;/code&gt; 每秒钟显示一次 CPU 使用情况的平均值。您可以通过指定时间间隔来调整输出频率。例如，要以每秒钟一次的频率运行 &lt;code&gt;mpstat&lt;/code&gt;，可以使用以下命令：&lt;code&gt;mpstat -P ALL 2&lt;/code&gt;，&lt;code&gt;irq&lt;/code&gt; 表示占用资源占用&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;01:32:33 PM  CPU    %usr   %nice    %sys %iowait    %irq   %soft  %steal  %guest  %gnice   %idle
+01:32:35 PM  all    0.00    0.00    0.26    0.00    3.73    0.26    0.00    0.00    0.00   95.76
+01:32:35 PM    0    0.00    0.00    0.51    0.00    3.57    0.00    0.00    0.00    0.00   95.92
+01:32:35 PM    1    0.00    0.00    0.00    0.00    3.59    0.51    0.00    0.00    0.00   95.90
+01:32:35 PM    2    0.00    0.00    0.00    0.00    4.15    0.00    0.00    0.00    0.00   95.85
+01:32:35 PM    3    0.00    0.00    0.52    0.00    3.61    0.52    0.00    0.00    0.00   95.36
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;分析输出&lt;/strong&gt;：
+&lt;code&gt;mpstat&lt;/code&gt; 的输出包括了每个 CPU 的利用率，以及系统的平均负载。特别关注平均负载以及每个 CPU 的利用率，可以帮助您了解系统的负载情况。如果负载较高，可以进一步分析是哪些进程导致的，以及是否存在性能瓶颈。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;结合其他工具&lt;/strong&gt;：
+除了 &lt;code&gt;mpstat&lt;/code&gt;，还可以使用 &lt;code&gt;sar&lt;/code&gt;、&lt;code&gt;pidstat&lt;/code&gt;、&lt;code&gt;iostat&lt;/code&gt; 等工具来综合分析系统性能。通过结合多种工具的输出，可以更全面地了解系统的负载情况，并找出性能问题的根源。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h3 id=&#34;中断&#34;&gt;中断
+&lt;/h3&gt;&lt;p&gt;此处不展开讲解内容太多，
+推荐: &lt;a class=&#34;link&#34; href=&#34;https://www.codedump.info/post/20200522-sgfap-softirq/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;《面向应用开发者的系统指南》CPU篇之软中断&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;频繁的触发软中断，也会体现在系统负载中。&lt;/p&gt;
+&lt;h2 id=&#34;问题排查&#34;&gt;问题排查
+&lt;/h2&gt;&lt;p&gt;考虑到仅从CPU角度分析无法定位问题，我们是否应该开始怀疑系统是否出现了异常？可能是Linux操作系统的负载过高，导致VMware占用了过多的CPU资源。通过使用&lt;code&gt;mpstat&lt;/code&gt;分析本地虚拟机，我们发现&lt;code&gt;irq&lt;/code&gt;占用异常，单核接近25%，而在正常情况下，启动业务进程空跑时，&lt;code&gt;irq&lt;/code&gt;占比应该约为5%。&lt;/p&gt;
+&lt;p&gt;在组内同事的开发环境中，他的CentOS 7部署在VMware上，资源占用显示正常。另一方面，在上海的开发环境中，虽然也是VMware，但我们无法直接观察宿主机的CPU资源情况。这时，我们面临着多个变量：VMware虚拟机、Linux操作系统和GCC版本。&lt;/p&gt;
+&lt;p&gt;转而分析测试环境，深圳的测试环境部署在物理机上，运行着低版本GCC编译的服务，而且在CentOS 8上运行。有趣的是，在深圳环境中，&lt;code&gt;irq&lt;/code&gt;占用都是正常的。&lt;/p&gt;
+&lt;p&gt;为了排查GCC版本引入的问题，我们将使用高版本GCC编译的程序部署到深圳环境进行测试，结果显示也都是正常的。&lt;/p&gt;
+&lt;p&gt;问题似乎变得更加明朗，我们开始怀疑操作系统是否存在问题。毕竟，CentOS 8已经不再受到官方支持。但即便重新部署了纯净的CentOS 7和CentOS 8，问题依然存在。&lt;/p&gt;
+&lt;p&gt;此时，我们开始怀疑唯一的不确定因素，即VMware虚拟机软件。突然间，灵光一现，我们想到了Hyper-V技术。是否之前启用了Hyper-V，但没有彻底关闭，从而导致了这个问题？毕竟，软中断也是通过虚拟机软件来实现的。不同的虚拟机虚拟技术是否存在BUG？这些问题值得深入思考和调查。&lt;/p&gt;
+&lt;h2 id=&#34;结论&#34;&gt;结论
+&lt;/h2&gt;&lt;p&gt;根据微软官方的手册，我们完全关闭了本机的Hyper-V服务后，发现VMware在宿主机上恢复了正常。至此，问题终于迎刃而解。正如一开始所述，这段经历曲折而艰辛，需要综合性的分析和判断。这也是我们首次排查问题，定位到了虚拟机这一层面。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Disable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V-Hypervisor
+bcdedit /set hypervisorlaunchtype off
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://learn.microsoft.com/zh-cn/troubleshoot/windows-client/application-management/virtualization-apps-not-work-with-hyper-v&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>程序优化不要试图对抗硬件</title>
         <link>https://ttf248.life/p/program-optimization-dont-fight-hardware/</link>
         <pubDate>Fri, 07 Apr 2023 16:30:15 +0800</pubDate>

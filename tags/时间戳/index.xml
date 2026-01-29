@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>时间戳 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/%E6%97%B6%E9%97%B4%E6%88%B3/</link>
+        <description>Recent content in 时间戳 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 29 Jan 2026 22:52:12 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/%E6%97%B6%E9%97%B4%E6%88%B3/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>跨机器计算时间差</title>
+        <link>https://ttf248.life/p/cross-machine-computation-time-difference/</link>
+        <pubDate>Thu, 19 Jun 2025 09:45:36 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/cross-machine-computation-time-difference/</guid>
+        <description>&lt;p&gt;组内现有通讯协议使用 &lt;code&gt;steady_clock&lt;/code&gt; 作为时间戳，计算单个节点的耗时，某个特殊场景，用到了消息包自带的时间戳，&lt;strong&gt;自带&lt;/strong&gt;的时间戳来自于其他机器，导致计算出来的耗时异常。&lt;/p&gt;
+&lt;p&gt;题话外：Gemini2.5 Pro 有希望彻底超越 GPT-4&lt;/p&gt;
+&lt;h2 id=&#34;问题排查&#34;&gt;问题排查
+&lt;/h2&gt;&lt;p&gt;开始也没注意到底层时间戳计算的问题，就想着停掉所有服务，仅从本地接入，分析下日志。发现有个服务一直停不掉，持续的在发送业务数据，没辙，按照通讯端口抓包定位机器的位置。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;sudo tcpdump -nni any -B 4096 -s 0 -w tmp.pcap port 13100
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;内部网络情况复杂，消息经过了代理转发，先从服务本机抓包，使用 &lt;code&gt;tcpdump&lt;/code&gt; 抓取端口 13100 的数据包。然后切换到代理服务器上，抓取端口 13100 的数据包。&lt;/p&gt;
+&lt;p&gt;分析发现，耗时异常的请求，都来自深圳办公室，排查问题的服务，都部署在上海办公室。&lt;/p&gt;
+&lt;h2 id=&#34;steady_clock-和-system_clock-的区别&#34;&gt;steady_clock 和 system_clock 的区别
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;std::steady_clock&lt;/code&gt; 和 &lt;code&gt;std::system_clock&lt;/code&gt; 是 C++ 中用于处理时间的两种主要时钟。它们有以下关键区别：&lt;/p&gt;
+&lt;h3 id=&#34;stdsystem_clock&#34;&gt;std::system_clock
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;代表“墙上时间” (Wall Clock Time)&lt;/strong&gt;：它表示的是系统范围内的、现实世界的时间。这个时间与操作系统显示的时间是一致的。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可以被调整&lt;/strong&gt;：这个时钟的时间可以被用户或系统服务（如 NTP 网络时间协议）向前或向后调整。例如，如果你手动修改系统时间，或者系统与时间服务器同步，&lt;code&gt;system_clock&lt;/code&gt; 的值会发生跳变。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不适合测量时间间隔&lt;/strong&gt;：由于它可能向后跳变，用它来计算两个时间点之间的时间差可能会得到负数或不准确的结果。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;主要用途&lt;/strong&gt;：获取当前的日历时间，用于需要与现实世界时间对应的场景（例如，日志记录时间戳）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;stdsteady_clock&#34;&gt;std::steady_clock
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;单调递增时钟 (Monotonic Clock)&lt;/strong&gt;：这个时钟从某个起点开始，只会稳定地向前移动，永远不会减少。它的速率可能是固定的，也可能不是（尽管通常是）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不可被调整&lt;/strong&gt;：&lt;code&gt;steady_clock&lt;/code&gt; 不受系统时间变化的影响。即使用户修改了系统时间，它也会继续稳定地向前走。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;最适合测量时间间隔&lt;/strong&gt;：由于其单调性，它是测量代码执行时间、超时等待等场景的最佳选择，可以保证结果的准确性。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;起点不确定&lt;/strong&gt;：它的起始时间点（epoch）通常是系统启动时，但这并没有被标准所保证。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;不同机器上的-steady_clock-一样吗&#34;&gt;不同机器上的 &lt;code&gt;steady_clock&lt;/code&gt; 一样吗？
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;不一样。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;steady_clock&lt;/code&gt; 的值在不同机器之间是&lt;strong&gt;没有可比性的&lt;/strong&gt;。甚至在同一台机器的两次不同启动之间，它的值也是不可比的。&lt;/p&gt;
+&lt;p&gt;因为它的设计初衷就是为了在&lt;strong&gt;单次程序运行中&lt;/strong&gt;精确地测量时间段，而不是为了表示一个绝对的时间点。它的起点（epoch）是未定义的，并且在不同的系统或不同的启动会话中几乎肯定是不同的。&lt;/p&gt;
+&lt;h3 id=&#34;总结&#34;&gt;总结
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;特性&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;&lt;code&gt;system_clock&lt;/code&gt;&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;&lt;code&gt;steady_clock&lt;/code&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;类型&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;墙上时钟&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;单调时钟&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;是否可调整&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;是，可以向前或向后跳变&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;否，只会向前移动&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;主要用途&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;获取当前日历时间&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;测量时间间隔、超时&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;跨机器/重启比较&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;可以（同步后）&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;不可以&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;简单来说&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;需要知道“现在几点了？”，用 &lt;code&gt;system_clock&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;需要知道“这段代码运行了多久？”，用 &lt;code&gt;steady_clock&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

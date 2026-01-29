@@ -77,6 +77,145 @@
 &lt;li&gt;需要知道“这段代码运行了多久？”，用 &lt;code&gt;steady_clock&lt;/code&gt;。&lt;/li&gt;
 &lt;/ul&gt;</description>
         </item>
+        <item>
+        <title>后台服务TCP通讯异常排查</title>
+        <link>https://ttf248.life/p/backend-service-tcp-communication-troubleshooting/</link>
+        <pubDate>Fri, 14 Feb 2025 22:54:13 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/backend-service-tcp-communication-troubleshooting/</guid>
+        <description>&lt;p&gt;业务模型：后台服务借助 TCP 与集团的行情网关建立连接。每次连接时，需先行发送一个授权请求，随后持续发送心跳包以维持连接状态。
+然而，某一天，收到了服务断开连接的告警信息。通过仔细排查日志后发现，后台服务一直在持续发送心跳包，但对方却毫无回应，可连接却始终未断开。&lt;/p&gt;
+&lt;h2 id=&#34;现场简述&#34;&gt;现场简述
+&lt;/h2&gt;&lt;p&gt;原本正在公司加班推进项目进度，工作群里突然弹出告警信息。乍一看，我还以为是老毛病，大概率是网络超时致使心跳发送失败，进而导致服务断开连接。可在仔细排查日志后，却发现实际情况并非如此。后台已发送了授权登录消息，然而一直未收到应答，与此同时，心跳包仍在持续不断地发送，对方却始终未回复任何心跳数据。经过对日志的深入分析，暴露出了以下几个关键问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;授权消息无应答：极有可能是对方系统正在重启，使得授权消息未能得到及时处理。&lt;/li&gt;
+&lt;li&gt;未成功授权却发送心跳数据：经排查，发现这是程序逻辑上的漏洞。心跳发送函数的判断逻辑存在缺陷，仅仅校验了连接状态，却遗漏了对授权状态的校验。&lt;/li&gt;
+&lt;li&gt;服务未断开连接：若服务能够断开连接，便可以触发重连机制，从而重新发送授权消息。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;目前，还剩下最后一个亟待解决的问题——为何服务没有断开连接。这一问题的解决需要开展更为深入细致的排查工作。&lt;/p&gt;
+&lt;h2 id=&#34;分析网络数据包&#34;&gt;分析网络数据包
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;tcpdump&lt;/code&gt; 是一个非常强大的网络抓包工具，可以用来捕获网络数据包。通过分析网络数据包，我们可以更加直观地了解网络通信的细节。在这里，我们可以使用 &lt;code&gt;tcpdump&lt;/code&gt; 来捕获网络数据包，以便进一步分析。&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/backend-service-tcp-communication-troubleshooting/20250220151952.png&#34;
+	width=&#34;1126&#34;
+	height=&#34;202&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;tcpdump&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;557&#34;
+		data-flex-basis=&#34;1337px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;p&gt;分析图中的数据，我可以看到心跳一直在正常发送，对方服务器并没有回复任何数据，但是给了 &lt;code&gt;ACK&lt;/code&gt;，这就导致连接不会主动断开了。&lt;/p&gt;
+&lt;h2 id=&#34;常见标志位说明&#34;&gt;常见标志位说明
+&lt;/h2&gt;&lt;p&gt;在 TCP 协议中，&lt;code&gt;PSH&lt;/code&gt;（Push）和 &lt;code&gt;ACK&lt;/code&gt;（Acknowledgment）是两个重要的标志位，分别用于控制数据传输和流量确认。它们的作用如下：&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;1-pshpush-flag&#34;&gt;&lt;strong&gt;1. PSH（Push Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;功能&lt;/strong&gt;：&lt;br&gt;
+&lt;code&gt;PSH&lt;/code&gt; 标志位的作用是&lt;strong&gt;请求接收方立即将缓冲区中的数据推送给上层应用&lt;/strong&gt;（而不是等待缓冲区填满）。这意味着一旦收到带有 &lt;code&gt;PSH&lt;/code&gt; 标志的数据段，接收方会尽可能快地处理并传递给应用程序，而非暂存于操作系统缓冲区中。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;典型场景&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;HTTP/HTTPS 请求&lt;/strong&gt;：客户端发送请求时（如 &lt;code&gt;GET /index.html&lt;/code&gt;）会设置 &lt;code&gt;PSH&lt;/code&gt;，希望服务器立即响应。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;SSH 协议&lt;/strong&gt;：每次键盘输入都会触发 &lt;code&gt;PSH&lt;/code&gt;，确保输入字符实时传输。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实时通信&lt;/strong&gt;：视频流、在线游戏等低延迟场景可能使用 &lt;code&gt;PSH&lt;/code&gt; 减少延迟。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;注意&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;PSH&lt;/code&gt; 并非强制要求，接收方可以选择忽略该标志位（但仍需正常处理数据）。&lt;/li&gt;
+&lt;li&gt;发送方可能不设置 &lt;code&gt;PSH&lt;/code&gt;，此时接收方会根据自身缓冲策略决定何时推送数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;2-ackacknowledgment-flag&#34;&gt;&lt;strong&gt;2. ACK（Acknowledgment Flag）&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;功能&lt;/strong&gt;：&lt;br&gt;
+&lt;code&gt;ACK&lt;/code&gt; 标志位表示&lt;strong&gt;确认已正确接收前序数据段&lt;/strong&gt;。每个 &lt;code&gt;ACK&lt;/code&gt; 包含一个确认号（&lt;code&gt;Acknowledgment Number&lt;/code&gt;），表示期望接收的下一个字节序号。它是 TCP 可靠传输的核心机制。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;工作原理&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;发送方发送数据段时，会携带期望接收方的 &lt;code&gt;ACK&lt;/code&gt; 值（例如 &lt;code&gt;ACK = 序列号 + 数据长度&lt;/code&gt;）。&lt;/li&gt;
+&lt;li&gt;接收方收到数据后，会生成一个 &lt;code&gt;ACK&lt;/code&gt; 报文段，确认已接收的数据序号。&lt;/li&gt;
+&lt;li&gt;发送方只有在收到对应的 &lt;code&gt;ACK&lt;/code&gt; 后，才会重传未被确认的数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;示例&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;若发送方发送了序号为 &lt;code&gt;100~199&lt;/code&gt; 的数据段，则期望接收方的 &lt;code&gt;ACK&lt;/code&gt; 应为 &lt;code&gt;200&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;若接收方未收到 &lt;code&gt;100~199&lt;/code&gt; 中的某些数据，会通过 &lt;code&gt;ACK=150&lt;/code&gt; 告知发送方重传。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;3-psh-和-ack-的组合&#34;&gt;&lt;strong&gt;3. PSH 和 ACK 的组合&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;在 TCP 报文中，&lt;code&gt;PSH&lt;/code&gt; 和 &lt;code&gt;ACK&lt;/code&gt; 可以同时出现，常见于以下场景：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;HTTP 请求响应&lt;/strong&gt;：&lt;br&gt;
+客户端发送 &lt;code&gt;POST&lt;/code&gt; 请求时（含数据），会设置 &lt;code&gt;PSH&lt;/code&gt; 和 &lt;code&gt;ACK&lt;/code&gt;（确认之前的响应）。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-plaintext&#34;&gt;Client → Server: SYN, ACK=1 → 建立连接
+Client → Server: PSH, ACK=1, 数据 → 发送请求数据
+Server → Client: PSH, ACK=数据长度+1 → 返回响应
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;SSH 握手后传输命令&lt;/strong&gt;：&lt;br&gt;
+客户端输入命令后，发送带有 &lt;code&gt;PSH&lt;/code&gt; 和 &lt;code&gt;ACK&lt;/code&gt; 的数据段，确保命令立即传输并被服务器处理。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;4-其他标志位的关联&#34;&gt;&lt;strong&gt;4. 其他标志位的关联&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;标志位&lt;/th&gt;
+&lt;th&gt;名称&lt;/th&gt;
+&lt;th&gt;简要说明&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;SYN&lt;/td&gt;
+&lt;td&gt;同步&lt;/td&gt;
+&lt;td&gt;初始化连接（三次握手）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;FIN&lt;/td&gt;
+&lt;td&gt;结束&lt;/td&gt;
+&lt;td&gt;优雅关闭连接&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;RST&lt;/td&gt;
+&lt;td&gt;复位&lt;/td&gt;
+&lt;td&gt;强制终止连接（异常情况）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;URG&lt;/td&gt;
+&lt;td&gt;紧急&lt;/td&gt;
+&lt;td&gt;标记紧急指针（极少使用）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;总结&#34;&gt;&lt;strong&gt;总结&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;PSH&lt;/strong&gt; 关注的是&lt;strong&gt;数据尽快到达应用层&lt;/strong&gt;，降低延迟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ACK&lt;/strong&gt; 关注的是&lt;strong&gt;数据的可靠传输&lt;/strong&gt;，避免丢包或乱序。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;两者协同工作，平衡了 TCP 协议的效率和可靠性。&lt;/p&gt;</description>
+        </item>
         
     </channel>
 </rss>

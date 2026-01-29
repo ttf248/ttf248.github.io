@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Std::function on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/stdfunction/</link>
+        <description>Recent content in Std::function on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 29 Jan 2026 21:27:15 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/stdfunction/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>C&#43;&#43;函数调用耗时</title>
+        <link>https://ttf248.life/p/cpp-function-call-timing/</link>
+        <pubDate>Wed, 24 Jan 2024 14:11:33 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/cpp-function-call-timing/</guid>
+        <description>&lt;p&gt;设计行情 SDK，针对不同的回调函数实现方式，进行了一次耗时的测试。近期在看 C++ 函数编程，当函数变成了一等公民，在程序内部流转，耗时有什么不同？&lt;/p&gt;
+&lt;p&gt;前文链接：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/compiler-callback-performance-testing/&#34; &gt;编译器、回调函数、性能测试&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;leimao&lt;/code&gt; 大佬刚好也做了类似的测试，借代码一用。&lt;/p&gt;
+&lt;h2 id=&#34;正文&#34;&gt;正文
+&lt;/h2&gt;&lt;p&gt;执行平台依旧是我们的老朋友，&lt;a class=&#34;link&#34; href=&#34;https://wandbox.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://wandbox.org/&lt;/a&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;cassert&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;functional&amp;gt;
+#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;vector&amp;gt;
+
+int add_one(int input) { return input + 1; }
+
+bool validate_vector_add_one(std::vector&amp;lt;int&amp;gt; const&amp;amp; input_vector,
+                             std::vector&amp;lt;int&amp;gt; const&amp;amp; output_vector)
+{
+    bool is_valid{true};
+    for (size_t i{0}; i &amp;lt; input_vector.size(); ++i)
+    {
+        if (output_vector.at(i) != input_vector.at(i) + 1)
+        {
+            is_valid = false;
+            break;
+        }
+    }
+    return is_valid;
+}
+
+void reset_vector(std::vector&amp;lt;int&amp;gt;&amp;amp; input_vector)
+{
+    for (size_t i{0}; i &amp;lt; input_vector.size(); ++i)
+    {
+        input_vector.at(i) = 0;
+    }
+}
+
+template &amp;lt;typename T, typename Func&amp;gt;
+void unitary_function_pass_by_lambda_function(T&amp;amp; output, T const&amp;amp; input,
+                                              Func const func)
+{
+    output = func(input);
+}
+
+template &amp;lt;typename T&amp;gt;
+void unitary_function_pass_by_std_function_value(T&amp;amp; output, T const&amp;amp; input,
+                                                 std::function&amp;lt;T(T)&amp;gt; const func)
+{
+    output = func(input);
+}
+
+template &amp;lt;typename T&amp;gt;
+void unitary_function_pass_by_std_function_reference(
+    T&amp;amp; output, T const&amp;amp; input, std::function&amp;lt;T(T)&amp;gt; const&amp;amp; func)
+{
+    output = func(input);
+}
+
+template &amp;lt;typename T&amp;gt;
+void unitary_function_pass_by_function_pointer(T&amp;amp; output, T const&amp;amp; input,
+                                               T (*func)(T))
+{
+    output = func(input);
+}
+
+int main()
+{
+    // Set floating point format std::cout with 3 decimal places.
+    std::cout.precision(3);
+
+    size_t const num_elements{10000000};
+    std::vector&amp;lt;int&amp;gt; input_vector(num_elements, 0);
+    std::vector&amp;lt;int&amp;gt; output_vector(num_elements, 0);
+
+    auto const lambda_function_add_one{[](int const&amp;amp; input) -&amp;gt; int
+                                       { return input + 1; }};
+    std::function&amp;lt;int(int)&amp;gt; const std_function_add_one{lambda_function_add_one};
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;The size of a function pointer: &amp;quot; &amp;lt;&amp;lt; sizeof(&amp;amp;add_one)
+              &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;The size of a std::function pointer: &amp;quot;
+              &amp;lt;&amp;lt; sizeof(&amp;amp;std_function_add_one) &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;The size of a std::function: &amp;quot; &amp;lt;&amp;lt; sizeof(std_function_add_one)
+              &amp;lt;&amp;lt; std::endl;
+
+    // Call function frequently in a vanilla way.
+    // The compiler knows what function to call at compile time and can optimize
+    // the code.
+    // This is the best performance we could get.
+    std::chrono::steady_clock::time_point const time_start_vanilla{
+        std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        output_vector.at(i) = add_one(input_vector.at(i));
+    }
+    std::chrono::steady_clock::time_point const time_end_vanilla{
+        std::chrono::steady_clock::now()};
+    auto const time_elapsed_vanilla{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(time_end_vanilla -
+                                                             time_start_vanilla)
+            .count()};
+    float const latency_vanilla{time_elapsed_vanilla /
+                                static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass Vanilla: &amp;quot; &amp;lt;&amp;lt; latency_vanilla &amp;lt;&amp;lt; &amp;quot; ns&amp;quot;
+              &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // Sometimes, we don&#39;t know what function to call at compile time.
+    // We can use std::function to pass a function as an argument.
+    // In this case, we pass the std::function by value.
+    // Because the size of a std::function is 32 bytes, passing by value
+    // results in a lot of copying and bad performance.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_std_function_value{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_std_function_value(
+            output_vector.at(i), input_vector.at(i), std_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_std_function_value{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_std_function_value{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_std_function_value -
+            time_start_pass_by_std_function_value)
+            .count()};
+    float const latency_pass_by_std_function_value{
+        time_elapsed_pass_by_std_function_value /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Std Function Value: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_std_function_value &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // Instead of passing the std::function by value, we can pass it by
+    // reference (pointer). In this case, object copying is eliminated. The
+    // performance is better than passing the std::function by value. However,
+    // the performance is still not as good as the vanilla way.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_std_function_reference{
+            std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_std_function_reference(
+            output_vector.at(i), input_vector.at(i), std_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_std_function_reference{
+            std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_std_function_reference{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_std_function_reference -
+            time_start_pass_by_std_function_reference)
+            .count()};
+    float const latency_pass_by_std_function_reference{
+        time_elapsed_pass_by_std_function_reference /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Std Function Reference: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_std_function_reference &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // std::function is a general purpose wrapper for function pointers,
+    // callable objects, and lambda functions. Because it&#39;s general purpose,
+    // it&#39;s not as efficient as a function pointer. In this case, we pass a
+    // function pointer to a function. The performance is better than passing
+    // the std::function by reference.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_function_pointer{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_function_pointer(output_vector.at(i),
+                                                  input_vector.at(i), &amp;amp;add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_function_pointer{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_function_pointer{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_function_pointer -
+            time_start_pass_by_function_pointer)
+            .count()};
+    float const latency_pass_by_function_pointer{
+        time_elapsed_pass_by_function_pointer /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Function Pointer: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_function_pointer &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+
+    // We can also pass a lambda function to a function.
+    // The compiler knows what function to call at compile time and can optimize
+    // the code. The performance is also better than passing the std::function
+    // by reference.
+    std::chrono::steady_clock::time_point const
+        time_start_pass_by_lambda_function{std::chrono::steady_clock::now()};
+    for (size_t i{0}; i &amp;lt; num_elements; ++i)
+    {
+        unitary_function_pass_by_lambda_function(
+            output_vector.at(i), input_vector.at(i), lambda_function_add_one);
+    }
+    std::chrono::steady_clock::time_point const
+        time_end_pass_by_lambda_function{std::chrono::steady_clock::now()};
+    auto const time_elapsed_pass_by_lambda_function{
+        std::chrono::duration_cast&amp;lt;std::chrono::nanoseconds&amp;gt;(
+            time_end_pass_by_lambda_function -
+            time_start_pass_by_lambda_function)
+            .count()};
+    float const latency_pass_by_lambda_function{
+        time_elapsed_pass_by_lambda_function /
+        static_cast&amp;lt;float&amp;gt;(num_elements)};
+    std::cout &amp;lt;&amp;lt; &amp;quot;Latency Pass By Lambda Function: &amp;quot;
+              &amp;lt;&amp;lt; latency_pass_by_lambda_function &amp;lt;&amp;lt; &amp;quot; ns&amp;quot; &amp;lt;&amp;lt; std::endl;
+    assert(validate_vector_add_one(input_vector, output_vector));
+    reset_vector(output_vector);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# 组里常规也就开启 O2 优化，编译选用了 gcc13，不同版本的 gcc 性能耗时略有不同，版本越高 lambda 效果越好
+The size of a function pointer: 8
+The size of a std::function pointer: 8
+The size of a std::function: 32
+Latency Pass Vanilla: 0.418 ns
+Latency Pass By Std Function Value: 3.47 ns
+Latency Pass By Std Function Reference: 1.36 ns
+Latency Pass By Function Pointer: 0.396 ns
+Latency Pass By Lambda Function: 0.44 ns
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://leimao.github.io/blog/CPP-Function-Call-Performance/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://leimao.github.io/blog/CPP-Function-Call-Performance/&lt;/a&gt;&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

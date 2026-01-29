@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Dispatcher on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/dispatcher/</link>
+        <description>Recent content in Dispatcher on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 29 Jan 2026 21:27:15 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/dispatcher/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>WPF中的UI线程与卡顿问题及其解决方案</title>
+        <link>https://ttf248.life/p/wpf-ui-thread-and-freezing-solutions/</link>
+        <pubDate>Tue, 12 Mar 2024 07:12:21 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/wpf-ui-thread-and-freezing-solutions/</guid>
+        <description>&lt;p&gt;在开发桌面应用程序时，特别是在使用Windows Presentation Foundation (WPF)框架构建富客户端应用时，正确处理用户界面（UI）线程对于保证应用的流畅性和响应性至关重要。UI线程，又称为主线程，是负责处理窗口和控件事件、布局计算以及绘制界面的核心线程。任何与UI元素交互的操作都应当在UI线程上执行，这是WPF以及其他大多数GUI框架遵循的基本原则。&lt;/p&gt;
+&lt;h2 id=&#34;什么是ui线程&#34;&gt;什么是UI线程？
+&lt;/h2&gt;&lt;p&gt;UI线程在WPF应用启动时由操作系统创建，并初始化应用程序主窗口。它是应用程序中唯一能够直接访问和修改UI组件的状态的线程。这意味着诸如按钮点击、文本框输入、窗口尺寸变化等所有用户交互产生的事件都在这个线程上下文中处理。同时，WPF的依赖属性系统、数据绑定机制以及布局逻辑也都在UI线程上同步执行。&lt;/p&gt;
+&lt;h2 id=&#34;卡顿现象及其原因&#34;&gt;卡顿现象及其原因
+&lt;/h2&gt;&lt;p&gt;当UI线程被长时间占用或阻塞时，例如执行耗时的计算、大量数据加载、数据库查询或其他I/O密集型任务时，会导致UI线程无法及时响应用户的交互请求，进而表现为界面无响应（Freeze），也就是我们常说的“卡顿”。这种情况下，用户会明显感觉到应用的延迟和不流畅，严重时甚至会出现“Application Not Responding”（ANR）警告。&lt;/p&gt;
+&lt;h2 id=&#34;ui线程的两条基本规则&#34;&gt;UI线程的两条基本规则
+&lt;/h2&gt;&lt;p&gt;为了避免上述情况的发生，WPF开发者应遵循以下两条关键规则：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;不要在UI线程上执行耗时操作&lt;/strong&gt;：任何可能导致UI线程挂起的操作都应尽可能地移至后台线程执行，以确保UI线程能及时响应用户的输入和渲染屏幕的变化。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;不要在非UI线程直接更新UI元素&lt;/strong&gt;：由于WPF的安全机制设计，只有UI线程有权对UI元素进行修改。试图从其他线程直接更改UI状态将会抛出异常。因此，即使在后台线程完成了计算或数据准备，也需要通过适当的跨线程通信机制将结果显示到UI上。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;解决方案异步编程与线程安全更新&#34;&gt;解决方案：异步编程与线程安全更新
+&lt;/h2&gt;&lt;p&gt;为了在保持UI流畅的同时又能执行耗时任务，WPF提供了多种异步编程模型和工具来协助开发者实现这一目标：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Dispatcher对象&lt;/strong&gt;：WPF的Dispatcher类允许你将工作项安排到UI线程的任务队列中执行。你可以使用&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;或&lt;code&gt;Dispatcher.BeginInvoke&lt;/code&gt;方法从后台线程安全地更新UI。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;async/await关键字&lt;/strong&gt;：利用C#语言的异步特性，可以编写异步方法并在其中使用&lt;code&gt;await&lt;/code&gt;关键字等待后台任务完成，完成后自动回到UI线程执行后续的UI更新代码。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;案例&#34;&gt;案例
+&lt;/h2&gt;&lt;h3 id=&#34;使用dispatcherinvoke方法更新ui&#34;&gt;使用&lt;code&gt;Dispatcher.Invoke&lt;/code&gt;方法更新UI
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-csharp&#34;&gt;private void Button_Click(object sender, RoutedEventArgs e)
+{
+    // 假设这是一个耗时操作
+    Task.Run(() =&amp;gt;
+    {
+        var result = LongRunningOperation(); // 这里是模拟一个耗时计算的方法
+        
+        // 当耗时操作完成后，在UI线程上更新UI
+        Application.Current.Dispatcher.Invoke(() =&amp;gt;
+        {
+            LabelStatus.Text = $&amp;quot;计算结果: {result}&amp;quot;;
+        });
+    });
+}
+
+private string LongRunningOperation()
+{
+    // 模拟耗时操作
+    Thread.Sleep(5000);
+    return &amp;quot;已完成&amp;quot;;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;使用asyncawait关键字配合taskrun&#34;&gt;使用&lt;code&gt;async/await&lt;/code&gt;关键字配合&lt;code&gt;Task.Run&lt;/code&gt;
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-csharp&#34;&gt;private async void Button_ClickAsync(object sender, RoutedEventArgs e)
+{
+    Button button = sender as Button;
+    button.IsEnabled = false; // 防止用户重复点击
+
+    try
+    {
+        // 开启后台任务
+        var result = await Task.Run(() =&amp;gt; LongRunningOperation());
+
+        // 在后台任务完成后，自动切换回UI线程更新UI
+        LabelStatus.Text = $&amp;quot;计算结果: {result}&amp;quot;;
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($&amp;quot;发生错误: {ex.Message}&amp;quot;);
+    }
+    finally
+    {
+        button.IsEnabled = true; // 重新启用按钮
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

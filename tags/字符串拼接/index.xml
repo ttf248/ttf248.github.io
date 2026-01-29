@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>字符串拼接 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%8B%BC%E6%8E%A5/</link>
+        <description>Recent content in 字符串拼接 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 29 Jan 2026 21:27:15 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%8B%BC%E6%8E%A5/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>linux后端服务处理大量字符串数据-效率很慢</title>
+        <link>https://ttf248.life/p/linux-backend-slow-string-processing/</link>
+        <pubDate>Wed, 13 Nov 2024 19:42:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/linux-backend-slow-string-processing/</guid>
+        <description>&lt;p&gt;在C++开发的历史项目中，我们使用自定义协议进行通信，协议采用了二维数组的模式。在处理大量数据时，协议内部需要遍历数组并进行序列化操作以生成日志，由于效率较低，导致了系统在高负载下出现明显的卡顿，业务部门反馈系统卡顿。&lt;/p&gt;
+&lt;h2 id=&#34;问题定位&#34;&gt;问题定位
+&lt;/h2&gt;&lt;p&gt;在排查问题时，我们首先对系统进行了性能分析，发现系统在处理大量数据时，CPU 占用率明显增加，且系统响应时间变长。通过分析系统的日志，我们发现了大量的序列化操作，这些操作在处理二维数组时效率较低，导致了系统性能下降。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;pstack&lt;/code&gt;工具截取服务的线程信息，定位到日志线程大部分时间都在处理字符串的拼接。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;这里是今天的重点，不同的累加方式，效率差别巨大。历史代码中使用的是 &lt;code&gt;+&lt;/code&gt; 运算符，这种方式会频繁的创建临时对象，效率很低。你知道它效率很差，但你不知道它效率有多差的那种。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id=&#34;demo-验证&#34;&gt;demo 验证
+&lt;/h2&gt;&lt;p&gt;基于项目代码，我们抽离业务逻辑，编写了一个简单的 demo，用于验证字符串拼接的效率问题。&lt;code&gt;windows&lt;/code&gt; 下的 &lt;code&gt;vs2022&lt;/code&gt; 编译器，&lt;code&gt;linux&lt;/code&gt; 下的 &lt;code&gt;gcc8.5&lt;/code&gt; 编译器，&lt;code&gt;Release&lt;/code&gt;模式下编译运行，对比效率。&lt;/p&gt;
+&lt;h3 id=&#34;关键点说明&#34;&gt;关键点说明
+&lt;/h3&gt;&lt;p&gt;项目使用的是方法四，在尚未拿到测试数据的时候，读者可以先思考一下，哪种方式效率最高？哪种方式效率最低？看到结果的时候，我还是很惊讶的。&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;方法 1 (&lt;code&gt;+=&lt;/code&gt; 拼接)&lt;/strong&gt;：直接通过 &lt;code&gt;+=&lt;/code&gt; 将每个字段拼接到字符串中。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 2 (&lt;code&gt;std::ostringstream&lt;/code&gt; 拼接)&lt;/strong&gt;：使用流（&lt;code&gt;std::ostringstream&lt;/code&gt;）来拼接每个字段，这种方法更高效，特别是对于大量数据拼接时。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 3（预分配内存的 &lt;code&gt;+=&lt;/code&gt; 拼接）&lt;/strong&gt;：通过 &lt;code&gt;reserve&lt;/code&gt; 提前为字符串分配足够的内存，减少了内存重新分配的开销，从而提升了性能。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;方法 4 (&lt;code&gt;bodys = bodys + body + &amp;quot;\n&amp;quot;&lt;/code&gt;)&lt;/strong&gt;：每次拼接都创建一个新的临时字符串对象，这会导致性能下降，尤其是在大规模拼接时，因为每次拼接都会涉及一次新的内存分配和复制。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;参考结果，我们可以看到，项目刚好选中了效率最差的方式。&lt;/p&gt;
+&lt;p&gt;再进一步，我们来分析不同平台编译器的优化效率，微软的 &lt;code&gt;visual studio&lt;/code&gt; 一如既往的优秀，针对字符串的优化效率很高，而 &lt;code&gt;gcc&lt;/code&gt; 编译器在这方面的优化效率就差了一些。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;代码在不同的机器执行，两份数据没有直接的对比意义，可以分别对比不同拼接方法之间的差值。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;windows 平台下的 vs2022 编译器
+
+----------------------------------------
+Data Generation Time: 0.054 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.053 seconds.
++ ostringstream Data merging took: 0.054 seconds.
++ Pre-reserved Data merging took: 0.045 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 16.108 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;linux 平台下的 gcc8.5 编译器
+----------------------------------------
+Data Generation Time: 0.108 seconds.
+----------------------------------------
+
+----------------------------------------
+Data Merging Performance:
+----------------------------------------
++ Data merging (+=) took: 0.100 seconds.
++ ostringstream Data merging took: 0.083 seconds.
++ Pre-reserved Data merging took: 0.057 seconds.
++ Data merging (bodys = bodys + body + &amp;quot;\n&amp;quot;) took: 29.298 seconds.
+
+----------------------------------------
+Data Merging Complete.
+----------------------------------------
+
+Program finished.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;完整代码&#34;&gt;完整代码
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;string&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;random&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;sstream&amp;gt;
+#include &amp;lt;iomanip&amp;gt;
+
+typedef std::vector&amp;lt;std::string&amp;gt; DataRow;
+typedef std::vector&amp;lt;DataRow&amp;gt; DataGroup;
+
+struct ResponsePackage
+{
+    std::string ErrorInfo;
+    DataRow Head;
+    std::string ClientId;
+    std::string UUID;
+    std::string MsgID;
+    std::string SessionID;
+    std::string ExtraInfo1;
+    std::string ExtraInfo2;
+    DataGroup DataBody;
+};
+
+// Generate specified length of random string
+std::string generateRandomString(size_t length)
+{
+    const char charset[] = &amp;quot;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&amp;quot;;
+    const size_t max_index = sizeof(charset) - 1;
+    std::string random_string;
+    random_string.reserve(length);
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution&amp;lt;&amp;gt; distribution(0, max_index);
+
+    for (size_t i = 0; i &amp;lt; length; ++i)
+    {
+        random_string += charset[distribution(generator)];
+    }
+
+    return random_string;
+}
+
+void create_large_string()
+{
+    // Example request package with 50 fields
+    ResponsePackage requestPackage;
+
+    requestPackage.Head = {
+        &amp;quot;Field1&amp;quot;, &amp;quot;Field2&amp;quot;, &amp;quot;Field3&amp;quot;, &amp;quot;Field4&amp;quot;, &amp;quot;Field5&amp;quot;,
+        &amp;quot;Field6&amp;quot;, &amp;quot;Field7&amp;quot;, &amp;quot;Field8&amp;quot;, &amp;quot;Field9&amp;quot;, &amp;quot;Field10&amp;quot;,
+        &amp;quot;Field11&amp;quot;, &amp;quot;Field12&amp;quot;, &amp;quot;Field13&amp;quot;, &amp;quot;Field14&amp;quot;, &amp;quot;Field15&amp;quot;,
+        &amp;quot;Field16&amp;quot;, &amp;quot;Field17&amp;quot;, &amp;quot;Field18&amp;quot;, &amp;quot;Field19&amp;quot;, &amp;quot;Field20&amp;quot;,
+        &amp;quot;Field21&amp;quot;, &amp;quot;Field22&amp;quot;, &amp;quot;Field23&amp;quot;, &amp;quot;Field24&amp;quot;, &amp;quot;Field25&amp;quot;,
+        &amp;quot;Field26&amp;quot;, &amp;quot;Field27&amp;quot;, &amp;quot;Field28&amp;quot;, &amp;quot;Field29&amp;quot;, &amp;quot;Field30&amp;quot;,
+        &amp;quot;Field31&amp;quot;, &amp;quot;Field32&amp;quot;, &amp;quot;Field33&amp;quot;, &amp;quot;Field34&amp;quot;, &amp;quot;Field35&amp;quot;,
+        &amp;quot;Field36&amp;quot;, &amp;quot;Field37&amp;quot;, &amp;quot;Field38&amp;quot;, &amp;quot;Field39&amp;quot;, &amp;quot;Field40&amp;quot;,
+        &amp;quot;Field41&amp;quot;, &amp;quot;Field42&amp;quot;, &amp;quot;Field43&amp;quot;, &amp;quot;Field44&amp;quot;, &amp;quot;Field45&amp;quot;,
+        &amp;quot;Field46&amp;quot;, &amp;quot;Field47&amp;quot;, &amp;quot;Field48&amp;quot;, &amp;quot;Field49&amp;quot;, &amp;quot;Field50&amp;quot;
+    };
+
+    requestPackage.ClientId = &amp;quot;ClientID&amp;quot;;
+    requestPackage.UUID = &amp;quot;UUID&amp;quot;;
+    requestPackage.MsgID = &amp;quot;MsgID&amp;quot;;
+    requestPackage.SessionID = &amp;quot;SessionID&amp;quot;;
+    requestPackage.ExtraInfo1 = &amp;quot;ExtraInfo1&amp;quot;;
+    requestPackage.ExtraInfo2 = &amp;quot;ExtraInfo2&amp;quot;;
+
+    // Start timing for data generation
+    auto start_gen = std::chrono::high_resolution_clock::now();
+
+    // Generate 10,000 rows of data, each with 50 fields
+    for (size_t i = 0; i &amp;lt; 10000; ++i)
+    {
+        DataRow dataRow(50, &amp;quot;This is a test string&amp;quot;);
+        requestPackage.DataBody.push_back(dataRow);
+    }
+
+    // End timing for data generation
+    auto end_gen = std::chrono::high_resolution_clock::now();
+    std::chrono::duration&amp;lt;double&amp;gt; duration_gen = end_gen - start_gen;
+
+    // Display result generation time
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Generation Time: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_gen.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    // Data merging using different methods
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Performance:\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+
+    {
+        // Method 1: Using &#39;+=&#39; string concatenation
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (+=) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 2: Using ostringstream
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::ostringstream bodys;
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::ostringstream body;
+            body &amp;lt;&amp;lt; &amp;quot;This is a test string&amp;quot;;
+            for (auto&amp;amp; item : vec)
+            {
+                body &amp;lt;&amp;lt; item &amp;lt;&amp;lt; &amp;quot; &amp;quot;;
+            }
+            bodys &amp;lt;&amp;lt; body.str() &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ ostringstream Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 3: Pre-allocated memory
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys;
+        bodys.reserve(1000 * 50 * 20); // Pre-allocate enough memory
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            body.reserve(50 * 20); // Pre-allocate memory for each row
+            for (auto&amp;amp; item : vec)
+            {
+                body += item + &amp;quot; &amp;quot;;
+            }
+            bodys += body + &amp;quot;\n&amp;quot;;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Pre-reserved Data merging took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    {
+        // Method 4: Using &#39;bodys = bodys + body + &amp;quot;\n&amp;quot;&#39;
+        auto start_merge = std::chrono::high_resolution_clock::now();
+        std::string bodys(&amp;quot;&amp;quot;);
+        for (auto&amp;amp; vec : requestPackage.DataBody)
+        {
+            std::string body(&amp;quot;This is a test string&amp;quot;);
+            for (auto&amp;amp; item : vec)
+            {
+                body = body + item + &amp;quot; &amp;quot;; // Note the use of &#39;body = body + item&#39;
+            }
+            bodys = bodys + body + &amp;quot;\n&amp;quot;; // Again, using &#39;bodys = bodys + body&#39;
+        }
+        auto end_merge = std::chrono::high_resolution_clock::now();
+        std::chrono::duration&amp;lt;double&amp;gt; duration_merge = end_merge - start_merge;
+        std::cout &amp;lt;&amp;lt; &amp;quot;+ Data merging (bodys = bodys + body + \&amp;quot;\\n\&amp;quot;) took: &amp;quot; &amp;lt;&amp;lt; std::fixed &amp;lt;&amp;lt; std::setprecision(3) &amp;lt;&amp;lt; duration_merge.count() &amp;lt;&amp;lt; &amp;quot; seconds.\n&amp;quot;;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n----------------------------------------\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Merging Complete.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;----------------------------------------\n&amp;quot;;
+}
+
+int main()
+{
+    try
+    {
+        create_large_string();
+    }
+    catch (const std::exception&amp;amp; e)
+    {
+        std::cerr &amp;lt;&amp;lt; &amp;quot;Caught exception: &amp;quot; &amp;lt;&amp;lt; e.what() &amp;lt;&amp;lt; std::endl;
+    }
+
+    std::cout &amp;lt;&amp;lt; &amp;quot;\nProgram finished.\n&amp;quot;;
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
