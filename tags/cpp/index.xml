@@ -1213,6 +1213,415 @@ Latency Pass By Lambda Function: 0.44 ns
     &gt;https://leimao.github.io/blog/CPP-Function-Call-Performance/&lt;/a&gt;&lt;/p&gt;</description>
         </item>
         <item>
+        <title>编译器、回调函数、性能测试</title>
+        <link>https://ttf248.life/p/compiler-callback-performance-testing/</link>
+        <pubDate>Wed, 15 Feb 2023 13:59:25 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/compiler-callback-performance-testing/</guid>
+        <description>&lt;p&gt;去年设计了一个&lt;code&gt;SDK&lt;/code&gt;，负责处理封装一些事件，对外提供一个类接口，服务初始化的时候，调用方实现对应的类，并将对象指针传给模块。
+接触过&lt;code&gt;C11&lt;/code&gt;，好奇心害死猫，就想着这些接口都用&lt;code&gt;lambda&lt;/code&gt;函数对象回调来实现会是什么结果，和纯虚函数的接口定义方法比较，更加灵活。
+疑问就出现了，两种不同的语法，从性能角度来说，哪个更快一些？不懂编译原理，弄段代码试试看。&lt;/p&gt;
+&lt;h2 id=&#34;前言&#34;&gt;前言
+&lt;/h2&gt;&lt;p&gt;在线网址，能选择不同编译器，编译参数，在&lt;code&gt;linux&lt;/code&gt;平台运行代码，亦或者查看对应的汇编代码。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://wandbox.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://wandbox.org/&lt;/a&gt;：有时候做些技术验证，网页执行小片段的代码很省事&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://godbolt.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://godbolt.org/&lt;/a&gt;：用不同的颜色，区分不同的汇编对应的代码，比本地的调试器看起来更加省事。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;正文&#34;&gt;正文
+&lt;/h2&gt;&lt;p&gt;标准委员会制定了语法的规则，在编译层面，如何实现，取决于各家的编译器，这里不得不说一声，微软的编译器，挺厉害的。语法糖不是万能的，回调接口不多，使用&lt;code&gt;lambda&lt;/code&gt;更加便捷，也无需定义空回调函数接口；回调接口种类繁多的时候，传统的虚函数更有利于业务接口定义的统一。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;windows&lt;/code&gt;平台，两者性能接近，没有太多的差异&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;linux&lt;/code&gt;平台，虚函数和&lt;code&gt;lambda&lt;/code&gt;比较，单次多了1.35ns&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;常规的业务系统开发中，此级别的性能损耗可以忽略，引入&lt;code&gt;lambda&lt;/code&gt;，在设计的上，能带来更多的便捷。在设计多信号处理时，尤为明显，底层有事件触发，如果需要落地日志，出入日志对象的的处理函数。当需要更多的业务处理接口时，底层用&lt;code&gt;vector&lt;/code&gt;保存&lt;code&gt;lambda&lt;/code&gt;对象，事件触发时，依次遍历调用，类似于&lt;code&gt;QT&lt;/code&gt;中的信号和槽，日志、监控、业务1、业务2，互相之间完全解耦。&lt;/p&gt;
+&lt;h2 id=&#34;代码&#34;&gt;代码
+&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Counter: 1000000
+Time: 3966us
+Counter: 1000000
+Time: 5316us
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;memory&amp;gt;
+#include &amp;lt;functional&amp;gt;
+#include &amp;lt;atomic&amp;gt;
+#include &amp;lt;string&amp;gt;
+
+std::atomic_int64_t counter = 0;
+
+// 定义回调接口
+class UserInterface
+{
+public:
+    virtual void name() = 0;
+    virtual void full_name() = 0;
+};
+
+class User : public UserInterface
+{
+public:
+    void name() {}
+    void full_name() { counter++; }
+};
+
+void to_string(UserInterface* user)
+{
+    user-&amp;gt;name();
+    user-&amp;gt;full_name();
+}
+
+using name_handler = std::function&amp;lt;void()&amp;gt;;
+using full_name_handler = std::function&amp;lt;void()&amp;gt;;
+
+class Test
+{
+    name_handler name_;
+    full_name_handler full_name_;
+
+public:
+    void set_name_handler(name_handler name)
+    {
+        name_ = name;
+    }
+
+    void set_full_name_handler(full_name_handler full_name)
+    {
+        full_name_ = full_name;
+    }
+
+    void to_string()
+    {
+        name_();
+        full_name_();
+    }
+};
+
+int main()
+{
+    User user;
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i &amp;lt; 1000000; i++)
+    {
+        to_string(&amp;amp;user);
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout &amp;lt;&amp;lt; &amp;quot;Counter: &amp;quot; &amp;lt;&amp;lt; counter &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Time: &amp;quot; &amp;lt;&amp;lt; std::chrono::duration_cast&amp;lt;std::chrono::microseconds&amp;gt;(end - start).count() &amp;lt;&amp;lt; &amp;quot;us&amp;quot; &amp;lt;&amp;lt; std::endl;
+
+    counter = 0;
+    auto name = []() {};
+    auto full_name = []() { counter++; };
+
+    Test test;
+    test.set_name_handler(name);
+    test.set_full_name_handler(full_name);
+
+    start = std::chrono::high_resolution_clock::now();
+
+    for (int i = 0; i &amp;lt; 1000000; i++)
+    {
+        test.to_string();
+    }
+
+    end = std::chrono::high_resolution_clock::now();
+    std::cout &amp;lt;&amp;lt; &amp;quot;Counter: &amp;quot; &amp;lt;&amp;lt; counter &amp;lt;&amp;lt; std::endl;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Time: &amp;quot; &amp;lt;&amp;lt; std::chrono::duration_cast&amp;lt;std::chrono::microseconds&amp;gt;(end - start).count() &amp;lt;&amp;lt; &amp;quot;us&amp;quot; &amp;lt;&amp;lt; std::endl;
+
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;后记&#34;&gt;后记
+&lt;/h2&gt;&lt;p&gt;查找资料的时候，翻到类似的代码片段 &lt;a class=&#34;link&#34; href=&#34;https://gist.githubusercontent.com/benloong/8050171/raw/fa577ec923b460862078b8b40233a42a1c619eeb/functionperformance.cpp&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;functionperformance.cpp&lt;/a&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;memory&amp;gt;
+#include &amp;lt;functional&amp;gt;
+
+using namespace std;
+using namespace std::chrono;
+
+class Base
+{
+public:
+	Base(){}
+	virtual ~Base(){}
+	virtual int func(int i) = 0;
+};
+
+class Derived : public Base
+{
+public:
+	Derived(int base = 10) : base{base}
+	{
+
+	}
+	~Derived(){}
+
+	virtual int func(int i)
+	{
+		return i*base;
+	}
+private:
+	int base;
+};
+
+struct Func
+{
+	int base;
+	int operator()(int i)
+	{
+		return i*base;
+	}
+	Func(int base) : base {base}
+	{
+
+	}
+};
+const int base = 10;
+int calculate(int i)
+{
+	return base*i;
+}
+
+int main()
+{
+	const int num = 10000;
+	Base *p = new Derived{10};
+	int total = 0;
+	auto start = high_resolution_clock::now();
+	for (int i = 0; i &amp;lt; num; ++i)
+	{
+		total += p-&amp;gt;func(i);
+	}
+	auto end = high_resolution_clock::now();
+	std::cout&amp;lt;&amp;lt;&amp;quot;result: &amp;quot;&amp;lt;&amp;lt;total&amp;lt;&amp;lt;&amp;quot;\nvirtual call elapsed: \t&amp;quot;&amp;lt;&amp;lt;duration_cast&amp;lt;nanoseconds&amp;gt;(end-start).count()&amp;lt;&amp;lt;&amp;quot; nanoseconds.\n&amp;quot;&amp;lt;&amp;lt;std::endl;
+
+	total = 0;
+	start = high_resolution_clock::now();
+	for (int i = 0; i &amp;lt; num; ++i)
+	{
+		total += calculate(i);
+	}
+	end = high_resolution_clock::now();
+	std::cout&amp;lt;&amp;lt;&amp;quot;result: &amp;quot;&amp;lt;&amp;lt;total&amp;lt;&amp;lt;&amp;quot;\ndirect function call elapsed: \t&amp;quot;&amp;lt;&amp;lt;duration_cast&amp;lt;nanoseconds&amp;gt;(end-start).count()&amp;lt;&amp;lt;&amp;quot; nanoseconds.\n&amp;quot;&amp;lt;&amp;lt;std::endl;
+
+	Func functor{10};
+	total = 0;
+	start = high_resolution_clock::now();
+	for (int i = 0; i &amp;lt; num; ++i)
+	{
+		total += functor(i);
+	}
+	end = high_resolution_clock::now();
+	std::cout&amp;lt;&amp;lt;&amp;quot;result: &amp;quot;&amp;lt;&amp;lt;total&amp;lt;&amp;lt;&amp;quot;\nfunctor call elapsed: \t&amp;quot;&amp;lt;&amp;lt;duration_cast&amp;lt;nanoseconds&amp;gt;(end-start).count()&amp;lt;&amp;lt;&amp;quot; nanoseconds.\n&amp;quot;&amp;lt;&amp;lt;std::endl;
+	int base = 10;
+	function&amp;lt;int(int)&amp;gt; lambda = [base](int i)
+	{
+		return i*base;
+	};
+	total = 0;
+	start = high_resolution_clock::now();
+	for (int i = 0; i &amp;lt; num; ++i)
+	{
+		total += lambda(i);
+	}
+	end = high_resolution_clock::now();
+	std::cout&amp;lt;&amp;lt;&amp;quot;result: &amp;quot;&amp;lt;&amp;lt;total&amp;lt;&amp;lt;&amp;quot;\nlambda call elapsed: \t&amp;quot;&amp;lt;&amp;lt;duration_cast&amp;lt;nanoseconds&amp;gt;(end-start).count()&amp;lt;&amp;lt;&amp;quot; nanoseconds.\n&amp;quot;&amp;lt;&amp;lt;std::endl;
+	return 0;
+}
+
+/*
+test on mac mini i7 2.7GHz
+clang++ -std=c++11 chronotest.cpp -O0
+output:
+result: 499950000
+virtual call elapsed: 	43171 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 	31379 nanoseconds.
+
+result: 499950000
+functor call elapsed: 	41497 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 	207416 nanoseconds.
+===================================================
+clang++ -std=c++11 chronotest.cpp -O1
+output:
+result: 499950000
+virtual call elapsed: 	26144 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 	22384 nanoseconds.
+
+result: 499950000
+functor call elapsed: 	33477 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 	55799 nanoseconds.
+===================================================
+clang++ -std=c++11 chronotest.cpp -O2
+result: 499950000
+virtual call elapsed: 	22284 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 	36 nanoseconds.
+
+result: 499950000
+functor call elapsed: 	30 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 	28292 nanoseconds.
+
+===================================================
+clang++ -std=c++11 chronotest.cpp -O3
+result: 499950000
+virtual call elapsed: 	18975 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 	29 nanoseconds.
+
+result: 499950000
+functor call elapsed: 	30 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 	22542 nanoseconds.
+===================================================
+clang++ -std=c++11 chronotest.cpp -O4
+
+result: 499950000
+virtual call elapsed: 	22141 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 	30 nanoseconds.
+
+result: 499950000
+functor call elapsed: 	30 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 	22584 nanoseconds.
+*/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里多了两种模式，普通函数和仿函数，提供接口回调的方式和直接调用比较，性能损耗是数量级的差异，仿函数性能和函数接近，有时候仿函数的性能更优，编译原理这块算是知识盲区，猜测是由于访问的变量地址和函数挨着，有利于&lt;code&gt;CPU&lt;/code&gt;处理&lt;/p&gt;
+&lt;p&gt;附上 &lt;code&gt;wandbox&lt;/code&gt; 运行结果&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;result: 499950000
+virtual call elapsed: 6143 nanoseconds.
+
+result: 499950000
+direct function call elapsed: 30 nanoseconds.
+
+result: 499950000
+functor call elapsed: 31 nanoseconds.
+
+result: 499950000
+lambda call elapsed: 15134 nanoseconds.
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
+        <title>主机序、网络序，通过调试器，直接观察</title>
+        <link>https://ttf248.life/p/host-network-byte-order-debugger/</link>
+        <pubDate>Tue, 10 Jan 2023 14:18:12 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/host-network-byte-order-debugger/</guid>
+        <description>&lt;p&gt;在计算机的发展历史中，如何存储数据并没有统一的标准。&lt;/p&gt;
+&lt;p&gt;字节的排列方式有两个通用规则。例如，将一个多位数的低位放在较小的地址处，高位放在较大的地址处，则称小端序；反之则称大端序。在网络应用中，字节序是一个必须被考虑的因素，因为不同机器类型可能采用不同标准的字节序，所以均按照网络标准转化。&lt;/p&gt;
+&lt;p&gt;按照阅读习惯，大端字节序更符合从左到右的阅读顺序。&lt;/p&gt;
+&lt;h2 id=&#34;处理器体系httpszhwikipediaorgwikie5ad97e88a82e5ba8f&#34;&gt;&lt;a class=&#34;link&#34; href=&#34;https://zh.wikipedia.org/wiki/%E5%AD%97%E8%8A%82%E5%BA%8F&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;处理器体系&lt;/a&gt;
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;x86、MOS Technology 6502、Z80、VAX、PDP-11 等处理器为小端序&lt;/li&gt;
+&lt;li&gt;Motorola 6800、Motorola 68000、PowerPC 970 等处理器为大端序&lt;/li&gt;
+&lt;li&gt;ARM、PowerPC（除PowerPC 970外）、DEC Alpha、SPARC V9、MIPS、PA-RISC及IA64的字节序是可配置的&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;网络序&#34;&gt;网络序
+&lt;/h2&gt;&lt;p&gt;网络传输一般采用大端序，也被称之为网络字节序，或网络序。IP协议中定义大端序为网络字节序。
+&lt;code&gt;Berkeley&lt;/code&gt;套接字定义了一组转换函数，用于16和32bit整数在网络序和本机字节序之间的转换。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;arpa/inet.h&amp;gt;
+
+uint32_t htonl(uint32_t hostlong); //把uint32_t类型从主机序转换到网络序
+uint16_t htons(uint16_t hostshort); //把uint16_t类型从主机序转换到网络序
+uint32_t ntohl(uint32_t netlong); //把uint32_t类型从网络序转换到主机序
+uint16_t ntohs(uint16_t netshort); //把uint16_t类型从网络序转换到主机序
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果选用&lt;code&gt;asio&lt;/code&gt;作为网络库，内置的命名空间中有跨平台适配的函数名&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::network_to_host_long&lt;/li&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::network_to_host_short&lt;/li&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::host_to_network_long&lt;/li&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::host_to_network_short&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;visual-studio-调试器&#34;&gt;visual studio 调试器
+&lt;/h2&gt;&lt;p&gt;调试模式下，选中调试菜单，窗口，勾选内存窗口&lt;/p&gt;
+&lt;p&gt;在&lt;code&gt;visual studio&lt;/code&gt;中，可以直接在调试器中查看内存中的数据，如下图所示&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/host-network-byte-order-debugger/Snipaste_2023-01-10_14-44-00.png&#34;
+	width=&#34;535&#34;
+	height=&#34;147&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;调试器菜单&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;363&#34;
+		data-flex-basis=&#34;873px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;h3 id=&#34;查看内存的方式&#34;&gt;查看内存的方式
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;窗口直接输出 &amp;amp;变量名，跳转到对应变量地址&lt;/li&gt;
+&lt;li&gt;如果变量原本就是指针，双击选中变量，拖动到内存窗口，展示对应地址的内容&lt;/li&gt;
+&lt;li&gt;如果变量不是指针，添加到计算窗口，获取地址，然后手工复制到内存窗口&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;举个栗子&#34;&gt;举个栗子
+&lt;/h3&gt;&lt;p&gt;收到一段数据，存储到&lt;code&gt;buffer&lt;/code&gt;对象中，将网络序转成主机序，得到&lt;code&gt;body_length&lt;/code&gt;等于 30，服务端划分了四个字节用于传出此数据。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;bool NetworkMessage::decode_header()
+{
+    // 网络序转成主机序
+    body_length_ = boost::asio::detail::socket_ops::network_to_host_long(*(int *)buffer_.data());
+    return auto_reserve(body_length_);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;strong&gt;大端字节序&lt;/strong&gt;：在内存窗口中，观察 &lt;code&gt;buffer_&lt;/code&gt; 的内容&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/host-network-byte-order-debugger/buffer_.png&#34;
+	width=&#34;603&#34;
+	height=&#34;318&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;buffer_&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;189&#34;
+		data-flex-basis=&#34;455px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;strong&gt;小端字节序&lt;/strong&gt;：在内存窗口中，观察 &lt;code&gt;body_length_&lt;/code&gt; 的内容&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/host-network-byte-order-debugger/body_length_.png&#34;
+	width=&#34;581&#34;
+	height=&#34;333&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;body_length_&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;174&#34;
+		data-flex-basis=&#34;418px&#34;
+	
+&gt;&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>C11: sleep for vs yield</title>
         <link>https://ttf248.life/p/c11-sleep-for-vs-yield/</link>
         <pubDate>Tue, 20 Sep 2022 20:54:51 +0800</pubDate>
