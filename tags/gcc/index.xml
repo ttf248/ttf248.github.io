@@ -6,39 +6,6 @@
         <description>Recent content in gcc on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/gcc/index.xml" rel="self" type="application/rss+xml" /><item>
-        <title>枚举值尽量不要从零开始定义</title>
-        <link>https://ttf248.life/p/protobuf-zero-value-trap/</link>
-        <pubDate>Thu, 20 Feb 2025 15:26:51 +0800</pubDate>
-        
-        <guid>https://ttf248.life/p/protobuf-zero-value-trap/</guid>
-        <description>&lt;p&gt;美股有三个交易时段，分别是：盘前、盘中、盘后；接口推送数据还是数值增量的逻辑（尽可能的节约带宽），仅在第一次发送全量，第二次开始所有字段都是增量推送逻辑。&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;为什么不用最优方案？牵扯到不同项目组，有些都已经上线多年。我方属于新对接，所以只能尽量兼容。&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;h2 id=&#34;一系列问题&#34;&gt;一系列问题
-&lt;/h2&gt;&lt;p&gt;单从摘要上看，可能还觉得没什么问题，问题带入组内的系统架构，带出来一系列问题。刚处理上一个问题，又遇到了新的问题，这个问题是由于之前的问题引起的。&lt;/p&gt;
-&lt;h3 id=&#34;无法识别交易时段&#34;&gt;无法识别交易时段
-&lt;/h3&gt;&lt;p&gt;已知盘中阶段定义为在 &lt;code&gt;protobuf&lt;/code&gt; 中定义为 0，但是在收到数据的时候由于是增量推送，业务方无法有效识别这个&lt;code&gt;零&lt;/code&gt;是默认值，还是真实的业务值。&lt;/p&gt;
-&lt;p&gt;通俗理解：每次收到 0，无法判断这个 0 是新行情设置的值，还是 protobuf 的默认值&lt;/p&gt;
-&lt;h3 id=&#34;引入-optional&#34;&gt;引入 optional
-&lt;/h3&gt;&lt;p&gt;Since protobuf release 3.15, proto3 supports using the optional keyword (just as in proto2) to give a scalar field presence information&lt;/p&gt;
-&lt;p&gt;组内的通讯协议是基于 &lt;code&gt;protobuf&lt;/code&gt; 的，但是由于历史原因，选择的版本比较老，并没支持 &lt;code&gt;optional&lt;/code&gt; 关键字。懂的都理解，由于从底层开始引入 &lt;code&gt;protobuf&lt;/code&gt;，项目底层通过静态库的方式发布，导致整个编译链路都需要升级，这个成本是非常高的。&lt;/p&gt;
-&lt;h3 id=&#34;gcc-版本问题&#34;&gt;gcc 版本问题
-&lt;/h3&gt;&lt;p&gt;好不容易想了方案，底层发布两个不同的版本，尽可能的控制 &lt;code&gt;protobuf&lt;/code&gt; 新版本的编译依赖传播。但是在编译的时候，发现 &lt;code&gt;gcc&lt;/code&gt; 版本太低，不支持 &lt;code&gt;protobuf&lt;/code&gt; 的新特性。&lt;/p&gt;
-&lt;p&gt;组内常用的服务器类型：centos7、centos8。centos7 默认的 &lt;code&gt;gcc&lt;/code&gt; 版本是 4.8，centos8 默认的 &lt;code&gt;gcc&lt;/code&gt; 版本是 8.3。由于 &lt;code&gt;protobuf&lt;/code&gt; 的新特性需要 &lt;code&gt;gcc&lt;/code&gt; 版本在 7.4 以上，所以 centos7 无法支持。&lt;/p&gt;
-&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82461&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
-    &gt;Bug 82461 - [7 Regression] Temporary required for brace-initializing (non-literal-type) member variable&lt;/a&gt;。&lt;/p&gt;
-&lt;p&gt;最后折腾一圈，相关服务的部署、编译服务器都挪到 centos8 上，解决了这个问题。&lt;/p&gt;
-&lt;h2 id=&#34;合理的枚举&#34;&gt;合理的枚举
-&lt;/h2&gt;&lt;p&gt;回顾整个问题，其实有一个更简单、高效的解决方案：调整枚举的定义，从 1 开始编号，而不是从 0 开始。这样就能有效区分默认值和业务值，避免上述一系列麻烦。&lt;/p&gt;
-&lt;h3 id=&#34;为什么从-1-开始更合理&#34;&gt;为什么从 1 开始更合理？
-&lt;/h3&gt;&lt;p&gt;在 &lt;code&gt;protobuf&lt;/code&gt; 中，枚举类型的默认值固定为 0。如果我们将有意义的业务值定义为 0（比如“盘中”），在增量推送时，业务方无法判断收到的 0 是业务值还是未设置的默认值。而如果将枚举从 1 开始定义，0 可以保留为一个无意义的默认值或“未知”状态，问题迎刃而解。&lt;/p&gt;
-&lt;p&gt;建议的实践：&lt;/p&gt;
-&lt;p&gt;在设计 protobuf 枚举时，始终将 0 定义为无意义的默认值（如 &lt;code&gt;UNKNOWN&lt;/code&gt; 或 &lt;code&gt;RESERVED&lt;/code&gt;）。
-将实际业务值从 1 开始分配，确保与默认值 0 区分开。&lt;/p&gt;
-&lt;p&gt;通过这一小调整，我们不仅解决了交易时段识别的问题，还为未来的协议设计提供了一个宝贵的经验教训。&lt;/p&gt;</description>
-        </item>
-        <item>
         <title>linux后端服务处理大量字符串数据-效率很慢</title>
         <link>https://ttf248.life/p/linux-backend-slow-string-processing/</link>
         <pubDate>Wed, 13 Nov 2024 19:42:59 +0800</pubDate>

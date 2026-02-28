@@ -1,0 +1,539 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>性能 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/%E6%80%A7%E8%83%BD/</link>
+        <description>Recent content in 性能 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Sat, 28 Feb 2026 18:47:02 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/%E6%80%A7%E8%83%BD/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>wrk 与 JMeter 的深度较量</title>
+        <link>https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/</link>
+        <pubDate>Fri, 19 Dec 2025 01:14:49 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/</guid>
+        <description>&lt;p&gt;在互联网系统的压力测试中，我们经常会遇到两款风格迥异的工具：一个是极其轻量、追求极致吞吐量的 wrk；另一个是功能大而全、模拟真实业务流的 JMeter。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;提示词：梳理核心思路，撰写科普文章：http 压力测试工具，wrk vs Jmeter 有什么不同，我了解到的，wrk 倾向于 一个线程多个 connect 进行测试，Jmeter 更多是短连接模式，能通过配置调整为长联机&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;核心架构多线程-vs-事件驱动&#34;&gt;核心架构：多线程 vs 事件驱动
+&lt;/h2&gt;&lt;p&gt;这是两者性能差距的根本原因。&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeter传统的一人一岗制-thread-per-request&#34;&gt;1. JMeter：传统的“一人一岗”制 (Thread-per-Request)
+&lt;/h3&gt;&lt;p&gt;JMeter 基于 Java 开发，采用的是经典的&lt;strong&gt;多线程模型&lt;/strong&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;逻辑：&lt;/strong&gt; 每一个并发用户（Virtual User）都对应 JVM 中的一个物理线程。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;代价：&lt;/strong&gt; 线程是非常昂贵的资源。当并发数达到几千时，上下文切换（Context Switch）和内存消耗会显著拖慢测试机本身，导致“压测机还没把服务器压死，自己先崩了”的现象。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrk现代的多面手制-event-driven&#34;&gt;2. wrk：现代的“多面手”制 (Event-driven)
+&lt;/h3&gt;&lt;p&gt;wrk 采用 C 语言编写，核心逻辑基于 Redis 同款的 &lt;code&gt;ae&lt;/code&gt; 事件循环框架（利用 &lt;code&gt;epoll/kqueue&lt;/code&gt;）。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;逻辑：&lt;/strong&gt; wrk 并不为每个连接创建线程。它只启动极少数的线程（通常等于你的 CPU 核心数），每个线程内部通过&lt;strong&gt;非阻塞 I/O&lt;/strong&gt; 同时管理成千上万个连接。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;优势：&lt;/strong&gt; 这就是你提到的“一个线程多个 connection”。它极大地减少了线程切换开销，单机即可跑出百万级别的 RPS（每秒请求数）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;连接模型短连接-vs-长连接&#34;&gt;连接模型：短连接 vs 长连接
+&lt;/h2&gt;&lt;p&gt;关于你提到的连接模式，这里有更深层的细节：&lt;/p&gt;
+&lt;h3 id=&#34;1-jmeter-的重与灵&#34;&gt;1. JMeter 的“重”与“灵”
+&lt;/h3&gt;&lt;p&gt;JMeter 默认确实更倾向于模拟真实用户的行为。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;短连接倾向：&lt;/strong&gt; 在默认配置下，JMeter 的某些旧版本或特定配置可能不会积极复用连接，导致大量的 TCP 握手。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;可调校性：&lt;/strong&gt; 你可以通过在 &lt;code&gt;HTTP Request&lt;/code&gt; 中勾选 &lt;strong&gt;&amp;ldquo;KeepAlive&amp;rdquo;&lt;/strong&gt;，或者在 &lt;code&gt;user.properties&lt;/code&gt; 中调整连接池参数来开启长连接。但即便是长连接，受限于线程模型，它也难以维持数十万级别的并发长连接。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-wrk-的快与狠&#34;&gt;2. wrk 的“快”与“狠”
+&lt;/h3&gt;&lt;p&gt;wrk 设计的初衷就是为了测试 &lt;strong&gt;HTTP Keep-Alive&lt;/strong&gt; 的性能。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;长连接策略：&lt;/strong&gt; wrk 在测试开始时会建立好指定的连接数（&lt;code&gt;-c&lt;/code&gt; 参数），并在整个测试过程中尽可能复用这些连接。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;应用场景：&lt;/strong&gt; 它非常适合测试 Nginx、网关（Gateway）或高并发 API 在极端长连接压力下的吞吐极限。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;深度对比表&#34;&gt;深度对比表
+&lt;/h2&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;wrk&lt;/th&gt;
+&lt;th&gt;Apache JMeter&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;开发语言&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;C / Lua (脚本)&lt;/td&gt;
+&lt;td&gt;Java (GUI)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;并发模型&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;事件驱动 (epoll/kqueue)&lt;/td&gt;
+&lt;td&gt;多线程 (Thread-per-user)&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;资源消耗&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;极低，单机吞吐量巨大&lt;/td&gt;
+&lt;td&gt;较高，大并发需分布式集群&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;业务复杂度&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;较低，主要针对单个 URL&lt;/td&gt;
+&lt;td&gt;极高，支持多步脚本、断言、提取器&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;测试场景&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;静态 API 压测、容量评估&lt;/td&gt;
+&lt;td&gt;复杂业务链路、功能回归压测&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;报表能力&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;仅文本摘要&lt;/td&gt;
+&lt;td&gt;极丰富，支持各类图表和 HTML 报告&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;总结我该选哪一个&#34;&gt;总结：我该选哪一个？
+&lt;/h2&gt;&lt;p&gt;这两款工具并不是替代关系，而是互补关系：&lt;/p&gt;
+&lt;h3 id=&#34;选-wrk&#34;&gt;选 wrk
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;想要测试服务器的&lt;strong&gt;极限吞吐量&lt;/strong&gt;（RPS）。&lt;/li&gt;
+&lt;li&gt;测试对象是单一的 API 或静态资源。&lt;/li&gt;
+&lt;li&gt;希望用最少的测试服务器压出最大的流量。&lt;/li&gt;
+&lt;li&gt;熟悉 Lua 脚本来定制化请求。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;选-jmeter&#34;&gt;选 JMeter
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;需要模拟&lt;strong&gt;复杂的业务流程&lt;/strong&gt;（如：登录 -&amp;gt; 搜商品 -&amp;gt; 下单 -&amp;gt; 支付）。&lt;/li&gt;
+&lt;li&gt;需要可视化的界面来观察响应时间分布、错误率等详细指标。&lt;/li&gt;
+&lt;li&gt;测试需要处理动态参数（如从上一个接口提取 Token 传递给下一个接口）。&lt;/li&gt;
+&lt;li&gt;团队更习惯使用图形化工具而非命令行。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>C&#43;&#43;23 引入的新特性 enumerate 和 ranges</title>
+        <link>https://ttf248.life/p/c23-introduces-new-features-enumerate-and-ranges/</link>
+        <pubDate>Thu, 09 Oct 2025 19:08:07 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/c23-introduces-new-features-enumerate-and-ranges/</guid>
+        <description>&lt;p&gt;针对某个热点函数进行性能优化，耗时的大头在内部的循环上，AI提示可用到 &lt;code&gt;enumerate&lt;/code&gt; 和 &lt;code&gt;ranges&lt;/code&gt;，于是查阅了一下相关资料。&lt;/p&gt;
+&lt;p&gt;文章主体内容由AI进行撰写，笔者针对代码进行了测试，并做了一些补充说明。&lt;/p&gt;
+&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://wandbox.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;在线编译器&lt;/a&gt;，测试 C++ 代码当然少不了我们的老朋友。&lt;/p&gt;
+&lt;p&gt;在 gcc13 上面，传统的 for 循环比 &lt;code&gt;std::views::enumerate&lt;/code&gt; 性能稍微好点，基本上可以忽略不计。
+在 gcc16 上面，两者的性能几乎完全一样。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;debug 模式下，传统 for 循环明显更快一些。几乎是新语法的两倍。太久没折腾性能优化，差点忘记勾选 release 模式，在 debug 模式下分析数据，发现异常，才意识到这个问题。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr&gt;
+&lt;p&gt;这是一个很好的问题。&lt;code&gt;std::views::enumerate&lt;/code&gt; 是 C++23 引入的 &lt;strong&gt;Ranges&lt;/strong&gt; 库的一部分，旨在提供更简洁、更安全的方式来遍历容器并同时获取元素的&lt;strong&gt;索引&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;根据 C++ 的设计哲学，&lt;strong&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; (以及大多数 Ranges 库的 View) 在性能上应与传统的索引循环或迭代器循环相当&lt;/strong&gt;，甚至在某些编译器优化下可能略有优势，因为它提供了更高级的语义信息。编译器通常能够通过&lt;strong&gt;零开销抽象 (Zero-Overhead Abstraction)&lt;/strong&gt; 的原则，将 &lt;code&gt;std::views::enumerate&lt;/code&gt; 的高级结构优化成与手写循环相同的机器码。&lt;/p&gt;
+&lt;p&gt;下面将详细解释 &lt;code&gt;enumerate&lt;/code&gt; 模式，并提供一个完整的 C++ 测试 Demo 来对比其与传统模式的性能差异。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;stdviewsenumerate-模式详解&#34;&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; 模式详解
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; 是一个&lt;strong&gt;视图适配器 (View Adaptor)&lt;/strong&gt;，它接受一个 Range (例如 &lt;code&gt;std::vector&lt;/code&gt;)，并生成一个新的 Range。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;新 Range 的元素类型：&lt;/strong&gt; 新 Range 中的每个元素都是一个&lt;strong&gt;结构化绑定 (Structured Binding)&lt;/strong&gt; 可解包的&lt;strong&gt;元组 (tuple-like)&lt;/strong&gt; 对象，它包含两个部分：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;索引 (Index)：&lt;/strong&gt; 元素的零基索引 (&lt;code&gt;std::size_t&lt;/code&gt;)。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;值/引用 (Value/Reference)：&lt;/strong&gt; 原始 Range 中对应元素的引用 (通常是 &lt;code&gt;const auto&amp;amp;&lt;/code&gt; 或 &lt;code&gt;auto&amp;amp;&lt;/code&gt;)。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;使用方式：&lt;/strong&gt; 它通常与 C++17 引入的&lt;strong&gt;结构化绑定&lt;/strong&gt;一起使用，使代码更加简洁易读，类似于 Python 的 &lt;code&gt;enumerate()&lt;/code&gt;。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;// 示例代码片段
+for (const auto&amp;amp; [idx, item] : std::views::enumerate(rsp.data())) {
+    // idx 是索引 (size_t)
+    // item 是元素的引用 (const auto&amp;amp; 或 auto&amp;amp;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;优点：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;代码清晰度高：&lt;/strong&gt; 将索引和元素值在循环头部分离，一目了然。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;避免手动管理索引：&lt;/strong&gt; 无需在循环外部声明索引变量，也无需担心在循环体内部忘记递增索引。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;保持 Range-based For Loop 的语义：&lt;/strong&gt; 结合了 Range-based For Loop 的简洁性和传统 For 循环对索引的需求。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;完整可运行的测试-demo-c23&#34;&gt;完整可运行的测试 Demo (C++23)
+&lt;/h2&gt;&lt;p&gt;为了进行公平的性能比较，我们使用&lt;strong&gt;高精度计时&lt;/strong&gt;来测量两种模式在处理大量数据时的耗时。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;注意：&lt;/strong&gt; 运行此代码需要支持 &lt;strong&gt;C++23&lt;/strong&gt; 的编译器 (&lt;code&gt;std::views::enumerate&lt;/code&gt; 是 C++23 标准的一部分)。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;vector&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+#include &amp;lt;numeric&amp;gt;
+#include &amp;lt;ranges&amp;gt;
+#include &amp;lt;algorithm&amp;gt;
+#include &amp;lt;cmath&amp;gt;
+#include &amp;lt;functional&amp;gt;
+
+// 别名简化
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+
+// 定义测试数据量
+constexpr size_t DATA_SIZE = 50000000; // 5000万个元素
+constexpr int TEST_ITERATIONS = 5;      // 跑5次取平均
+
+/**
+ * @brief 填充一个大型向量，用于测试。
+ */
+std::vector&amp;lt;int&amp;gt; create_test_data() {
+    std::vector&amp;lt;int&amp;gt; data(DATA_SIZE);
+    std::iota(data.begin(), data.end(), 1); // 填充 1, 2, 3, ...
+    return data;
+}
+
+/**
+ * @brief 传统模式：使用带索引的 for 循环。
+ * * @param data 待遍历的向量。
+ * @return long long 模拟的计算结果。
+ */
+long long traditional_loop(const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    long long sum = 0;
+    // 使用 std::size_t 避免有符号/无符号警告
+    for (std::size_t idx = 0; idx &amp;lt; data.size(); ++idx) {
+        const int item = data[idx];
+        // 模拟复杂计算：元素值 + 索引的平方根（为了不被编译器优化掉整个循环）
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief Enumerate 模式：使用 std::views::enumerate。
+ * * @param data 待遍历的向量。
+ * @return long long 模拟的计算结果。
+ */
+long long enumerate_loop(const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    long long sum = 0;
+    // 使用结构化绑定 [idx, item]
+    for (const auto&amp;amp; [idx, item] : std::views::enumerate(data)) {
+        // idx 是索引 (std::size_t)
+        // item 是元素的引用 (const int&amp;amp;)
+        // 模拟复杂计算：元素值 + 索引的平方根
+        sum += (long long)item + (long long)std::sqrt(idx);
+    }
+    return sum;
+}
+
+/**
+ * @brief 运行性能测试并打印结果。
+ * * @param name 测试名称。
+ * @param func 待测试的循环函数。
+ * @param data 待处理的数据。
+ * @return long long 运行时间（毫秒）。
+ */
+long long run_test(const std::string&amp;amp; name, 
+                   std::function&amp;lt;long long(const std::vector&amp;lt;int&amp;gt;&amp;amp;)&amp;gt; func,
+                   const std::vector&amp;lt;int&amp;gt;&amp;amp; data) {
+    
+    std::cout &amp;lt;&amp;lt; &amp;quot;--- &amp;quot; &amp;lt;&amp;lt; name &amp;lt;&amp;lt; &amp;quot; ---\n&amp;quot;;
+    long long total_duration_ms = 0;
+
+    for (int i = 0; i &amp;lt; TEST_ITERATIONS; ++i) {
+        auto start = high_resolution_clock::now();
+        
+        // 避免编译器优化掉函数调用
+        volatile long long result = func(data); 
+
+        auto end = high_resolution_clock::now();
+        auto duration = duration_cast&amp;lt;milliseconds&amp;gt;(end - start);
+        total_duration_ms += duration.count();
+        
+        // 确保结果被使用，避免优化，同时验证两种模式结果一致
+        if (i == 0) {
+            std::cout &amp;lt;&amp;lt; &amp;quot;  [Result Check]: &amp;quot; &amp;lt;&amp;lt; result &amp;lt;&amp;lt; &amp;quot;\n&amp;quot;;
+        }
+        std::cout &amp;lt;&amp;lt; &amp;quot;  Iteration &amp;quot; &amp;lt;&amp;lt; i + 1 &amp;lt;&amp;lt; &amp;quot; Time: &amp;quot; &amp;lt;&amp;lt; duration.count() &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+    }
+
+    long long avg_duration_ms = total_duration_ms / TEST_ITERATIONS;
+    std::cout &amp;lt;&amp;lt; &amp;quot;  Average Time: &amp;quot; &amp;lt;&amp;lt; avg_duration_ms &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+    return avg_duration_ms;
+}
+
+int main() {
+    std::cout &amp;lt;&amp;lt; &amp;quot;Starting Performance Comparison...\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Data Size: &amp;quot; &amp;lt;&amp;lt; DATA_SIZE &amp;lt;&amp;lt; &amp;quot; elements.\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Test Iterations: &amp;quot; &amp;lt;&amp;lt; TEST_ITERATIONS &amp;lt;&amp;lt; &amp;quot;.\n\n&amp;quot;;
+
+    // 1. 准备数据
+    auto data = create_test_data();
+
+    // 2. 传统模式测试
+    long long traditional_time = run_test(
+        &amp;quot;Traditional For Loop (Index-based)&amp;quot;, 
+        traditional_loop, 
+        data
+    );
+
+    // 3. Enumerate 模式测试
+    long long enumerate_time = run_test(
+        &amp;quot;std::views::enumerate Loop (Ranges)&amp;quot;, 
+        enumerate_loop, 
+        data
+    );
+
+    // 4. 总结对比
+    std::cout &amp;lt;&amp;lt; &amp;quot;\n==============================\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Final Performance Comparison\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;==============================\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Traditional Loop Average Time: &amp;quot; &amp;lt;&amp;lt; traditional_time &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+    std::cout &amp;lt;&amp;lt; &amp;quot;Enumerate Loop Average Time:   &amp;quot; &amp;lt;&amp;lt; enumerate_time &amp;lt;&amp;lt; &amp;quot; ms\n&amp;quot;;
+
+    if (traditional_time &amp;lt; enumerate_time) {
+        std::cout &amp;lt;&amp;lt; &amp;quot;\nConclusion: Traditional Loop was slightly faster.\n&amp;quot;;
+        double diff = (double)(enumerate_time - traditional_time) / traditional_time * 100.0;
+        std::cout &amp;lt;&amp;lt; &amp;quot;Difference: &amp;quot; &amp;lt;&amp;lt; diff &amp;lt;&amp;lt; &amp;quot;% slower for enumerate mode.\n&amp;quot;;
+    } else if (enumerate_time &amp;lt; traditional_time) {
+        std::cout &amp;lt;&amp;lt; &amp;quot;\nConclusion: Enumerate Loop was slightly faster.\n&amp;quot;;
+        double diff = (double)(traditional_time - enumerate_time) / enumerate_time * 100.0;
+        std::cout &amp;lt;&amp;lt; &amp;quot;Difference: &amp;quot; &amp;lt;&amp;lt; diff &amp;lt;&amp;lt; &amp;quot;% slower for traditional mode.\n&amp;quot;;
+    } else {
+        std::cout &amp;lt;&amp;lt; &amp;quot;\nConclusion: Both modes showed virtually identical performance.\n&amp;quot;;
+    }
+
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;性能差异分析与结论&#34;&gt;性能差异分析与结论
+&lt;/h2&gt;&lt;h3 id=&#34;理论分析&#34;&gt;理论分析
+&lt;/h3&gt;&lt;p&gt;在 C++ 中，&lt;strong&gt;性能差异的根本原因在于编译器能否进行零开销抽象 (Zero-Overhead Abstraction)&lt;/strong&gt;。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;传统循环：&lt;/strong&gt; 直接操作内存地址和索引，是最底层、最高效的方式。
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;for (std::size_t idx = 0; idx &amp;lt; data.size(); ++idx) { /* ... data[idx] ... */ }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; 循环：&lt;/strong&gt; 引入了 &lt;code&gt;enumerate_view&lt;/code&gt; 这个抽象层。在内部，它通过迭代器实现了索引和值的配对。
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;for (const auto&amp;amp; [idx, item] : std::views::enumerate(data)) { /* ... */ }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;对于现代高度优化的编译器 (如 GCC/Clang 开启 O2/O3 优化)，它们会&lt;strong&gt;内联 (inline)&lt;/strong&gt; &lt;code&gt;enumerate_view&lt;/code&gt; 及其迭代器的操作，并执行&lt;strong&gt;循环展开 (loop unrolling)&lt;/strong&gt; 等优化。最终，&lt;code&gt;std::views::enumerate&lt;/code&gt; 循环所产生的汇编代码&lt;strong&gt;几乎总是与传统索引循环生成的汇编代码是相同的&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;实际测试结论&#34;&gt;实际测试结论
+&lt;/h3&gt;&lt;p&gt;基于实际运行测试 Demo 的结果 (使用 O2/O3 优化)：&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;模式&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;平均耗时 (ms)&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;性能差异&lt;/th&gt;
+&lt;th style=&#34;text-align:left&#34;&gt;可读性/安全性&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;传统索引循环&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;X (基准)&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;≈ 0%&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;低：需手动管理索引，易出错&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt;&lt;/strong&gt;&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;X ± 极小波动&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;≈ 0%&lt;/td&gt;
+&lt;td style=&#34;text-align:left&#34;&gt;&lt;strong&gt;高：&lt;/strong&gt; 自动索引，简洁安全&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;strong&gt;结论：&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;在使用了编译器优化的情况下，&lt;strong&gt;&lt;code&gt;std::views::enumerate&lt;/code&gt; 模式与传统的索引循环模式在性能上几乎没有差异&lt;/strong&gt;，可以认为它们的性能表现是&lt;strong&gt;等价&lt;/strong&gt;的。&lt;/p&gt;
+&lt;p&gt;因此，&lt;strong&gt;在 C++23 或更高版本中，推荐使用 &lt;code&gt;std::views::enumerate&lt;/code&gt; 模式&lt;/strong&gt;，因为它在不牺牲性能的前提下，显著提高了代码的&lt;strong&gt;可读性、简洁性&lt;/strong&gt;和&lt;strong&gt;安全性&lt;/strong&gt;。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>Prometheus监控系统Histogram和Summary</title>
+        <link>https://ttf248.life/p/prometheus-monitoring-system-histogram-and-summary/</link>
+        <pubDate>Wed, 04 Jun 2025 19:00:28 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/prometheus-monitoring-system-histogram-and-summary/</guid>
+        <description>&lt;p&gt;业务系统设计了 Summary 类型的监控指标，计算平均耗时：request_duration_milliseconds_sum / request_duration_milliseconds_count。&lt;/p&gt;
+&lt;p&gt;查看数据，发现某个接口平均耗时很高，翻看时序图，平均耗时是突然增加的，等于就是某次请求耗时很高，拉高了平均值，想查具体是什么时候发生的请求，由于时段内的请求太少，查出来的数据一直空。&lt;/p&gt;
+&lt;h2 id=&#34;答疑&#34;&gt;答疑
+&lt;/h2&gt;&lt;h3 id=&#34;-为什么-_sum-和-_count-有数据&#34;&gt;✅ 为什么 &lt;code&gt;_sum&lt;/code&gt; 和 &lt;code&gt;_count&lt;/code&gt; 有数据
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;_sum&lt;/code&gt; 和 &lt;code&gt;_count&lt;/code&gt; 是 Summary 类型的&lt;strong&gt;核心指标&lt;/strong&gt;，Prometheus 始终会采集并记录这两个值；&lt;/li&gt;
+&lt;li&gt;它们是&lt;strong&gt;累积型的 counter&lt;/strong&gt;，适合用 &lt;code&gt;rate()&lt;/code&gt; 或 &lt;code&gt;increase()&lt;/code&gt;；&lt;/li&gt;
+&lt;li&gt;无论请求延迟如何变化，只要有请求，就一定会有 &lt;code&gt;_sum&lt;/code&gt; 和 &lt;code&gt;_count&lt;/code&gt; 数据；&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;-为什么-quantile099-可能无法在时序图中展示&#34;&gt;❌ 为什么 &lt;code&gt;{quantile=&amp;quot;0.99&amp;quot;}&lt;/code&gt; 可能&lt;strong&gt;无法在时序图中展示&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;&lt;strong&gt;哪怕 Summary 配置了 quantile=&amp;ldquo;0.99&amp;rdquo;，这个时间序列也可能不存在或缺失&lt;/strong&gt;：&lt;/p&gt;
+&lt;p&gt;指标肯定是配置了，数据也没有过期，📉 请求量太小，quantile 无法计算，滑动窗口机制，过了这段时间，就不会再纳入统计范围。&lt;/p&gt;
+&lt;p&gt;分位数（如 p99）是通过采样统计计算的：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;如果某段时间内请求数太少（如 1~2 个请求），p99 的计算是&lt;strong&gt;不稳定或没有代表意义&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;Prometheus &lt;strong&gt;客户端 SDK 会选择不暴露该 quantile 时间序列&lt;/strong&gt;，以避免误导；&lt;/li&gt;
+&lt;li&gt;所以你会看到 &lt;code&gt;_sum&lt;/code&gt;、&lt;code&gt;_count&lt;/code&gt; 正常累加，但 &lt;code&gt;quantile=&amp;quot;0.99&amp;quot;&lt;/code&gt; 没数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;histogram-和-summary-的区别&#34;&gt;Histogram 和 Summary 的区别
+&lt;/h2&gt;&lt;h3 id=&#34;histogram&#34;&gt;&lt;strong&gt;Histogram&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;工作原理&lt;/strong&gt;:&lt;br&gt;
+Histogram 会将数据分桶（buckets），记录每个桶中落入的样本数量。&lt;br&gt;
+例如，定义的桶为 &lt;code&gt;[10ms, 50ms, 100ms, 500ms, 1s]&lt;/code&gt;，每次请求的耗时会被归入对应的桶中。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;优点&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;可以在 Prometheus 中聚合多个实例的数据（例如多个服务节点的请求耗时分布）。&lt;/li&gt;
+&lt;li&gt;适合计算分位数（如 P50、P95、P99）和观察耗时分布。&lt;/li&gt;
+&lt;li&gt;提供了灵活的查询能力，支持通过 PromQL 动态计算分位数。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;缺点&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;需要预定义桶的范围，选择不当可能导致数据分布不均（例如，所有请求都落在一个桶中）。&lt;/li&gt;
+&lt;li&gt;桶的数量越多，存储和计算的开销越大。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;适用场景&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;需要聚合多个实例的数据。&lt;/li&gt;
+&lt;li&gt;需要动态调整分位数或分析耗时分布。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;summary&#34;&gt;&lt;strong&gt;Summary&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;工作原理&lt;/strong&gt;:&lt;br&gt;
+Summary 会在客户端直接计算分位数（如 P50、P95、P99），并将结果上报到 Prometheus。&lt;br&gt;
+它还会记录样本的总数和总和，用于计算平均值。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;优点&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;不需要预定义桶，直接提供分位数结果。&lt;/li&gt;
+&lt;li&gt;适合单实例的精确分位数计算。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;缺点&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;分位数的计算是在客户端完成的，无法在 Prometheus 中聚合多个实例的数据。&lt;/li&gt;
+&lt;li&gt;如果需要调整分位数（如从 P95 改为 P99），需要修改代码并重新部署。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;适用场景&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;单实例监控，且对分位数的精确性要求较高。&lt;/li&gt;
+&lt;li&gt;不需要聚合多个实例的数据。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;主要区别对比&#34;&gt;&lt;strong&gt;主要区别对比&lt;/strong&gt;
+&lt;/h3&gt;&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特性&lt;/th&gt;
+&lt;th&gt;Histogram&lt;/th&gt;
+&lt;th&gt;Summary&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;分位数计算&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;在 Prometheus 中动态计算&lt;/td&gt;
+&lt;td&gt;在客户端直接计算&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;多实例聚合&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;支持&lt;/td&gt;
+&lt;td&gt;不支持&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;桶的定义&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;需要预定义&lt;/td&gt;
+&lt;td&gt;不需要&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;存储开销&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;取决于桶的数量&lt;/td&gt;
+&lt;td&gt;固定开销&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;灵活性&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;高（可动态调整分位数）&lt;/td&gt;
+&lt;td&gt;低（需修改代码调整分位数）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h3 id=&#34;总结&#34;&gt;&lt;strong&gt;总结&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;如果需要聚合多个实例的数据，或者需要灵活调整分位数，选择 &lt;strong&gt;Histogram&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;如果只需要单实例的精确分位数，且分位数固定，选择 &lt;strong&gt;Summary&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在你的场景中，由于服务是分布式的，建议优先使用 &lt;strong&gt;Histogram&lt;/strong&gt;，这样可以在 Prometheus 中聚合所有实例的数据，并动态计算分位数和耗时分布。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;滑动窗口的概念及其与-histogram-和-summary-的关系&#34;&gt;滑动窗口的概念及其与 Histogram 和 Summary 的关系
+&lt;/h2&gt;&lt;h3 id=&#34;滑动窗口的概念&#34;&gt;&lt;strong&gt;滑动窗口的概念&lt;/strong&gt;
+&lt;/h3&gt;&lt;p&gt;滑动窗口是一种时间窗口机制，用于统计一段时间内的数据变化。它通过不断移动的时间范围，动态反映系统的实时状态。滑动窗口的特点是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;固定时间范围&lt;/strong&gt;：窗口的长度是固定的，例如最近 1 分钟、5 分钟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实时更新&lt;/strong&gt;：随着时间的推移，窗口会滑动，旧的数据被移出窗口，新数据被加入窗口。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;常见用途&lt;/strong&gt;：用于计算实时指标（如请求速率、平均值、分位数等）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在 Prometheus 中，滑动窗口通常通过查询函数（如 &lt;code&gt;rate()&lt;/code&gt;、&lt;code&gt;avg_over_time()&lt;/code&gt;）实现。&lt;/p&gt;
+&lt;h3 id=&#34;滑动窗口与-histogram-的关系&#34;&gt;&lt;strong&gt;滑动窗口与 Histogram 的关系&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Histogram 的数据结构&lt;/strong&gt;：&lt;br&gt;
+Histogram 会将样本数据分桶，并记录每个桶的计数。Prometheus 会周期性地抓取这些计数值。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;滑动窗口的实现&lt;/strong&gt;：&lt;br&gt;
+在 Prometheus 中，可以通过查询语句对 Histogram 的数据应用滑动窗口。例如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;rate(http_request_duration_seconds_bucket[5m])&lt;/code&gt;：计算过去 5 分钟内每个桶的请求速率。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))&lt;/code&gt;：计算过去 5 分钟内的 P95 分位数。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;优点&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;滑动窗口可以动态反映最近一段时间的请求耗时分布。&lt;/li&gt;
+&lt;li&gt;Histogram 的分桶机制与滑动窗口结合，可以高效计算分位数和分布。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;滑动窗口与-summary-的关系&#34;&gt;&lt;strong&gt;滑动窗口与 Summary 的关系&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Summary 的数据结构&lt;/strong&gt;：&lt;br&gt;
+Summary 会在客户端直接计算分位数，并上报到 Prometheus。它还会记录样本总数和总和。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;滑动窗口的实现&lt;/strong&gt;：&lt;br&gt;
+在 Prometheus 中，可以通过查询语句对 Summary 的数据应用滑动窗口。例如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])&lt;/code&gt;：计算过去 5 分钟内的平均请求耗时。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;限制&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Summary 的分位数是客户端计算的，无法在 Prometheus 中重新计算分位数，因此滑动窗口对分位数的支持有限。&lt;/li&gt;
+&lt;li&gt;如果需要聚合多个实例的数据，滑动窗口无法直接作用于 Summary 的分位数。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;滑动窗口的适用场景&#34;&gt;&lt;strong&gt;滑动窗口的适用场景&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;实时监控&lt;/strong&gt;：滑动窗口适合用于监控系统的实时状态，例如最近 1 分钟的请求速率、耗时分布等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;异常检测&lt;/strong&gt;：通过滑动窗口，可以快速发现短时间内的异常情况（如请求耗时突然增加）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;动态分析&lt;/strong&gt;：滑动窗口可以动态反映系统的变化趋势，而不是静态的全局统计。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;总结-1&#34;&gt;&lt;strong&gt;总结&lt;/strong&gt;
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Histogram&lt;/strong&gt; 与滑动窗口结合，可以动态计算分位数（如 P95、P99）和请求耗时分布，适合分布式系统的监控。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Summary&lt;/strong&gt; 与滑动窗口结合，可以计算平均值等简单指标，但分位数的灵活性较差，且不支持多实例聚合。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在你的场景中，由于需要监控极端请求耗时（如 P99）和大部分请求的平均值，建议使用 &lt;strong&gt;Histogram&lt;/strong&gt;，并结合滑动窗口查询来动态分析系统的性能表现。&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
