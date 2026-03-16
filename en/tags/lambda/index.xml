@@ -6,7 +6,56 @@
         <description>Recent content in Lambda on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Mon, 02 Jun 2025 20:54:02 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/lambda/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Mon, 16 Mar 2026 20:41:53 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/lambda/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Deep Dive: Memory Corruption and Cache Pollution in C&#43;&#43; with Static Lambdas</title>
+        <link>https://ttf248.life/en/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/</link>
+        <pubDate>Mon, 16 Mar 2026 20:18:18 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/</guid>
+        <description>&lt;p&gt;This article analyzes the bizarre phenomenon in C++ development where &lt;code&gt;unordered_map::find&lt;/code&gt; returns an object with mismatched fields after a hit. The root cause lies in defining a &lt;code&gt;static lambda&lt;/code&gt; within the function and using reference capture to capture local variables, leading to a dangling reference after the first call, triggering undefined behavior (UB) and polluting cache data in subsequent calls. It is recommended to address this issue by explicitly passing parameters instead of implicit capture, managing lifecycles properly, and utilizing Sanitizer tools.&lt;/p&gt;
+&lt;p&gt;When building high-performance market data services or distributed caches, developers often encounter a &amp;ldquo;ghost event&amp;rdquo;: after using a Key to explicitly find an object from &lt;code&gt;std::unordered_map&lt;/code&gt;, when reading its internal fields, it turns out to be the data of another Key. This “identity misalignment” often points to an insidious C++ trap: &lt;strong&gt;conflict between &lt;code&gt;static lambda&lt;/code&gt; and lifecycle capture resulting in undefined behavior (UB).&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;failure-modes-short-lifecycles-of-references-long-lastingly-preserved&#34;&gt;Failure Modes: Short Lifecycles of References &amp;ldquo;Long-Lastingly&amp;rdquo; Preserved
+&lt;/h2&gt;&lt;p&gt;When optimizing performance, some developers are accustomed to defining &lt;code&gt;static lambda&lt;/code&gt; functions within a function to reduce closure creation overhead. However, when combined with implicit capture using &lt;code&gt;[&amp;amp;]&lt;/code&gt;, this can lay a dangerous trap:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;void UpdateCache(std::unordered_map&amp;lt;std::string, Tick&amp;gt;&amp;amp; cache, Tick&amp;amp; current_input) {
+    // Dangerous: static extends the lambda&#39;s lifetime to process level
+    // [&amp;amp;] captures a reference to the local variable current_input on the stack
+    static auto patch_func = [&amp;amp;](auto it) {
+        it-&amp;gt;second.price = current_input.price; // The reference here is invalid at the second execution
+    };
+
+    auto it = cache.find(current_input.symbol);
+    if (it != cache.end()) {
+        patch_func(it); 
+    }
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;technical-principle-analysis&#34;&gt;Technical Principle Analysis
+&lt;/h2&gt;&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Lifecycle Misalignment:&lt;/strong&gt; The &lt;code&gt;static&lt;/code&gt; variable is initialized only once when the program reaches that line for the first time and persists throughout the entire process execution. This means the reference captured within &lt;code&gt;patch_func&lt;/code&gt; to &lt;code&gt;current_input&lt;/code&gt; is permanently fixed at the memory address in the stack frame &lt;strong&gt;at the time of its initial call&lt;/strong&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Dangling Reference:&lt;/strong&gt; After the first &lt;code&gt;UpdateCache&lt;/code&gt; executes, the original stack frame is destroyed. When &lt;code&gt;patch_func&lt;/code&gt; is called a second time, it continues to read and write to that now-invalidated address.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Hidden Memory Corruption:&lt;/strong&gt; Due to the reuse of stack space, this address may contain new business data. Writing to it appears to be updating the value for the current Key, but in reality, it&amp;rsquo;s performing an illegal write operation on a &amp;ldquo;random&amp;rdquo; area of memory. This explains why &lt;code&gt;find&lt;/code&gt;’s Key is A, and the read Value field is B.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;solutions-and-engineering-practices&#34;&gt;Solutions and Engineering Practices
+&lt;/h2&gt;&lt;h3 id=&#34;1-eliminate-implicit-capture-use-explicit-parameters&#34;&gt;1. Eliminate Implicit Capture, Use Explicit Parameters
+&lt;/h3&gt;&lt;p&gt;The most reliable approach is to keep the Lambda “stateless” (Stateless), passing all dependent objects through parameters.&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;// Recommended practice: Stateless lambda, explicitly pass src
+auto patch = [](auto it, const Tick&amp;amp; src) {
+    it-&amp;gt;second.price = src.price;
+};
+patch(it, current_input);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;2-avoid-using-static-to-decorate-closures&#34;&gt;2. Avoid using &lt;code&gt;static&lt;/code&gt; to decorate closures
+&lt;/h3&gt;&lt;p&gt;Inside a function, unless the closure does not capture any local variables, do not use &lt;code&gt;static&lt;/code&gt;. Modern compilers are very good at optimizing non-&lt;code&gt;static&lt;/code&gt; lambdas, and the performance boost from blindly using &lt;code&gt;static&lt;/code&gt; is negligible, but it brings significant security risks.&lt;/p&gt;
+&lt;h3 id=&#34;3-reinforcement-consistency-verification-and-dynamic-detection&#34;&gt;3. Reinforcement Consistency Verification and Dynamic Detection
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Assertion Checking&lt;/strong&gt;: After updating the logic, add &lt;code&gt;assert(it-&amp;gt;first == it-&amp;gt;second.symbol)&lt;/code&gt; to intercept “identity inconsistency” issues during development.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Tool Assistance&lt;/strong&gt;: Enable &lt;code&gt;ASan&lt;/code&gt; (AddressSanitizer) and &lt;code&gt;UBSan&lt;/code&gt; (UndefinedBehaviorSanitizer) in the test environment. These tools can accurately capture behavior of accessing invalid stack memory and immediately report errors.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion
+&lt;/h2&gt;&lt;p&gt;&amp;ldquo;Table lookup errors&amp;rdquo; in C++ are often just symptoms, the underlying truth is usually the failure of memory management contracts. &lt;strong&gt;Correct key lookup does not necessarily mean the value is still valid.&lt;/strong&gt; When dealing with long-lived objects (such as &lt;code&gt;static&lt;/code&gt;, global variables, and long-running callbacks), you must always be vigilant about whether the references they capture have been invalidated by stack frame destruction (“blown away”).&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>C&#43;&#43; Lambda Expression Parameter Lifetimes</title>
         <link>https://ttf248.life/en/p/cpp-lambda-parameter-lifetime/</link>
         <pubDate>Wed, 13 Nov 2024 19:23:02 +0800</pubDate>
