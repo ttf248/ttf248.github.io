@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>调试技巧 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/debugging-techniques/</link>
+        <description>Recent content in 调试技巧 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language><atom:link href="https://ttf248.life/tags/debugging-techniques/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>pstack排查进程假死</title>
+        <link>https://ttf248.life/p/pstack-troubleshooting-process-hangs/</link>
+        <pubDate>Sat, 24 Feb 2024 23:55:59 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/pstack-troubleshooting-process-hangs/</guid>
+        <description>&lt;p&gt;在软件开发和运维中，经常会遇到进程假死的情况，这种情况会导致系统性能下降或者服务不可用。本文介绍如何使用 pstack 工具来排查进程假死问题，通过分析进程的堆栈信息，找出问题的原因并解决。&lt;/p&gt;
+&lt;p&gt;背景：风控系统子服务出现假死，导致风控服务不可用。由于缺乏服务可用性监控，无法及时发现进程假死的情况，导致系统不可用。&lt;/p&gt;
+&lt;h2 id=&#34;正文&#34;&gt;正文
+&lt;/h2&gt;&lt;p&gt;进程假死是指进程停止响应，但并没有退出的状态。这种情况可能由于多种原因引起，比如死锁、资源耗尽、异常等。为了解决这类问题，我们可以使用 pstack 工具来分析进程的堆栈信息，找出问题的根源。&lt;/p&gt;
+&lt;h2 id=&#34;步骤&#34;&gt;步骤
+&lt;/h2&gt;&lt;p&gt;pstack 是一个常用的工具，通常随着 gdb（GNU 调试器）一起提供。你可以通过以下命令安装它：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;sudo apt-get install gdb
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;获取进程ID：首先，我们需要获取假死进程的进程ID（PID）。可以使用 ps 命令来列出所有进程，并找到需要排查的进程ID。
+使用 pstack 工具分析进程堆栈，一旦获取到进程ID，就可以使用 pstack 工具来获取该进程的堆栈信息。运行以下命令：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;pstack &amp;lt;PID&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这将输出该进程的堆栈信息，显示出当前正在执行的函数调用序列。通过分析这些信息，可以发现进程停滞的位置，进而定位问题。&lt;/p&gt;
+&lt;p&gt;分析堆栈信息，通过查看堆栈信息，可以找到导致进程假死的原因。可能会发现一些死锁情况、无限循环或者其他异常情况。根据具体情况采取相应的措施，比如释放锁、修复代码逻辑等。&lt;/p&gt;
+&lt;h2 id=&#34;案例&#34;&gt;案例
+&lt;/h2&gt;&lt;p&gt;简单 demo，main 函数启动以后，新建子线程，实际执行函数进入死循环，导致程序无法正常结束，陷入假死的状态。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;cmake_minimum_required(VERSION 3.0.0)
+project(pstack_main VERSION 0.1.0 LANGUAGES C CXX)
+
+include(CTest)
+enable_testing()
+
+# 查找线程库
+find_package(Threads REQUIRED)
+
+add_executable(pstack_main main.cpp)
+
+# 链接线程库
+target_link_libraries(pstack_main PRIVATE Threads::Threads)
+
+set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+include(CPack)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;iostream&amp;gt;
+#include &amp;lt;thread&amp;gt;
+#include &amp;lt;chrono&amp;gt;
+
+void infiniteLoop() {
+    while (true) {
+        // 主线程进入死循环
+    }
+}
+
+int main() {
+    std::thread thread(infiniteLoop); // 创建一个线程，执行死循环函数
+    thread.join(); // 等待线程结束
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;启动程序，执行 pstack 结果：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Thread 2 (Thread 0x7eff3619b700 (LWP 1315017)):
+#0  infiniteLoop () at /root/pstack/main.cpp:6
+#1  0x0000000000402ca9 in std::__invoke_impl&amp;lt;void, void (*)()&amp;gt; (__f=@0x2260eb8: 0x4029a6 &amp;lt;infiniteLoop()&amp;gt;) at /usr/include/c++/8/bits/invoke.h:60
+#2  0x0000000000402b02 in std::__invoke&amp;lt;void (*)()&amp;gt; (__fn=@0x2260eb8: 0x4029a6 &amp;lt;infiniteLoop()&amp;gt;) at /usr/include/c++/8/bits/invoke.h:95
+#3  0x0000000000403150 in std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt;::_M_invoke&amp;lt;0ul&amp;gt; (this=0x2260eb8) at /usr/include/c++/8/thread:244
+#4  0x0000000000403126 in std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt;::operator() (this=0x2260eb8) at /usr/include/c++/8/thread:253
+#5  0x000000000040310a in std::thread::_State_impl&amp;lt;std::thread::_Invoker&amp;lt;std::tuple&amp;lt;void (*)()&amp;gt; &amp;gt; &amp;gt;::_M_run (this=0x2260eb0) at /usr/include/c++/8/thread:196
+#6  0x00007eff36bceb23 in execute_native_thread_routine () from /lib64/libstdc++.so.6
+#7  0x00007eff36ea91ca in start_thread () from /lib64/libpthread.so.0
+#8  0x00007eff361d58d3 in clone () from /lib64/libc.so.6
+Thread 1 (Thread 0x7eff372e1740 (LWP 1315016)):
+#0  0x00007eff36eaa6cd in __pthread_timedjoin_ex () from /lib64/libpthread.so.0
+#1  0x00007eff36bceda7 in std::thread::join() () from /lib64/libstdc++.so.6
+#2  0x00000000004029d2 in main () at /root/pstack/main.cpp:13
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;可以看到，进程假死的原因是死循环，主线程进入死循环，子线程无法退出，导致进程假死。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>主机序、网络序，通过调试器，直接观察</title>
+        <link>https://ttf248.life/p/host-network-byte-order-debugger/</link>
+        <pubDate>Tue, 10 Jan 2023 14:18:12 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/host-network-byte-order-debugger/</guid>
+        <description>&lt;p&gt;在计算机的发展历史中，如何存储数据并没有统一的标准。&lt;/p&gt;
+&lt;p&gt;字节的排列方式有两个通用规则。例如，将一个多位数的低位放在较小的地址处，高位放在较大的地址处，则称小端序；反之则称大端序。在网络应用中，字节序是一个必须被考虑的因素，因为不同机器类型可能采用不同标准的字节序，所以均按照网络标准转化。&lt;/p&gt;
+&lt;p&gt;按照阅读习惯，大端字节序更符合从左到右的阅读顺序。&lt;/p&gt;
+&lt;h2 id=&#34;处理器体系httpszhwikipediaorgwikie5ad97e88a82e5ba8f&#34;&gt;&lt;a class=&#34;link&#34; href=&#34;https://zh.wikipedia.org/wiki/%E5%AD%97%E8%8A%82%E5%BA%8F&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;处理器体系&lt;/a&gt;
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;x86、MOS Technology 6502、Z80、VAX、PDP-11 等处理器为小端序&lt;/li&gt;
+&lt;li&gt;Motorola 6800、Motorola 68000、PowerPC 970 等处理器为大端序&lt;/li&gt;
+&lt;li&gt;ARM、PowerPC（除PowerPC 970外）、DEC Alpha、SPARC V9、MIPS、PA-RISC及IA64的字节序是可配置的&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;网络序&#34;&gt;网络序
+&lt;/h2&gt;&lt;p&gt;网络传输一般采用大端序，也被称之为网络字节序，或网络序。IP协议中定义大端序为网络字节序。
+&lt;code&gt;Berkeley&lt;/code&gt;套接字定义了一组转换函数，用于16和32bit整数在网络序和本机字节序之间的转换。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;#include &amp;lt;arpa/inet.h&amp;gt;
+
+uint32_t htonl(uint32_t hostlong); //把uint32_t类型从主机序转换到网络序
+uint16_t htons(uint16_t hostshort); //把uint16_t类型从主机序转换到网络序
+uint32_t ntohl(uint32_t netlong); //把uint32_t类型从网络序转换到主机序
+uint16_t ntohs(uint16_t netshort); //把uint16_t类型从网络序转换到主机序
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果选用&lt;code&gt;asio&lt;/code&gt;作为网络库，内置的命名空间中有跨平台适配的函数名&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::network_to_host_long&lt;/li&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::network_to_host_short&lt;/li&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::host_to_network_long&lt;/li&gt;
+&lt;li&gt;boost::asio::detail::socket_ops::host_to_network_short&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;visual-studio-调试器&#34;&gt;visual studio 调试器
+&lt;/h2&gt;&lt;p&gt;调试模式下，选中调试菜单，窗口，勾选内存窗口&lt;/p&gt;
+&lt;p&gt;在&lt;code&gt;visual studio&lt;/code&gt;中，可以直接在调试器中查看内存中的数据，如下图所示&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/host-network-byte-order-debugger/Snipaste_2023-01-10_14-44-00.png&#34;
+	width=&#34;535&#34;
+	height=&#34;147&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;调试器菜单&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;363&#34;
+		data-flex-basis=&#34;873px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;h3 id=&#34;查看内存的方式&#34;&gt;查看内存的方式
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;窗口直接输出 &amp;amp;变量名，跳转到对应变量地址&lt;/li&gt;
+&lt;li&gt;如果变量原本就是指针，双击选中变量，拖动到内存窗口，展示对应地址的内容&lt;/li&gt;
+&lt;li&gt;如果变量不是指针，添加到计算窗口，获取地址，然后手工复制到内存窗口&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;举个栗子&#34;&gt;举个栗子
+&lt;/h3&gt;&lt;p&gt;收到一段数据，存储到&lt;code&gt;buffer&lt;/code&gt;对象中，将网络序转成主机序，得到&lt;code&gt;body_length&lt;/code&gt;等于 30，服务端划分了四个字节用于传出此数据。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-c++&#34;&gt;bool NetworkMessage::decode_header()
+{
+    // 网络序转成主机序
+    body_length_ = boost::asio::detail::socket_ops::network_to_host_long(*(int *)buffer_.data());
+    return auto_reserve(body_length_);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;strong&gt;大端字节序&lt;/strong&gt;：在内存窗口中，观察 &lt;code&gt;buffer_&lt;/code&gt; 的内容&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/host-network-byte-order-debugger/buffer_.png&#34;
+	width=&#34;603&#34;
+	height=&#34;318&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;buffer_&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;189&#34;
+		data-flex-basis=&#34;455px&#34;
+	
+&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;p&gt;&lt;strong&gt;小端字节序&lt;/strong&gt;：在内存窗口中，观察 &lt;code&gt;body_length_&lt;/code&gt; 的内容&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/host-network-byte-order-debugger/body_length_.png&#34;
+	width=&#34;581&#34;
+	height=&#34;333&#34;
+	
+	loading=&#34;lazy&#34;
+	
+		alt=&#34;body_length_&#34;
+	
+	
+		class=&#34;gallery-image&#34; 
+		data-flex-grow=&#34;174&#34;
+		data-flex-basis=&#34;418px&#34;
+	
+&gt;&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
