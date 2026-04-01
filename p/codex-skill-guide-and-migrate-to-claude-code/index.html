@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="这两天看 Codex 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。\n总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。\n">
+<title>给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code</title>
+
+<link rel='canonical' href='https://ttf248.life/p/codex-skill-guide-and-migrate-to-claude-code/'>
+
+<link rel="stylesheet" href="/scss/style.min.55195fb305d85c0d3c75a67dffa64547514599c0ee81d20c3b24aa71587b0dd8.css"><meta property='og:title' content="给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code">
+<meta property='og:description' content="这两天看 Codex 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。\n总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。\n">
+<meta property='og:url' content='https://ttf248.life/p/codex-skill-guide-and-migrate-to-claude-code/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:tag' content='codex' /><meta property='article:tag' content='skill' /><meta property='article:tag' content='claude code' /><meta property='article:tag' content='agent' /><meta property='article:tag' content='工作流' /><meta property='article:published_time' content='2026-04-01T18:00:00&#43;08:00'/><meta property='article:modified_time' content='2026-04-01T17:02:11&#43;08:00'/>
+<meta name="twitter:title" content="给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code">
+<meta name="twitter:description" content="这两天看 Codex 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。\n总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">向叔记事簿</a></h1>
+            <h2 class="site-description">拾光记事，岁月有痕</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>首页</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" selected>中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>暗色模式</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#skill-到底是什么">skill 到底是什么</a></li>
+    <li><a href="#小白最适合先写什么-skill">小白最适合先写什么 skill</a></li>
+    <li><a href="#一个最小可用的-skill长什么样">一个最小可用的 skill，长什么样</a></li>
+    <li><a href="#skillmd-应该怎么写"><code>SKILL.md</code> 应该怎么写</a>
+      <ol>
+        <li><a href="#1-这个-skill-是干什么的">1. 这个 skill 是干什么的</a></li>
+        <li><a href="#2-用户要提供什么">2. 用户要提供什么</a></li>
+        <li><a href="#3-你要按什么步骤做">3. 你要按什么步骤做</a></li>
+        <li><a href="#4-输出应该长什么样">4. 输出应该长什么样</a></li>
+        <li><a href="#5-自检要检查什么">5. 自检要检查什么</a></li>
+      </ol>
+    </li>
+    <li><a href="#小白最容易踩的几个坑">小白最容易踩的几个坑</a>
+      <ol>
+        <li><a href="#把-skill-写成空泛-prompt">把 skill 写成空泛 prompt</a></li>
+        <li><a href="#把所有说明塞进一个文件">把所有说明塞进一个文件</a></li>
+        <li><a href="#不写不该做什么">不写“不该做什么”</a></li>
+        <li><a href="#没有自检和落盘规则">没有自检和落盘规则</a></li>
+      </ol>
+    </li>
+    <li><a href="#一个比较稳的-codex-skill-开发流程">一个比较稳的 Codex skill 开发流程</a>
+      <ol>
+        <li><a href="#先选一件最近重复做过三次以上的事">先选一件最近重复做过三次以上的事</a></li>
+        <li><a href="#先写最小版-skillmd">先写最小版 <code>SKILL.md</code></a></li>
+        <li><a href="#拿真实任务跑两三轮">拿真实任务跑两三轮</a></li>
+        <li><a href="#把高频重复说明拆出去">把高频重复说明拆出去</a></li>
+        <li><a href="#最后再补失败约束">最后再补失败约束</a></li>
+      </ol>
+    </li>
+    <li><a href="#如果这个-skill-要迁到-claude-code需要改什么">如果这个 skill 要迁到 Claude Code，需要改什么</a></li>
+    <li><a href="#第一目录位置要改">第一，目录位置要改</a></li>
+    <li><a href="#第二调用方式要改">第二，调用方式要改</a></li>
+    <li><a href="#第三把-codex-专属术语换成-claude-code-的术语">第三，把 Codex 专属术语换成 Claude Code 的术语</a></li>
+    <li><a href="#第四补上-claude-code-特有的配置点">第四，补上 Claude Code 特有的配置点</a></li>
+    <li><a href="#哪些-skill-最适合双端复用">哪些 skill 最适合双端复用</a></li>
+    <li><a href="#一个比较稳的迁移思路">一个比较稳的迁移思路</a></li>
+    <li><a href="#说到底skill-开发最重要的不是高级而是稳定">说到底，skill 开发最重要的不是高级，而是稳定</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: #4CAF50;
+    --copy-btn-hover-bg: #45a049;
+    --copy-btn-success-bg: #2196F3;
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 6px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1rem 0;
+}
+
+.code-container pre {
+    margin: 0;
+    border-radius: var(--copy-btn-border-radius);
+    overflow-x: auto;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 6px 12px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: none;
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 500;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0.8;
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 0.8em;
+        padding: 4px 8px;
+        top: 4px;
+        right: 4px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 1;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.initializeHighlighting();
+        this.addCopyButtons();
+    }
+
+    initializeHighlighting() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/computer/" >
+                计算机
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/codex-skill-guide-and-migrate-to-claude-code/">给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月01日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            阅读约 13 分钟
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            codex
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+    </div>
+    
+
+    
+    <div class="article-lead">
+        <p>这两天看 <code>Codex</code> 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。</p>
+<p>总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="skill-到底是什么">skill 到底是什么
+</h2><p>如果拿最直白的话来说，skill 不是插件，不是模型微调，也不是某种神秘黑盒。它更像一个可复用的任务包。</p>
+<p>这个包里，通常会有几样东西：</p>
+<ul>
+<li><code>SKILL.md</code></li>
+<li>参考资料</li>
+<li>输出模板</li>
+<li>辅助脚本</li>
+</ul>
+<p>其中真正的核心，其实还是 <code>SKILL.md</code>。它负责告诉 agent，这个 skill 是干什么的，用户要给什么输入，你应该按什么顺序处理，最后输出成什么样。</p>
+<p>截至 2026 年 4 月，OpenAI 对 Codex skill 的官方表述已经很明确了：skill 是把 instructions、resources 和 scripts 打包起来，让 Codex 能按团队偏好稳定完成任务。Anthropic 那边现在也把 Claude Code 的这套能力放到了 skill 机制里，旧的 slash command 目录还兼容，但推荐逐步迁到 <code>.claude/skills/&lt;name&gt;/SKILL.md</code> 这种结构。换句话说，这事不是临时玩具，已经是正经工作流能力了。</p>
+<h2 id="小白最适合先写什么-skill">小白最适合先写什么 skill
+</h2><p>别一开始就写“全能编程助手”。</p>
+<p>这种 skill 看起来很厉害，实际最容易废掉。因为边界太大，输入太散，最后 agent 只能靠猜。你以为自己在做一个万能工具，实际做出来的是一个每次表现都不一样的 prompt 大杂烩。</p>
+<p>更适合新手起步的，是下面几类：</p>
+<ul>
+<li>固定格式写作</li>
+<li>固定格式总结</li>
+<li>固定格式排障</li>
+<li>固定格式代码检查</li>
+<li>固定格式发布前检查</li>
+</ul>
+<p>它们有个共同点：输入清楚，步骤固定，结果也容易判断对不对。</p>
+<p>比如：</p>
+<ul>
+<li>给博客起草 Markdown 成稿</li>
+<li>把 issue 整理成开发任务</li>
+<li>根据报错日志给出排查路径</li>
+<li>按项目规范做一次 PR review</li>
+<li>发布前检查 frontmatter、目录、脚本和链接</li>
+</ul>
+<p>说白了，skill 最适合先固化重复劳动，不适合一上来替你承包所有思考。</p>
+<h2 id="一个最小可用的-skill长什么样">一个最小可用的 skill，长什么样
+</h2><p>先看最小目录结构：</p>
+<pre><code class="language-text">my-skill/
+├── SKILL.md
+├── references/
+│   └── guide.md
+├── templates/
+│   └── output-template.md
+└── scripts/
+    └── validate.ps1
+</code></pre>
+<p>很多人第一反应是，既然 <code>SKILL.md</code> 最重要，那就把所有规则全塞进去。这样短期确实省事，但后面通常会越来越乱。更稳的做法，是把主流程放 <code>SKILL.md</code>，把那些不需要每次都读的大块内容拆出去。</p>
+<p>像这些东西，就很适合拆：</p>
+<ul>
+<li>风格规则</li>
+<li>输出模板</li>
+<li>名词解释</li>
+<li>校验脚本</li>
+<li>示例文件</li>
+</ul>
+<p>这样做的好处很直接。第一，主文件更短，agent 不容易被无关信息带偏。第二，后续维护也轻松，改模板时不用动主流程，改风格时不用碰脚本。</p>
+<h2 id="skillmd-应该怎么写"><code>SKILL.md</code> 应该怎么写
+</h2><p>对于小白，我建议先老老实实写五段。</p>
+<h3 id="1-这个-skill-是干什么的">1. 这个 skill 是干什么的
+</h3><p>别写空话。不要写什么“你是一个专业、全面、系统的助手”。这类句子几乎没信息量。</p>
+<p>直接写任务目标，比如：</p>
+<ul>
+<li>根据用户提供的大纲和链接，输出一篇可发布的 Markdown 博客</li>
+<li>根据错误日志和代码片段，整理排查路径和可能根因</li>
+<li>根据 PR diff 和项目规范，输出 review 意见</li>
+</ul>
+<h3 id="2-用户要提供什么">2. 用户要提供什么
+</h3><p>这里要写输入边界。</p>
+<p>比如博客写作 skill，就可以写：</p>
+<ul>
+<li>必填：大纲</li>
+<li>必填：链接或关键词</li>
+<li>选填：目标读者</li>
+<li>选填：长度和语气</li>
+</ul>
+<p>这一段越清楚，后面误解越少。</p>
+<h3 id="3-你要按什么步骤做">3. 你要按什么步骤做
+</h3><p>这是 skill 最关键的部分。</p>
+<p>不要只说“分析需求并输出结果”，要把顺序写出来。比如：</p>
+<ol>
+<li>先判断是不是依赖最新事实</li>
+<li>如果依赖最新事实，先查官方文档或一手资料</li>
+<li>再整理名词、日期、数字和因果链</li>
+<li>最后按指定风格生成正文</li>
+<li>返回前执行格式和事实检查</li>
+</ol>
+<p>你会发现，真正有用的 skill，核心不是“语气多高级”，而是流程够不够稳。</p>
+<h3 id="4-输出应该长什么样">4. 输出应该长什么样
+</h3><p>这一步也经常被忽略。</p>
+<p>如果你不写，agent 就会按它自己的理解输出。今天给你列表，明天给你散文，后天给你半成品。要想结果稳定，就得把输出格式写死一点。</p>
+<p>比如：</p>
+<ul>
+<li>必须带 frontmatter</li>
+<li>必须包含 <code>&lt;!--more--&gt;</code></li>
+<li>必须补 <code>## 参考资料</code></li>
+<li>必须返回最终写入路径</li>
+</ul>
+<h3 id="5-自检要检查什么">5. 自检要检查什么
+</h3><p>这一段非常值钱。</p>
+<p>因为很多结果看起来“完成了”，其实只是“生成了”。真正决定能不能直接拿来用的，往往就是最后这轮自检。</p>
+<p>常见的自检项可以包括：</p>
+<ul>
+<li>是否缺少必填字段</li>
+<li>是否引用了没核实的事实</li>
+<li>是否输出成了错误格式</li>
+<li>是否偏离目标读者</li>
+<li>是否把研究稿误写成了正式成稿</li>
+</ul>
+<h2 id="小白最容易踩的几个坑">小白最容易踩的几个坑
+</h2><h3 id="把-skill-写成空泛-prompt">把 skill 写成空泛 prompt
+</h3><p>这是最常见的。</p>
+<p>如果你的 <code>SKILL.md</code> 里充满“全面”“深入”“系统”“高质量”这种词，基本可以理解为你什么都没说。agent 看到这种内容，还是只能自己猜。</p>
+<p>写 skill 时，真正重要的是这些：</p>
+<ul>
+<li>什么时候要联网</li>
+<li>优先查什么来源</li>
+<li>哪些资料能当参考</li>
+<li>哪些情况必须停下来</li>
+<li>输出必须长什么样</li>
+</ul>
+<h3 id="把所有说明塞进一个文件">把所有说明塞进一个文件
+</h3><p>这事短期最省事，长期最麻烦。</p>
+<p>一旦 skill 开始变长，你就会发现，每次改一点点东西，都要在一大坨说明里翻来翻去。更现实的问题是，agent 每次都得重新吞一大段并不总是相关的内容。</p>
+<h3 id="不写不该做什么">不写“不该做什么”
+</h3><p>很多人只写“该怎么做”，不写“什么情况下别做”。这会让 agent 太积极。</p>
+<p>比如：</p>
+<ul>
+<li>没核实事实时，不要直接下结论</li>
+<li>用户明确只要研究稿时，不要直接生成成稿</li>
+<li>目标文件已存在时，不要静默覆盖</li>
+</ul>
+<p>这类约束非常重要。说白了，它们决定了 skill 会不会惹事。</p>
+<h3 id="没有自检和落盘规则">没有自检和落盘规则
+</h3><p>尤其是写作类、发布类、代码生成类 skill，没有最后的检查和写入规则，结果通常就停留在“聊天窗口里看起来还行”。</p>
+<p>一旦要落到真实仓库里，就得补上：</p>
+<ul>
+<li>路径生成规则</li>
+<li>覆盖策略</li>
+<li>最小格式要求</li>
+<li>写入成功后的反馈</li>
+</ul>
+<h2 id="一个比较稳的-codex-skill-开发流程">一个比较稳的 Codex skill 开发流程
+</h2><p>如果你准备自己动手，我建议按下面这个顺序来。</p>
+<h3 id="先选一件最近重复做过三次以上的事">先选一件最近重复做过三次以上的事
+</h3><p>不要选最复杂的，选最重复的。</p>
+<p>比如：</p>
+<ul>
+<li>写博客初稿</li>
+<li>做 PR review</li>
+<li>整理 issue</li>
+<li>检查发布物</li>
+</ul>
+<p>这类任务最容易看到收益。</p>
+<h3 id="先写最小版-skillmd">先写最小版 <code>SKILL.md</code>
+</h3><p>先别追求漂亮，先让它能跑。</p>
+<p>最小版只要能回答四个问题：</p>
+<ul>
+<li>它做什么</li>
+<li>需要什么输入</li>
+<li>按什么步骤做</li>
+<li>最后交付什么</li>
+</ul>
+<h3 id="拿真实任务跑两三轮">拿真实任务跑两三轮
+</h3><p>这一步不能省。</p>
+<p>你要看的不是“它有没有输出内容”，而是：</p>
+<ul>
+<li>有没有误解输入</li>
+<li>有没有跳步骤</li>
+<li>有没有乱用旧经验</li>
+<li>输出是不是能直接拿来用</li>
+</ul>
+<p>skill 的价值，不在于生成一段文字，而在于减少你重复解释和返工的次数。</p>
+<h3 id="把高频重复说明拆出去">把高频重复说明拆出去
+</h3><p>等你发现某段说明经常改，就别继续堆在主文件里了。</p>
+<p>把它拆到：</p>
+<ul>
+<li><code>references/</code></li>
+<li><code>templates/</code></li>
+<li><code>scripts/</code></li>
+</ul>
+<p>让主流程只保留决策逻辑。</p>
+<h3 id="最后再补失败约束">最后再补失败约束
+</h3><p>也就是：</p>
+<ul>
+<li>哪些情况不能继续</li>
+<li>哪些情况必须联网确认</li>
+<li>哪些情况只能给草稿，不能直接落盘</li>
+</ul>
+<p>这一步补完之后，skill 才开始像一个能长期复用的东西。</p>
+<h2 id="如果这个-skill-要迁到-claude-code需要改什么">如果这个 skill 要迁到 Claude Code，需要改什么
+</h2><p>先说结论：能迁，而且如果你本来就写得规矩，改动不会特别大。</p>
+<p>但这不等于“复制过去就完事”。真正要改的，主要是运行环境相关的那一层。</p>
+<h2 id="第一目录位置要改">第一，目录位置要改
+</h2><p>如果你现在在 Codex 这边用的是自己仓库里的 skill 目录，比如 <code>.agents/skills/&lt;name&gt;/SKILL.md</code>，那迁到 Claude Code 时，通常要改成：</p>
+<pre><code class="language-text">.claude/skills/&lt;name&gt;/SKILL.md
+</code></pre>
+<p>这是目前 Claude Code 官方推荐的项目级 skill 位置。旧的 <code>.claude/commands/*.md</code> 还兼容，但官方已经明确更推荐 skill 目录结构，因为它更适合同时带参考资料、模板和脚本。</p>
+<p>换句话说，迁移时第一件事不是改 prompt，而是先把目录放到 Claude Code 能识别的地方。</p>
+<h2 id="第二调用方式要改">第二，调用方式要改
+</h2><p>Codex 这边的 skill 调用，可以是自动，也可以是显式点名。在一些工作流里，甚至会直接写成 <code>$skill-name</code> 这种形式。</p>
+<p>到了 Claude Code，显式触发通常更接近 slash command 的用法，也就是：</p>
+<pre><code class="language-text">/skill-name
+</code></pre>
+<p>所以如果你原来的 skill 文档里写了很多 Codex 专属的调用说明，迁过去时要一起改掉。不然不是 skill 本身坏了，而是入口已经不对了。</p>
+<h2 id="第三把-codex-专属术语换成-claude-code-的术语">第三，把 Codex 专属术语换成 Claude Code 的术语
+</h2><p>这是最容易漏的地方。</p>
+<p>比如你原来的 skill 里，如果隐含依赖了这些东西：</p>
+<ul>
+<li>Codex 的 team config</li>
+<li>Codex 专属工具名</li>
+<li>Codex 的权限规则</li>
+<li>Codex 的技能自动发现方式</li>
+</ul>
+<p>迁到 Claude Code 时，就要换成它自己的语境：</p>
+<ul>
+<li><code>CLAUDE.md</code></li>
+<li><code>.claude/settings.json</code></li>
+<li><code>.claude/agents/</code></li>
+<li><code>.mcp.json</code></li>
+<li>Claude Code 的权限与 MCP 配置</li>
+</ul>
+<p>说白了，Markdown 文件本身好迁，真正难迁的是运行时假设。</p>
+<h2 id="第四补上-claude-code-特有的配置点">第四，补上 Claude Code 特有的配置点
+</h2><p>如果你只是想“能用”，前三步其实已经差不多了。</p>
+<p>但如果你想“用起来顺”，还得再补一点 Claude Code 特有的东西。比如 frontmatter 配置、是否允许自动触发、是否显式触发优先、是否配合 subagent 使用。</p>
+<p>Claude Code 现在这套 skill 机制，已经不只是一个静态 prompt 文件了。它可以结合子代理、MCP、项目设置和按需加载文件来工作。所以如果你原来的 Codex skill 是个特别大的单文件，迁过去之后，通常值得顺手拆细一点。</p>
+<h2 id="哪些-skill-最适合双端复用">哪些 skill 最适合双端复用
+</h2><p>不是所有 skill 都值得同时维护 Codex 和 Claude Code 两个版本。</p>
+<p>最适合双端复用的，通常是这些：</p>
+<ul>
+<li>写作类</li>
+<li>文档整理类</li>
+<li>研究总结类</li>
+<li>规范检查类</li>
+<li>流程执行类</li>
+</ul>
+<p>因为它们的核心是流程约束，不太依赖某个平台的专属工具。</p>
+<p>最不适合直接复制的，通常是这些：</p>
+<ul>
+<li>强依赖平台专属工具调用的</li>
+<li>强依赖自动发现目录的</li>
+<li>强依赖权限模型的</li>
+<li>强依赖某个内置 prompt 行为的</li>
+</ul>
+<p>这类 skill 不是不能迁，只是迁完以后，本质上已经更像“同一个目标的两套实现”。</p>
+<h2 id="一个比较稳的迁移思路">一个比较稳的迁移思路
+</h2><p>如果你手上已经有 Codex skill，我建议这么做。</p>
+<ol>
+<li>保留原版，不要直接覆盖。</li>
+<li>复制一份到 <code>.claude/skills/&lt;name&gt;/SKILL.md</code>。</li>
+<li>把调用语法、目录约定、工具名改成 Claude Code 的说法。</li>
+<li>把通用逻辑和平台逻辑拆开。</li>
+<li>用两三个真实任务回归测试。</li>
+</ol>
+<p>不要一边迁一边大重构。这样最容易把问题搅在一起，最后你自己都说不清到底坏在哪。</p>
+<h2 id="说到底skill-开发最重要的不是高级而是稳定">说到底，skill 开发最重要的不是高级，而是稳定
+</h2><p>很多人第一次写 skill，总想着一步到位，做一个又聪明又全面的东西。</p>
+<p>但真正能留下来的 skill，通常都不花哨。它只是把一件高频小事做稳了。输入稳定，步骤稳定，输出稳定，出错时也知道该停下来。你下次再用的时候，不用重新解释半天，也不用担心它突然换了一套做法。</p>
+<p>这事看起来不炫，但很值钱。</p>
+<p>因为 agent 真正替你省下来的，不是一两次灵感爆发，而是那些原本要反复解释、反复返工、反复检查的小动作。把这些小动作固化成 skill，本质上就是在给自己做接口。</p>
+<p>先别想着写一个万能 skill。先写一个你明天还愿意继续用的版本，这就够了。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li>OpenAI, Introducing the Codex app: <a class="link" href="https://openai.com/index/introducing-the-codex-app/"  target="_blank" rel="noopener"
+    >https://openai.com/index/introducing-the-codex-app/</a></li>
+<li>OpenAI Academy, Skills: <a class="link" href="https://academy.openai.com/public/resources/skills"  target="_blank" rel="noopener"
+    >https://academy.openai.com/public/resources/skills</a></li>
+<li>OpenAI Skills Catalog: <a class="link" href="https://github.com/openai/skills"  target="_blank" rel="noopener"
+    >https://github.com/openai/skills</a></li>
+<li>Anthropic, Claude Code slash commands and skills: <a class="link" href="https://code.claude.com/docs/en/slash-commands"  target="_blank" rel="noopener"
+    >https://code.claude.com/docs/en/slash-commands</a></li>
+<li>Anthropic, Claude Code settings: <a class="link" href="https://code.claude.com/docs/en/settings"  target="_blank" rel="noopener"
+    >https://code.claude.com/docs/en/settings</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/ai-inspiration-hub/">AI 灵感碰撞坊</a>
+        
+            <a href="/tags/codex/">codex</a>
+        
+            <a href="/tags/skill/">Skill</a>
+        
+            <a href="/tags/claude-code/">claude code</a>
+        
+            <a href="/tags/agent/">Agent</a>
+        
+            <a href="/tags/%E5%B7%A5%E4%BD%9C%E6%B5%81/">工作流</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                codex
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 2026年04月01日 17:02
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-content__list">
+        
+            <article class="related-content__item">
+                <a href="/p/next-8-ai-topics-after-reviewing-two-years-of-posts/" class="related-content__link">
+                    <h3 class="related-content__title">复盘近两年 AI 文章后，我觉得接下来该写这 8 个选题</h3>
+                    <time class="related-content__date" datetime='2026-03-30T22:20:00&#43;08:00'>2026年03月30日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/the-end-of-low-cost-api-relays/" class="related-content__link">
+                    <h3 class="related-content__title">低价 API 中转站的终局：三月份的大模型体验与不可能三角</h3>
+                    <time class="related-content__date" datetime='2026-03-30T20:00:00&#43;08:00'>2026年03月30日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/computing-power-hegemony-and-valuation-bubble-we-are-entering-a-costly-new-era/" class="related-content__link">
+                    <h3 class="related-content__title">算力霸权与估值的“倒挂”：我们正在进入一个昂贵的新时代</h3>
+                    <time class="related-content__date" datetime='2026-03-18T13:09:26&#43;08:00'>2026年03月18日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/" class="related-content__link">
+                    <h3 class="related-content__title">深度解析 C&#43;&#43; 中 `static lambda` 引发的内存空转与缓存污染</h3>
+                    <time class="related-content__date" datetime='2026-03-16T20:18:18&#43;08:00'>2026年03月16日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/mcp-vs-skill-comparison/" class="related-content__link">
+                    <h3 class="related-content__title">从协议约束到智能释放：深度对比 MCP 与 Skill</h3>
+                    <time class="related-content__date" datetime='2026-01-30T01:53:28&#43;08:00'>2026年01月30日</time>
+                </a>
+            </article>
+        
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
