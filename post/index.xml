@@ -6,7 +6,333 @@
         <description>Recent content in Posts on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language>
-        <lastBuildDate>Thu, 02 Apr 2026 23:35:02 +0800</lastBuildDate><atom:link href="https://ttf248.life/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Fri, 03 Apr 2026 00:11:51 +0800</lastBuildDate><atom:link href="https://ttf248.life/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>blog-style-suite：把风格数据、生成过程和 token 成本一起拆开</title>
+        <link>https://ttf248.life/p/blog-style-suite-splitting-style-data-and-token-cost/</link>
+        <pubDate>Fri, 03 Apr 2026 00:01:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/blog-style-suite-splitting-style-data-and-token-cost/</guid>
+        <description>&lt;p&gt;如果说 &lt;code&gt;blog-writer&lt;/code&gt; 解决的是“写稿动作自动化”，那 &lt;code&gt;blog-style-suite&lt;/code&gt; 解决的就是另一层更现实的问题：风格学习这件事，不能每次写稿都重新烧一遍 token。&lt;/p&gt;
+&lt;p&gt;这也是它为什么最后不适合继续做成一个独立 skill，而更适合变成 Python 项目。&lt;/p&gt;
+&lt;p&gt;系列导航：上一篇是 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/why-i-turned-blog-writing-into-a-skill/&#34; &gt;从手工复制到 blog-writer：我为什么一定要把博客写作流程做成 Skill&lt;/a&gt;。这是第 2 篇。下一篇我会讲 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/local-models-online-models-and-minimax-in-my-writing-pipeline/&#34; &gt;本地模型、在线模型和 Minimax 混用以后，工作流到底哪里变了&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;最朴素的办法当然有用但代价也最直接&#34;&gt;最朴素的办法当然有用，但代价也最直接
+&lt;/h2&gt;&lt;p&gt;先把话说死一点。Token 足够富裕的时候，直接生吃历史文章，当然是能跑的。&lt;/p&gt;
+&lt;p&gt;你把旧文章批量塞给模型，让它现场归纳风格，再结合当前题目起草正文，这件事在能力上没什么问题。甚至在样本还不多的时候，它还挺省事。&lt;/p&gt;
+&lt;p&gt;但它有两个很现实的副作用：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;每次写稿都要重复付费&lt;/li&gt;
+&lt;li&gt;每次都要重复等待&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;而且样本越多，这个问题越重。你博客写得越久，历史文章越多，重复喂上下文这件事就越不划算。&lt;/p&gt;
+&lt;p&gt;所以我后来越来越明确一件事：&lt;strong&gt;风格学习和正文生成，应该是两个阶段。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;风格学习是低频动作，正文生成是高频动作。低频动作可以重一点，高频动作必须轻。&lt;/p&gt;
+&lt;p&gt;这句话听上去像废话，但很多 AI 工作流一开始失败，恰恰就是因为把这两件事混在一起了。&lt;/p&gt;
+&lt;h2 id=&#34;为什么最后更适合做成-python-项目&#34;&gt;为什么最后更适合做成 Python 项目
+&lt;/h2&gt;&lt;p&gt;最开始数据生成模块其实还是往 skill 的方向写的，但写着写着就发现不对。&lt;/p&gt;
+&lt;p&gt;因为它处理的已经不是“单次任务说明”，而是一条完整的数据管线：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;扫描 &lt;code&gt;content/post&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;提取 frontmatter、正文开头、结尾、小标题、摘录&lt;/li&gt;
+&lt;li&gt;判断哪些文章该入选，哪些该排除&lt;/li&gt;
+&lt;li&gt;给文章分 lane&lt;/li&gt;
+&lt;li&gt;做启发式评分&lt;/li&gt;
+&lt;li&gt;选出最值得代表文风的样本&lt;/li&gt;
+&lt;li&gt;再把这些东西压成一份更轻的 runtime&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这套东西继续塞在 skill 里，维护成本会越来越高。它更像一个需要被重复运行、可测试、可恢复、可替换 provider 的构建系统。&lt;/p&gt;
+&lt;p&gt;所以最后落成 Python 项目，其实是很自然的结果。不是为了“更工程化”而工程化，而是因为它真的已经长成了一条 pipeline。&lt;/p&gt;
+&lt;h2 id=&#34;它真正省-token-的地方不是一个点而是三层拆分&#34;&gt;它真正省 token 的地方，不是一个点，而是三层拆分
+&lt;/h2&gt;&lt;p&gt;现在回头看，&lt;code&gt;blog-style-suite&lt;/code&gt; 省 token 的关键，不是某一个优化技巧，而是架构上主动把问题拆开了。&lt;/p&gt;
+&lt;h3 id=&#34;第一层扫描和筛选尽量不用-ai&#34;&gt;第一层，扫描和筛选尽量不用 AI
+&lt;/h3&gt;&lt;p&gt;在 &lt;code&gt;scanner.py&lt;/code&gt; 这一层，很多事情本来就没必要上模型。&lt;/p&gt;
+&lt;p&gt;比如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;frontmatter 解析&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt; 检查&lt;/li&gt;
+&lt;li&gt;正文是否过短&lt;/li&gt;
+&lt;li&gt;是否嵌了 prompt&lt;/li&gt;
+&lt;li&gt;blockquote 占比是否过高&lt;/li&gt;
+&lt;li&gt;路径遍历、标题提取、小标题提取&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这些东西交给规则做就行，没必要每篇文章都调一次模型。&lt;/p&gt;
+&lt;p&gt;后来在 &lt;code&gt;bc4b950&lt;/code&gt; 这个提交里，scan 阶段干脆彻底改成了纯启发式。提交说明里写得很直接，&lt;code&gt;AI 调用从 ~2000 次降到 5 次/provider&lt;/code&gt;。这不是小修小补，是整条成本曲线都被改了。&lt;/p&gt;
+&lt;h3 id=&#34;第二层把每篇一调改成每类一调&#34;&gt;第二层，把“每篇一调”改成“每类一调”
+&lt;/h3&gt;&lt;p&gt;真正贵的地方，不只是有没有 AI，而是调用粒度。&lt;/p&gt;
+&lt;p&gt;如果每篇文章都单独做 AI 筛选、AI 分类、AI 打标签，那文章一多，调用次数就会直接爆掉。后面重构以后，思路变成：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;scan 阶段先本地启发式处理&lt;/li&gt;
+&lt;li&gt;build 阶段再按 lane 批量精选&lt;/li&gt;
+&lt;li&gt;每个 lane 一次&lt;/li&gt;
+&lt;li&gt;最后作者风格压缩再来一次&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这就把原来按文章线性增长的成本，压到了按 lane 增长。lane 就四个，作者风格再加一次，冷启动也就 5 次左右。&lt;/p&gt;
+&lt;p&gt;这一步其实很关键。很多人说“优化 token”，最后只是从大 prompt 改成小 prompt。但更本质的优化，是把调用单位改了。&lt;/p&gt;
+&lt;h3 id=&#34;第三层运行时只读压缩后的-runtime&#34;&gt;第三层，运行时只读压缩后的 runtime
+&lt;/h3&gt;&lt;p&gt;这也是我觉得最重要的一层。&lt;/p&gt;
+&lt;p&gt;现在 &lt;code&gt;blog-writer&lt;/code&gt; 正常写稿时，不再去读一堆原始语料，而是只读 &lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;。这个文件顶层结构已经被压到比较稳定的几块：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lanes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;writer_guide&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这意味着写稿阶段拿到的，不再是一堆原始文章，而是一份预处理后的、已经筛好、压好的“文风索引”。&lt;/p&gt;
+&lt;p&gt;这才是预处理真正省 token 的地方。不是说历史文章没用了，而是它们的作用，已经提前在构建阶段被消化了一轮。&lt;/p&gt;
+&lt;h2 id=&#34;数据结构为什么要这么设计&#34;&gt;数据结构为什么要这么设计
+&lt;/h2&gt;&lt;p&gt;我觉得这套结构设计得比较对路的地方，是它没有试图做成一个巨型万能 schema，而是刻意分成了几种不同粒度的数据。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;author_style&lt;/code&gt; 负责全局声音。比如开头习惯、结构习惯、推理习惯、事实处理方式。这个层是“这人整体怎么写”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;lanes&lt;/code&gt; 负责局部增强。技术、金融、随笔、工具体验，这几类题材虽然都是同一个作者写，但确实会有局部差异。这个层是“这类题更适合怎么写”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;samples&lt;/code&gt; 不是全文，而是 sample card。里面只有开头卡、结构卡、声音卡、不要抄什么。这个层是“拿几个最能代表风格的例子做提示”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;writer_guide&lt;/code&gt; 再去约束读取顺序和读取上限。这个层是“运行时别贪多，读到够用就停”。&lt;/p&gt;
+&lt;p&gt;你会发现，这几个层级其实刚好对应四个问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;我整体是什么风格&lt;/li&gt;
+&lt;li&gt;这篇当前属于哪类&lt;/li&gt;
+&lt;li&gt;有没有几个高价值样本可以参考&lt;/li&gt;
+&lt;li&gt;运行时怎么读才不浪费&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这比把所有历史文章硬塞给模型清晰得多。&lt;/p&gt;
+&lt;h2 id=&#34;checkpoint-和缓存不只是省时间也是在省-token&#34;&gt;checkpoint 和缓存，不只是省时间，也是在省 token
+&lt;/h2&gt;&lt;p&gt;后面又做了两件我觉得非常务实的事。&lt;/p&gt;
+&lt;p&gt;一个是 provider checkpoint 恢复。&lt;code&gt;2e6bb9f&lt;/code&gt; 这个提交里，把 provider 的中间结果恢复机制补上了。这样构建中断以后，不需要全部重来。&lt;/p&gt;
+&lt;p&gt;另一个是 screening / lane 指纹缓存复用。&lt;code&gt;5b82d23&lt;/code&gt; 这个提交里，用指纹判断旧结果还能不能复用。条件没变，就直接拿旧结果，不再重跑。&lt;/p&gt;
+&lt;p&gt;这两步表面上是“工程体验更好”，本质上还是在控成本。因为对接本地模型也好，对接在线模型也好，只要你能少调一次，就是真实省下来一次。&lt;/p&gt;
+&lt;h2 id=&#34;所以核心设计思路其实很简单&#34;&gt;所以核心设计思路其实很简单
+&lt;/h2&gt;&lt;p&gt;如果要用一句话总结 &lt;code&gt;blog-style-suite&lt;/code&gt; 的设计思路，我会这么说：&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;把高频阶段做轻，把低频阶段做重，把需要模型判断的地方压缩到最少，把不需要模型判断的地方尽量本地化。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这套东西说白了不神秘。真正难的不是“想到可以预处理”，而是愿不愿意把整条链路拆清楚。&lt;/p&gt;
+&lt;p&gt;很多时候，AI 工作流一开始很丝滑，是因为你还没到必须算账的时候。等历史数据多起来、文章数量多起来、provider 也多起来，迟早会碰到成本问题。&lt;/p&gt;
+&lt;p&gt;这时候如果前面没有做数据分层，没有把扫描、构建、运行时拆开，那后面几乎必然会越来越重。&lt;/p&gt;
+&lt;p&gt;所以下一篇，我就继续把这个问题往前推一步。&lt;/p&gt;
+&lt;p&gt;既然风格构建也贵，那为什么不接本地模型？本地模型接进来以后，和在线版本到底差在哪？Minimax 放在这条链路里，又扮演了什么角色？&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;bc4b950&lt;/code&gt;，AI 调用从约 2000 次降到 5 次/provider&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/2e6bb9f4ea554b87830dc3c67f96aa8ce95ec73f&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;2e6bb9f&lt;/code&gt;，provider checkpoint 恢复机制&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/5b82d23899c69532654010ed6833f27eda5ada82&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;5b82d23&lt;/code&gt;，screening/lane 指纹缓存复用&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/style_pipeline/scanner.py&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;scanner.py&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/style_pipeline/builder.py&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;builder.py&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/style_pipeline/compressor.py&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;compressor.py&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/README.md&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;README.md&lt;/code&gt; for &lt;code&gt;blog-style-suite&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;本次的内容比较多，拆分成系列文章：去年就有很多稿子是通过大模型写的，那会是自己写个大纲或者问题清单，然后AI出稿子，复制内容到本地 md 文档，填写头信息，标签信息、发布文章；近期 codex 用了很多，发现 codex 里面的联网搜索能力很强，那我是不是能写个 skill，将这些事情自动化，此时诞生了 skill blog-writer 的第一稿，我还想着让 AI 学习我以前文章的风格，这就导致 blog-writer 运行的时候，很费 token，后续我针对 blog-writer 进行了多个版本的优化，拆分了 数据模块，数据生成的模块，原本数据生成的模块还是独立的 skill，写着写着，我就发现，更适合做成 Python 项目，此时就有了 blog-style-suite，然后我又发现，训练风格数据，也是比较费 token，我就想着用本地的大模型，对接了本地的大模型，我又想到了对比下本地大模型和在线版本的区别，又对接了 minimax；blog-style-suite 和 blog-writer 的演化历史可以分析的 git 提价记录。顺带基于本地 blog-writer、blog-style-suite 的代码，可以讲讲里面的设计思路，是如何做到了节约 token，数据结构是如何设计的，核心的设计思路。Token 富裕完全能生吃历史文章，预处理能节约很多 token
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;这一篇重点放在架构拆分和 token 成本，不重复第一篇的流程起源。&lt;/li&gt;
+&lt;li&gt;直接用三层拆分来解释节省 token 的原因，比泛泛说“做了优化”更清楚。&lt;/li&gt;
+&lt;li&gt;把 &lt;code&gt;scanner&lt;/code&gt;、&lt;code&gt;builder&lt;/code&gt;、&lt;code&gt;runtime&lt;/code&gt; 的职责分开写，顺手把数据结构设计讲透。&lt;/li&gt;
+&lt;li&gt;特意把 checkpoint 和指纹缓存单独拎出来，因为它们体现的是“工程化以后才有的现实收益”。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>本地模型、在线模型和 Minimax 混用以后，我对这条写作流水线的判断</title>
+        <link>https://ttf248.life/p/local-models-online-models-and-minimax-in-my-writing-pipeline/</link>
+        <pubDate>Fri, 03 Apr 2026 00:01:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/local-models-online-models-and-minimax-in-my-writing-pipeline/</guid>
+        <description>&lt;p&gt;写到这里，真正绕不开的问题其实只剩一个。&lt;/p&gt;
+&lt;p&gt;既然风格资产构建本身也不便宜，那我为什么后来会去接本地大模型，又为什么没有彻底抛弃在线版本，反而还把 &lt;code&gt;Minimax&lt;/code&gt; 也接了进来？&lt;/p&gt;
+&lt;p&gt;我的答案很现实，因为这事从来都不是“谁更强”这么简单，而是&lt;strong&gt;成本、速度、稳定性、最终质量&lt;/strong&gt;四件事一起算账。&lt;/p&gt;
+&lt;p&gt;系列导航：前文是 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/why-i-turned-blog-writing-into-a-skill/&#34; &gt;从手工复制到 blog-writer：我为什么一定要把博客写作流程做成 Skill&lt;/a&gt; 和 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/blog-style-suite-splitting-style-data-and-token-cost/&#34; &gt;blog-style-suite：把风格数据、生成过程和 token 成本一起拆开&lt;/a&gt;。这是这个系列的第 3 篇。&lt;/p&gt;
+&lt;h2 id=&#34;本地模型最先解决的是敢不敢多跑几轮&#34;&gt;本地模型最先解决的，是“敢不敢多跑几轮”
+&lt;/h2&gt;&lt;p&gt;训练风格数据费 token，这个事说得再直白一点，就是你一旦开始多 provider 对比、多轮调试、多次重构 prompt，很快就会感觉在线模型的成本有点肉疼。&lt;/p&gt;
+&lt;p&gt;这时候本地模型的价值就出来了。&lt;/p&gt;
+&lt;p&gt;它不一定最强，但它有两个很实际的优势：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;你敢反复跑&lt;/li&gt;
+&lt;li&gt;你敢拿来做预处理&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;尤其是风格构建这种低频但偏重的任务，本地模型天然更适合做“先来一遍粗加工”。哪怕效果不是最好，只要能把大部分重复劳动先吃掉，它就已经有价值了。&lt;/p&gt;
+&lt;p&gt;这个判断其实和正文生成不完全一样。正文生成更看重最终质感，风格构建更看重“能不能持续试错”。&lt;/p&gt;
+&lt;h2 id=&#34;但本地模型的问题也很明显&#34;&gt;但本地模型的问题也很明显
+&lt;/h2&gt;&lt;p&gt;我不太认同那种一上来就把本地模型吹成万能替代品的说法。&lt;/p&gt;
+&lt;p&gt;本地模型的真实问题，主要就三件事：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;遵循度不一定稳定&lt;/li&gt;
+&lt;li&gt;长上下文和复杂压缩任务容易飘&lt;/li&gt;
+&lt;li&gt;同样一份输入，输出上限通常还是不如强在线模型&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这也是为什么后来 &lt;code&gt;blog-style-suite&lt;/code&gt; 没有把 provider 写死，而是保留了多 provider 结构。&lt;/p&gt;
+&lt;p&gt;你从现在的目录就能看出来，suite 会分别生成：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;lm-studio-gemma.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lm-studio-qwen.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;minimax-m2.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;最后真正给 &lt;code&gt;blog-writer&lt;/code&gt; 生效的，不是它们全部，而是人工挑一份发布到 &lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;这个设计我觉得很对。因为它承认了一件事：&lt;strong&gt;provider 不是宗教选择，而是结果选择。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;为什么又接了-minimax&#34;&gt;为什么又接了 Minimax
+&lt;/h2&gt;&lt;p&gt;很多时候，在线模型真正的价值，不是“全流程都在线跑”，而是作为质量基准。&lt;/p&gt;
+&lt;p&gt;我后来接 &lt;code&gt;Minimax&lt;/code&gt;，一方面当然是因为它本身有可用性，另一方面也是因为我需要一个在线参照系。只有把本地版本和在线版本放到同一套数据结构、同一套输出契约里，差异才是可比的。&lt;/p&gt;
+&lt;p&gt;这个差异主要看三件事：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt; 压出来够不够稳&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt; 选得准不准&lt;/li&gt;
+&lt;li&gt;当前 runtime 真拿去写稿时，味道是不是对&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果没有统一 pipeline，这个对比其实很虚。你今天换个 prompt，明天换个输入长度，后天又换个输出格式，最后根本分不清到底是模型差异，还是实验条件变了。&lt;/p&gt;
+&lt;p&gt;而现在 &lt;code&gt;blog-style-suite&lt;/code&gt; 把 scan、build、runtime 契约都固定以后，本地模型和在线模型的差异，才终于能落到同一张考卷上。&lt;/p&gt;
+&lt;h2 id=&#34;我对这条流水线的最终判断&#34;&gt;我对这条流水线的最终判断
+&lt;/h2&gt;&lt;p&gt;写到最后，我反而觉得这整件事最有价值的，不是“接了多少模型”，而是慢慢形成了一种更现实的分工方式。&lt;/p&gt;
+&lt;h3 id=&#34;1-token-富裕时生吃原文依然有效&#34;&gt;1. token 富裕时，生吃原文依然有效
+&lt;/h3&gt;&lt;p&gt;这事没必要回避。只要预算足够，直接带更多历史文章、带更多上下文，让强模型现场理解，效果通常不会差。&lt;/p&gt;
+&lt;p&gt;所以我不会把预处理神化成唯一答案。&lt;/p&gt;
+&lt;p&gt;预处理的意义，不是证明“生吃不行”，而是证明在长期工作流里，&lt;strong&gt;不是每次都值得生吃&lt;/strong&gt;。&lt;/p&gt;
+&lt;h3 id=&#34;2-高频环节必须轻&#34;&gt;2. 高频环节必须轻
+&lt;/h3&gt;&lt;p&gt;真正天天要跑的，是写稿，是起草，是补事实，是落盘。&lt;/p&gt;
+&lt;p&gt;这些环节如果还背着巨大的历史上下文，成本和等待时间都会越来越难看。所以运行时读取压缩后的 runtime，是非常合理的。&lt;/p&gt;
+&lt;h3 id=&#34;3-低频环节可以重但要有替代方案&#34;&gt;3. 低频环节可以重，但要有替代方案
+&lt;/h3&gt;&lt;p&gt;风格构建、provider 对比、数据重建，这些低频动作可以允许更重一点。但也正因为它们重，所以才更需要：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本地模型做试错&lt;/li&gt;
+&lt;li&gt;checkpoint 做恢复&lt;/li&gt;
+&lt;li&gt;缓存做复用&lt;/li&gt;
+&lt;li&gt;多 provider 做横向比较&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这四件事加起来，才让它成为一条能长期维护的流水线，而不是一次性的实验品。&lt;/p&gt;
+&lt;h2 id=&#34;从-blog-writer-到-blog-style-suite这里面真正长出来的东西&#34;&gt;从 blog-writer 到 blog-style-suite，这里面真正长出来的东西
+&lt;/h2&gt;&lt;p&gt;如果只看名字变化，很容易以为这只是工具越来越多。&lt;/p&gt;
+&lt;p&gt;但我觉得真正长出来的，其实是下面这套方法：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;高频任务和低频任务分层&lt;/li&gt;
+&lt;li&gt;运行时数据和构建时数据分层&lt;/li&gt;
+&lt;li&gt;本地规则和模型判断分层&lt;/li&gt;
+&lt;li&gt;私有 skill 和仓库级工具分层&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这几层一旦拆开，整个系统就稳定很多。哪怕后面再接新的本地模型，或者再换新的在线 provider，也只是替换其中一层，而不是把整套写作流程推倒重来。&lt;/p&gt;
+&lt;p&gt;这也是为什么我越来越觉得，AI 工作流真正值得写的，不是“某个模型强不强”，而是你有没有把那些真正反复发生的劳动，拆成一套能算得清账、换得了部件、跑得动很久的系统。&lt;/p&gt;
+&lt;p&gt;从这个角度看，&lt;code&gt;blog-writer&lt;/code&gt; 和 &lt;code&gt;blog-style-suite&lt;/code&gt; 的演化，写到最后已经不只是博客写作的事了。&lt;/p&gt;
+&lt;p&gt;它更像一个很小的样本，说明一件事：当 AI 真正进入生产环境以后，最后比拼的往往不是一次回答的惊艳程度，而是谁先学会把上下文、成本、数据和流程放到同一张表里一起管理。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/84a06b5dc743f2e9bc6e788d53496a1261bc63ae&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;84a06b5&lt;/code&gt;，以 &lt;code&gt;blog-style-suite&lt;/code&gt; 工具替代维护 skill&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/19149f8360c8129857adac22120da526e021b76a&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;19149f8&lt;/code&gt;，suite 输出目录调整为 &lt;code&gt;scripts/blog-style-suite/data&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/66fbfb4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;66fbfb4&lt;/code&gt;，更新风格资产数据并精简 provider 配置&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/.agents/data/blog-writing/published.runtime.json&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: 当前生效 runtime&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/commands.py&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;commands.py&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/config.json&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;config.json&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;本次的内容比较多，拆分成系列文章：去年就有很多稿子是通过大模型写的，那会是自己写个大纲或者问题清单，然后AI出稿子，复制内容到本地 md 文档，填写头信息，标签信息、发布文章；近期 codex 用了很多，发现 codex 里面的联网搜索能力很强，那我是不是能写个 skill，将这些事情自动化，此时诞生了 skill blog-writer 的第一稿，我还想着让 AI 学习我以前文章的风格，这就导致 blog-writer 运行的时候，很费 token，后续我针对 blog-writer 进行了多个版本的优化，拆分了 数据模块，数据生成的模块，原本数据生成的模块还是独立的 skill，写着写着，我就发现，更适合做成 Python 项目，此时就有了 blog-style-suite，然后我又发现，训练风格数据，也是比较费 token，我就想着用本地的大模型，对接了本地的大模型，我又想到了对比下本地大模型和在线版本的区别，又对接了 minimax；blog-style-suite 和 blog-writer 的演化历史可以分析的 git 提价记录。顺带基于本地 blog-writer、blog-style-suite 的代码，可以讲讲里面的设计思路，是如何做到了节约 token，数据结构是如何设计的，核心的设计思路。Token 富裕完全能生吃历史文章，预处理能节约很多 token
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;最后一篇不再重复前两篇的结构，直接把 provider 分工、本地模型位置和最终判断讲透。&lt;/li&gt;
+&lt;li&gt;核心不是评测某个模型，而是解释为什么必须保留多 provider 和人工发布位。&lt;/li&gt;
+&lt;li&gt;保留“token 富裕可以生吃，预处理不是唯一答案”这个判断，避免把工程方案写成宗教立场。&lt;/li&gt;
+&lt;li&gt;结尾回收到更一般的 AI 工作流方法论，让这组文章不只停在博客工具本身。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>从手工复制到 blog-writer：我为什么一定要把博客写作流程做成 Skill</title>
+        <link>https://ttf248.life/p/why-i-turned-blog-writing-into-a-skill/</link>
+        <pubDate>Fri, 03 Apr 2026 00:01:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/why-i-turned-blog-writing-into-a-skill/</guid>
+        <description>&lt;p&gt;去年写不少 AI 稿子的时候，流程其实很土。先自己写个大纲，或者列一串问题，让大模型出稿，然后我再把内容复制到本地 &lt;code&gt;md&lt;/code&gt; 文件里，补 frontmatter，填标签，整理一下标题和 slug，最后再发布。&lt;/p&gt;
+&lt;p&gt;这套东西一开始完全够用。问题不在于它不能写，而在于它每次都要重新做一遍。&lt;/p&gt;
+&lt;p&gt;系列导航：这是第 1 篇。下一篇我会讲 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/blog-style-suite-splitting-style-data-and-token-cost/&#34; &gt;blog-style-suite：把风格数据、生成过程和 token 成本一起拆开&lt;/a&gt;，第三篇会落到 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/local-models-online-models-and-minimax-in-my-writing-pipeline/&#34; &gt;本地模型、在线模型和 Minimax 混用以后，工作流到底哪里变了&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;最早的痛点不是写不出来是重复劳动太多&#34;&gt;最早的痛点，不是写不出来，是重复劳动太多
+&lt;/h2&gt;&lt;p&gt;那会真正烦人的地方，不是正文生成，而是正文之外那一串机械动作：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;复制内容到本地文章目录&lt;/li&gt;
+&lt;li&gt;手工补标题、日期、标签、分类&lt;/li&gt;
+&lt;li&gt;检查 &lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;调整输出路径和 slug&lt;/li&gt;
+&lt;li&gt;最后再确认能不能发布&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;说白了，这里面很多动作根本不需要人脑。人真正该做的，是想清楚这篇文章的主线、判断和事实锚点。可现实是，体力活反而占了不少时间。&lt;/p&gt;
+&lt;p&gt;后来开始重度用 &lt;code&gt;Codex&lt;/code&gt;，我一个很直接的感受就是，联网搜索能力上来以后，很多以前要我自己做的补资料动作，其实也可以交给 agent。那问题就变了。&lt;/p&gt;
+&lt;p&gt;以前的问题是“AI 能不能帮我出稿”，后来变成了“我能不能把整套写稿流程交给 AI，而且它还得按我的方式做”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; 的第一稿，就是在这个时候长出来的。&lt;/p&gt;
+&lt;h2 id=&#34;skill-真正解决的不是文风而是流程稳定&#34;&gt;Skill 真正解决的，不是文风，而是流程稳定
+&lt;/h2&gt;&lt;p&gt;很多人一提到博客写作 skill，第一反应是“是不是为了学文风”。这只说对了一半。&lt;/p&gt;
+&lt;p&gt;文风当然重要，但更关键的是流程固化。&lt;/p&gt;
+&lt;p&gt;如果没有 skill，每次写文章都得重新交代一遍：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;去哪里读历史风格资产&lt;/li&gt;
+&lt;li&gt;哪些资料可以看，哪些资料不能看&lt;/li&gt;
+&lt;li&gt;什么时候要联网确认事实&lt;/li&gt;
+&lt;li&gt;frontmatter 里有哪些字段不能漏&lt;/li&gt;
+&lt;li&gt;输出路径怎么生成&lt;/li&gt;
+&lt;li&gt;如果是系列文章，内部 relref 怎么串起来&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这些要求单看都不复杂，但你每次都靠 prompt 现讲，模型就一定会有漂移。今天忘了补作者，明天忘了 &lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt;，后天又把系列路径猜错了。&lt;/p&gt;
+&lt;p&gt;所以 &lt;code&gt;blog-writer&lt;/code&gt; 的第一层价值，不是“会写文章”，而是把这些重复说了无数次的话，收进了 &lt;code&gt;SKILL.md&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;这也是我后来越来越认可 Skill 的原因。它不像普通 prompt 那样只管一轮对话，而是把一类任务的工作顺序、输入契约、输出契约都固定下来。对博客这种长期重复任务来说，这比“单次写得很惊艳”更重要。&lt;/p&gt;
+&lt;h2 id=&#34;但很快我又发现只靠一个-skill-不够&#34;&gt;但很快我又发现，只靠一个 skill 不够
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; 第一稿出来以后，我还想做一件事，让 AI 学习我以前文章的风格。&lt;/p&gt;
+&lt;p&gt;这件事听起来很合理，实际一做就会碰到第一个硬问题：&lt;strong&gt;太费 token 了。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;如果每次写文章，都把大量历史文章直接塞给模型，那当然最原始，也最“生吃”。只要 token 足够，很多事都能做。&lt;/p&gt;
+&lt;p&gt;但问题在于，真实使用里，token 不是无限的，延迟也不是免费的。&lt;/p&gt;
+&lt;p&gt;尤其是写稿这件事，本身就还要带大纲、事实资料、外部链接、系列关系、写作附记。如果历史文章也整批往里灌，很快就会出现两个结果：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;上下文越来越大，成本越来越高&lt;/li&gt;
+&lt;li&gt;真正和当前文章有关的信息，反而被淹没了&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;我后来回头看，这其实也是 &lt;code&gt;blog-writer&lt;/code&gt; 演化的分水岭。&lt;/p&gt;
+&lt;p&gt;第一阶段，重点是把“写稿动作”自动化。&lt;/p&gt;
+&lt;p&gt;第二阶段，重点就不再只是写，而是开始考虑：&lt;strong&gt;文风资产应该怎么压缩，哪些信息该预处理，哪些信息没必要在每次写稿时重新喂一遍。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这也是为什么后面我会把数据模块、数据生成模块慢慢拆出来。因为这已经不是一个单独 skill 能优雅承载的事情了。&lt;/p&gt;
+&lt;h2 id=&#34;从复制粘贴到真正意义上的写作工作流&#34;&gt;从复制粘贴，到真正意义上的写作工作流
+&lt;/h2&gt;&lt;p&gt;现在回头看，&lt;code&gt;blog-writer&lt;/code&gt; 的价值其实有三层。&lt;/p&gt;
+&lt;p&gt;第一层最直观，就是把过去手工做的发布动作自动化。&lt;/p&gt;
+&lt;p&gt;第二层更关键，是把博客写作这件事从“每次重新交代”变成“按固定契约执行”。这一步让输出稳定了很多。&lt;/p&gt;
+&lt;p&gt;第三层才是后面慢慢长出来的，也就是把风格、资料、写稿、落盘这几个阶段拆开，不再把它们混成一次巨大的上下文调用。&lt;/p&gt;
+&lt;p&gt;我觉得很多 AI 工作流，到最后都会走到这一步。&lt;/p&gt;
+&lt;p&gt;最开始大家都靠一个大 prompt 硬顶。能跑，甚至也能跑出一些不错的结果。但只要任务开始重复、边界开始复杂、历史资产开始增多，迟早会发现，单次 prompt 的方式很难维护。&lt;/p&gt;
+&lt;p&gt;你总得回答下面这些问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;什么东西该固化成流程&lt;/li&gt;
+&lt;li&gt;什么东西该提炼成数据&lt;/li&gt;
+&lt;li&gt;什么东西该放在运行时读取&lt;/li&gt;
+&lt;li&gt;什么东西没必要每次都重新喂&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; 的第一稿，解决的是“把写稿动作从手工复制里解放出来”。后面的 &lt;code&gt;blog-style-suite&lt;/code&gt;，解决的才是更难的一层：&lt;strong&gt;如何让风格资产变得可维护，而且别把 token 烧得太快。&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;这部分我放到下一篇细讲。&lt;/p&gt;
+&lt;p&gt;文末再说一句我的判断。很多人现在谈 AI 写作，还停留在“让模型帮我写一篇文章”这个层面。但真正有用的，往往不是那一篇文章，而是你能不能把自己重复做的那套动作，沉淀成一条稳定工作流。&lt;/p&gt;
+&lt;p&gt;从这个角度看，&lt;code&gt;blog-writer&lt;/code&gt; 本质上不是一个“写作提示词”，而是一个写作工种。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/991536a237d04aba7c44dec501b3d98c644040c8&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;991536a&lt;/code&gt;，&lt;code&gt;blog-writer&lt;/code&gt; 初版 skill 提交&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/1d490022fbbec854c98bd2e054b0056775267431&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: commit &lt;code&gt;1d49002&lt;/code&gt;，风格资产从 &lt;code&gt;blog-writer&lt;/code&gt; 中拆出&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/.agents/skills/blog-writer/SKILL.md&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;blog-writer&lt;/code&gt; 当前 skill 说明&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/blob/dev/.agents/skills/blog-writer/scripts/write_post.py&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;notebook: &lt;code&gt;write_post.py&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;本次的内容比较多，拆分成系列文章：去年就有很多稿子是通过大模型写的，那会是自己写个大纲或者问题清单，然后AI出稿子，复制内容到本地 md 文档，填写头信息，标签信息、发布文章；近期 codex 用了很多，发现 codex 里面的联网搜索能力很强，那我是不是能写个 skill，将这些事情自动化，此时诞生了 skill blog-writer 的第一稿，我还想着让 AI 学习我以前文章的风格，这就导致 blog-writer 运行的时候，很费 token，后续我针对 blog-writer 进行了多个版本的优化，拆分了 数据模块，数据生成的模块，原本数据生成的模块还是独立的 skill，写着写着，我就发现，更适合做成 Python 项目，此时就有了 blog-style-suite，然后我又发现，训练风格数据，也是比较费 token，我就想着用本地的大模型，对接了本地的大模型，我又想到了对比下本地大模型和在线版本的区别，又对接了 minimax；blog-style-suite 和 blog-writer 的演化历史可以分析的 git 提价记录。顺带基于本地 blog-writer、blog-style-suite 的代码，可以讲讲里面的设计思路，是如何做到了节约 token，数据结构是如何设计的，核心的设计思路。Token 富裕完全能生吃历史文章，预处理能节约很多 token
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第一篇先不急着讲实现细节，先把最初的人工流程和 &lt;code&gt;blog-writer&lt;/code&gt; 的诞生背景讲清楚。&lt;/li&gt;
+&lt;li&gt;主线刻意压在“重复劳动很多”与“Skill 解决流程稳定”这两个问题上，而不是泛泛谈 AI 写作。&lt;/li&gt;
+&lt;li&gt;保留“token 富裕可以生吃历史文章，但现实工作流不能一直这么干”这个判断，给后两篇埋钩子。&lt;/li&gt;
+&lt;li&gt;参考资料优先引用仓库提交和脚本入口，和正文的演化叙事保持一致。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>弱模型也有弱模型的活：Minimax 与本地 12B 的现实价值</title>
         <link>https://ttf248.life/p/minimax-and-local-12b-realistic-value/</link>
         <pubDate>Thu, 02 Apr 2026 22:05:00 +0800</pubDate>
