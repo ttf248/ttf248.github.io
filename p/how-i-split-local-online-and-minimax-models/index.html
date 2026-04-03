@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="翻了一圈现在仓库里的配置，我反而更确定一件事：这套东西最后拼的不是单个模型有多强，而是每一层到底该让谁来承担成本。\n最明显的一个信号就是，当前生效的 published.runtime.json 还是 2026 年 4 月 2 日生成的 minimax-m2，但 2026 年 4 月 3 日 16:38 的 5f17088 已经把 blog-style-suite 的默认 provider 切到了本地 LM Studio 里的 gemma-4-26b-a4b。这看起来像前后不一致，其实不是，它恰好说明了这条流水线开始有了分工。\n">
+<title>AI 写博客这件事，后来还是得做成工程（三）：本地模型、在线模型和 Minimax 最后怎么分工</title>
+
+<link rel='canonical' href='https://ttf248.life/p/how-i-split-local-online-and-minimax-models/'>
+
+<link rel="stylesheet" href="/scss/style.min.fbd0998b2633f387e0fec8f2dd210bdee833d70fb44445168ccda6d413af0baf.css"><meta property='og:title' content="AI 写博客这件事，后来还是得做成工程（三）：本地模型、在线模型和 Minimax 最后怎么分工">
+<meta property='og:description' content="翻了一圈现在仓库里的配置，我反而更确定一件事：这套东西最后拼的不是单个模型有多强，而是每一层到底该让谁来承担成本。\n最明显的一个信号就是，当前生效的 published.runtime.json 还是 2026 年 4 月 2 日生成的 minimax-m2，但 2026 年 4 月 3 日 16:38 的 5f17088 已经把 blog-style-suite 的默认 provider 切到了本地 LM Studio 里的 gemma-4-26b-a4b。这看起来像前后不一致，其实不是，它恰好说明了这条流水线开始有了分工。\n">
+<meta property='og:url' content='https://ttf248.life/p/how-i-split-local-online-and-minimax-models/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:tag' content='ai' /><meta property='article:tag' content='编程' /><meta property='article:tag' content='minimax' /><meta property='article:tag' content='本地模型' /><meta property='article:tag' content='blog-style-suite' /><meta property='article:published_time' content='2026-04-03T20:06:02&#43;08:00'/><meta property='article:modified_time' content='2026-04-03T17:04:02&#43;08:00'/>
+<meta name="twitter:title" content="AI 写博客这件事，后来还是得做成工程（三）：本地模型、在线模型和 Minimax 最后怎么分工">
+<meta name="twitter:description" content="翻了一圈现在仓库里的配置，我反而更确定一件事：这套东西最后拼的不是单个模型有多强，而是每一层到底该让谁来承担成本。\n最明显的一个信号就是，当前生效的 published.runtime.json 还是 2026 年 4 月 2 日生成的 minimax-m2，但 2026 年 4 月 3 日 16:38 的 5f17088 已经把 blog-style-suite 的默认 provider 切到了本地 LM Studio 里的 gemma-4-26b-a4b。这看起来像前后不一致，其实不是，它恰好说明了这条流水线开始有了分工。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">向叔记事簿</a></h1>
+            <h2 class="site-description">拾光记事，岁月有痕</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>首页</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" selected>中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>暗色模式</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#训练风格数据不值得每一步都烧在线模型">训练风格数据，不值得每一步都烧在线模型</a></li>
+    <li><a href="#本地模型更适合脏活重活和反复试错">本地模型更适合脏活、重活和反复试错</a></li>
+    <li><a href="#在线模型更适合收口不适合包办一切">在线模型更适合收口，不适合包办一切</a></li>
+    <li><a href="#minimax-的意义不只是多接了一个-provider">Minimax 的意义，不只是多接了一个 provider</a></li>
+    <li><a href="#真正的分工不是按模型强弱分是按任务类型分">真正的分工，不是按模型强弱分，是按任务类型分</a>
+      <ol>
+        <li><a href="#规则和硬约束">规则和硬约束</a></li>
+        <li><a href="#风格数据生产">风格数据生产</a></li>
+        <li><a href="#最终写稿和事实收口">最终写稿和事实收口</a></li>
+      </ol>
+    </li>
+    <li><a href="#到最后最值钱的不是模型而是边界清楚">到最后，最值钱的不是模型，而是边界清楚</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    <article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0.92;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 1;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/computer/" >
+                计算机
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/how-i-split-local-online-and-minimax-models/">AI 写博客这件事，后来还是得做成工程（三）：本地模型、在线模型和 Minimax 最后怎么分工</a>
+        </h2>
+    
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月03日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            阅读约 11 分钟
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>翻了一圈现在仓库里的配置，我反而更确定一件事：这套东西最后拼的不是单个模型有多强，而是每一层到底该让谁来承担成本。</p>
+<p>最明显的一个信号就是，当前生效的 <code>published.runtime.json</code> 还是 2026 年 4 月 2 日生成的 <code>minimax-m2</code>，但 2026 年 4 月 3 日 16:38 的 <code>5f17088</code> 已经把 <code>blog-style-suite</code> 的默认 provider 切到了本地 <code>LM Studio</code> 里的 <code>gemma-4-26b-a4b</code>。这看起来像前后不一致，其实不是，它恰好说明了这条流水线开始有了分工。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <p>这组文章到这里，前两篇已经把边界铺开了。<a class="link" href="/p/why-blog-writer-had-to-exist/" >第一篇</a> 讲的是 <code>blog-writer</code> 为什么会长出来，<a class="link" href="/p/how-blog-style-suite-split-style-and-token-cost/" >第二篇</a> 讲的是 <code>blog-style-suite</code> 怎么把风格学习和 token 成本拆开。最后这一篇，就收在最现实的问题上：本地模型、在线模型、<code>Minimax</code>，到底该放在哪个工位上。</p>
+<h2 id="训练风格数据不值得每一步都烧在线模型">训练风格数据，不值得每一步都烧在线模型
+</h2><p>风格数据这件事，一旦开始认真做，token 很快就会变成现实问题。</p>
+<p>不是你想不想省，而是你如果不分工，这套东西根本跑不久。</p>
+<p>以前最容易出现的误区，就是让一个在线模型把所有活都包了。</p>
+<ul>
+<li>扫历史文章</li>
+<li>做筛选</li>
+<li>做归类</li>
+<li>评分</li>
+<li>抽样本</li>
+<li>压风格</li>
+<li>最后再去写稿</li>
+</ul>
+<p>这么干的最大问题，不是“模型不够强”，而是每一步都在烧同一档成本。</p>
+<p>现在回头看，真正合理的做法应该是反过来想：哪些步骤必须在线，哪些步骤其实应该尽量本地化，哪些步骤甚至根本不该交给模型。</p>
+<p>只要这个边界不清楚，再强的模型进来，最后也只是在帮你重复做一堆本来能预处理掉的活。</p>
+<h2 id="本地模型更适合脏活重活和反复试错">本地模型更适合脏活、重活和反复试错
+</h2><p>我现在越来越愿意把本地模型定义成生产侧的体力层。</p>
+<p>它不一定最强，也不一定每次都最漂亮，但它特别适合承担这些事情：</p>
+<ul>
+<li>反复试跑的构建</li>
+<li>风格数据的多轮压缩实验</li>
+<li>配置改动后的重新扫描</li>
+<li>对已有结构做低风险重算</li>
+</ul>
+<p>这类活的共同点很明显。</p>
+<p>不是单次价值极高，而是要反复跑、能容忍试错、并且最好别每一轮都重新付高价。</p>
+<p>当前 <code>scripts/blog-style-suite/config.json</code> 已经切到了 <code>lm-studio-gemma4</code>，这本身就说明判断在变。不是说本地 <code>gemma</code> 一定比在线模型更强，而是生产侧这条链路，终于开始优先考虑“跑得起、跑得勤、能反复改”。</p>
+<p>这一点，其实和我前面写过的 <a class="link" href="/p/weaker-models-shouldnt-do-frontier-work/" >弱模型别硬上强活</a> 是同一个逻辑。</p>
+<p>本地模型不一定适合总包复杂写稿，但很适合接那些脏活、重活、批量活。风格数据的预处理，本来就更像这一类任务。</p>
+<h2 id="在线模型更适合收口不适合包办一切">在线模型更适合收口，不适合包办一切
+</h2><p>说本地模型适合生产侧，不等于在线模型就没价值了。</p>
+<p>在线模型真正值钱的地方，恰恰是最后那一下收口。</p>
+<p>比如：</p>
+<ul>
+<li>根据最新资料补事实</li>
+<li>在更大上下文里整理论证</li>
+<li>处理需要联网核验的时间敏感信息</li>
+<li>把已经准备好的结构化风格资产，转成一篇能发出来的文章</li>
+</ul>
+<p>这些动作对表达质量、事实整合、上下文理解要求更高，在线模型放在这里更值。</p>
+<p>也就是说，强模型更像总装线最后那几道工序。它不是不可以往前多干点，但如果你让它从头扫到尾，整个成本结构很快就会走形。</p>
+<p>这也是为什么 <code>blog-writer</code> 在设计上只读发布位 <code>published.runtime.json</code>，而不是写稿时再去切 provider、再去回扫 suite 目录。消费侧越轻，越适合让更强的模型专心把文章收好。</p>
+<h2 id="minimax-的意义不只是多接了一个-provider">Minimax 的意义，不只是多接了一个 provider
+</h2><p>很多人看到 <code>Minimax</code>，第一反应可能是：无非又多接了一个模型。</p>
+<p>我觉得不是。</p>
+<p><code>Minimax</code> 真正有价值的地方，是它把“多 provider 输出，同一发布契约消费”这条路走通了。</p>
+<p>2026 年 4 月 2 日 10:18 的 <code>9f15199</code> 把 <code>blog-style-suite</code> 改成了多模型配置，输出按 provider 隔离。后面 README 和 runtime 结构也一直在强调一件事：suite 可以生成很多份结果，但真正生效的只有人工挑出来的 <code>published.runtime.json</code>。</p>
+<p>这个边界特别重要。</p>
+<p>因为一旦边界明确了，<code>Minimax</code> 的角色就不再是“必须绑定在写稿流程里”，而变成了：</p>
+<ul>
+<li>它可以参与生产侧的对比</li>
+<li>可以用来生成一版 runtime</li>
+<li>可以和本地模型产物横向比较</li>
+<li>最后由人工决定哪一版发布</li>
+</ul>
+<p>这就把 provider 从“系统依赖”变成了“可替换部件”。</p>
+<p>我觉得这是 <code>Minimax</code> 在这套工程里最有意思的意义。它不是来统治整条链路的，它是来验证这条链路到底有没有把接口收干净。</p>
+<h2 id="真正的分工不是按模型强弱分是按任务类型分">真正的分工，不是按模型强弱分，是按任务类型分
+</h2><p>我现在更认同一种很土，但很管用的划分法。</p>
+<h3 id="规则和硬约束">规则和硬约束
+</h3><p>交给本地脚本。</p>
+<p>能用 <code>scanner.py</code>、<code>write_post.py</code>、<code>write_post_series.py</code> 这种确定性工具解决的，就别让模型掺和。</p>
+<h3 id="风格数据生产">风格数据生产
+</h3><p>优先交给本地模型或成本更低的 provider。</p>
+<p>因为这里最重要的是可重复、可试错、可缓存，不是单次输出必须最华丽。</p>
+<h3 id="最终写稿和事实收口">最终写稿和事实收口
+</h3><p>交给更适合长上下文整合、表达收束、联网补事实的模型。</p>
+<p>这一层才是在线模型最值得花钱的地方。</p>
+<p>这么一拆，很多原来纠结的问题反而没那么复杂了。你不需要每天争论“到底哪个模型最强”，你只需要问一句：这个任务属于哪一层。</p>
+<h2 id="到最后最值钱的不是模型而是边界清楚">到最后，最值钱的不是模型，而是边界清楚
+</h2><p>第三篇我就收在这里。</p>
+<p><code>blog-writer</code> 和 <code>blog-style-suite</code> 这套东西一路演化下来，我觉得最值钱的，不是又接了谁、又换了谁、又试了哪个 provider。</p>
+<p>最值钱的是边界终于越来越清楚了。</p>
+<ul>
+<li><code>blog-writer</code> 管消费侧</li>
+<li><code>blog-style-suite</code> 管生产侧</li>
+<li><code>published.runtime.json</code> 是发布位</li>
+<li>本地模型更适合反复跑的脏活和重活</li>
+<li>在线模型更适合最后的收口</li>
+<li><code>Minimax</code> 这类在线 provider 更像可替换部件，而不是系统中枢</li>
+</ul>
+<p>边界一清楚，整个工作流就顺了。</p>
+<p>你不会再指望一个模型包打天下，也不会再把每一步都堆到最贵那一层去做。到最后，这件事看起来是在选模型，实际上是在给不同类型的任务安排工位。</p>
+<p>说白了，单点更强当然好。</p>
+<p>但长期跑下来，边界清楚，往往比单点更强更重要。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li>仓库提交：<a class="link" href="https://github.com/ttf248/notebook/commit/9f1519967981c5eef7bd1eb407b0406ac542ebd0"  target="_blank" rel="noopener"
+    ><code>9f1519967981c5eef7bd1eb407b0406ac542ebd0</code></a></li>
+<li>仓库提交：<a class="link" href="https://github.com/ttf248/notebook/commit/5f17088391ee858b88fc50df884bc0103ff0b3c1"  target="_blank" rel="noopener"
+    ><code>5f17088391ee858b88fc50df884bc0103ff0b3c1</code></a></li>
+<li>仓库文件：<code>scripts/blog-style-suite/config.json</code></li>
+<li>生效运行时：<code>.agents/data/blog-writing/published.runtime.json</code></li>
+<li>相关旧文：<a class="link" href="/p/a-long-period-of-deep-ai-programming/" >重度AI编程的一段日子</a></li>
+<li>相关旧文：<a class="link" href="/p/ultimately-its-returning-to-domestic-models/" >终归还是回到国产模型</a></li>
+<li>相关旧文：<a class="link" href="/p/weaker-models-shouldnt-do-frontier-work/" >弱模型别硬上强活</a></li>
+</ul>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><pre><code class="language-text">$blog-writer 本次的内容比较多，拆分成系列文章：去年就有很多稿子是通过大模型写的，那会是自己写个大纲或者问题清单，然后AI出稿子，复制内容到本地 md 文档，填写头信息，标签信息、发布文章；近期 codex 用了很多，发现 codex 里面的联网搜索能力很强，那我是不是能写个 skill，将这些事情自动化，此时诞生了 skill blog-writer 的第一稿，我还想着让 AI 学习我以前文章的风格，这就导致 blog-writer 运行的时候，很费 token，后续我针对 blog-writer 进行了多个版本的优化，拆分了 数据模块，数据生成的模块，原本数据生成的模块还是独立的 skill，写着写着，我就发现，更适合做成 Python 项目，此时就有了 blog-style-suite，然后我又发现，训练风格数据，也是比较费 token，我就想着用本地的大模型，对接了本地的大模型，我又想到了对比下本地大模型和在线版本的区别，又对接了 minimax；blog-style-suite 和 blog-writer 的演化历史可以分析的 git 提价记录。顺带基于本地 blog-writer、blog-style-suite 的代码，可以讲讲里面的设计思路，是如何做到了节约 token，数据结构是如何设计的，核心的设计思路。Token 富裕完全能生吃历史文章，预处理能节约很多 token
+</code></pre>
+<h3 id="写作思路摘要">写作思路摘要
+</h3><ul>
+<li>第三篇不再重复讲架构，而是把“模型分工”这个现实问题单独收口。</li>
+<li>直接用当前仓库里 <code>published.runtime.json</code> 还是 <code>minimax-m2</code>、<code>config.json</code> 已切到本地 <code>gemma4</code> 这个事实开篇，减少空话。</li>
+<li>重点不是证明谁更强，而是说明为什么不同任务该由不同成本层来承担。</li>
+<li>把 <code>Minimax</code> 放在“可替换 provider”这个位置上讲，是为了把它的意义拉回工程边界，而不是模型榜单。</li>
+<li>结尾回到“边界清楚比单点更强更重要”这个总判断，作为整组文章的收口。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/ai-inspiration-hub/">AI 灵感碰撞坊</a>
+        
+            <a href="/tags/ai/">ai</a>
+        
+            <a href="/tags/programming/">编程</a>
+        
+            <a href="/tags/minimax/">Minimax</a>
+        
+            <a href="/tags/%E6%9C%AC%E5%9C%B0%E6%A8%A1%E5%9E%8B/">本地模型</a>
+        
+            <a href="/tags/blog-style-suite/">Blog-Style-Suite</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 2026年04月03日 17:04
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <h2 class="section-title">相关文章</h2>
+    <div class="related-content__list">
+        
+            <article class="related-content__item">
+                <a href="/p/how-blog-style-suite-split-style-and-token-cost/" class="related-content__link">
+                    <h3 class="related-content__title">AI 写博客这件事，后来还是得做成工程（二）：blog-style-suite 怎么把风格学习和 token 成本拆开</h3>
+                    <time class="related-content__date" datetime='2026-04-03T20:02:02&#43;08:00'>2026年04月03日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/why-blog-writer-had-to-exist/" class="related-content__link">
+                    <h3 class="related-content__title">AI 写博客这件事，后来还是得做成工程（一）：blog-writer 为什么会长出来</h3>
+                    <time class="related-content__date" datetime='2026-04-03T20:58:02&#43;08:00'>2026年04月03日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/weaker-models-shouldnt-do-frontier-work/" class="related-content__link">
+                    <h3 class="related-content__title">弱模型别硬上强活</h3>
+                    <time class="related-content__date" datetime='2026-04-02T22:05:00&#43;08:00'>2026年04月02日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/next-8-ai-topics-after-reviewing-two-years-of-posts/" class="related-content__link">
+                    <h3 class="related-content__title">复盘近两年 AI 文章后，我觉得接下来该写这 8 个选题</h3>
+                    <time class="related-content__date" datetime='2026-03-30T22:20:00&#43;08:00'>2026年03月30日</time>
+                </a>
+            </article>
+        
+            <article class="related-content__item">
+                <a href="/p/skill-is-an-agent-handbook/" class="related-content__link">
+                    <h3 class="related-content__title">Skill 不是新提示词，它是给 agent 配工种手册</h3>
+                    <time class="related-content__date" datetime='2026-04-02T22:43:16&#43;08:00'>2026年04月02日</time>
+                </a>
+            </article>
+        
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
