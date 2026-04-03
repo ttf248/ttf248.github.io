@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 
-<link rel="stylesheet" href="/scss/style.min.612bd07ca8fd58954c347db33072eb579a90f5181e48e59b81cf35148524b55d.css"><meta property='og:title' content="深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染">
+<link rel="stylesheet" href="/scss/style.min.435f5ce4ccdfa85e4d0dc71bf57c9ee31d1516bcb3aaa5418671229e997e195f.css"><meta property='og:title' content="深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染">
 <meta property='og:description' content="本記事では、C++開発における unordered_map::find がヒットした後にオブジェクトフィールドが一致しないという奇妙な現象を分析しています。原因は、関数内部で static lambda を定義し、参照キャプチャによってローカル変数を捕捉することです。これにより、最初の呼び出し後には幽霊参照が発生し、その後の呼び出しで未定義動作（UB）を引き起こし、キャッシュデータを汚染します。この問題を解決するには、明示的なパラメータの渡しを介して暗黙のキャプチャを置き換え、ライフサイクルの管理を標準化し、Sanitizerツールを使用することを推奨します。\n">
 <meta property='og:url' content='https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 <meta property='og:site_name' content='向叔の手帳'>
@@ -688,44 +688,64 @@ patch(it, current_input);
     
 
 <aside class="related-content--wrapper">
-    <h2 class="section-title">関連するコンテンツ</h2>
-    <div class="related-content__list">
-        
-            <article class="related-content__item">
-                <a href="/ja/p/cross-machine-computation-time-difference/" class="related-content__link">
-                    <h3 class="related-content__title">マシン間計算の時間差 (Mashinkan tenkiho no jikanusa)</h3>
-                    <time class="related-content__date" datetime='2025-06-19T09:45:36&#43;08:00'>2025年06月19日</time>
-                </a>
-            </article>
-        
-            <article class="related-content__item">
-                <a href="/ja/p/memory-layout-and-binary-compatibility/" class="related-content__link">
-                    <h3 class="related-content__title">メモリレイアウトとバイナリ互換性</h3>
-                    <time class="related-content__date" datetime='2025-06-10T18:53:02&#43;08:00'>2025年06月10日</time>
-                </a>
-            </article>
-        
-            <article class="related-content__item">
-                <a href="/ja/p/linux-backend-slow-string-processing/" class="related-content__link">
-                    <h3 class="related-content__title">Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</h3>
-                    <time class="related-content__date" datetime='2024-11-13T19:42:59&#43;08:00'>2024年11月13日</time>
-                </a>
-            </article>
-        
-            <article class="related-content__item">
-                <a href="/ja/p/cpp-lambda-parameter-lifetime/" class="related-content__link">
-                    <h3 class="related-content__title">C&#43;&#43;におけるラムダ式のパラメータのライフタイムについて</h3>
-                    <time class="related-content__date" datetime='2024-11-13T19:23:02&#43;08:00'>2024年11月13日</time>
-                </a>
-            </article>
-        
-            <article class="related-content__item">
-                <a href="/ja/p/gcc-upgrade-causes-program-crash-code-irregularities/" class="related-content__link">
-                    <h3 class="related-content__title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました：コードの非規整性による問題点</h3>
-                    <time class="related-content__date" datetime='2024-03-10T23:19:06&#43;08:00'>2024年03月10日</time>
-                </a>
-            </article>
-        
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">関連するコンテンツ</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/cross-machine-computation-time-difference/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">マシン間計算の時間差 (Mashinkan tenkiho no jikanusa)</h3>
+                            <time class="related-content__date" datetime='2025-06-19T09:45:36&#43;08:00'>2025年06月19日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/memory-layout-and-binary-compatibility/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">メモリレイアウトとバイナリ互換性</h3>
+                            <time class="related-content__date" datetime='2025-06-10T18:53:02&#43;08:00'>2025年06月10日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/linux-backend-slow-string-processing/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</h3>
+                            <time class="related-content__date" datetime='2024-11-13T19:42:59&#43;08:00'>2024年11月13日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/cpp-lambda-parameter-lifetime/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">C&#43;&#43;におけるラムダ式のパラメータのライフタイムについて</h3>
+                            <time class="related-content__date" datetime='2024-11-13T19:23:02&#43;08:00'>2024年11月13日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/gcc-upgrade-causes-program-crash-code-irregularities/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました：コードの非規整性による問題点</h3>
+                            <time class="related-content__date" datetime='2024-03-10T23:19:06&#43;08:00'>2024年03月10日</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
     </div>
 </aside>
 
