@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>3060 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/3060/</link>
+        <description>Recent content in 3060 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 09 Apr 2026 00:33:23 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/3060/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>谷歌这次把 Gemma 4 放开了（二）</title>
+        <link>https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/</link>
+        <pubDate>Wed, 08 Apr 2026 23:52:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/</guid>
+        <description>&lt;p&gt;如果只看榜单，最容易心动的肯定是 &lt;code&gt;31B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;但真把机器搬出来，还是那台没升级的 &lt;code&gt;RTX 3060 12GB&lt;/code&gt;，判断马上就会变。怎么说呢，本地部署这件事，最后拼的不是谁最风光，而是谁最像能长期相处的那个。对我来说，这次真正值得先跑的，不是 &lt;code&gt;31B&lt;/code&gt;，而是 &lt;code&gt;26B A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;上一篇 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-models-and-license/&#34; &gt;谷歌这次把 Gemma 4 放开了（一）：先别急着跑本地，型号和协议得先看明白&lt;/a&gt; 把发布和协议讲完了。当前这一篇就只说本地体验本身；最后一篇接着写 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/&#34; &gt;谷歌这次把 Gemma 4 放开了（三）：显存不够为什么会断崖，Mac 为什么能兜底却快不起来&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;为什么我先跑-26b-a4b&#34;&gt;为什么我先跑 &lt;code&gt;26B A4B&lt;/code&gt;
+&lt;/h2&gt;&lt;p&gt;原因其实很土，就是硬件现实。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;31B&lt;/code&gt; 当然强，官方榜单和社区第一波反馈都挺猛。但你把它放到 &lt;code&gt;3060 12GB&lt;/code&gt; 这种机器上，问题马上就不再是“它强不强”，而是“它值不值得你等”。一旦模型和 cache 往系统内存回退，速度很容易直接塌掉，这件事我放到第三篇详细讲。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;26B A4B&lt;/code&gt; 不一样。&lt;/p&gt;
+&lt;p&gt;它虽然总参数是 &lt;code&gt;25.2B&lt;/code&gt;，但每个 token 真正激活的大约只有 &lt;code&gt;3.8B&lt;/code&gt;。说白了，它就是这次 Gemma 4 里最像“专门留给本地玩家”的那档。&lt;/p&gt;
+&lt;p&gt;所以如果你的机器和我差不多，还是消费级老卡，判断可以直接一点：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;想看榜单，上 &lt;code&gt;31B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;想真本地长期用，先看 &lt;code&gt;26B A4B&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;五角星这题这次终于有人看懂我在挖坑&#34;&gt;五角星这题，这次终于有人看懂我在挖坑
+&lt;/h2&gt;&lt;p&gt;我自己一直有个很土的测试题，让模型写一段 &lt;code&gt;C++&lt;/code&gt; 代码，在控制台输出五角星。&lt;/p&gt;
+&lt;p&gt;这题看起来像玩笑，实际挺坏。因为很多模型会把它理解成一个纯数学绘图题，接着就开始上坐标、三角函数、循环，最后在纯文本控制台里输出一坨根本不能看的字符。&lt;/p&gt;
+&lt;p&gt;去年很多小参数开源模型，基本都死在这里。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 这次第一反应，反而让我很意外。它没急着装懂，而是先识别约束，给出了这段判断：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;说白了，它先看懂了题目背后的环境限制。控制台不是画布，字符网格也不是像素网格。你要先把“怎么稳定给出一个五角星”想明白，再谈数学绘制。&lt;/p&gt;
+&lt;p&gt;然后它第一版直接给了一个硬编码的五角星字符串。&lt;/p&gt;
+&lt;p&gt;这个动作特别对味。不是为了秀推导，而是先把题做对。&lt;/p&gt;
+&lt;h2 id=&#34;更让我意外的是它还能继续往下走&#34;&gt;更让我意外的是，它还能继续往下走
+&lt;/h2&gt;&lt;p&gt;如果只是停在 ASCII Art，这题还只能算它识别了陷阱。&lt;/p&gt;
+&lt;p&gt;真正让我高看一眼的是，后面我继续追着要求它用数学计算，它也没有露馅，而是能顺着往下做，把几何关系映射到字符网格，最后把五角星算出来。&lt;/p&gt;
+&lt;p&gt;这说明的不是“它会写一段代码”，而是它知道这题其实分两层：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;第一层，控制台里最稳的答案是什么&lt;/li&gt;
+&lt;li&gt;第二层，如果你非要做计算，怎么把几何问题降到字符网格上&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;以前很多本地小模型一上来就冲第二层，最后第一层都没做好。&lt;code&gt;Gemma 4&lt;/code&gt; 这次反过来了，先把边界认出来，再决定怎么解。&lt;/p&gt;
+&lt;p&gt;我觉得这件事比单独一项 benchmark 分数更值钱。&lt;/p&gt;
+&lt;h2 id=&#34;这次-coding-提升不只是更聪明了&#34;&gt;这次 coding 提升，不只是“更聪明了”
+&lt;/h2&gt;&lt;p&gt;五角星这题之所以好用，就是因为它不只是考语法。&lt;/p&gt;
+&lt;p&gt;它真正考的是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;能不能先理解输出环境&lt;/li&gt;
+&lt;li&gt;能不能承认直觉解法不合适&lt;/li&gt;
+&lt;li&gt;能不能在“最优展示效果”和“用户强制要求计算”之间切换&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这种题一旦能做对，说明模型开始更像一个会处理现实约束的开发助手，而不是只会补全代码片段。&lt;/p&gt;
+&lt;p&gt;这也是为什么我对 &lt;code&gt;Gemma 4&lt;/code&gt; 的第一印象会比去年那批小参数开源模型好很多。去年很多模型属于能聊天、能补全、能凑合，但一碰到这种稍微带点边界感的问题，就容易露底。&lt;/p&gt;
+&lt;p&gt;这次谷歌起码把这个短板补上了。&lt;/p&gt;
+&lt;h2 id=&#34;翻译这条线反而不能简单说gemma-4-全面接班&#34;&gt;翻译这条线，反而不能简单说“Gemma 4 全面接班”
+&lt;/h2&gt;&lt;p&gt;你前面提到一个点很关键，以前常拿 &lt;code&gt;Gemma&lt;/code&gt; 跑本地翻译。&lt;/p&gt;
+&lt;p&gt;这件事到 &lt;code&gt;Gemma 4&lt;/code&gt; 这里，其实没那么线性。因为谷歌在 2026 年 2 月单独发了 &lt;code&gt;TranslateGemma&lt;/code&gt;，而且还是建在 &lt;code&gt;Gemma 3&lt;/code&gt; 那套尺寸上。&lt;/p&gt;
+&lt;p&gt;这意味着什么？&lt;/p&gt;
+&lt;p&gt;意味着如果你现成的本地翻译链路已经跑顺了，短期内不一定非要全部切到 &lt;code&gt;Gemma 4&lt;/code&gt;。尤其是那种目标特别单一、只想稳定多语言转换的场景，专门的翻译模型还是有它的价值。&lt;/p&gt;
+&lt;p&gt;但如果你想要的是一套本地模型，尽量兼顾翻译、问答、代码和一般文本任务，那 &lt;code&gt;26B A4B&lt;/code&gt; 这种更全能的路线就很顺。&lt;/p&gt;
+&lt;p&gt;它未必是最专的，但它更像现实世界里“只想先跑起来一个够用主力模型”的选择。&lt;/p&gt;
+&lt;h2 id=&#34;为什么我不想在第二篇里继续吹-31b&#34;&gt;为什么我不想在第二篇里继续吹 &lt;code&gt;31B&lt;/code&gt;
+&lt;/h2&gt;&lt;p&gt;不是因为 &lt;code&gt;31B&lt;/code&gt; 不行，恰恰相反，它太行了，所以很容易把注意力带偏。&lt;/p&gt;
+&lt;p&gt;你一旦一直盯着 &lt;code&gt;31B&lt;/code&gt; 的榜单表现看，很容易把这篇写成“强模型真强”。但本地部署最怕的就是这种话。因为真正决定你每天会不会继续用它的，不是榜单，而是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;启动是不是太慢&lt;/li&gt;
+&lt;li&gt;回答是不是掉速严重&lt;/li&gt;
+&lt;li&gt;长上下文是不是很快就拖垮体验&lt;/li&gt;
+&lt;li&gt;自己机器到底撑不撑得住&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在 &lt;code&gt;3060 12GB&lt;/code&gt; 这种机器上，这些现实问题比榜单重要多了。&lt;/p&gt;
+&lt;p&gt;所以我对第二篇的收口很简单。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;31B&lt;/code&gt; 值得看，&lt;code&gt;26B A4B&lt;/code&gt; 值得用。对本地玩家来说，这两句话不是一回事。&lt;/p&gt;
+&lt;h2 id=&#34;我的本地第一结论&#34;&gt;我的本地第一结论
+&lt;/h2&gt;&lt;p&gt;如果让我用一句话概括这次实测感受，那就是：&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 终于开始像一个会看场景的本地模型了。&lt;/p&gt;
+&lt;p&gt;尤其是 &lt;code&gt;26B A4B&lt;/code&gt;。它不是那种最能拿来晒榜单的型号，但在老机器、消费级显卡、本地长期使用这些现实约束下，它反而更像真正的主力选择。&lt;/p&gt;
+&lt;p&gt;至少这次五角星测试，谷歌是过关了。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://huggingface.co/google/gemma-4-26B-A4B-it&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;google/gemma-4-26B-A4B-it on Hugging Face&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.googleblog.com/introducing-gemma3/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3: The Developer Guide&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/translategemma/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;TranslateGemma: A new family of open translation models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://foodtruckbench.com/blog/gemma-4-31b&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 31B on FoodTruck Bench&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第二篇只保留本地体验，不再替第一篇做总述，也不替第三篇讲显存原理。&lt;/li&gt;
+&lt;li&gt;先给出“为什么先跑 26B A4B”的硬判断，再展开五角星测试。&lt;/li&gt;
+&lt;li&gt;五角星题被当成主轴，是因为它比跑分更能说明 coding 场景里的边界感。&lt;/li&gt;
+&lt;li&gt;翻译任务单独收一节，避免把 &lt;code&gt;Gemma 4&lt;/code&gt; 写成对所有旧流程的线性接班。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

@@ -6,6 +6,485 @@
         <description>Recent content in ai on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/ai/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>谷歌这次把 Gemma 4 放开了（三）</title>
+        <link>https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</link>
+        <pubDate>Wed, 08 Apr 2026 23:56:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</guid>
+        <description>&lt;p&gt;这次刷论坛，最让我长记性的不是哪家又发了榜单，而是一句很土的话，显存不够，参数再大也白搭。&lt;/p&gt;
+&lt;p&gt;以前我总把“模型慢”理解成算力问题。后来越看越明白，很多时候根本不是 GPU 算不动，而是数据没法待在对的地方。只要内存路径一变，token 速度就不是慢一点，是直接掉下去。&lt;/p&gt;
+&lt;p&gt;前两篇已经把前置问题收完了。&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-models-and-license/&#34; &gt;第一篇&lt;/a&gt; 讲发布和协议，&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/&#34; &gt;第二篇&lt;/a&gt; 讲 3060 12GB 上为什么先看 &lt;code&gt;26B A4B&lt;/code&gt;。最后这一篇，就只讲速度到底是怎么塌的。&lt;/p&gt;
+&lt;h2 id=&#34;显存不够慢的不是一点点&#34;&gt;显存不够，慢的不是一点点
+&lt;/h2&gt;&lt;p&gt;推理这件事，拆开看就两块特别关键：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;模型权重&lt;/li&gt;
+&lt;li&gt;KV cache&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;权重决定模型本身，KV cache 记录前文状态。上下文越长，KV cache 越大。只要这两块都能稳稳留在 GPU 显存里，生成 token 的时候基本就是在高带宽显存里取数据、做计算、回写结果，速度通常还能看。&lt;/p&gt;
+&lt;p&gt;真正麻烦的，是显存装不下。&lt;/p&gt;
+&lt;p&gt;一旦装不下，推理框架就得退让：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;一部分权重放系统内存&lt;/li&gt;
+&lt;li&gt;或者一部分 KV cache 放系统内存&lt;/li&gt;
+&lt;li&gt;或者干脆 CPU 和 GPU 来回搬&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这时候问题就不是“多算了点”，而是“每出一个 token 都要等数据”。&lt;/p&gt;
+&lt;h2 id=&#34;为什么会出现断崖不是线性变慢&#34;&gt;为什么会出现断崖，不是线性变慢
+&lt;/h2&gt;&lt;p&gt;很多人第一次遇到这个坑，直觉都会觉得，模型从 &lt;code&gt;14B&lt;/code&gt; 变成 &lt;code&gt;31B&lt;/code&gt;，那就慢一倍多，忍一忍也行。&lt;/p&gt;
+&lt;p&gt;现实不是这样。&lt;/p&gt;
+&lt;p&gt;真正的分界线不是参数翻倍，而是工作集有没有跨过显存边界。&lt;/p&gt;
+&lt;p&gt;只要没跨过去，模型变大通常还是一种可预期的变慢。&lt;/p&gt;
+&lt;p&gt;一旦跨过去，系统状态就变了：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;原来是“显存内闭环”&lt;/li&gt;
+&lt;li&gt;现在变成“显存 + 主内存 + 总线搬运”&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;路径一换，代价就完全不一样了。尤其是 decode 阶段，本来就是逐 token 往前走，batch 也不大，这时候最怕的就是每个 token 都要跨设备去等一批数据回来。&lt;/p&gt;
+&lt;p&gt;所以你会看到一种很典型的现象：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;模型不是不能跑&lt;/li&gt;
+&lt;li&gt;GPU 也不是完全闲着&lt;/li&gt;
+&lt;li&gt;但 token/s 直接很难看&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这就是大家说的“断崖”。不是模型突然变蠢，是内存路径突然变笨了。&lt;/p&gt;
+&lt;h2 id=&#34;26b-a4b-为什么对本地玩家友好一点&#34;&gt;&lt;code&gt;26B A4B&lt;/code&gt; 为什么对本地玩家友好一点
+&lt;/h2&gt;&lt;p&gt;这一点也正好解释了，为什么我前一篇一直更看重 &lt;code&gt;26B A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;它的总盘子当然不小，但每个 token 真正激活的大约只有 &lt;code&gt;3.8B&lt;/code&gt;。这意味着在相似部署条件下，它对计算和显存路径的压力，往往比 dense 大模型更容易控制。&lt;/p&gt;
+&lt;p&gt;这也不是魔法。&lt;/p&gt;
+&lt;p&gt;如果你上下文拉太长，或者量化和框架支持不到位，它一样会难受。只是相比那种一上来就把整块显存顶满的 dense 模型，&lt;code&gt;26B A4B&lt;/code&gt; 更像是留给消费级显卡的一条现实路线。&lt;/p&gt;
+&lt;p&gt;所以很多时候不是 &lt;code&gt;31B&lt;/code&gt; 不强，而是本地机器更适合和谁长期相处。&lt;/p&gt;
+&lt;h2 id=&#34;mac-为什么看起来不容易爆&#34;&gt;Mac 为什么看起来“不容易爆”
+&lt;/h2&gt;&lt;p&gt;Mac 这边最不一样的，不在模型，在内存结构。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Apple silicon&lt;/code&gt; 走的是统一内存。CPU 和 GPU 共享同一池内存，而不是像独显机器那样，一边是显存，一边是主内存，中间再靠总线搬。&lt;/p&gt;
+&lt;p&gt;这套结构最大的好处，就是很多在独显机器上“显存根本装不下”的模型，到 Mac 上会变成另外一种状态：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;不一定很快&lt;/li&gt;
+&lt;li&gt;但大概率先能装进去&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;也就是说，Mac 更不容易在第一步就撞上那堵非常生硬的“显存墙”。&lt;/p&gt;
+&lt;p&gt;这就是为什么很多人会觉得，Mac 在本地大模型这件事上特别适合兜底。它解决的是“能不能先把整套工作集塞进同一池内存里”。&lt;/p&gt;
+&lt;h2 id=&#34;但统一内存不等于送你高速度&#34;&gt;但统一内存不等于送你高速度
+&lt;/h2&gt;&lt;p&gt;这个地方一定要拆开看。&lt;/p&gt;
+&lt;p&gt;统一内存解决了什么？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;解决了独显显存和主内存硬分家&lt;/li&gt;
+&lt;li&gt;解决了很多模型在小显存卡上直接装不下&lt;/li&gt;
+&lt;li&gt;解决了部分极难看的跨设备来回搬运&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;但它没有解决什么？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;没有把大模型推理从“海量读内存”变成别的事情&lt;/li&gt;
+&lt;li&gt;没有让大模型突然不吃带宽&lt;/li&gt;
+&lt;li&gt;没有让所有推理框架自动拥有 CUDA 那套成熟生态&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;所以 Mac 的舒服，和英伟达大显存卡的快，不是同一回事。&lt;/p&gt;
+&lt;p&gt;Mac 更像是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;机器安静&lt;/li&gt;
+&lt;li&gt;总内存大&lt;/li&gt;
+&lt;li&gt;统一&lt;/li&gt;
+&lt;li&gt;很多原本塞不下的模型，终于能先跑&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;英伟达大显存卡更像是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;生态成熟&lt;/li&gt;
+&lt;li&gt;CUDA 工具链完整&lt;/li&gt;
+&lt;li&gt;真把模型和 cache 留在 GPU 里以后，速度更容易拉起来&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;为什么想要速度最后还是得看英伟达大显存&#34;&gt;为什么想要速度，最后还是得看英伟达大显存
+&lt;/h2&gt;&lt;p&gt;这不是情绪判断，是本地部署一路折腾下来很容易得出的现实结论。&lt;/p&gt;
+&lt;p&gt;如果你追求的是这些东西：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本地助手常驻&lt;/li&gt;
+&lt;li&gt;多轮长对话&lt;/li&gt;
+&lt;li&gt;长上下文&lt;/li&gt;
+&lt;li&gt;更高 token/s&lt;/li&gt;
+&lt;li&gt;尽量减少等待&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;那最后看的还是大显存英伟达卡。因为你真正在买的，是把模型和 cache 尽量稳定留在 GPU 那边的能力。&lt;/p&gt;
+&lt;p&gt;Mac 当然也成立，但它更适合另外一类诉求：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;我想一台机器先把更大的模型装进去&lt;/li&gt;
+&lt;li&gt;我接受速度一般，但不想折腾驱动和外设&lt;/li&gt;
+&lt;li&gt;我更在乎整体体验、功耗和噪音&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这两种路线都合理，只是解决的问题不一样。&lt;/p&gt;
+&lt;h2 id=&#34;放回到-gemma-4我的最终判断&#34;&gt;放回到 Gemma 4，我的最终判断
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 这次确实让我觉得，本地开源模型已经进入了一个更值得认真讨论硬件的阶段。&lt;/p&gt;
+&lt;p&gt;但模型变强，不代表物理规律跟着一起松了。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;31B&lt;/code&gt; 再强，显存不够也会掉速。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;26B A4B&lt;/code&gt; 再务实，上下文过长也会吃压力。&lt;/p&gt;
+&lt;p&gt;Mac 统一内存再舒服，也只是让“先跑起来”更容易，不会白送你一张大显存 CUDA 卡的速度。&lt;/p&gt;
+&lt;p&gt;所以最后还是那句很土的话：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;要速度，优先英伟达大显存&lt;/li&gt;
+&lt;li&gt;要兜底，Mac 的统一内存确实舒服&lt;/li&gt;
+&lt;li&gt;要在 &lt;code&gt;3060 12GB&lt;/code&gt; 这种机器上长期玩，别老惦记 dense 大模型，&lt;code&gt;26B A4B&lt;/code&gt; 这种路线更现实&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这组文章写到这里，也就收住了。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M3, M3 Pro, and M3 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/01/apple-unveils-m2-pro-and-m2-max-next-generation-chips-for-next-level-workflows/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M2 Pro and M2 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/macbook-pro/specs/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MacBook Pro Tech Specs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第三篇只保留“速度为什么塌”和“Mac 为什么不等于快”这两条线，不再回头解释前两篇的内容。&lt;/li&gt;
+&lt;li&gt;先讲显存边界，再讲非线性掉速，逻辑比上一版更顺。&lt;/li&gt;
+&lt;li&gt;Mac 和英伟达被拆成两个不同维度来讲，一个偏兜底，一个偏速度。&lt;/li&gt;
+&lt;li&gt;结尾只保留硬件判断，不再重复解释为什么拆系列。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>谷歌这次把 Gemma 4 放开了（二）</title>
+        <link>https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/</link>
+        <pubDate>Wed, 08 Apr 2026 23:52:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/</guid>
+        <description>&lt;p&gt;如果只看榜单，最容易心动的肯定是 &lt;code&gt;31B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;但真把机器搬出来，还是那台没升级的 &lt;code&gt;RTX 3060 12GB&lt;/code&gt;，判断马上就会变。怎么说呢，本地部署这件事，最后拼的不是谁最风光，而是谁最像能长期相处的那个。对我来说，这次真正值得先跑的，不是 &lt;code&gt;31B&lt;/code&gt;，而是 &lt;code&gt;26B A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;上一篇 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-models-and-license/&#34; &gt;谷歌这次把 Gemma 4 放开了（一）：先别急着跑本地，型号和协议得先看明白&lt;/a&gt; 把发布和协议讲完了。当前这一篇就只说本地体验本身；最后一篇接着写 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/&#34; &gt;谷歌这次把 Gemma 4 放开了（三）：显存不够为什么会断崖，Mac 为什么能兜底却快不起来&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;为什么我先跑-26b-a4b&#34;&gt;为什么我先跑 &lt;code&gt;26B A4B&lt;/code&gt;
+&lt;/h2&gt;&lt;p&gt;原因其实很土，就是硬件现实。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;31B&lt;/code&gt; 当然强，官方榜单和社区第一波反馈都挺猛。但你把它放到 &lt;code&gt;3060 12GB&lt;/code&gt; 这种机器上，问题马上就不再是“它强不强”，而是“它值不值得你等”。一旦模型和 cache 往系统内存回退，速度很容易直接塌掉，这件事我放到第三篇详细讲。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;26B A4B&lt;/code&gt; 不一样。&lt;/p&gt;
+&lt;p&gt;它虽然总参数是 &lt;code&gt;25.2B&lt;/code&gt;，但每个 token 真正激活的大约只有 &lt;code&gt;3.8B&lt;/code&gt;。说白了，它就是这次 Gemma 4 里最像“专门留给本地玩家”的那档。&lt;/p&gt;
+&lt;p&gt;所以如果你的机器和我差不多，还是消费级老卡，判断可以直接一点：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;想看榜单，上 &lt;code&gt;31B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;想真本地长期用，先看 &lt;code&gt;26B A4B&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;五角星这题这次终于有人看懂我在挖坑&#34;&gt;五角星这题，这次终于有人看懂我在挖坑
+&lt;/h2&gt;&lt;p&gt;我自己一直有个很土的测试题，让模型写一段 &lt;code&gt;C++&lt;/code&gt; 代码，在控制台输出五角星。&lt;/p&gt;
+&lt;p&gt;这题看起来像玩笑，实际挺坏。因为很多模型会把它理解成一个纯数学绘图题，接着就开始上坐标、三角函数、循环，最后在纯文本控制台里输出一坨根本不能看的字符。&lt;/p&gt;
+&lt;p&gt;去年很多小参数开源模型，基本都死在这里。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 这次第一反应，反而让我很意外。它没急着装懂，而是先识别约束，给出了这段判断：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;说白了，它先看懂了题目背后的环境限制。控制台不是画布，字符网格也不是像素网格。你要先把“怎么稳定给出一个五角星”想明白，再谈数学绘制。&lt;/p&gt;
+&lt;p&gt;然后它第一版直接给了一个硬编码的五角星字符串。&lt;/p&gt;
+&lt;p&gt;这个动作特别对味。不是为了秀推导，而是先把题做对。&lt;/p&gt;
+&lt;h2 id=&#34;更让我意外的是它还能继续往下走&#34;&gt;更让我意外的是，它还能继续往下走
+&lt;/h2&gt;&lt;p&gt;如果只是停在 ASCII Art，这题还只能算它识别了陷阱。&lt;/p&gt;
+&lt;p&gt;真正让我高看一眼的是，后面我继续追着要求它用数学计算，它也没有露馅，而是能顺着往下做，把几何关系映射到字符网格，最后把五角星算出来。&lt;/p&gt;
+&lt;p&gt;这说明的不是“它会写一段代码”，而是它知道这题其实分两层：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;第一层，控制台里最稳的答案是什么&lt;/li&gt;
+&lt;li&gt;第二层，如果你非要做计算，怎么把几何问题降到字符网格上&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;以前很多本地小模型一上来就冲第二层，最后第一层都没做好。&lt;code&gt;Gemma 4&lt;/code&gt; 这次反过来了，先把边界认出来，再决定怎么解。&lt;/p&gt;
+&lt;p&gt;我觉得这件事比单独一项 benchmark 分数更值钱。&lt;/p&gt;
+&lt;h2 id=&#34;这次-coding-提升不只是更聪明了&#34;&gt;这次 coding 提升，不只是“更聪明了”
+&lt;/h2&gt;&lt;p&gt;五角星这题之所以好用，就是因为它不只是考语法。&lt;/p&gt;
+&lt;p&gt;它真正考的是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;能不能先理解输出环境&lt;/li&gt;
+&lt;li&gt;能不能承认直觉解法不合适&lt;/li&gt;
+&lt;li&gt;能不能在“最优展示效果”和“用户强制要求计算”之间切换&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这种题一旦能做对，说明模型开始更像一个会处理现实约束的开发助手，而不是只会补全代码片段。&lt;/p&gt;
+&lt;p&gt;这也是为什么我对 &lt;code&gt;Gemma 4&lt;/code&gt; 的第一印象会比去年那批小参数开源模型好很多。去年很多模型属于能聊天、能补全、能凑合，但一碰到这种稍微带点边界感的问题，就容易露底。&lt;/p&gt;
+&lt;p&gt;这次谷歌起码把这个短板补上了。&lt;/p&gt;
+&lt;h2 id=&#34;翻译这条线反而不能简单说gemma-4-全面接班&#34;&gt;翻译这条线，反而不能简单说“Gemma 4 全面接班”
+&lt;/h2&gt;&lt;p&gt;你前面提到一个点很关键，以前常拿 &lt;code&gt;Gemma&lt;/code&gt; 跑本地翻译。&lt;/p&gt;
+&lt;p&gt;这件事到 &lt;code&gt;Gemma 4&lt;/code&gt; 这里，其实没那么线性。因为谷歌在 2026 年 2 月单独发了 &lt;code&gt;TranslateGemma&lt;/code&gt;，而且还是建在 &lt;code&gt;Gemma 3&lt;/code&gt; 那套尺寸上。&lt;/p&gt;
+&lt;p&gt;这意味着什么？&lt;/p&gt;
+&lt;p&gt;意味着如果你现成的本地翻译链路已经跑顺了，短期内不一定非要全部切到 &lt;code&gt;Gemma 4&lt;/code&gt;。尤其是那种目标特别单一、只想稳定多语言转换的场景，专门的翻译模型还是有它的价值。&lt;/p&gt;
+&lt;p&gt;但如果你想要的是一套本地模型，尽量兼顾翻译、问答、代码和一般文本任务，那 &lt;code&gt;26B A4B&lt;/code&gt; 这种更全能的路线就很顺。&lt;/p&gt;
+&lt;p&gt;它未必是最专的，但它更像现实世界里“只想先跑起来一个够用主力模型”的选择。&lt;/p&gt;
+&lt;h2 id=&#34;为什么我不想在第二篇里继续吹-31b&#34;&gt;为什么我不想在第二篇里继续吹 &lt;code&gt;31B&lt;/code&gt;
+&lt;/h2&gt;&lt;p&gt;不是因为 &lt;code&gt;31B&lt;/code&gt; 不行，恰恰相反，它太行了，所以很容易把注意力带偏。&lt;/p&gt;
+&lt;p&gt;你一旦一直盯着 &lt;code&gt;31B&lt;/code&gt; 的榜单表现看，很容易把这篇写成“强模型真强”。但本地部署最怕的就是这种话。因为真正决定你每天会不会继续用它的，不是榜单，而是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;启动是不是太慢&lt;/li&gt;
+&lt;li&gt;回答是不是掉速严重&lt;/li&gt;
+&lt;li&gt;长上下文是不是很快就拖垮体验&lt;/li&gt;
+&lt;li&gt;自己机器到底撑不撑得住&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在 &lt;code&gt;3060 12GB&lt;/code&gt; 这种机器上，这些现实问题比榜单重要多了。&lt;/p&gt;
+&lt;p&gt;所以我对第二篇的收口很简单。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;31B&lt;/code&gt; 值得看，&lt;code&gt;26B A4B&lt;/code&gt; 值得用。对本地玩家来说，这两句话不是一回事。&lt;/p&gt;
+&lt;h2 id=&#34;我的本地第一结论&#34;&gt;我的本地第一结论
+&lt;/h2&gt;&lt;p&gt;如果让我用一句话概括这次实测感受，那就是：&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 终于开始像一个会看场景的本地模型了。&lt;/p&gt;
+&lt;p&gt;尤其是 &lt;code&gt;26B A4B&lt;/code&gt;。它不是那种最能拿来晒榜单的型号，但在老机器、消费级显卡、本地长期使用这些现实约束下，它反而更像真正的主力选择。&lt;/p&gt;
+&lt;p&gt;至少这次五角星测试，谷歌是过关了。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://huggingface.co/google/gemma-4-26B-A4B-it&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;google/gemma-4-26B-A4B-it on Hugging Face&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.googleblog.com/introducing-gemma3/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3: The Developer Guide&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/translategemma/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;TranslateGemma: A new family of open translation models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://foodtruckbench.com/blog/gemma-4-31b&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 31B on FoodTruck Bench&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第二篇只保留本地体验，不再替第一篇做总述，也不替第三篇讲显存原理。&lt;/li&gt;
+&lt;li&gt;先给出“为什么先跑 26B A4B”的硬判断，再展开五角星测试。&lt;/li&gt;
+&lt;li&gt;五角星题被当成主轴，是因为它比跑分更能说明 coding 场景里的边界感。&lt;/li&gt;
+&lt;li&gt;翻译任务单独收一节，避免把 &lt;code&gt;Gemma 4&lt;/code&gt; 写成对所有旧流程的线性接班。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>谷歌这次把 Gemma 4 放开了（一）</title>
+        <link>https://ttf248.life/p/gemma-4-series-models-and-license/</link>
+        <pubDate>Wed, 08 Apr 2026 23:48:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/gemma-4-series-models-and-license/</guid>
+        <description>&lt;p&gt;首发当天我本来想干的事很简单，找一个和 &lt;code&gt;Gemma 3&lt;/code&gt; 对应得上的升级版，先下下来跑。&lt;/p&gt;
+&lt;p&gt;结果一圈看下来，人先有点傻眼。以前熟的 &lt;code&gt;4B / 12B / 27B&lt;/code&gt; 那套名字没了，冒出来的是 &lt;code&gt;E4B&lt;/code&gt;、&lt;code&gt;26B A4B&lt;/code&gt;、&lt;code&gt;31B&lt;/code&gt;。怎么说呢，这次谷歌真正改的，不只是模型大小，而是连“你该怎么理解这批模型”都一起改了。&lt;/p&gt;
+&lt;p&gt;这组文章我拆成三篇。当前这一篇只把发布信息、型号和协议讲清楚；下一篇写 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/&#34; &gt;谷歌这次把 Gemma 4 放开了（二）：3060 12GB 本地跑下来，26B A4B 才是更现实的那个&lt;/a&gt;；最后一篇收在 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/&#34; &gt;谷歌这次把 Gemma 4 放开了（三）：显存不够为什么会断崖，Mac 为什么能兜底却快不起来&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;先把这次到底发了什么说清楚&#34;&gt;先把这次到底发了什么说清楚
+&lt;/h2&gt;&lt;p&gt;去年 &lt;code&gt;Gemma 3&lt;/code&gt; 是 2025 年 3 月 12 日发布的，这次 &lt;code&gt;Gemma 4&lt;/code&gt; 是 2026 年 4 月 2 日发布，确实差不多隔了一年。&lt;/p&gt;
+&lt;p&gt;但这次不能再按“27B 的下一代是谁”这种思路去找。官方给的四个主要尺寸，已经不是单纯按总参数分档了。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;型号&lt;/th&gt;
+          &lt;th&gt;结构&lt;/th&gt;
+          &lt;th&gt;关键数字&lt;/th&gt;
+          &lt;th&gt;典型场景&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;E2B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;2.3B effective，5.1B 含 embeddings，128K context&lt;/td&gt;
+          &lt;td&gt;设备侧、超轻量本地&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;E4B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;4.5B effective，8B 含 embeddings，128K context&lt;/td&gt;
+          &lt;td&gt;原来 4B 这条小模型主线&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;26B A4B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;MoE&lt;/td&gt;
+          &lt;td&gt;25.2B total，约 3.8B active，256K context&lt;/td&gt;
+          &lt;td&gt;消费级显卡、本地部署、兼顾质量和速度&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;31B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;30.7B dense，256K context&lt;/td&gt;
+          &lt;td&gt;追求上限、榜单和更稳质量&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;如果只看表面，你会觉得这次名字更乱了。可实际不是乱，是谷歌在刻意把三种路线拆开：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;小模型设备侧，给 &lt;code&gt;E2B / E4B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;本地玩家路线，给 &lt;code&gt;26B A4B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;质量和上限路线，给 &lt;code&gt;31B&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这也是为什么很多人首发第一感觉会是“以前熟的升级路径断了”。不是没给升级版，是谷歌不想再只按总参数一个维度来卖货。&lt;/p&gt;
+&lt;h2 id=&#34;e-和-a-这次不是装饰字母&#34;&gt;&lt;code&gt;E&lt;/code&gt; 和 &lt;code&gt;A&lt;/code&gt; 这次不是装饰字母
+&lt;/h2&gt;&lt;p&gt;这批名字里，最容易让人犯嘀咕的就是 &lt;code&gt;E4B&lt;/code&gt; 和 &lt;code&gt;A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;E2B&lt;/code&gt;、&lt;code&gt;E4B&lt;/code&gt; 里的 &lt;code&gt;E&lt;/code&gt;，官方给的是 &lt;code&gt;effective parameters&lt;/code&gt;。因为这两个模型用了 &lt;code&gt;Per-Layer Embeddings&lt;/code&gt;，所以总参数量和真正有效参数量不是一个口径。说白了，谷歌是在提醒你，这不是过去那种“一个朴素的 4B dense 模型”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;26B A4B&lt;/code&gt; 里的 &lt;code&gt;A&lt;/code&gt;，就是 &lt;code&gt;active parameters&lt;/code&gt;。总盘子是 &lt;code&gt;25.2B&lt;/code&gt;，但每个 token 实际激活的大约是 &lt;code&gt;3.8B&lt;/code&gt;。这就是 MoE 路线的关键，模型总量不小，但运行时真正参与计算的那部分小很多。&lt;/p&gt;
+&lt;p&gt;所以这两个名字看着都带个 &lt;code&gt;4B&lt;/code&gt;，含义却完全不同：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;E4B&lt;/code&gt; 是小模型主线&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;26B A4B&lt;/code&gt; 是大盘子 MoE，本地推理时更像“激活规模只有 4B 左右”&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这个命名方式一开始确实别扭，但它比过去更接近真实部署体验。&lt;/p&gt;
+&lt;h2 id=&#34;如果你以前常用-gemma-3这次该怎么找对应关系&#34;&gt;如果你以前常用 Gemma 3，这次该怎么找对应关系
+&lt;/h2&gt;&lt;p&gt;我觉得这一代最容易误判的地方，就是把它当成 &lt;code&gt;Gemma 3&lt;/code&gt; 的线性升级。&lt;/p&gt;
+&lt;p&gt;如果按使用习惯去找，差不多可以这么理解：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;以前盯着 &lt;code&gt;4B&lt;/code&gt; 跑轻任务的人，现在先看 &lt;code&gt;E4B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;以前盯着 &lt;code&gt;27B&lt;/code&gt; 看模型上限的人，现在看 &lt;code&gt;31B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;以前想在消费级显卡上找一个“够强但不至于完全跑不动”的平衡点，现在重点看 &lt;code&gt;26B A4B&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这一层不先理顺，后面本地部署很容易跑偏。你会一边吐槽“怎么没有熟悉的升级版”，一边又把真正适合自己的那个型号错过去。&lt;/p&gt;
+&lt;h2 id=&#34;这次最值钱的更新其实不是参数&#34;&gt;这次最值钱的更新，其实不是参数
+&lt;/h2&gt;&lt;p&gt;真正让我觉得这次发布像是“终于想通了”的，不是榜单，而是协议。&lt;/p&gt;
+&lt;p&gt;老版本 &lt;code&gt;Gemma&lt;/code&gt; 那套 terms 不能说完全没法用，但一直有点别扭。尤其是你如果关心这些事：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;再分发&lt;/li&gt;
+&lt;li&gt;做蒸馏或二次包装&lt;/li&gt;
+&lt;li&gt;把模型放进自己的产品链路&lt;/li&gt;
+&lt;li&gt;做商业部署&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;你总得回头看看条款里那些 notice、下游限制、附带协议到底要怎么处理。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 这次直接改成 &lt;code&gt;Apache 2.0&lt;/code&gt;，事情一下子就干脆了很多。核心意思非常明确：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;可以商用&lt;/li&gt;
+&lt;li&gt;可以修改&lt;/li&gt;
+&lt;li&gt;可以再分发&lt;/li&gt;
+&lt;li&gt;义务主要回到保留 license、notice、修改说明这些开源世界熟悉的东西&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;说白了，谷歌这次不是单纯把模型开源了点，而是把“大家到底敢不敢放心拿去用”这件事一起做顺了。&lt;/p&gt;
+&lt;h2 id=&#34;社区第一波评价基本也是两条线&#34;&gt;社区第一波评价，基本也是两条线
+&lt;/h2&gt;&lt;p&gt;如果只看第一周口碑，大致就是两个声音。&lt;/p&gt;
+&lt;p&gt;第一条线是，&lt;code&gt;31B&lt;/code&gt; 确实能打。&lt;/p&gt;
+&lt;p&gt;官方给出的成绩已经很猛了。&lt;code&gt;Arena AI&lt;/code&gt; 文本榜单里，31B 发布时排到开源模型前列，&lt;code&gt;LiveCodeBench v6&lt;/code&gt; 也明显比 &lt;code&gt;Gemma 3 27B&lt;/code&gt; 上去了一大截。很多人看到的第一反应就是，这个尺寸能打成这样，挺超预期。&lt;/p&gt;
+&lt;p&gt;第二条线是，&lt;code&gt;26B A4B&lt;/code&gt; 很像给本地玩家留的一条活路。&lt;/p&gt;
+&lt;p&gt;它不是那种一眼看上去最风光的门面型号，但特别现实。尤其是你不是在机房里跑，而是在消费级显卡、工作站、甚至老机器上折腾，本地体验反而更容易落到这条线。&lt;/p&gt;
+&lt;p&gt;当然，首发第一波口碑也有个很现实的前提，生态还在追版本。模板、量化、推理框架、前端工具，很多还没完全跟上。所以现阶段你看到的评论，最好分两层看：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;模型本体，这次确实进步很大&lt;/li&gt;
+&lt;li&gt;本地体验，还会继续受工具链成熟度影响&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;我对第一篇的结论&#34;&gt;我对第一篇的结论
+&lt;/h2&gt;&lt;p&gt;如果你只是想知道这次谷歌到底发了什么，其实一句话就够了。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 不再是“从小到大一排 dense 模型”的老思路，而是把设备侧、本地部署、质量上限这三条路分开了。&lt;code&gt;E4B&lt;/code&gt;、&lt;code&gt;26B A4B&lt;/code&gt;、&lt;code&gt;31B&lt;/code&gt; 看着名字怪，背后对应的却是很现实的部署分工。&lt;/p&gt;
+&lt;p&gt;但如果你问我这次最大的变化到底是什么，我还是那句判断：&lt;/p&gt;
+&lt;p&gt;不是参数，不是榜单，而是谷歌终于把 &lt;code&gt;Gemma 4&lt;/code&gt; 放进了一个大家更敢真用的开源协议里。&lt;/p&gt;
+&lt;p&gt;这一步，比表上的数字更重要。&lt;/p&gt;
+&lt;p&gt;下一篇我就不继续讲发布会口径了，直接回到本地机器上。还是那张没升级的 &lt;code&gt;RTX 3060 12GB&lt;/code&gt;，为什么我最后先盯上的不是 &lt;code&gt;31B&lt;/code&gt;，而是 &lt;code&gt;26B A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/terms&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma Terms of Use&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/apache_2&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apache License 2.0 for Gemma 4&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://foodtruckbench.com/blog/gemma-4-31b&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 31B on FoodTruck Bench&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.reddit.com/r/LocalLLaMA/comments/1san4kd/will_gemma_4_124b_moe_open_as_well/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;LocalLLaMA discussion on Gemma 4 license changes&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.googleblog.com/introducing-gemma3/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3: The Developer Guide&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第一篇只负责把“这次到底发了什么”和“协议为什么重要”讲清楚，不再抢本地体验的话题。&lt;/li&gt;
+&lt;li&gt;先把型号路线拆开，再解释字母含义，逻辑顺序比上一版更直。&lt;/li&gt;
+&lt;li&gt;协议部分保留了“这次真正放开的不是参数，是使用限制”这个判断。&lt;/li&gt;
+&lt;li&gt;社区评价只做收束，不再把太多本地体验提前写进来。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Codex 默认 medium，我后来还是切到 high</title>
+        <link>https://ttf248.life/p/codex-default-medium-vs-high/</link>
+        <pubDate>Wed, 08 Apr 2026 22:57:47 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/codex-default-medium-vs-high/</guid>
+        <description>&lt;p&gt;用 Codex 这段时间，有个问题一直挺别扭：默认思考档位是 &lt;code&gt;medium&lt;/code&gt;，但网上一聊到 &lt;code&gt;GPT-5.4&lt;/code&gt;，口气又都很猛。真到自己手里，&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt; 到底差多少，官方也没给一张特别直白的表。&lt;/p&gt;
+&lt;p&gt;我现在的结论挺明确，日常编码我更愿意直接开 &lt;code&gt;high&lt;/code&gt;。&lt;code&gt;medium&lt;/code&gt; 不是不能用，快活、小修小补、试探方向没问题；但真到多文件修改、需求有歧义、还要边看代码边判断的时候，&lt;code&gt;medium&lt;/code&gt; 很容易把算力省错地方。&lt;code&gt;xhigh&lt;/code&gt; 我反而不会常开，留给卡壳的大活更合适。&lt;/p&gt;
+&lt;h2 id=&#34;先把-medium-说清楚&#34;&gt;先把 medium 说清楚
+&lt;/h2&gt;&lt;p&gt;这事最容易绕晕人的地方，是 &lt;code&gt;medium&lt;/code&gt; 不止一套含义。&lt;/p&gt;
+&lt;p&gt;截至 &lt;code&gt;2026-04-08&lt;/code&gt;，OpenAI 公开文档里，&lt;code&gt;GPT-5.4&lt;/code&gt; 的 &lt;code&gt;reasoning.effort&lt;/code&gt; 支持的是 &lt;code&gt;none&lt;/code&gt;、&lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt;，默认还是 &lt;code&gt;none&lt;/code&gt;。但同一套文档里，&lt;code&gt;verbosity&lt;/code&gt; 也有 &lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;，而且 &lt;code&gt;GPT-5.4&lt;/code&gt; 的 &lt;code&gt;verbosity&lt;/code&gt; 默认值就是 &lt;code&gt;medium&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;所以你在网上看到一句“默认是 medium”，先别急着往“思考等级”上套。很多时候，说的根本不是一回事。&lt;/p&gt;
+&lt;p&gt;如果你是在 Codex 里直接用，看到默认是 &lt;code&gt;medium&lt;/code&gt;，我更倾向于把它理解成产品层给你的预设，而不是模型文档里的底层默认值。这个区别不拆开，后面讨论就会一直打架。&lt;/p&gt;
+&lt;h2 id=&#34;官方其实没把差距讲透&#34;&gt;官方其实没把差距讲透
+&lt;/h2&gt;&lt;p&gt;再说官方说明。&lt;/p&gt;
+&lt;p&gt;公开文档现在能确认几件事：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4&lt;/code&gt; 是官方推荐的通用编码默认模型。&lt;/li&gt;
+&lt;li&gt;代码生成指南里，官方给 &lt;code&gt;gpt-5.4&lt;/code&gt; 的示例，直接配的是 &lt;code&gt;reasoning: high&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.3-codex&lt;/code&gt; 这类 Codex 定向模型，公开页面明确支持 &lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4-pro&lt;/code&gt; 是另一条线，不是普通 &lt;code&gt;gpt-5.4&lt;/code&gt; 单纯把档位拧高那么简单，它本身就是“用更多算力想更久”的独立型号。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;但官方没有给出一张特别实用的表，比如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;medium&lt;/code&gt; 比 &lt;code&gt;high&lt;/code&gt; 到底差多少成功率&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;high&lt;/code&gt; 比 &lt;code&gt;xhigh&lt;/code&gt; 多花多少时间、多少 token&lt;/li&gt;
+&lt;li&gt;在编码场景里，什么任务值得直接上 &lt;code&gt;xhigh&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;也就是说，官方把旋钮给你了，没把经验曲线替你画完。&lt;/p&gt;
+&lt;h2 id=&#34;真正有用的还是看排行榜怎么拆档位&#34;&gt;真正有用的，还是看排行榜怎么拆档位
+&lt;/h2&gt;&lt;p&gt;灵光一闪，我去翻了 Arena 的代码榜，这下就清楚多了。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;arena.ai&lt;/code&gt; 的代码排行榜把档位拆开写了。页面更新时间是 &lt;code&gt;2026-04-01&lt;/code&gt;，截至我写这篇文章时：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4-high (codex-harness)&lt;/code&gt; 排第 &lt;code&gt;6&lt;/code&gt;，分数 &lt;code&gt;1457&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4-medium (codex-harness)&lt;/code&gt; 排第 &lt;code&gt;16&lt;/code&gt;，分数 &lt;code&gt;1427&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.3-codex (codex-harness)&lt;/code&gt; 排第 &lt;code&gt;18&lt;/code&gt;，分数 &lt;code&gt;1407&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这几个数放一起看，意思已经很直接了。&lt;/p&gt;
+&lt;p&gt;同一个 &lt;code&gt;GPT-5.4&lt;/code&gt;，&lt;code&gt;high&lt;/code&gt; 和 &lt;code&gt;medium&lt;/code&gt; 不是“差一点点体验”，而是已经能拉开一个明显档次。你要是只看“GPT-5.4 很强”这句话，其实信息不够，因为榜单自己都把 &lt;code&gt;high&lt;/code&gt; 和 &lt;code&gt;medium&lt;/code&gt; 拆成两条了。很多人口中的“很强”，大概率说的是高思考档跑出来的效果，不是在替 &lt;code&gt;medium&lt;/code&gt; 站台。&lt;/p&gt;
+&lt;p&gt;当然，排行榜不是你项目里的真理。它测的是 agentic coding + harness 场景，不是你本地这一个仓库。但方向已经很明显了：编码这种事，推理档位真会改结果，不只是改速度。&lt;/p&gt;
+&lt;h2 id=&#34;我现在怎么选&#34;&gt;我现在怎么选
+&lt;/h2&gt;&lt;p&gt;说白了，我现在的用法很简单。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;medium&lt;/code&gt; 留给下面这些场景：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;改几个小文件&lt;/li&gt;
+&lt;li&gt;修明显 bug&lt;/li&gt;
+&lt;li&gt;先让模型吐个草稿&lt;/li&gt;
+&lt;li&gt;要速度，不想等太久&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;high&lt;/code&gt; 适合当日常默认：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;多文件联动修改&lt;/li&gt;
+&lt;li&gt;需求里有一点模糊地方&lt;/li&gt;
+&lt;li&gt;需要先读代码再下手&lt;/li&gt;
+&lt;li&gt;要做判断，不只是补全代码&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;xhigh&lt;/code&gt; 我会留给硬骨头：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;高风险重构&lt;/li&gt;
+&lt;li&gt;长链路排障&lt;/li&gt;
+&lt;li&gt;架构改动&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;high&lt;/code&gt; 连着两轮都没把问题啃下来&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这里面最关键的，不是 &lt;code&gt;xhigh&lt;/code&gt; 有多神，而是别把 &lt;code&gt;medium&lt;/code&gt; 用成“万金油”。&lt;code&gt;medium&lt;/code&gt; 真正的问题不是弱，而是它太容易在复杂任务上给你一种“差一点就行”的错觉。结果就是第一轮省了点时间，后面返工更多。&lt;/p&gt;
+&lt;h2 id=&#34;说回-gpt-54到底强的是哪个级别&#34;&gt;说回 GPT-5.4，到底强的是哪个级别
+&lt;/h2&gt;&lt;p&gt;所以最后回到那个问题：网上说 &lt;code&gt;GPT-5.4&lt;/code&gt; 很强，说的到底是哪个级别？&lt;/p&gt;
+&lt;p&gt;我的判断是，没写清楚档位的“GPT-5.4 很强”，默认按高思考档理解更靠谱一点。至少在编码场景里，你别直接把它理解成 &lt;code&gt;medium&lt;/code&gt;。如果对方说的是 &lt;code&gt;gpt-5.4-pro&lt;/code&gt;，那就更不是一回事了，那是单独的更重计算版本。&lt;/p&gt;
+&lt;p&gt;前文写过 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/command-line-ai-coding-interaction/&#34; &gt;基于命令行的AI编码交互&lt;/a&gt;，那会更多还在聊交互方式的变化。现在回头看，交互变了是一回事，模型到底开哪档，其实已经变成另一个更现实的问题了。&lt;/p&gt;
+&lt;p&gt;我现在站得很明确：日常用 &lt;code&gt;high&lt;/code&gt; 足矣，搞不定再试 &lt;code&gt;xhigh&lt;/code&gt;。这样在速度、成本和成功率之间，平衡点更像是对的。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/guides/latest-model&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Using GPT-5.4 | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/guides/code-generation&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Code generation | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/models/gpt-5.4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GPT-5.4 Model | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/models/gpt-5.4-pro&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GPT-5.4 pro Model | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/models/gpt-5.3-codex&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GPT-5.3-Codex Model | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arena.ai/leaderboard/code&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Code AI Leaderboard - Best AI Models for Coding&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer codex 使用期间，有个疑问，默认的思考等级 medium，那剩下的 high xhigh 能力差别有多少，我日常使用应该是用哪个？官方也没看到明确的说明，网上说的 GTP5.4 很强，说的又是哪个级别的思考？灵关一闪，我想到大模型的排名：https://arena.ai/leaderboard/code，在这里，明确的说明了大模型的思考等级，没错了 gpt-5.4-high (codex-harness) 排在第六，默认用 high 足矣，搞不定了，可以试试 xhigh，能均衡下成本和速度
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;把“日常用 high，xhigh 兜底”作为主判断，没有写成档位百科。&lt;/li&gt;
+&lt;li&gt;先拆开 &lt;code&gt;reasoning&lt;/code&gt; 和 &lt;code&gt;verbosity&lt;/code&gt;，避免把公开文档里的两个 &lt;code&gt;medium&lt;/code&gt; 混为一谈。&lt;/li&gt;
+&lt;li&gt;官方资料主要用来确认支持档位、默认值和代码生成示例，没有硬编一张官方并未提供的能力差距表。&lt;/li&gt;
+&lt;li&gt;Arena 榜单用了 &lt;code&gt;2026-04-01&lt;/code&gt; 页面里的名次和分数，给“high 明显强于 medium”补事实锚点。&lt;/li&gt;
+&lt;li&gt;结构上先讲为什么会困惑，再讲官方口径的边界，最后收口到日常怎么选。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>AI 写博客这件事，后来还是得做成工程（三）</title>
         <link>https://ttf248.life/p/how-i-split-local-online-and-minimax-models/</link>
         <pubDate>Fri, 03 Apr 2026 21:06:02 +0800</pubDate>

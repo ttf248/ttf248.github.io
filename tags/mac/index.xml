@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Mac on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/mac/</link>
+        <description>Recent content in Mac on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 09 Apr 2026 00:33:23 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/mac/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>谷歌这次把 Gemma 4 放开了（三）</title>
+        <link>https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</link>
+        <pubDate>Wed, 08 Apr 2026 23:56:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</guid>
+        <description>&lt;p&gt;这次刷论坛，最让我长记性的不是哪家又发了榜单，而是一句很土的话，显存不够，参数再大也白搭。&lt;/p&gt;
+&lt;p&gt;以前我总把“模型慢”理解成算力问题。后来越看越明白，很多时候根本不是 GPU 算不动，而是数据没法待在对的地方。只要内存路径一变，token 速度就不是慢一点，是直接掉下去。&lt;/p&gt;
+&lt;p&gt;前两篇已经把前置问题收完了。&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-models-and-license/&#34; &gt;第一篇&lt;/a&gt; 讲发布和协议，&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/&#34; &gt;第二篇&lt;/a&gt; 讲 3060 12GB 上为什么先看 &lt;code&gt;26B A4B&lt;/code&gt;。最后这一篇，就只讲速度到底是怎么塌的。&lt;/p&gt;
+&lt;h2 id=&#34;显存不够慢的不是一点点&#34;&gt;显存不够，慢的不是一点点
+&lt;/h2&gt;&lt;p&gt;推理这件事，拆开看就两块特别关键：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;模型权重&lt;/li&gt;
+&lt;li&gt;KV cache&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;权重决定模型本身，KV cache 记录前文状态。上下文越长，KV cache 越大。只要这两块都能稳稳留在 GPU 显存里，生成 token 的时候基本就是在高带宽显存里取数据、做计算、回写结果，速度通常还能看。&lt;/p&gt;
+&lt;p&gt;真正麻烦的，是显存装不下。&lt;/p&gt;
+&lt;p&gt;一旦装不下，推理框架就得退让：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;一部分权重放系统内存&lt;/li&gt;
+&lt;li&gt;或者一部分 KV cache 放系统内存&lt;/li&gt;
+&lt;li&gt;或者干脆 CPU 和 GPU 来回搬&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这时候问题就不是“多算了点”，而是“每出一个 token 都要等数据”。&lt;/p&gt;
+&lt;h2 id=&#34;为什么会出现断崖不是线性变慢&#34;&gt;为什么会出现断崖，不是线性变慢
+&lt;/h2&gt;&lt;p&gt;很多人第一次遇到这个坑，直觉都会觉得，模型从 &lt;code&gt;14B&lt;/code&gt; 变成 &lt;code&gt;31B&lt;/code&gt;，那就慢一倍多，忍一忍也行。&lt;/p&gt;
+&lt;p&gt;现实不是这样。&lt;/p&gt;
+&lt;p&gt;真正的分界线不是参数翻倍，而是工作集有没有跨过显存边界。&lt;/p&gt;
+&lt;p&gt;只要没跨过去，模型变大通常还是一种可预期的变慢。&lt;/p&gt;
+&lt;p&gt;一旦跨过去，系统状态就变了：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;原来是“显存内闭环”&lt;/li&gt;
+&lt;li&gt;现在变成“显存 + 主内存 + 总线搬运”&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;路径一换，代价就完全不一样了。尤其是 decode 阶段，本来就是逐 token 往前走，batch 也不大，这时候最怕的就是每个 token 都要跨设备去等一批数据回来。&lt;/p&gt;
+&lt;p&gt;所以你会看到一种很典型的现象：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;模型不是不能跑&lt;/li&gt;
+&lt;li&gt;GPU 也不是完全闲着&lt;/li&gt;
+&lt;li&gt;但 token/s 直接很难看&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这就是大家说的“断崖”。不是模型突然变蠢，是内存路径突然变笨了。&lt;/p&gt;
+&lt;h2 id=&#34;26b-a4b-为什么对本地玩家友好一点&#34;&gt;&lt;code&gt;26B A4B&lt;/code&gt; 为什么对本地玩家友好一点
+&lt;/h2&gt;&lt;p&gt;这一点也正好解释了，为什么我前一篇一直更看重 &lt;code&gt;26B A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;它的总盘子当然不小，但每个 token 真正激活的大约只有 &lt;code&gt;3.8B&lt;/code&gt;。这意味着在相似部署条件下，它对计算和显存路径的压力，往往比 dense 大模型更容易控制。&lt;/p&gt;
+&lt;p&gt;这也不是魔法。&lt;/p&gt;
+&lt;p&gt;如果你上下文拉太长，或者量化和框架支持不到位，它一样会难受。只是相比那种一上来就把整块显存顶满的 dense 模型，&lt;code&gt;26B A4B&lt;/code&gt; 更像是留给消费级显卡的一条现实路线。&lt;/p&gt;
+&lt;p&gt;所以很多时候不是 &lt;code&gt;31B&lt;/code&gt; 不强，而是本地机器更适合和谁长期相处。&lt;/p&gt;
+&lt;h2 id=&#34;mac-为什么看起来不容易爆&#34;&gt;Mac 为什么看起来“不容易爆”
+&lt;/h2&gt;&lt;p&gt;Mac 这边最不一样的，不在模型，在内存结构。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Apple silicon&lt;/code&gt; 走的是统一内存。CPU 和 GPU 共享同一池内存，而不是像独显机器那样，一边是显存，一边是主内存，中间再靠总线搬。&lt;/p&gt;
+&lt;p&gt;这套结构最大的好处，就是很多在独显机器上“显存根本装不下”的模型，到 Mac 上会变成另外一种状态：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;不一定很快&lt;/li&gt;
+&lt;li&gt;但大概率先能装进去&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;也就是说，Mac 更不容易在第一步就撞上那堵非常生硬的“显存墙”。&lt;/p&gt;
+&lt;p&gt;这就是为什么很多人会觉得，Mac 在本地大模型这件事上特别适合兜底。它解决的是“能不能先把整套工作集塞进同一池内存里”。&lt;/p&gt;
+&lt;h2 id=&#34;但统一内存不等于送你高速度&#34;&gt;但统一内存不等于送你高速度
+&lt;/h2&gt;&lt;p&gt;这个地方一定要拆开看。&lt;/p&gt;
+&lt;p&gt;统一内存解决了什么？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;解决了独显显存和主内存硬分家&lt;/li&gt;
+&lt;li&gt;解决了很多模型在小显存卡上直接装不下&lt;/li&gt;
+&lt;li&gt;解决了部分极难看的跨设备来回搬运&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;但它没有解决什么？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;没有把大模型推理从“海量读内存”变成别的事情&lt;/li&gt;
+&lt;li&gt;没有让大模型突然不吃带宽&lt;/li&gt;
+&lt;li&gt;没有让所有推理框架自动拥有 CUDA 那套成熟生态&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;所以 Mac 的舒服，和英伟达大显存卡的快，不是同一回事。&lt;/p&gt;
+&lt;p&gt;Mac 更像是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;机器安静&lt;/li&gt;
+&lt;li&gt;总内存大&lt;/li&gt;
+&lt;li&gt;统一&lt;/li&gt;
+&lt;li&gt;很多原本塞不下的模型，终于能先跑&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;英伟达大显存卡更像是：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;生态成熟&lt;/li&gt;
+&lt;li&gt;CUDA 工具链完整&lt;/li&gt;
+&lt;li&gt;真把模型和 cache 留在 GPU 里以后，速度更容易拉起来&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;为什么想要速度最后还是得看英伟达大显存&#34;&gt;为什么想要速度，最后还是得看英伟达大显存
+&lt;/h2&gt;&lt;p&gt;这不是情绪判断，是本地部署一路折腾下来很容易得出的现实结论。&lt;/p&gt;
+&lt;p&gt;如果你追求的是这些东西：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本地助手常驻&lt;/li&gt;
+&lt;li&gt;多轮长对话&lt;/li&gt;
+&lt;li&gt;长上下文&lt;/li&gt;
+&lt;li&gt;更高 token/s&lt;/li&gt;
+&lt;li&gt;尽量减少等待&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;那最后看的还是大显存英伟达卡。因为你真正在买的，是把模型和 cache 尽量稳定留在 GPU 那边的能力。&lt;/p&gt;
+&lt;p&gt;Mac 当然也成立，但它更适合另外一类诉求：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;我想一台机器先把更大的模型装进去&lt;/li&gt;
+&lt;li&gt;我接受速度一般，但不想折腾驱动和外设&lt;/li&gt;
+&lt;li&gt;我更在乎整体体验、功耗和噪音&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这两种路线都合理，只是解决的问题不一样。&lt;/p&gt;
+&lt;h2 id=&#34;放回到-gemma-4我的最终判断&#34;&gt;放回到 Gemma 4，我的最终判断
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 这次确实让我觉得，本地开源模型已经进入了一个更值得认真讨论硬件的阶段。&lt;/p&gt;
+&lt;p&gt;但模型变强，不代表物理规律跟着一起松了。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;31B&lt;/code&gt; 再强，显存不够也会掉速。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;26B A4B&lt;/code&gt; 再务实，上下文过长也会吃压力。&lt;/p&gt;
+&lt;p&gt;Mac 统一内存再舒服，也只是让“先跑起来”更容易，不会白送你一张大显存 CUDA 卡的速度。&lt;/p&gt;
+&lt;p&gt;所以最后还是那句很土的话：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;要速度，优先英伟达大显存&lt;/li&gt;
+&lt;li&gt;要兜底，Mac 的统一内存确实舒服&lt;/li&gt;
+&lt;li&gt;要在 &lt;code&gt;3060 12GB&lt;/code&gt; 这种机器上长期玩，别老惦记 dense 大模型，&lt;code&gt;26B A4B&lt;/code&gt; 这种路线更现实&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这组文章写到这里，也就收住了。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M3, M3 Pro, and M3 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/01/apple-unveils-m2-pro-and-m2-max-next-generation-chips-for-next-level-workflows/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M2 Pro and M2 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/macbook-pro/specs/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MacBook Pro Tech Specs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第三篇只保留“速度为什么塌”和“Mac 为什么不等于快”这两条线，不再回头解释前两篇的内容。&lt;/li&gt;
+&lt;li&gt;先讲显存边界，再讲非线性掉速，逻辑比上一版更顺。&lt;/li&gt;
+&lt;li&gt;Mac 和英伟达被拆成两个不同维度来讲，一个偏兜底，一个偏速度。&lt;/li&gt;
+&lt;li&gt;结尾只保留硬件判断，不再重复解释为什么拆系列。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

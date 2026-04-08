@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="这次刷论坛，最让我长记性的不是哪家又发了榜单，而是一句很土的话，显存不够，参数再大也白搭。\n以前我总把“模型慢”理解成算力问题。后来越看越明白，很多时候根本不是 GPU 算不动，而是数据没法待在对的地方。只要内存路径一变，token 速度就不是慢一点，是直接掉下去。\n">
+<title>谷歌这次把 Gemma 4 放开了（三）</title>
+
+<link rel='canonical' href='https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/'>
+
+<link rel="stylesheet" href="/scss/style.min.989aa97a25e023e9a3a706c4fe4a8ba5d8e0fdaa68698a5434411a1cb9be0136.css"><meta property='og:title' content="谷歌这次把 Gemma 4 放开了（三）">
+<meta property='og:description' content="这次刷论坛，最让我长记性的不是哪家又发了榜单，而是一句很土的话，显存不够，参数再大也白搭。\n以前我总把“模型慢”理解成算力问题。后来越看越明白，很多时候根本不是 GPU 算不动，而是数据没法待在对的地方。只要内存路径一变，token 速度就不是慢一点，是直接掉下去。\n">
+<meta property='og:url' content='https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:tag' content='ai' /><meta property='article:tag' content='gemma' /><meta property='article:tag' content='显存' /><meta property='article:tag' content='Mac' /><meta property='article:tag' content='英伟达' /><meta property='article:published_time' content='2026-04-08T23:56:20&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T00:33:23&#43;08:00'/>
+<meta name="twitter:title" content="谷歌这次把 Gemma 4 放开了（三）">
+<meta name="twitter:description" content="这次刷论坛，最让我长记性的不是哪家又发了榜单，而是一句很土的话，显存不够，参数再大也白搭。\n以前我总把“模型慢”理解成算力问题。后来越看越明白，很多时候根本不是 GPU 算不动，而是数据没法待在对的地方。只要内存路径一变，token 速度就不是慢一点，是直接掉下去。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">向叔记事簿</a></h1>
+            <h2 class="site-description">拾光记事，岁月有痕</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>首页</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" selected>中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>暗色模式</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#显存不够慢的不是一点点">显存不够，慢的不是一点点</a></li>
+    <li><a href="#为什么会出现断崖不是线性变慢">为什么会出现断崖，不是线性变慢</a></li>
+    <li><a href="#26b-a4b-为什么对本地玩家友好一点"><code>26B A4B</code> 为什么对本地玩家友好一点</a></li>
+    <li><a href="#mac-为什么看起来不容易爆">Mac 为什么看起来“不容易爆”</a></li>
+    <li><a href="#但统一内存不等于送你高速度">但统一内存不等于送你高速度</a></li>
+    <li><a href="#为什么想要速度最后还是得看英伟达大显存">为什么想要速度，最后还是得看英伟达大显存</a></li>
+    <li><a href="#放回到-gemma-4我的最终判断">放回到 Gemma 4，我的最终判断</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/computer/" >
+                计算机
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/gemma-4-series-vram-cliff-and-mac-unified-memory/">谷歌这次把 Gemma 4 放开了（三）</a>
+        </h2>
+    
+        
+        
+        <h3 class="article-subtitle">
+            显存不够为什么会断崖，Mac 为什么能兜底却快不起来
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月08日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            阅读约 9 分钟
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>这次刷论坛，最让我长记性的不是哪家又发了榜单，而是一句很土的话，显存不够，参数再大也白搭。</p>
+<p>以前我总把“模型慢”理解成算力问题。后来越看越明白，很多时候根本不是 GPU 算不动，而是数据没法待在对的地方。只要内存路径一变，token 速度就不是慢一点，是直接掉下去。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <p>前两篇已经把前置问题收完了。<a class="link" href="/p/gemma-4-series-models-and-license/" >第一篇</a> 讲发布和协议，<a class="link" href="/p/gemma-4-series-local-test-on-rtx-3060/" >第二篇</a> 讲 3060 12GB 上为什么先看 <code>26B A4B</code>。最后这一篇，就只讲速度到底是怎么塌的。</p>
+<h2 id="显存不够慢的不是一点点">显存不够，慢的不是一点点
+</h2><p>推理这件事，拆开看就两块特别关键：</p>
+<ul>
+<li>模型权重</li>
+<li>KV cache</li>
+</ul>
+<p>权重决定模型本身，KV cache 记录前文状态。上下文越长，KV cache 越大。只要这两块都能稳稳留在 GPU 显存里，生成 token 的时候基本就是在高带宽显存里取数据、做计算、回写结果，速度通常还能看。</p>
+<p>真正麻烦的，是显存装不下。</p>
+<p>一旦装不下，推理框架就得退让：</p>
+<ul>
+<li>一部分权重放系统内存</li>
+<li>或者一部分 KV cache 放系统内存</li>
+<li>或者干脆 CPU 和 GPU 来回搬</li>
+</ul>
+<p>这时候问题就不是“多算了点”，而是“每出一个 token 都要等数据”。</p>
+<h2 id="为什么会出现断崖不是线性变慢">为什么会出现断崖，不是线性变慢
+</h2><p>很多人第一次遇到这个坑，直觉都会觉得，模型从 <code>14B</code> 变成 <code>31B</code>，那就慢一倍多，忍一忍也行。</p>
+<p>现实不是这样。</p>
+<p>真正的分界线不是参数翻倍，而是工作集有没有跨过显存边界。</p>
+<p>只要没跨过去，模型变大通常还是一种可预期的变慢。</p>
+<p>一旦跨过去，系统状态就变了：</p>
+<ul>
+<li>原来是“显存内闭环”</li>
+<li>现在变成“显存 + 主内存 + 总线搬运”</li>
+</ul>
+<p>路径一换，代价就完全不一样了。尤其是 decode 阶段，本来就是逐 token 往前走，batch 也不大，这时候最怕的就是每个 token 都要跨设备去等一批数据回来。</p>
+<p>所以你会看到一种很典型的现象：</p>
+<ul>
+<li>模型不是不能跑</li>
+<li>GPU 也不是完全闲着</li>
+<li>但 token/s 直接很难看</li>
+</ul>
+<p>这就是大家说的“断崖”。不是模型突然变蠢，是内存路径突然变笨了。</p>
+<h2 id="26b-a4b-为什么对本地玩家友好一点"><code>26B A4B</code> 为什么对本地玩家友好一点
+</h2><p>这一点也正好解释了，为什么我前一篇一直更看重 <code>26B A4B</code>。</p>
+<p>它的总盘子当然不小，但每个 token 真正激活的大约只有 <code>3.8B</code>。这意味着在相似部署条件下，它对计算和显存路径的压力，往往比 dense 大模型更容易控制。</p>
+<p>这也不是魔法。</p>
+<p>如果你上下文拉太长，或者量化和框架支持不到位，它一样会难受。只是相比那种一上来就把整块显存顶满的 dense 模型，<code>26B A4B</code> 更像是留给消费级显卡的一条现实路线。</p>
+<p>所以很多时候不是 <code>31B</code> 不强，而是本地机器更适合和谁长期相处。</p>
+<h2 id="mac-为什么看起来不容易爆">Mac 为什么看起来“不容易爆”
+</h2><p>Mac 这边最不一样的，不在模型，在内存结构。</p>
+<p><code>Apple silicon</code> 走的是统一内存。CPU 和 GPU 共享同一池内存，而不是像独显机器那样，一边是显存，一边是主内存，中间再靠总线搬。</p>
+<p>这套结构最大的好处，就是很多在独显机器上“显存根本装不下”的模型，到 Mac 上会变成另外一种状态：</p>
+<ul>
+<li>不一定很快</li>
+<li>但大概率先能装进去</li>
+</ul>
+<p>也就是说，Mac 更不容易在第一步就撞上那堵非常生硬的“显存墙”。</p>
+<p>这就是为什么很多人会觉得，Mac 在本地大模型这件事上特别适合兜底。它解决的是“能不能先把整套工作集塞进同一池内存里”。</p>
+<h2 id="但统一内存不等于送你高速度">但统一内存不等于送你高速度
+</h2><p>这个地方一定要拆开看。</p>
+<p>统一内存解决了什么？</p>
+<ul>
+<li>解决了独显显存和主内存硬分家</li>
+<li>解决了很多模型在小显存卡上直接装不下</li>
+<li>解决了部分极难看的跨设备来回搬运</li>
+</ul>
+<p>但它没有解决什么？</p>
+<ul>
+<li>没有把大模型推理从“海量读内存”变成别的事情</li>
+<li>没有让大模型突然不吃带宽</li>
+<li>没有让所有推理框架自动拥有 CUDA 那套成熟生态</li>
+</ul>
+<p>所以 Mac 的舒服，和英伟达大显存卡的快，不是同一回事。</p>
+<p>Mac 更像是：</p>
+<ul>
+<li>机器安静</li>
+<li>总内存大</li>
+<li>统一</li>
+<li>很多原本塞不下的模型，终于能先跑</li>
+</ul>
+<p>英伟达大显存卡更像是：</p>
+<ul>
+<li>生态成熟</li>
+<li>CUDA 工具链完整</li>
+<li>真把模型和 cache 留在 GPU 里以后，速度更容易拉起来</li>
+</ul>
+<h2 id="为什么想要速度最后还是得看英伟达大显存">为什么想要速度，最后还是得看英伟达大显存
+</h2><p>这不是情绪判断，是本地部署一路折腾下来很容易得出的现实结论。</p>
+<p>如果你追求的是这些东西：</p>
+<ul>
+<li>本地助手常驻</li>
+<li>多轮长对话</li>
+<li>长上下文</li>
+<li>更高 token/s</li>
+<li>尽量减少等待</li>
+</ul>
+<p>那最后看的还是大显存英伟达卡。因为你真正在买的，是把模型和 cache 尽量稳定留在 GPU 那边的能力。</p>
+<p>Mac 当然也成立，但它更适合另外一类诉求：</p>
+<ul>
+<li>我想一台机器先把更大的模型装进去</li>
+<li>我接受速度一般，但不想折腾驱动和外设</li>
+<li>我更在乎整体体验、功耗和噪音</li>
+</ul>
+<p>这两种路线都合理，只是解决的问题不一样。</p>
+<h2 id="放回到-gemma-4我的最终判断">放回到 Gemma 4，我的最终判断
+</h2><p><code>Gemma 4</code> 这次确实让我觉得，本地开源模型已经进入了一个更值得认真讨论硬件的阶段。</p>
+<p>但模型变强，不代表物理规律跟着一起松了。</p>
+<p><code>31B</code> 再强，显存不够也会掉速。</p>
+<p><code>26B A4B</code> 再务实，上下文过长也会吃压力。</p>
+<p>Mac 统一内存再舒服，也只是让“先跑起来”更容易，不会白送你一张大显存 CUDA 卡的速度。</p>
+<p>所以最后还是那句很土的话：</p>
+<ul>
+<li>要速度，优先英伟达大显存</li>
+<li>要兜底，Mac 的统一内存确实舒服</li>
+<li>要在 <code>3060 12GB</code> 这种机器上长期玩，别老惦记 dense 大模型，<code>26B A4B</code> 这种路线更现实</li>
+</ul>
+<p>这组文章写到这里，也就收住了。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/"  target="_blank" rel="noopener"
+    >Gemma 4: Byte for byte, the most capable open models</a></li>
+<li><a class="link" href="https://ai.google.dev/gemma/docs/core/model_card_4"  target="_blank" rel="noopener"
+    >Gemma 4 model card</a></li>
+<li><a class="link" href="https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"  target="_blank" rel="noopener"
+    >Apple unveils M3, M3 Pro, and M3 Max</a></li>
+<li><a class="link" href="https://www.apple.com/newsroom/2023/01/apple-unveils-m2-pro-and-m2-max-next-generation-chips-for-next-level-workflows/"  target="_blank" rel="noopener"
+    >Apple unveils M2 Pro and M2 Max</a></li>
+<li><a class="link" href="https://www.apple.com/macbook-pro/specs/"  target="_blank" rel="noopener"
+    >MacBook Pro Tech Specs</a></li>
+</ul>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><pre><code class="language-text">$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。
+</code></pre>
+<h3 id="写作思路摘要">写作思路摘要
+</h3><ul>
+<li>第三篇只保留“速度为什么塌”和“Mac 为什么不等于快”这两条线，不再回头解释前两篇的内容。</li>
+<li>先讲显存边界，再讲非线性掉速，逻辑比上一版更顺。</li>
+<li>Mac 和英伟达被拆成两个不同维度来讲，一个偏兜底，一个偏速度。</li>
+<li>结尾只保留硬件判断，不再重复解释为什么拆系列。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/ai-inspiration-hub/">AI 灵感碰撞坊</a>
+        
+            <a href="/tags/ai/">ai</a>
+        
+            <a href="/tags/gemma/">gemma</a>
+        
+            <a href="/tags/%E6%98%BE%E5%AD%98/">显存</a>
+        
+            <a href="/tags/mac/">Mac</a>
+        
+            <a href="/tags/nvidia/">英伟达</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 2026年04月09日 00:33
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">相关文章</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（二）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-models-and-license/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（一）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:48:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/codex-default-medium-vs-high/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex 默认 medium，我后来还是切到 high</h3>
+                            <time class="related-content__date" datetime='2026-04-08T22:57:47&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/how-i-split-local-online-and-minimax-models/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI 写博客这件事，后来还是得做成工程（三）</h3>
+                            <time class="related-content__date" datetime='2026-04-03T21:06:02&#43;08:00'>2026年04月03日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/how-blog-style-suite-split-style-and-token-cost/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI 写博客这件事，后来还是得做成工程（二）</h3>
+                            <time class="related-content__date" datetime='2026-04-03T21:02:02&#43;08:00'>2026年04月03日</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

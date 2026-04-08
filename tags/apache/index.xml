@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Apache on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/apache/</link>
+        <description>Recent content in Apache on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 09 Apr 2026 00:33:23 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/apache/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>谷歌这次把 Gemma 4 放开了（一）</title>
+        <link>https://ttf248.life/p/gemma-4-series-models-and-license/</link>
+        <pubDate>Wed, 08 Apr 2026 23:48:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/gemma-4-series-models-and-license/</guid>
+        <description>&lt;p&gt;首发当天我本来想干的事很简单，找一个和 &lt;code&gt;Gemma 3&lt;/code&gt; 对应得上的升级版，先下下来跑。&lt;/p&gt;
+&lt;p&gt;结果一圈看下来，人先有点傻眼。以前熟的 &lt;code&gt;4B / 12B / 27B&lt;/code&gt; 那套名字没了，冒出来的是 &lt;code&gt;E4B&lt;/code&gt;、&lt;code&gt;26B A4B&lt;/code&gt;、&lt;code&gt;31B&lt;/code&gt;。怎么说呢，这次谷歌真正改的，不只是模型大小，而是连“你该怎么理解这批模型”都一起改了。&lt;/p&gt;
+&lt;p&gt;这组文章我拆成三篇。当前这一篇只把发布信息、型号和协议讲清楚；下一篇写 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/&#34; &gt;谷歌这次把 Gemma 4 放开了（二）：3060 12GB 本地跑下来，26B A4B 才是更现实的那个&lt;/a&gt;；最后一篇收在 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/&#34; &gt;谷歌这次把 Gemma 4 放开了（三）：显存不够为什么会断崖，Mac 为什么能兜底却快不起来&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;先把这次到底发了什么说清楚&#34;&gt;先把这次到底发了什么说清楚
+&lt;/h2&gt;&lt;p&gt;去年 &lt;code&gt;Gemma 3&lt;/code&gt; 是 2025 年 3 月 12 日发布的，这次 &lt;code&gt;Gemma 4&lt;/code&gt; 是 2026 年 4 月 2 日发布，确实差不多隔了一年。&lt;/p&gt;
+&lt;p&gt;但这次不能再按“27B 的下一代是谁”这种思路去找。官方给的四个主要尺寸，已经不是单纯按总参数分档了。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;型号&lt;/th&gt;
+          &lt;th&gt;结构&lt;/th&gt;
+          &lt;th&gt;关键数字&lt;/th&gt;
+          &lt;th&gt;典型场景&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;E2B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;2.3B effective，5.1B 含 embeddings，128K context&lt;/td&gt;
+          &lt;td&gt;设备侧、超轻量本地&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;E4B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;4.5B effective，8B 含 embeddings，128K context&lt;/td&gt;
+          &lt;td&gt;原来 4B 这条小模型主线&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;26B A4B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;MoE&lt;/td&gt;
+          &lt;td&gt;25.2B total，约 3.8B active，256K context&lt;/td&gt;
+          &lt;td&gt;消费级显卡、本地部署、兼顾质量和速度&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;31B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;30.7B dense，256K context&lt;/td&gt;
+          &lt;td&gt;追求上限、榜单和更稳质量&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;如果只看表面，你会觉得这次名字更乱了。可实际不是乱，是谷歌在刻意把三种路线拆开：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;小模型设备侧，给 &lt;code&gt;E2B / E4B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;本地玩家路线，给 &lt;code&gt;26B A4B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;质量和上限路线，给 &lt;code&gt;31B&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这也是为什么很多人首发第一感觉会是“以前熟的升级路径断了”。不是没给升级版，是谷歌不想再只按总参数一个维度来卖货。&lt;/p&gt;
+&lt;h2 id=&#34;e-和-a-这次不是装饰字母&#34;&gt;&lt;code&gt;E&lt;/code&gt; 和 &lt;code&gt;A&lt;/code&gt; 这次不是装饰字母
+&lt;/h2&gt;&lt;p&gt;这批名字里，最容易让人犯嘀咕的就是 &lt;code&gt;E4B&lt;/code&gt; 和 &lt;code&gt;A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;E2B&lt;/code&gt;、&lt;code&gt;E4B&lt;/code&gt; 里的 &lt;code&gt;E&lt;/code&gt;，官方给的是 &lt;code&gt;effective parameters&lt;/code&gt;。因为这两个模型用了 &lt;code&gt;Per-Layer Embeddings&lt;/code&gt;，所以总参数量和真正有效参数量不是一个口径。说白了，谷歌是在提醒你，这不是过去那种“一个朴素的 4B dense 模型”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;26B A4B&lt;/code&gt; 里的 &lt;code&gt;A&lt;/code&gt;，就是 &lt;code&gt;active parameters&lt;/code&gt;。总盘子是 &lt;code&gt;25.2B&lt;/code&gt;，但每个 token 实际激活的大约是 &lt;code&gt;3.8B&lt;/code&gt;。这就是 MoE 路线的关键，模型总量不小，但运行时真正参与计算的那部分小很多。&lt;/p&gt;
+&lt;p&gt;所以这两个名字看着都带个 &lt;code&gt;4B&lt;/code&gt;，含义却完全不同：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;E4B&lt;/code&gt; 是小模型主线&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;26B A4B&lt;/code&gt; 是大盘子 MoE，本地推理时更像“激活规模只有 4B 左右”&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这个命名方式一开始确实别扭，但它比过去更接近真实部署体验。&lt;/p&gt;
+&lt;h2 id=&#34;如果你以前常用-gemma-3这次该怎么找对应关系&#34;&gt;如果你以前常用 Gemma 3，这次该怎么找对应关系
+&lt;/h2&gt;&lt;p&gt;我觉得这一代最容易误判的地方，就是把它当成 &lt;code&gt;Gemma 3&lt;/code&gt; 的线性升级。&lt;/p&gt;
+&lt;p&gt;如果按使用习惯去找，差不多可以这么理解：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;以前盯着 &lt;code&gt;4B&lt;/code&gt; 跑轻任务的人，现在先看 &lt;code&gt;E4B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;以前盯着 &lt;code&gt;27B&lt;/code&gt; 看模型上限的人，现在看 &lt;code&gt;31B&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;以前想在消费级显卡上找一个“够强但不至于完全跑不动”的平衡点，现在重点看 &lt;code&gt;26B A4B&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这一层不先理顺，后面本地部署很容易跑偏。你会一边吐槽“怎么没有熟悉的升级版”，一边又把真正适合自己的那个型号错过去。&lt;/p&gt;
+&lt;h2 id=&#34;这次最值钱的更新其实不是参数&#34;&gt;这次最值钱的更新，其实不是参数
+&lt;/h2&gt;&lt;p&gt;真正让我觉得这次发布像是“终于想通了”的，不是榜单，而是协议。&lt;/p&gt;
+&lt;p&gt;老版本 &lt;code&gt;Gemma&lt;/code&gt; 那套 terms 不能说完全没法用，但一直有点别扭。尤其是你如果关心这些事：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;再分发&lt;/li&gt;
+&lt;li&gt;做蒸馏或二次包装&lt;/li&gt;
+&lt;li&gt;把模型放进自己的产品链路&lt;/li&gt;
+&lt;li&gt;做商业部署&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;你总得回头看看条款里那些 notice、下游限制、附带协议到底要怎么处理。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 这次直接改成 &lt;code&gt;Apache 2.0&lt;/code&gt;，事情一下子就干脆了很多。核心意思非常明确：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;可以商用&lt;/li&gt;
+&lt;li&gt;可以修改&lt;/li&gt;
+&lt;li&gt;可以再分发&lt;/li&gt;
+&lt;li&gt;义务主要回到保留 license、notice、修改说明这些开源世界熟悉的东西&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;说白了，谷歌这次不是单纯把模型开源了点，而是把“大家到底敢不敢放心拿去用”这件事一起做顺了。&lt;/p&gt;
+&lt;h2 id=&#34;社区第一波评价基本也是两条线&#34;&gt;社区第一波评价，基本也是两条线
+&lt;/h2&gt;&lt;p&gt;如果只看第一周口碑，大致就是两个声音。&lt;/p&gt;
+&lt;p&gt;第一条线是，&lt;code&gt;31B&lt;/code&gt; 确实能打。&lt;/p&gt;
+&lt;p&gt;官方给出的成绩已经很猛了。&lt;code&gt;Arena AI&lt;/code&gt; 文本榜单里，31B 发布时排到开源模型前列，&lt;code&gt;LiveCodeBench v6&lt;/code&gt; 也明显比 &lt;code&gt;Gemma 3 27B&lt;/code&gt; 上去了一大截。很多人看到的第一反应就是，这个尺寸能打成这样，挺超预期。&lt;/p&gt;
+&lt;p&gt;第二条线是，&lt;code&gt;26B A4B&lt;/code&gt; 很像给本地玩家留的一条活路。&lt;/p&gt;
+&lt;p&gt;它不是那种一眼看上去最风光的门面型号，但特别现实。尤其是你不是在机房里跑，而是在消费级显卡、工作站、甚至老机器上折腾，本地体验反而更容易落到这条线。&lt;/p&gt;
+&lt;p&gt;当然，首发第一波口碑也有个很现实的前提，生态还在追版本。模板、量化、推理框架、前端工具，很多还没完全跟上。所以现阶段你看到的评论，最好分两层看：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;模型本体，这次确实进步很大&lt;/li&gt;
+&lt;li&gt;本地体验，还会继续受工具链成熟度影响&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;我对第一篇的结论&#34;&gt;我对第一篇的结论
+&lt;/h2&gt;&lt;p&gt;如果你只是想知道这次谷歌到底发了什么，其实一句话就够了。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Gemma 4&lt;/code&gt; 不再是“从小到大一排 dense 模型”的老思路，而是把设备侧、本地部署、质量上限这三条路分开了。&lt;code&gt;E4B&lt;/code&gt;、&lt;code&gt;26B A4B&lt;/code&gt;、&lt;code&gt;31B&lt;/code&gt; 看着名字怪，背后对应的却是很现实的部署分工。&lt;/p&gt;
+&lt;p&gt;但如果你问我这次最大的变化到底是什么，我还是那句判断：&lt;/p&gt;
+&lt;p&gt;不是参数，不是榜单，而是谷歌终于把 &lt;code&gt;Gemma 4&lt;/code&gt; 放进了一个大家更敢真用的开源协议里。&lt;/p&gt;
+&lt;p&gt;这一步，比表上的数字更重要。&lt;/p&gt;
+&lt;p&gt;下一篇我就不继续讲发布会口径了，直接回到本地机器上。还是那张没升级的 &lt;code&gt;RTX 3060 12GB&lt;/code&gt;，为什么我最后先盯上的不是 &lt;code&gt;31B&lt;/code&gt;，而是 &lt;code&gt;26B A4B&lt;/code&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/terms&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma Terms of Use&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/apache_2&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apache License 2.0 for Gemma 4&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://foodtruckbench.com/blog/gemma-4-31b&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 31B on FoodTruck Bench&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.reddit.com/r/LocalLLaMA/comments/1san4kd/will_gemma_4_124b_moe_open_as_well/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;LocalLLaMA discussion on Gemma 4 license changes&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.googleblog.com/introducing-gemma3/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3: The Developer Guide&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第一篇只负责把“这次到底发了什么”和“协议为什么重要”讲清楚，不再抢本地体验的话题。&lt;/li&gt;
+&lt;li&gt;先把型号路线拆开，再解释字母含义，逻辑顺序比上一版更直。&lt;/li&gt;
+&lt;li&gt;协议部分保留了“这次真正放开的不是参数，是使用限制”这个判断。&lt;/li&gt;
+&lt;li&gt;社区评价只做收束，不再把太多本地体验提前写进来。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
