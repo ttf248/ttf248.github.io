@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="最近写算法服务，twap、vwap 这类模块一铺开，我又把这个老问题翻出来了。\nC++ 里如果还靠类名硬扛语义，名字很快就会失控。TwapOrderManager、VwapOrderManager、AlgoOrderManager 这种东西，写着写着就一股子“我知道自己结构没收住，但我先把前缀补上”的味道。说白了，按文件夹分层，再配一层 namespace，不是代码洁癖，这是在补 C++ 没有 Java 那种原生 package 体系的空位。\n">
+<title>文件夹分层再套 namespace，这事到底叫什么</title>
+
+<link rel='canonical' href='https://ttf248.life/p/cpp-folder-namespace-what-is-it-called/'>
+
+<link rel="stylesheet" href="/scss/style.min.989aa97a25e023e9a3a706c4fe4a8ba5d8e0fdaa68698a5434411a1cb9be0136.css"><meta property='og:title' content="文件夹分层再套 namespace，这事到底叫什么">
+<meta property='og:description' content="最近写算法服务，twap、vwap 这类模块一铺开，我又把这个老问题翻出来了。\nC++ 里如果还靠类名硬扛语义，名字很快就会失控。TwapOrderManager、VwapOrderManager、AlgoOrderManager 这种东西，写着写着就一股子“我知道自己结构没收住，但我先把前缀补上”的味道。说白了，按文件夹分层，再配一层 namespace，不是代码洁癖，这是在补 C++ 没有 Java 那种原生 package 体系的空位。\n">
+<meta property='og:url' content='https://ttf248.life/p/cpp-folder-namespace-what-is-it-called/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='软件工程' /><meta property='article:tag' content='架构设计' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:published_time' content='2026-04-09T02:31:07&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T03:45:21&#43;08:00'/>
+<meta name="twitter:title" content="文件夹分层再套 namespace，这事到底叫什么">
+<meta name="twitter:description" content="最近写算法服务，twap、vwap 这类模块一铺开，我又把这个老问题翻出来了。\nC++ 里如果还靠类名硬扛语义，名字很快就会失控。TwapOrderManager、VwapOrderManager、AlgoOrderManager 这种东西，写着写着就一股子“我知道自己结构没收住，但我先把前缀补上”的味道。说白了，按文件夹分层，再配一层 namespace，不是代码洁癖，这是在补 C++ 没有 Java 那种原生 package 体系的空位。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">向叔记事簿</a></h1>
+            <h2 class="site-description">拾光记事，岁月有痕</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>首页</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" selected>中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>暗色模式</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#先说结论">先说结论</a></li>
+    <li><a href="#这事先解决的其实不是好看">这事先解决的，其实不是“好看”</a></li>
+    <li><a href="#这背后更像按特性分包">这背后更像“按特性分包”</a></li>
+    <li><a href="#再往上走一步就是高内聚低耦合">再往上走一步，就是高内聚低耦合</a></li>
+    <li><a href="#什么时候它又不够了">什么时候它又不够了</a>
+      <ol>
+        <li><a href="#目录和命名空间对不上">目录和命名空间对不上</a></li>
+        <li><a href="#模块边界是假边界">模块边界是假边界</a></li>
+        <li><a href="#common-目录越长越胖"><code>common</code> 目录越长越胖</a></li>
+        <li><a href="#结构只按层不按业务">结构只按层，不按业务</a></li>
+      </ol>
+    </li>
+    <li><a href="#那它到底该叫啥">那它到底该叫啥</a></li>
+    <li><a href="#最后一句">最后一句</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/computer/" >
+                计算机
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/cpp-folder-namespace-what-is-it-called/">文件夹分层再套 namespace，这事到底叫什么</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月09日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            阅读约 8 分钟
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            GPT-5
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>最近写算法服务，<code>twap</code>、<code>vwap</code> 这类模块一铺开，我又把这个老问题翻出来了。</p>
+<p>C++ 里如果还靠类名硬扛语义，名字很快就会失控。<code>TwapOrderManager</code>、<code>VwapOrderManager</code>、<code>AlgoOrderManager</code> 这种东西，写着写着就一股子“我知道自己结构没收住，但我先把前缀补上”的味道。说白了，按文件夹分层，再配一层 <code>namespace</code>，不是代码洁癖，这是在补 C++ 没有 Java 那种原生 <code>package</code> 体系的空位。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="先说结论">先说结论
+</h2><p>如果非要找一个最贴近的软件工程名词，我觉得最该说的是两个词：</p>
+<ul>
+<li><strong>模块化</strong>（modularization）</li>
+<li><strong>命名空间管理</strong>（namespace management）</li>
+</ul>
+<p>如果再说得更贴一点，这类目录组织往往是在做：</p>
+<ul>
+<li><strong>按特性分包 / 按领域分包</strong>，也就是常说的 <code>package by feature</code></li>
+<li>如果业务边界已经很强，还会带一点 <strong>bounded context</strong> 的味道</li>
+</ul>
+<p>也就是说，它不是一个只有单一标准译名的小概念，更像是几套设计原则叠在一起。</p>
+<h2 id="这事先解决的其实不是好看">这事先解决的，其实不是“好看”
+</h2><p>很多人一看到 <code>namespace</code>，第一反应是避免重名。这个当然对，C++ 标准里的 <code>namespace</code> 本来就是拿来防止大型项目里名字冲突的 <a class="link" href="https://en.cppreference.com/w/cpp/language/namespace"  target="_blank" rel="noopener"
+    >cppreference</a>。但真到业务代码里，它的价值远不止这个。</p>
+<p>目录和 <code>namespace</code> 一旦对齐，类名就不用再把上层语义重复一遍了。</p>
+<p>比如以前可能会写成这样：</p>
+<pre><code class="language-cpp">class TwapOrderManager;
+class TwapScheduleEngine;
+class VwapOrderManager;
+class VwapScheduleEngine;
+</code></pre>
+<p>换成目录和命名空间以后，更自然的写法通常是：</p>
+<pre><code class="language-cpp">namespace algo::twap {
+class OrderManager;
+class ScheduleEngine;
+}
+
+namespace algo::vwap {
+class OrderManager;
+class ScheduleEngine;
+}
+</code></pre>
+<p>这一下，重复前缀没了，语义反而更清楚。因为“它属于哪个上下文”不再塞进类名里，而是交给目录和 <code>namespace</code> 来表达。</p>
+<p>所以这套做法，本质上是在把<strong>上下文信息从名字里抽出去，交给结构来承载</strong>。</p>
+<h2 id="这背后更像按特性分包">这背后更像“按特性分包”
+</h2><p>如果你的目录是这样长的：</p>
+<pre><code class="language-text">strategy/
+  twap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+  vwap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+</code></pre>
+<p>那你其实已经不是在做传统的“按技术层分包”了。</p>
+<p>传统分法更像这样：</p>
+<pre><code class="language-text">models/
+services/
+utils/
+controllers/
+</code></pre>
+<p>这种分法前期看着整齐，后面业务一长，<code>service</code> 目录就会像垃圾回收站。跟一个功能相关的类会被打散到不同目录里，读代码的时候脑子一直在跳。</p>
+<p>而 <code>twap</code>、<code>vwap</code> 这种分法，更接近 <code>package by feature</code>。也就是一个目录先回答“这块业务是干什么的”，再在里面放这块业务自己需要的对象和流程。Java 世界里这个说法更常见，但放到 C++ 一样成立，只是承载它的不是原生 <code>package</code>，而是“目录 + <code>namespace</code> + 头文件边界”。</p>
+<p>说白了，你是在<strong>按变化原因组织代码，而不是按代码长相组织代码</strong>。</p>
+<h2 id="再往上走一步就是高内聚低耦合">再往上走一步，就是高内聚低耦合
+</h2><p>软件工程里老生常谈的那句“高内聚、低耦合”，其实就落在这种地方。</p>
+<p><code>twap</code> 下面的对象彼此协作频繁，就应该放得近一点，命名空间也靠得近一点；<code>vwap</code> 和它相似，但又不是一回事，就该给它单独边界。这样做有几个很直接的好处：</p>
+<ul>
+<li>同一个模块里的类名可以短一点</li>
+<li>模块之间的依赖更容易看出来</li>
+<li>重构时更容易判断改动会不会串到别的地方</li>
+<li>以后真要把某块能力拆成独立库，代价也小一些</li>
+</ul>
+<p>这也是为什么很多成熟项目最后都会长成“目录边界 + 命名空间边界 + 编译边界”尽量一致的样子。QuickFIX 这类项目里，你也能看到类似思路，类型和扩展点都尽量放在清晰的命名空间下面，而不是靠巨长的类名前缀去硬区分 <a class="link" href="https://quickfixengine.org/c/"  target="_blank" rel="noopener"
+    >QuickFIX</a> <a class="link" href="https://github.com/quickfix/quickfix"  target="_blank" rel="noopener"
+    >GitHub</a>。</p>
+<h2 id="什么时候它又不够了">什么时候它又不够了
+</h2><p>不过这事也别神化。</p>
+<p>文件夹分层再套 <code>namespace</code>，只能说明你在往模块化方向走，不代表架构就自动好了。几个常见坑也很明显：</p>
+<h3 id="目录和命名空间对不上">目录和命名空间对不上
+</h3><p>目录是 <code>twap/</code>，代码里却还是一堆散着的全局类，或者 <code>namespace common</code> 到处乱飞，这种基本等于白分。</p>
+<h3 id="模块边界是假边界">模块边界是假边界
+</h3><p>表面上有 <code>twap</code>、<code>vwap</code>，实际上互相 <code>#include</code>，公共逻辑随便穿透，最后只是把文件挪了位置，耦合一点没降。</p>
+<h3 id="common-目录越长越胖"><code>common</code> 目录越长越胖
+</h3><p>这个最常见。很多项目前面切得挺好，后面嫌麻烦，开始往 <code>common</code>、<code>base</code>、<code>util</code> 里丢东西。丢到最后，真正稳定的抽象没沉淀下来，反而多了一个谁都能动、谁都依赖的大坑。</p>
+<h3 id="结构只按层不按业务">结构只按层，不按业务
+</h3><p>如果你的目录永远是 <code>api</code>、<code>service</code>、<code>dao</code>、<code>model</code>，那很多业务概念其实没有家。类名只好越来越长，把本该由结构表达的东西全塞回名字里。</p>
+<h2 id="那它到底该叫啥">那它到底该叫啥
+</h2><p>如果是在团队里沟通，我觉得可以分三档说法：</p>
+<ul>
+<li>只想说人话：<strong>按目录和命名空间做模块化</strong></li>
+<li>想说得更工程一点：<strong>按特性分包的组织方式，配合层级命名空间</strong></li>
+<li>如果这套边界已经和业务语义强绑定了：<strong>带 bounded context 味道的模块划分</strong></li>
+</ul>
+<p>我自己更倾向第二种。因为它最贴近你描述的场景。</p>
+<p>你说的不是 C++ 语法技巧，也不是单纯命名规范，而是在做一件更实在的事：<strong>用结构承载语义，让名字回归本义</strong>。</p>
+<p>类名短下来，文件名短下来，读代码时先看到的是 <code>twap::OrderManager</code> 这种上下文明确的对象，而不是 <code>TwapOrderManagerImpl</code> 这种把目录职责、命名职责、实现职责全搅在一起的东西。</p>
+<p>这时候代码才有点像 Java 里包结构成熟之后那种感觉。</p>
+<h2 id="最后一句">最后一句
+</h2><p>所以，软件工程上当然有对应概念，但不是只有一个标准答案。</p>
+<p>往大了说，它叫模块化。往代码组织上说，它叫按特性分包，再加命名空间管理。往领域边界上说，它又有点 bounded context 的意思。</p>
+<p>怎么说呢，这种实践最值钱的地方，从来不是“名字看起来整齐了”，而是你终于不用靠超长前缀去弥补结构缺位了。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://en.cppreference.com/w/cpp/language/namespace"  target="_blank" rel="noopener"
+    >cppreference: Namespaces</a></li>
+<li><a class="link" href="https://quickfixengine.org/c/"  target="_blank" rel="noopener"
+    >QuickFIX/C++ 官方站点</a></li>
+<li><a class="link" href="https://github.com/quickfix/quickfix"  target="_blank" rel="noopener"
+    >QuickFIX GitHub 仓库</a></li>
+<li><a class="link" href="https://www.javapractices.com/home/HomeAction.do"  target="_blank" rel="noopener"
+    >Java Practices: Package by feature, not layer</a></li>
+<li><a class="link" href="https://martinfowler.com/bliki/BoundedContext.html"  target="_blank" rel="noopener"
+    >Martin Fowler: Bounded Context</a></li>
+</ul>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><blockquote>
+<p>提示词：在编码开发的时候，C++一种好的实践规范，那就是按照文件夹分层，然后每个类上面套个 namespace，类似 Java 的 package，能有效减少文件名称和类名字里面掺杂冗余的内容,有个经典的项目就是 quickfix，近期开发算法服务也用到了类似的设计，twap vwap 很多功能模块都是类似的，软件工程学上有没有专门的概念？</p></blockquote>
+<h3 id="写作思路摘要">写作思路摘要
+</h3><ul>
+<li>从算法服务里 <code>twap</code>、<code>vwap</code> 的真实模块触发点切入，先把判断亮出来。</li>
+<li>没把问题硬解释成单一名词，而是拆成模块化、命名空间管理、按特性分包几个更准确的层次。</li>
+<li>保留了 QuickFIX 和 Java package 的对照关系，用来说明 C++ 经常要靠目录和命名空间补结构语义。</li>
+<li>重点落在“用结构承载语义”，而不是停留在“避免重名”这种表层解释。</li>
+<li>补了 <code>namespace</code>、<code>package by feature</code>、<code>bounded context</code> 相关参考链接，方便后续继续展开。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/cpp/">c&#43;&#43;</a>
+        
+            <a href="/tags/%E8%BD%AF%E4%BB%B6%E5%B7%A5%E7%A8%8B/">软件工程</a>
+        
+            <a href="/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">架构设计</a>
+        
+            <a href="/tags/ai-inspiration-hub/">AI 灵感碰撞坊</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                GPT-5
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 2026年04月09日 03:45
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">相关文章</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">深度解析 C&#43;&#43; 中 `static lambda` 引发的内存空转与缓存污染</h3>
+                            <time class="related-content__date" datetime='2026-03-16T20:18:18&#43;08:00'>2026年03月16日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（三）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（二）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-models-and-license/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（一）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:48:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/codex-default-medium-vs-high/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex 默认 medium，我后来还是切到 high</h3>
+                            <time class="related-content__date" datetime='2026-04-08T22:57:47&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

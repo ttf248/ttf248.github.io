@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>架构设计 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/</link>
+        <description>Recent content in 架构设计 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Thu, 09 Apr 2026 03:45:21 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>文件夹分层再套 namespace，这事到底叫什么</title>
+        <link>https://ttf248.life/p/cpp-folder-namespace-what-is-it-called/</link>
+        <pubDate>Thu, 09 Apr 2026 02:31:07 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/cpp-folder-namespace-what-is-it-called/</guid>
+        <description>&lt;p&gt;最近写算法服务，&lt;code&gt;twap&lt;/code&gt;、&lt;code&gt;vwap&lt;/code&gt; 这类模块一铺开，我又把这个老问题翻出来了。&lt;/p&gt;
+&lt;p&gt;C++ 里如果还靠类名硬扛语义，名字很快就会失控。&lt;code&gt;TwapOrderManager&lt;/code&gt;、&lt;code&gt;VwapOrderManager&lt;/code&gt;、&lt;code&gt;AlgoOrderManager&lt;/code&gt; 这种东西，写着写着就一股子“我知道自己结构没收住，但我先把前缀补上”的味道。说白了，按文件夹分层，再配一层 &lt;code&gt;namespace&lt;/code&gt;，不是代码洁癖，这是在补 C++ 没有 Java 那种原生 &lt;code&gt;package&lt;/code&gt; 体系的空位。&lt;/p&gt;
+&lt;h2 id=&#34;先说结论&#34;&gt;先说结论
+&lt;/h2&gt;&lt;p&gt;如果非要找一个最贴近的软件工程名词，我觉得最该说的是两个词：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;模块化&lt;/strong&gt;（modularization）&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;命名空间管理&lt;/strong&gt;（namespace management）&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果再说得更贴一点，这类目录组织往往是在做：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;按特性分包 / 按领域分包&lt;/strong&gt;，也就是常说的 &lt;code&gt;package by feature&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;如果业务边界已经很强，还会带一点 &lt;strong&gt;bounded context&lt;/strong&gt; 的味道&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;也就是说，它不是一个只有单一标准译名的小概念，更像是几套设计原则叠在一起。&lt;/p&gt;
+&lt;h2 id=&#34;这事先解决的其实不是好看&#34;&gt;这事先解决的，其实不是“好看”
+&lt;/h2&gt;&lt;p&gt;很多人一看到 &lt;code&gt;namespace&lt;/code&gt;，第一反应是避免重名。这个当然对，C++ 标准里的 &lt;code&gt;namespace&lt;/code&gt; 本来就是拿来防止大型项目里名字冲突的 &lt;a class=&#34;link&#34; href=&#34;https://en.cppreference.com/w/cpp/language/namespace&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;cppreference&lt;/a&gt;。但真到业务代码里，它的价值远不止这个。&lt;/p&gt;
+&lt;p&gt;目录和 &lt;code&gt;namespace&lt;/code&gt; 一旦对齐，类名就不用再把上层语义重复一遍了。&lt;/p&gt;
+&lt;p&gt;比如以前可能会写成这样：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class TwapOrderManager;
+class TwapScheduleEngine;
+class VwapOrderManager;
+class VwapScheduleEngine;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;换成目录和命名空间以后，更自然的写法通常是：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;namespace algo::twap {
+class OrderManager;
+class ScheduleEngine;
+}
+
+namespace algo::vwap {
+class OrderManager;
+class ScheduleEngine;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这一下，重复前缀没了，语义反而更清楚。因为“它属于哪个上下文”不再塞进类名里，而是交给目录和 &lt;code&gt;namespace&lt;/code&gt; 来表达。&lt;/p&gt;
+&lt;p&gt;所以这套做法，本质上是在把&lt;strong&gt;上下文信息从名字里抽出去，交给结构来承载&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;这背后更像按特性分包&#34;&gt;这背后更像“按特性分包”
+&lt;/h2&gt;&lt;p&gt;如果你的目录是这样长的：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;strategy/
+  twap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+  vwap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;那你其实已经不是在做传统的“按技术层分包”了。&lt;/p&gt;
+&lt;p&gt;传统分法更像这样：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;models/
+services/
+utils/
+controllers/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这种分法前期看着整齐，后面业务一长，&lt;code&gt;service&lt;/code&gt; 目录就会像垃圾回收站。跟一个功能相关的类会被打散到不同目录里，读代码的时候脑子一直在跳。&lt;/p&gt;
+&lt;p&gt;而 &lt;code&gt;twap&lt;/code&gt;、&lt;code&gt;vwap&lt;/code&gt; 这种分法，更接近 &lt;code&gt;package by feature&lt;/code&gt;。也就是一个目录先回答“这块业务是干什么的”，再在里面放这块业务自己需要的对象和流程。Java 世界里这个说法更常见，但放到 C++ 一样成立，只是承载它的不是原生 &lt;code&gt;package&lt;/code&gt;，而是“目录 + &lt;code&gt;namespace&lt;/code&gt; + 头文件边界”。&lt;/p&gt;
+&lt;p&gt;说白了，你是在&lt;strong&gt;按变化原因组织代码，而不是按代码长相组织代码&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;再往上走一步就是高内聚低耦合&#34;&gt;再往上走一步，就是高内聚低耦合
+&lt;/h2&gt;&lt;p&gt;软件工程里老生常谈的那句“高内聚、低耦合”，其实就落在这种地方。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;twap&lt;/code&gt; 下面的对象彼此协作频繁，就应该放得近一点，命名空间也靠得近一点；&lt;code&gt;vwap&lt;/code&gt; 和它相似，但又不是一回事，就该给它单独边界。这样做有几个很直接的好处：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同一个模块里的类名可以短一点&lt;/li&gt;
+&lt;li&gt;模块之间的依赖更容易看出来&lt;/li&gt;
+&lt;li&gt;重构时更容易判断改动会不会串到别的地方&lt;/li&gt;
+&lt;li&gt;以后真要把某块能力拆成独立库，代价也小一些&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这也是为什么很多成熟项目最后都会长成“目录边界 + 命名空间边界 + 编译边界”尽量一致的样子。QuickFIX 这类项目里，你也能看到类似思路，类型和扩展点都尽量放在清晰的命名空间下面，而不是靠巨长的类名前缀去硬区分 &lt;a class=&#34;link&#34; href=&#34;https://quickfixengine.org/c/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;QuickFIX&lt;/a&gt; &lt;a class=&#34;link&#34; href=&#34;https://github.com/quickfix/quickfix&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GitHub&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;什么时候它又不够了&#34;&gt;什么时候它又不够了
+&lt;/h2&gt;&lt;p&gt;不过这事也别神化。&lt;/p&gt;
+&lt;p&gt;文件夹分层再套 &lt;code&gt;namespace&lt;/code&gt;，只能说明你在往模块化方向走，不代表架构就自动好了。几个常见坑也很明显：&lt;/p&gt;
+&lt;h3 id=&#34;目录和命名空间对不上&#34;&gt;目录和命名空间对不上
+&lt;/h3&gt;&lt;p&gt;目录是 &lt;code&gt;twap/&lt;/code&gt;，代码里却还是一堆散着的全局类，或者 &lt;code&gt;namespace common&lt;/code&gt; 到处乱飞，这种基本等于白分。&lt;/p&gt;
+&lt;h3 id=&#34;模块边界是假边界&#34;&gt;模块边界是假边界
+&lt;/h3&gt;&lt;p&gt;表面上有 &lt;code&gt;twap&lt;/code&gt;、&lt;code&gt;vwap&lt;/code&gt;，实际上互相 &lt;code&gt;#include&lt;/code&gt;，公共逻辑随便穿透，最后只是把文件挪了位置，耦合一点没降。&lt;/p&gt;
+&lt;h3 id=&#34;common-目录越长越胖&#34;&gt;&lt;code&gt;common&lt;/code&gt; 目录越长越胖
+&lt;/h3&gt;&lt;p&gt;这个最常见。很多项目前面切得挺好，后面嫌麻烦，开始往 &lt;code&gt;common&lt;/code&gt;、&lt;code&gt;base&lt;/code&gt;、&lt;code&gt;util&lt;/code&gt; 里丢东西。丢到最后，真正稳定的抽象没沉淀下来，反而多了一个谁都能动、谁都依赖的大坑。&lt;/p&gt;
+&lt;h3 id=&#34;结构只按层不按业务&#34;&gt;结构只按层，不按业务
+&lt;/h3&gt;&lt;p&gt;如果你的目录永远是 &lt;code&gt;api&lt;/code&gt;、&lt;code&gt;service&lt;/code&gt;、&lt;code&gt;dao&lt;/code&gt;、&lt;code&gt;model&lt;/code&gt;，那很多业务概念其实没有家。类名只好越来越长，把本该由结构表达的东西全塞回名字里。&lt;/p&gt;
+&lt;h2 id=&#34;那它到底该叫啥&#34;&gt;那它到底该叫啥
+&lt;/h2&gt;&lt;p&gt;如果是在团队里沟通，我觉得可以分三档说法：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;只想说人话：&lt;strong&gt;按目录和命名空间做模块化&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;想说得更工程一点：&lt;strong&gt;按特性分包的组织方式，配合层级命名空间&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;如果这套边界已经和业务语义强绑定了：&lt;strong&gt;带 bounded context 味道的模块划分&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;我自己更倾向第二种。因为它最贴近你描述的场景。&lt;/p&gt;
+&lt;p&gt;你说的不是 C++ 语法技巧，也不是单纯命名规范，而是在做一件更实在的事：&lt;strong&gt;用结构承载语义，让名字回归本义&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;类名短下来，文件名短下来，读代码时先看到的是 &lt;code&gt;twap::OrderManager&lt;/code&gt; 这种上下文明确的对象，而不是 &lt;code&gt;TwapOrderManagerImpl&lt;/code&gt; 这种把目录职责、命名职责、实现职责全搅在一起的东西。&lt;/p&gt;
+&lt;p&gt;这时候代码才有点像 Java 里包结构成熟之后那种感觉。&lt;/p&gt;
+&lt;h2 id=&#34;最后一句&#34;&gt;最后一句
+&lt;/h2&gt;&lt;p&gt;所以，软件工程上当然有对应概念，但不是只有一个标准答案。&lt;/p&gt;
+&lt;p&gt;往大了说，它叫模块化。往代码组织上说，它叫按特性分包，再加命名空间管理。往领域边界上说，它又有点 bounded context 的意思。&lt;/p&gt;
+&lt;p&gt;怎么说呢，这种实践最值钱的地方，从来不是“名字看起来整齐了”，而是你终于不用靠超长前缀去弥补结构缺位了。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://en.cppreference.com/w/cpp/language/namespace&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;cppreference: Namespaces&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://quickfixengine.org/c/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;QuickFIX/C++ 官方站点&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/quickfix/quickfix&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;QuickFIX GitHub 仓库&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.javapractices.com/home/HomeAction.do&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Java Practices: Package by feature, not layer&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://martinfowler.com/bliki/BoundedContext.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Martin Fowler: Bounded Context&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;提示词：在编码开发的时候，C++一种好的实践规范，那就是按照文件夹分层，然后每个类上面套个 namespace，类似 Java 的 package，能有效减少文件名称和类名字里面掺杂冗余的内容,有个经典的项目就是 quickfix，近期开发算法服务也用到了类似的设计，twap vwap 很多功能模块都是类似的，软件工程学上有没有专门的概念？&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;从算法服务里 &lt;code&gt;twap&lt;/code&gt;、&lt;code&gt;vwap&lt;/code&gt; 的真实模块触发点切入，先把判断亮出来。&lt;/li&gt;
+&lt;li&gt;没把问题硬解释成单一名词，而是拆成模块化、命名空间管理、按特性分包几个更准确的层次。&lt;/li&gt;
+&lt;li&gt;保留了 QuickFIX 和 Java package 的对照关系，用来说明 C++ 经常要靠目录和命名空间补结构语义。&lt;/li&gt;
+&lt;li&gt;重点落在“用结构承载语义”，而不是停留在“避免重名”这种表层解释。&lt;/li&gt;
+&lt;li&gt;补了 &lt;code&gt;namespace&lt;/code&gt;、&lt;code&gt;package by feature&lt;/code&gt;、&lt;code&gt;bounded context&lt;/code&gt; 相关参考链接，方便后续继续展开。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
