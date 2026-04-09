@@ -6,7 +6,1559 @@
         <description>Recent content in Ai on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Wed, 18 Mar 2026 13:46:18 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/ai/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/ai/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Googleが今回Gemma 4を公開した（3）</title>
+        <link>https://ttf248.life/ja/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</link>
+        <pubDate>Wed, 08 Apr 2026 23:56:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</guid>
+        <description>&lt;p&gt;今回フォーラムを巡回していて、一番印象に残ったのは、「またランキングを出した」というところではなく、「VRAMが足りないから、パラメータがどれだけ大きくても無駄だ」という、かなり生易しい（陳腐な）一言でした。&lt;/p&gt;
+&lt;p&gt;以前は「モデルが遅い」ことを計算能力の問題だと捉えがちでした。しかし、後になってよく気づいたのは、多くのケースでGPUの計算能力が足りないのではなく、データが適切な場所に留まらないことが原因だということです。メモリのパスが少し変わるだけで、トークン速度は少し落ちるというレベルではなく、直接落ちてしまいます。&lt;/p&gt;
+&lt;p&gt;前2の記事で、前提となる問題は全て網羅しました。&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/gemma-4-series-models-and-license/&#34; &gt;第1回&lt;/a&gt; ではリリースとライセンスについて、&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/gemma-4-series-local-test-on-rtx-3060/&#34; &gt;第2回&lt;/a&gt; では3060 12GBでなぜまず&lt;code&gt;26B A4B&lt;/code&gt;を見るのかについて解説しました。そして、今回の記事では、速度が具体的にどのように落ちていくのかだけを扱います。&lt;/p&gt;
+&lt;h2 id=&#34;vram不足慢のはちょっとの問題ではない&#34;&gt;VRAM不足、慢のはちょっとの問題ではない
+&lt;/h2&gt;&lt;p&gt;推論というプロセスを分解して見ると、特に重要なのが以下の2点です。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;モデルの重み（モデルウェイト）&lt;/li&gt;
+&lt;li&gt;KVキャッシュ
+重みはモデルそのものを決定し、KVキャッシュはこれまでの文脈の状態を記録します。コンテキストが長くなるほど、KVキャッシュは大きくなります。この2つが安定してGPUのVRAM内に収まっていれば、トークンを生成する際も基本的に高帯域幅なVRAM内でのデータ読み出し、計算、結果書き戻しが行われるため、速度は通常期待できます。
+本当に厄介なのは、VRAMに乗り切らない場合です。
+一度容量オーバーになると、推論フレームワークは譲歩せざるを得ません：&lt;/li&gt;
+&lt;li&gt;一部の重みをシステムメモリに配置する&lt;/li&gt;
+&lt;li&gt;あるいは一部のKVキャッシュをシステムメモリに配置する&lt;/li&gt;
+&lt;li&gt;あるいはCPUとGPU間でデータを頻繁に行き来させる
+この状況では問題は「少し計算量が増えた」というレベルではなく、「トークンを一つ出すたびにデータ待ちが発生する」というレベルになります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;なぜ急落断崖が発生するのか線形に遅くなるわけではない&#34;&gt;なぜ急落（断崖）が発生するのか、線形に遅くなるわけではない
+&lt;/h2&gt;&lt;p&gt;この罠に初めて遭遇した多くの人は、「モデルが $14\text{B}$ から $31\text{B}$ になったら、2倍以上遅くなるから、我慢できる範囲だ」と直感的に考えます。&lt;/p&gt;
+&lt;p&gt;しかし、現実はそうではありません。&lt;/p&gt;
+&lt;p&gt;真の境界線はパラメータが2倍になることではなく、ワークセットがVRAM（ビデオメモリ）の境界を越えたかどうかです。&lt;/p&gt;
+&lt;p&gt;まだ越えていない場合、モデルが大きくなることで遅くなるのは、通常予測可能な範囲内です。&lt;/p&gt;
+&lt;p&gt;一度それを超えると、システムの状態が根本的に変わります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;それまでは「VRAM内でのクローズドループ」だった&lt;/li&gt;
+&lt;li&gt;今や「VRAM + メインメモリ + バスによるデータ転送」になる&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;経路が変わるだけで、コストは全く異なります。特にデコード（生成）の段階では、元々トークンを一つずつ順に進んでいき、バッチサイズもそれほど大きくないため、この時最も怖いのは、すべてのトークンに対してデバイスをまたいでデータを待つ必要があることです。&lt;/p&gt;
+&lt;p&gt;そのため、非常に典型的な現象を目にすることがあります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;モデルが動かないわけではない&lt;/li&gt;
+&lt;li&gt;GPUも完全に遊んでいるわけではない&lt;/li&gt;
+&lt;li&gt;しかし、トークン/秒（token/s）の数値が非常に悪い&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これが皆が言う「断崖」です。モデルが突然賢さを失ったのではなく、メモリのデータ経路が突然非効率的になったのです。&lt;/p&gt;
+&lt;h2 id=&#34;26b-a4bがローカルプレイヤーにとってより親切な理由&#34;&gt;「26B A4B」がローカルプレイヤーにとってより親切な理由
+&lt;/h2&gt;&lt;p&gt;この点も、なぜ私が前回の記事で一貫して「26B A4B」を重視してきたのかを説明しています。
+当然ながら総パラメータ数は小さいわけではありませんが、実際にトークンごとにアクティブになるのは約「3.8B」程度です。これは、類似のデプロイメント条件下において、計算リソースやVRAMへの負荷が、密な（dense）大規模モデルよりも管理しやすい場合が多いことを意味します。
+これも魔法ではありません。
+もしコンテキストを長くしすぎたり、量子化やフレームワークのサポートが不十分だと、これでも苦労します。ただ、最初からVRAMを使い切ってしまうような密なモデルと比較すると、「26B A4B」は、一般消費者向けのグラフィックカードにとってより現実的な選択肢という側面があります。
+ですから、多くのケースで「31B」が弱いのではなく、ローカルマシンが誰と長期的に付き合うのに適しているか、という問題なのです。&lt;/p&gt;
+&lt;h2 id=&#34;mac-が爆発しにくい理由&#34;&gt;Mac が「爆発しにくい」理由
+&lt;/h2&gt;&lt;p&gt;Mac の最も異なる点は、モデルではなくメモリ構造にあります。
+&lt;code&gt;Apple silicon&lt;/code&gt; はユニファイドメモリを採用しています。CPU と GPU が同じメモリプールを共有するため、専用GPU搭載機のように、片方がVRAM、もう片方がメインメモリで、間にバスを介してデータを移動させるという構造ではありません。
+この構造の最大の利点は、専用GPU搭載機では「VRAMにそもそも収まらない」モデルでも、Mac 上では別の状態になることです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;必ずしも速くはないが&lt;/li&gt;
+&lt;li&gt;まずは格納できる可能性が高いということです。
+つまり、Mac は最初から非常に硬い「VRAMの壁」にぶつかりにくいのです。
+これが、多くの人が Mac がローカルでの大規模言語モデル（LLM）において特に適していると感じる理由です。それは、「まずワークセット全体を同じメモリプールに詰め込めるか否か」という問題を解決してくれるからです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;しかしユニファイドメモリが高速を保証するわけではない&#34;&gt;しかし、ユニファイドメモリが高速を保証するわけではない
+&lt;/h2&gt;&lt;p&gt;この部分は分けて考える必要があります。
+ユニファイドメモリは何を解決したのか？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;専用GPUメモリとメインメモリの物理的な分離の問題を解決した&lt;/li&gt;
+&lt;li&gt;小容量のVRAMでは直接搭載できなかった多くのモデルに対応できるようになった&lt;/li&gt;
+&lt;li&gt;非常に煩雑な、デバイス間でのデータの往復移動の問題を解決した
+しかし、何が解決されていないのか？&lt;/li&gt;
+&lt;li&gt;大規模モデルの推論を「大量のメモリ読み出し」から別のものに変えていない&lt;/li&gt;
+&lt;li&gt;大規模モデルが突然帯域幅を消費しなくなるわけではない&lt;/li&gt;
+&lt;li&gt;すべての推論フレームワークが自動的にCUDAのような成熟したエコシステムを持つわけではない
+したがって、Macの快適さとNVIDIAの大容量VRAMカードの速さは、同じものではありません。
+Macはむしろ以下のようなものです：&lt;/li&gt;
+&lt;li&gt;機械が静かであること&lt;/li&gt;
+&lt;li&gt;総メモリが大きいこと&lt;/li&gt;
+&lt;li&gt;統一されていること&lt;/li&gt;
+&lt;li&gt;これまで搭載できなかった多くのモデルを、とりあえず動かすことができるようになったこと
+NVIDIAの大容量VRAMカードはむしろ以下のようなものです：&lt;/li&gt;
+&lt;li&gt;エコシステムが成熟していること&lt;/li&gt;
+&lt;li&gt;CUDAツールチェーンが完全であること&lt;/li&gt;
+&lt;li&gt;モデルとキャッシュをGPU内に留め込むことができれば、速度を上げやすいこと&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;なぜスピードを求めるのか結局はnvidiaのvram容量が重要になる&#34;&gt;なぜスピードを求めるのか、結局はNVIDIAのVRAM容量が重要になる
+&lt;/h2&gt;&lt;p&gt;これは感情的な判断ではなく、ローカルにデプロイする過程で容易にたどり着く現実的な結論です。
+もしあなたが以下のようなものを追求しているなら：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ローカルアシスタントの常駐化&lt;/li&gt;
+&lt;li&gt;多回の長文対話&lt;/li&gt;
+&lt;li&gt;長いコンテキストウィンドウ&lt;/li&gt;
+&lt;li&gt;より高いトークン/秒 (token/s)&lt;/li&gt;
+&lt;li&gt;待ち時間を極力減らすこと
+それらの場合、結局はVRAM容量の大きなNVIDIA製GPUが重要になります。なぜなら、あなたが真に購入しているのは、モデルとキャッシュをできるだけ安定してGPU上に保持する能力だからです。
+Macももちろん当てはまりますが、こちらは別の種類の要求に適しています：&lt;/li&gt;
+&lt;li&gt;大きなモデルを一度に搭載したい&lt;/li&gt;
+&lt;li&gt;速度は平均的でも良いが、ドライバや周辺機器の設定で手間をかけたくない&lt;/li&gt;
+&lt;li&gt;全体的な体験、消費電力、騒音を重視する
+これら二つのアプローチはいずれも合理的ですが、解決しようとしている問題点が異なります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;gemma-4-に戻る私の最終判断&#34;&gt;Gemma 4 に戻る、私の最終判断
+&lt;/h2&gt;&lt;p&gt;今回、&lt;code&gt;Gemma 4&lt;/code&gt; は、ローカルでオープンソースのモデルが、より真剣にハードウェアについて議論すべき段階に入ったと感じさせられました。
+しかし、モデルが強くなっても、物理法則まで緩むわけではありません。
+どれだけ強力な &lt;code&gt;31B&lt;/code&gt; でも、VRAM が不足すれば速度は落ちます。
+どんなに現実的な &lt;code&gt;26B A4B&lt;/code&gt; でも、コンテキストが長すぎれば負荷がかかります。
+Mac のユニファイドメモリは快適ですが、それは単に「とりあえず動かす」のが容易になるだけであり、大容量の VRAM を持つ CUDA カードの速度を無償で提供してくれるわけではありません。
+そのため、結局やはりこの地味な結論になります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;速度を求めるなら、最優先は NVIDIA の大容量 VRAM です。&lt;/li&gt;
+&lt;li&gt;万全を期すなら、Mac のユニファイドメモリは確かに快適です。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;3060 12GB&lt;/code&gt; のようなマシンで長期的に遊ぶのであれば、常に巨大なモデル（dense model）ばかりを気にするのではなく、&lt;code&gt;26B A4B&lt;/code&gt; のようなアプローチの方が現実的です。
+この一連の記事は、ここまでで締めくくりとします。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M3, M3 Pro, and M3 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/01/apple-unveils-m2-pro-and-m2-max-next-generation-chips-for-next-level-workflows/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M2 Pro and M2 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/macbook-pro/specs/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MacBook Pro Tech Specs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer Googleが1年ぶりにGemma4モデルをリリースしました。いつものように、ローカルデプロイメントを試します。使用するのはアップグレードされていないデスクトップPCに搭載されている3060 12GB NVIDIAグラフィックボードです。今回は初出陣でしたが、以前よく使っていたGemma3のアップグレード版が見つかりませんでした。しかし、類似のバージョンであるGemmaE4bというものがあるので、まずこれを検索して紹介してください。今回リリースされた全モデルについて、含まれる略語アルファベットがそれぞれ何を意味するのかを説明し、さらにオンライン上のGemma4に関する評価を検索してください。重要な点として、今回のGoogleによる更新でモデルのプロトコルが変更され、利用時の制限が緩和されました。最大の驚きは、私がよく使うテスト問題です。「C++コードを書いて、コンソールに五芒星を出力しなさい」というものでした。昨年の小規模パラメータのオープンソースモデルではこの問題をクリアできませんでしたが、Googleはこの回で成功させました。最初の回答は私の予想を完全に超えており、私の意図（トラップ）を理解していました。コンソールへの五芒星の出力は非常に厄介なため、直接アスキーアートとして文字列をハードコーディングし、コンソールに出力しました。これが原文です：「純粋なテキストのコンソール（Console）で数学的なロジックだけで正確な幾何学的構造を持つ五芒星を描画するのは非常に複雑である（座標変換やピクセル充填が関わるため）。最も古典的で視覚効果が高い方法は、アスキーアート（文字芸術）を使用することである。私が計算を強制的に要求した後も、それは成功しました。数学的な計算を通じて、五芒星を描画したのです。」以前はローカルでの翻訳タスクにGemma4をよく使用していました。現在のブログの多くの過去の記事の多言語版がこのようにして作られています。ローカルテストに使用したのは：gemma-4-26b-a4bモデルで、31bバージョンは本当に遅すぎます。しかし、レビューを見ると31bの効果は非常に良く、ランキングの成績も優れています。同時にフォーラムを閲覧し、私は「VRAMが不足している場合、モデルパラメータを上げると、生成トークンの速度が急激に低下する」ということに気づきました。なぜそうなるのか説明してください。Macではこの問題は発生しません。ユニファイドメモリを使用しているため、技術的な理由を説明してください。また、速度が必要な場合は、やはりNVIDIAのVRAM大容量グラフィックボードが必要です。Macのソリューションはバックアップにはなりますが、速度が出ません。今回の内容は多岐にわたるので、シリーズ記事に分割すべきか評価してください。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第3編では、「なぜスピードが落ちるのか」と「Macが速さ＝ではない理由」の2つの論点のみを残し、前2編の内容への回帰的な説明は行わない。&lt;/li&gt;
+&lt;li&gt;まずVRAM（ビデオメモリ）の限界について述べ、次に非線形な速度低下について述べることで、前回版よりも論理の流れがスムーズになる。&lt;/li&gt;
+&lt;li&gt;MacとNVIDIAをそれぞれ異なる側面から語り分け、一方は「安定性重視」、もう一方は「速度重視」という形で対比させる。&lt;/li&gt;
+&lt;li&gt;結論ではハードウェアの判断のみに留め、シリーズ分割の理由付けは繰り返さない。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Googleが今回Gemma 4を公開した（2）</title>
+        <link>https://ttf248.life/ja/p/gemma-4-series-local-test-on-rtx-3060/</link>
+        <pubDate>Wed, 08 Apr 2026 23:52:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/gemma-4-series-local-test-on-rtx-3060/</guid>
+        <description>&lt;p&gt;ランキングだけを見ると、一番心が動くのは間違いなく &lt;code&gt;31B&lt;/code&gt; です。
+しかし、実際にマシンを前にすると、やはりアップグレードされていない &lt;code&gt;RTX 3060 12GB&lt;/code&gt; の方が、判断はすぐに変わります。どう言えばいいか、ローカルにデプロイするということは、最後に一番派手なものが勝つのではなく、長く一緒にいられそうなものを選ぶことなんです。私にとっては、今回まず試す価値があるのは &lt;code&gt;31B&lt;/code&gt; ではなく、&lt;code&gt;26B A4B&lt;/code&gt; です。&lt;/p&gt;
+&lt;p&gt;前回の記事 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/gemma-4-series-models-and-license/&#34; &gt;GoogleがGemma 4を公開した件（一）：急いでローカルに動かす前に、モデル名とプロトコルを理解すべき&lt;/a&gt; では、リリースとプロトコルについて説明しました。今回の記事ではローカルでの体験そのものに焦点を当てています。最後の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/gemma-4-series-vram-cliff-and-mac-unified-memory/&#34; &gt;GoogleがGemma 4を公開した件（三）：VRAM不足でなぜ急落するのか、Macはなぜバックアップになり得るのに速くないのか&lt;/a&gt; を続けます。&lt;/p&gt;
+&lt;h2 id=&#34;なぜ先に26b-a4bを試すのか&#34;&gt;なぜ先に「26B A4B」を試すのか
+&lt;/h2&gt;&lt;p&gt;理由は実はかなり現実的、つまりハードウェアの制約によるものです。
+「31B」はもちろん強力で、公式ランキングやコミュニティからの初期フィードバックも非常に高いです。しかし、それを「RTX 3060 12GB」のようなマシンに載せると、問題はすぐに「どれだけ強いか」から「待つ価値があるか」へと変わってきます。モデルやキャッシュがシステムメモリに退避してしまうと、速度が急激に落ちてしまうことがあり、この件については第3弾で詳しく解説します。
+「26B A4B」は違います。
+総パラメータ数は「25.2B」ですが、実際にトークンごとにアクティブになるのは約「3.8B」程度です。平たく言えば、これは今回のGemma 4の中で、「ローカルユーザー向けに特別に用意された」モデルと言えます。
+ですから、もしあなたのマシンが私と同じような、コンシューマーグレードの古いグラボであるなら、判断はシンプルになります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ランキングを見たいだけなら、「31B」を試す&lt;/li&gt;
+&lt;li&gt;本格的に長期でローカルに使いたいなら、まず「26B A4B」から始める&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;五芒星の問題今回はついに誰かが私が罠を仕掛けていることに気づいた&#34;&gt;五芒星の問題、今回はついに誰かが私が罠を仕掛けていることに気づいた
+&lt;/h2&gt;&lt;p&gt;私自身がずっと持っている、かなり原始的なテスト問題があります。モデルに &lt;code&gt;C++&lt;/code&gt; コードを書いて、コンソールに五芒星を出力させるというものです。&lt;/p&gt;
+&lt;p&gt;この問題は冗談のように見えますが、実際には結構厄介です。なぜなら、多くのモデルはこれを純粋な数学的な描画問題だと誤解し、座標系や三角関数、ループ処理などを持ち出してきてしまい、最終的にテキストコンソール上に、全く見づらい文字の塊を出力してしまうからです。&lt;/p&gt;
+&lt;p&gt;去年の小規模パラメータのオープンソースモデルの多くが、この点でつまずきました。&lt;/p&gt;
+&lt;p&gt;しかし、今回 &lt;code&gt;Gemma 4&lt;/code&gt; の最初の反応は、逆に私を驚かせました。すぐに理解したふりをするのではなく、制約条件を先に認識し、以下の判断を出してくれたのです：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;純粋なテキストコンソール（Console）上で、正確な幾何学的構造を持つ五芒星を数学的なロジックだけで描画するのは非常に複雑です（座標変換やピクセル充填が関わってきます）。最も古典的で視覚的に効果的な方法は、ASCII Art（文字アート）を使用することです。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h2 id=&#34;五芒星の問題今回はついに誰かが私が仕掛けた罠を理解してくれた&#34;&gt;五芒星の問題、今回はついに誰かが私が仕掛けた罠を理解してくれた
+&lt;/h2&gt;&lt;p&gt;端的に言うと、まず問題の背後にある環境的な制約を理解した点だ。コンソールはキャンバスではなく、文字グリッドもピクセルグリッドではない。先に「どうすれば安定して五芒星を出力できるか」を考え抜いてから、数学的な描画について語るべきだった。&lt;/p&gt;
+&lt;p&gt;そして、最初のバージョンではいきなりハードコーディングされた五芒星の文字列を提示した。
+この行動は非常に的確だ。推論を見せるためではなく、まず問題を正しく解くことを優先した。&lt;/p&gt;
+&lt;h2 id=&#34;さらに驚いたのはそれがさらに進んでいくことだった&#34;&gt;さらに驚いたのは、それがさらに進んでいくことだった
+&lt;/h2&gt;&lt;p&gt;単にASCIIアートで止まっていただけなら、この問題はトラップを認識したとしか言えない。
+私が高く評価したのは、その後も数学的な計算を要求し続けた際にも、それが失敗せず、むしろ幾何学的な関係性を文字のグリッド上にマッピングし、最終的に五芒星を算出した点だ。
+これは「コードを書ける」ということではなく、この問題が実際には二層構造になっていることを理解している証拠だと考える。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;第一層：コンソール上で最も確実な答えは何か&lt;/li&gt;
+&lt;li&gt;第二層：もし計算をしなければならない場合、どのように幾何学の問題を文字のグリッド上に落とし込むか
+以前の多くのローカル小規模モデルは、最初から第二層に飛びつき、結局第一層ができていないことが多かった。&lt;code&gt;Gemma 4&lt;/code&gt; は今回、逆の手順を踏み、まず境界線を見極め、それからどう解くかを決定した。
+私はこの点の方が、単体のベンチマークスコアよりも価値があると思う。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;今回のコーディング能力の向上は賢くなっただけではない&#34;&gt;今回のコーディング能力の向上は、「賢くなった」だけではない
+&lt;/h2&gt;&lt;p&gt;この五角星の問題が使いやすいのは、単に文法を問うものではないからです。
+本当に試しているのは以下の点です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;出力環境を先に理解できるか&lt;/li&gt;
+&lt;li&gt;直感的な解法が不適切であることを認められるか&lt;/li&gt;
+&lt;li&gt;「最適な表示効果」と「ユーザーによる強制計算要求」の間を切り替えられるか
+このような問題を正しく解けるということは、モデルが単にコードスニペットを補完するだけでなく、現実の制約を処理できる開発アシスタントらしくなり始めたことを示しています。
+だからこそ、私にとって &lt;code&gt;Gemma 4&lt;/code&gt; の第一印象は、去年の小規模パラメータのオープンソースモデル群よりも格段に良いのです。昨年の多くのモデルは、チャットができる、補完できる、なんとかこなせるレベルでしたが、このような少し境界線を感じさせる問題に直面すると、脆さが露呈しがちでした。
+今回、Googleはこの弱点を少なくとも補ってくれました。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;この一文を翻訳するとgemma-4-が全面的に引き継ぐと単純には言えない&#34;&gt;この一文を翻訳すると、「Gemma 4 が全面的に引き継ぐ」と単純には言えない
+&lt;/h2&gt;&lt;p&gt;あなたが以前指摘した点は非常に重要です。これまでローカルで翻訳を行う際によく &lt;code&gt;Gemma&lt;/code&gt; を利用していましたよね。&lt;/p&gt;
+&lt;p&gt;この件は、&lt;code&gt;Gemma 4&lt;/code&gt; になると、実はそれほど直線的ではありません。なぜなら、Google は 2026 年 2 月に単独で &lt;code&gt;TranslateGemma&lt;/code&gt; をリリースし、しかもそれは &lt;code&gt;Gemma 3&lt;/code&gt; のアーキテクチャをベースにしているからです。&lt;/p&gt;
+&lt;p&gt;これはどういう意味か？
+ということです。もしあなたがすでにローカルでの翻訳パイプラインを確立していて動いているなら、短期間で全てを &lt;code&gt;Gemma 4&lt;/code&gt; に切り替える必要はないかもしれません。特に、目的が非常に限定的で、単に安定した多言語変換だけを求めるシナリオにおいては、専用の翻訳モデルには依然として価値があります。&lt;/p&gt;
+&lt;p&gt;しかし、もしあなたが求めているのが、翻訳、質問応答、コード、一般的なテキストタスクなど、複数の用途を可能な限りカバーできるローカルモデルセットであるならば、&lt;code&gt;26B A4B&lt;/code&gt; のようなより万能なアプローチの方がスムーズでしょう。&lt;/p&gt;
+&lt;p&gt;これが最も特化しているわけではないかもしれませんが、「とりあえず動く、十分なメインストリームモデルが欲しい」という現実的な選択肢に近いと言えます。&lt;/p&gt;
+&lt;h2 id=&#34;なぜ第2回で31bを褒め続けたくないのか&#34;&gt;なぜ第2回で「31B」を褒め続けたくないのか
+&lt;/h2&gt;&lt;p&gt;「31B」がダメだからというわけではない。むしろ、良すぎるからこそ、注意が逸れやすいのだ。
+ずっと「31B」のベンチマークスコアばかり見ていると、「強力なモデルは本当にすごい」という記事になりがちだ。しかし、ローカル環境で最も怖いのは、そういった謳い文句である。なぜなら、あなたが毎日使い続けるかどうかを決定するのは、ランキングではなく、以下の点だからだ：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;起動が遅すぎないか&lt;/li&gt;
+&lt;li&gt;回答速度が著しく落ちないか&lt;/li&gt;
+&lt;li&gt;長いコンテキストを扱うとすぐに体験を台無しにしないか&lt;/li&gt;
+&lt;li&gt;自分自身のマシンで本当に支えられるか
+「3060 12GB」のようなマシンでは、これらの現実的な問題の方が、ランキングよりもずっと重要だ。
+そのため、第2回の締めくくりはシンプルにした。
+「31B」は見る価値があるが、「26B A4B」は使う価値がある。ローカルユーザーにとって、この二つの文は全くの別物なのだ。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;私のローカルでの第一印象&#34;&gt;私のローカルでの第一印象
+&lt;/h2&gt;&lt;p&gt;今回の実測感触を一言でまとめると、それは以下の通りです。
+&lt;code&gt;Gemma 4&lt;/code&gt; はついにシーンを考慮できるローカルモデルになり始めた。
+特に &lt;code&gt;26B A4B&lt;/code&gt; がそうですね。これはベンチマーク表を飾るためのモデルというよりは、古いマシンやコンシューマー向けのグラフィックボード、ローカルでの長期利用といった現実的な制約の下では、かえって真の主力選択肢のように感じられます。
+少なくとも今回の五角星テストに関しては、Googleは合格点を超えました。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://huggingface.co/google/gemma-4-26B-A4B-it&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;google/gemma-4-26B-A4B-it on Hugging Face&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.googleblog.com/introducing-gemma3/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3: The Developer Guide&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/translategemma/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;TranslateGemma: A new family of open translation models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://foodtruckbench.com/blog/gemma-4-31b&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 31B on FoodTruck Bench&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer Googleが1年ぶりにGemma4モデルをリリースしました。いつものように、ローカルでのデプロイを試します。使用するのはアップグレードされていないデスクトップPCに搭載されている3060 12GBのNVIDIAグラフィックボードです。今回は初出陣でしたが、以前よく使っていたGemma3のアップグレード版が見つかりませんでした。しかし、類似のバージョンであるGemmaE4bというものがあるので、まずこれを検索して紹介してください。今回リリースされた全モデルについて、含まれる略語アルファベットがそれぞれ何を意味するのかを説明し、さらにオンライン上のGemma4に関するレビューを検索してください。重要な点として、今回のGoogleの更新によりモデルのプロトコルが変更され、利用時の制限が緩和されました。最大の驚きは、私がよく使うテスト問題です。「C++コードを書いて、コンソールに五芒星を出力しなさい」というものです。去年の小規模パラメータのオープンソースモデルではこの問題をクリアできませんでしたが、Googleはこの回で成功させました。最初の回答は私の予想を完全に超えており、私の意図（トラップ）を理解していました。コンソールに出力する五芒星は非常に面倒なので、直接アスキーアート形式の文字列としてハードコーディングし、コンソールに直接出力しました。原文は以下の通りです：「純粋なテキストのコンソール（Console）で数学的なロジックだけで正確な幾何学的構造を持つ五芒星を描画するのは非常に複雑であるため（座標変換やピクセル充填が関わる）、最も古典的で視覚効果が高い方法はASCII Art（文字アート）を使用することです。私が計算を強制的に要求した後も、それは成功しました。数学的な計算を通じて、五芒星を描画することができました。」以前はローカルでの翻訳タスクにGemma4をよく使っていました。現在ブログにある多くの過去の記事の多言語版がこのようにして作られています。ローカルテストに使用したのは：gemma-4-26b-a4bモデルで、31bバージョンは本当に遅すぎます。しかし、レビューを見ると31bの効果は非常に良く、ランキングの成績も優れています。またフォーラムを閲覧していて気づいたのですが、VRAMが不足している場合、モデルパラメータを上げると生成トークンの速度が急激に低下します。この理由を説明してください。Macではこのような問題が発生しないのはなぜですか？ユニファイドメモリを使用する技術的な理由を説明してください。さらに、速度が必要な場合は、やはりNVIDIAの大容量VRAM搭載グラフィックボードが必要です。Macのソリューションはバックアップとしては機能しますが、速度が出ません。今回の内容は多岐にわたるので、シリーズ記事に分割すべきか評価してください。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子要約&#34;&gt;ライティングの骨子要約
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第2編はローカル体験のみに留め、第1編の総括や第3編のVRAM原理の説明は行わない。&lt;/li&gt;
+&lt;li&gt;まず「なぜ先に 26B A4B を実行するのか」という明確な判断を提示し、その後で五芒星テストを展開する。&lt;/li&gt;
+&lt;li&gt;五芒星の問題が主軸となるのは、ベンチマークスコアよりもコーディングシナリオにおける限界点をよりよく示せるからである。&lt;/li&gt;
+&lt;li&gt;翻訳タスクは独立したセクションとして扱い、&lt;code&gt;Gemma 4&lt;/code&gt; が全ての旧プロセスを線形的に引き継いでいるという印象を避ける。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Googleが今回Gemma 4を公開した（1）</title>
+        <link>https://ttf248.life/ja/p/gemma-4-series-models-and-license/</link>
+        <pubDate>Wed, 08 Apr 2026 23:48:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/gemma-4-series-models-and-license/</guid>
+        <description>&lt;p&gt;初日に私がやりたかったことはとてもシンプルでした。&lt;code&gt;Gemma 3&lt;/code&gt; に対応するアップグレード版を見つけて、まずダウンロードして動かしてみることです。
+しかし、全体をざっと見ていくと、少し戸惑いを覚えました。以前慣れていた &lt;code&gt;4B / 12B / 27B&lt;/code&gt; という命名規則がなくなり、代わりに &lt;code&gt;E4B&lt;/code&gt;、&lt;code&gt;26B A4B&lt;/code&gt;、&lt;code&gt;31B&lt;/code&gt; といったものが現れたのです。どう言えばいいか、今回Googleが真に変わったのは、単にモデルのサイズだけではなく、「この一連のモデルをどう理解すべきか」という部分まで変わってしまったからです。&lt;/p&gt;
+&lt;p&gt;この記事群は3つの記事に分けて書きました。現在の記事では、リリース情報、モデル名、プロトコルを明確に説明します。次の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/gemma-4-series-local-test-on-rtx-3060/&#34; &gt;Googleが今回Gemma 4を公開した（2）：RTX 3060 12GBでローカル実行してみた、真の現実的なのは26B A4B&lt;/a&gt; を書きます。そして最後の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/gemma-4-series-vram-cliff-and-mac-unified-memory/&#34; &gt;Googleが今回Gemma 4を公開した（3）：VRAM不足でなぜ急落するのか、Macはなぜバックアップになり得るのに速くないのか&lt;/a&gt; で締めくくります。&lt;/p&gt;
+&lt;h2 id=&#34;まず今回具体的に何がリリースされたのかを明確にしましょう&#34;&gt;まず、今回具体的に何がリリースされたのかを明確にしましょう
+&lt;/h2&gt;&lt;p&gt;昨年の &lt;code&gt;Gemma 3&lt;/code&gt; は 2025年3月12日にリリースされ、今回の &lt;code&gt;Gemma 4&lt;/code&gt; は 2026年4月2日と、確かに約1年空いています。
+しかし、今回は「27Bの次は何だろう」という考え方で探すのはやめましょう。公式が提示した主要な4つのサイズは、もはや単に総パラメータ数で区分けされているわけではありません。
+| &lt;code&gt;E2B&lt;/code&gt; | Dense | 2.3B effective，5.1B 含 embeddings，128K context | デバイス側、超軽量ローカル |&lt;/p&gt;
+&lt;h2 id=&#34;今回結局何を発行したのかを明確にする&#34;&gt;今回、結局何を発行したのかを明確にする
+&lt;/h2&gt;&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;モデル名&lt;/th&gt;
+          &lt;th&gt;構造&lt;/th&gt;
+          &lt;th&gt;主要な数値&lt;/th&gt;
+          &lt;th&gt;代表的なユースケース&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;E4B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;有効パラメータ 4.5B、埋め込み込み含む 8B、コンテキスト長 128K&lt;/td&gt;
+          &lt;td&gt;元の 4B の小型モデルをメインラインとして展開&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;今回到底发布了什么说清楚&#34;&gt;今回到底发布了什么说清楚
+&lt;/h2&gt;&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;モデル名&lt;/th&gt;
+          &lt;th&gt;構造&lt;/th&gt;
+          &lt;th&gt;主要な数値&lt;/th&gt;
+          &lt;th&gt;代表的なユースケース&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;26B A4B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;MoE&lt;/td&gt;
+          &lt;td&gt;合計 25.2B、アクティブ約 3.8B、コンテキスト 256K&lt;/td&gt;
+          &lt;td&gt;コンシューマー向けGPU、ローカルデプロイメント、品質と速度の両立&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;まず今回具体的に何を出したのかを明確にする&#34;&gt;まず、今回具体的に何を出したのかを明確にする
+&lt;/h2&gt;&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;モデル名&lt;/th&gt;
+          &lt;th&gt;構造&lt;/th&gt;
+          &lt;th&gt;主要な数値&lt;/th&gt;
+          &lt;th&gt;代表的なユースケース&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;31B&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Dense&lt;/td&gt;
+          &lt;td&gt;30.7B dense、256K context&lt;/td&gt;
+          &lt;td&gt;最高性能の追求、ランキングでの優位性、より安定した品質&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;今回結局何を出したのかを明確にする&#34;&gt;今回、結局何を出したのかを明確にする
+&lt;/h2&gt;&lt;p&gt;表面だけを見ると、今回のネーミングはより混乱していると感じるかもしれません。しかし実際は混乱しているのではなく、Googleが意図的に3つの異なるアプローチに分割しているのです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;小規模モデル・デバイス側向けに &lt;code&gt;E2B / E4B&lt;/code&gt; を提供&lt;/li&gt;
+&lt;li&gt;ローカルプレイヤー路線として &lt;code&gt;26B A4B&lt;/code&gt; を提供&lt;/li&gt;
+&lt;li&gt;品質と上限を重視した路線として &lt;code&gt;31B&lt;/code&gt; を提供
+これが、多くの人が最初に「以前の馴染んだアップグレードパスが途切れた」と感じる理由です。アップグレード版を提供していないわけではなく、Googleはもはや総パラメータ数という単一の次元だけで製品を売りたいわけではないのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;eとaは今回装飾文字ではありません&#34;&gt;「E」と「A」は今回、装飾文字ではありません
+&lt;/h2&gt;&lt;p&gt;このモデル名の中で、最も誤解を招きやすいのが &lt;code&gt;E4B&lt;/code&gt; と &lt;code&gt;A4B&lt;/code&gt; です。
+&lt;code&gt;E2B&lt;/code&gt; や &lt;code&gt;E4B&lt;/code&gt; に含まれる &lt;code&gt;E&lt;/code&gt; は、公式では &lt;code&gt;effective parameters&lt;/code&gt;（実効パラメータ）を指します。これら2つのモデルは &lt;code&gt;Per-Layer Embeddings&lt;/code&gt; を使用しているため、総パラメータ数と真の有効パラメータ数が同じ基準ではありません。平たく言えば、Googleは「これは過去のような『単なる 4B の密なモデル』ではない」と注意喚起しています。
+一方、&lt;code&gt;26B A4B&lt;/code&gt; に含まれる &lt;code&gt;A&lt;/code&gt; は &lt;code&gt;active parameters&lt;/code&gt;（アクティブパラメータ）を指します。総容量は &lt;code&gt;25.2B&lt;/code&gt; ですが、各トークンで実際に活性化するのは約 &lt;code&gt;3.8B&lt;/code&gt; です。これがMoE（Mixture of Experts）の鍵であり、モデル全体のサイズは大きいものの、実行時に実際に計算に参加する部分はかなり小さいということです。
+そのため、この2つの名前はどちらも「4B」を含んでいますが、その意味合いは全く異なります。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;E4B&lt;/code&gt; は小規模モデルのメインラインです。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;26B A4B&lt;/code&gt; は大規模なMoEであり、ローカル推論時には「アクティブな規模が約 4B 程度」というイメージに近いです。
+この命名規則は当初は確かに不自然ですが、過去のものよりも実際のデプロイ体験により近くなっています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;以前-gemma-3-を使っていた場合今回どういう対応関係で探せばいいか&#34;&gt;以前 Gemma 3 を使っていた場合、今回どういう対応関係で探せばいいか
+&lt;/h2&gt;&lt;p&gt;私が思うに、この世代で最も誤解しやすいのは、これを &lt;code&gt;Gemma 3&lt;/code&gt; の線形なアップグレードだと捉えてしまう点です。&lt;/p&gt;
+&lt;p&gt;使用する習慣から考えると、だいたい以下のように理解できます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;これまで &lt;code&gt;4B&lt;/code&gt; で軽いタスクを動かしていた人は、まずは &lt;code&gt;E4B&lt;/code&gt; を見てください。&lt;/li&gt;
+&lt;li&gt;これまで &lt;code&gt;27B&lt;/code&gt; でモデルの限界値を見ていた人は、今度は &lt;code&gt;31B&lt;/code&gt; を見てください。&lt;/li&gt;
+&lt;li&gt;これまでコンシューマー向けのグラボで「十分強力だけど、完全に動かせなくなるほどではない」というバランス点を探していた人は、重点的に &lt;code&gt;26B A4B&lt;/code&gt; を見てください。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;この部分を先に整理しておかないと、後からローカルにデプロイする際に非常に迷いやすいです。「いつものアップグレード版がないな」と文句を言いながら、実際自分に合っているモデルを見逃してしまう可能性があります。&lt;/p&gt;
+&lt;h2 id=&#34;今回最も価値のあるアップデートは実はパラメータではない&#34;&gt;今回最も価値のあるアップデートは、実はパラメータではない
+&lt;/h2&gt;&lt;p&gt;今回「ようやく腑に落ちた」と感じさせたのは、ランキングではなくプロトコル（ライセンス）でした。
+以前のバージョンの &lt;code&gt;Gemma&lt;/code&gt; の利用規約が全く使えないわけではありませんが、ずっとどこか引っかかる部分がありました。特に以下のようなことを気にされている場合：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;再配布&lt;/li&gt;
+&lt;li&gt;蒸留や二次加工を行う&lt;/li&gt;
+&lt;li&gt;モデルを自社の製品ラインに組み込む&lt;/li&gt;
+&lt;li&gt;商用展開を行う
+といった場合、常にライセンス条項内の通知（notice）、下流利用の制限、付帯する契約などをどう処理すべきかを確認する必要がありました。
+&lt;code&gt;Gemma 4&lt;/code&gt; が今回直接 &lt;code&gt;Apache 2.0&lt;/code&gt; に変更されたことで、状況が非常にクリアになりました。核となるメッセージは極めて明確です：&lt;/li&gt;
+&lt;li&gt;商用利用が可能である&lt;/li&gt;
+&lt;li&gt;改変が可能である&lt;/li&gt;
+&lt;li&gt;再配布が可能である
+義務は主に、ライセンス、通知（notice）、改変の説明といったオープンソースの世界で馴染み深いものに留まるというものです。
+つまり、Googleが今回単にモデルをオープンソースにしたのではなく、「皆が安心して使えるかどうか」という点まで含めて整備してくれたのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;コミュニティからの初期評価は基本的に2つのラインに集約される&#34;&gt;コミュニティからの初期評価は、基本的に2つのラインに集約される
+&lt;/h2&gt;&lt;p&gt;最初の週の口コミだけを見ると、大まかに2つの声があります。&lt;/p&gt;
+&lt;p&gt;1つ目のラインは、「&lt;code&gt;31B&lt;/code&gt; は確かに実力がある」というものです。
+公式が発表したスコアは非常に強力です。&lt;code&gt;Arena AI&lt;/code&gt; のテキストランキングでは、31B がリリースされた時点でオープンソースモデルの上位にランクインし、&lt;code&gt;LiveCodeBench v6&lt;/code&gt; でも &lt;code&gt;Gemma 3 27B&lt;/code&gt; よりかなり向上しています。多くの人が最初に抱く感想は、「このサイズでこれだけの性能が出せるのは、期待を上回っている」というものです。&lt;/p&gt;
+&lt;p&gt;2つ目のラインは、「&lt;code&gt;26B A4B&lt;/code&gt; はローカルユーザーのための生命線のようなものだ」というものです。
+一見して最も華やかなフラッグシップモデルというわけではありませんが、非常に現実的です。特にデータセンターではなく、コンシューマー向けのグラフィックボードやワークステーション、さらには古いマシンで動かす場合、ローカルでの体験はむしろこのラインに落ち着きやすいのです。&lt;/p&gt;
+&lt;p&gt;もちろん、最初の口コミには非常に現実的な前提があります。それはエコシステムがまだ追いついている最中だということです。テンプレート、量子化、推論フレームワーク、フロントエンドツールなど、多くのものがまだ完全に追いついていません。そのため、現段階で目にするレビューは、以下の2つのレイヤーに分けて見るのが最善です。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;モデル本体&lt;/strong&gt;: 今回は確かに大きな進歩があった&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;ローカル体験&lt;/strong&gt;: 今後もツールの成熟度に影響され続けるだろう&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;第1回の結論について&#34;&gt;第1回の結論について
+&lt;/h2&gt;&lt;p&gt;単に今回のGoogleが何を発表したのかを知りたいだけであれば、一言で十分です。
+「Gemma 4」は、「小さいものから大きいものまで並べる密度の高いモデル」という古い考え方ではなく、デバイス側、ローカルデプロイ、品質の上限という3つの道を分離しました。「E4B」、「26B A4B」、「31B」と名前は奇妙ですが、背後にあるのは非常に現実的なデプロイメントの分業です。
+しかし、もし私に今回の最大の変化は何だと尋ねられたら、やはりこの判断になります。
+パラメータでも、ベンチマークスコアでもなく、Googleがようやく「Gemma 4」を皆がより安心して使えるオープンソースライセンスに組み込んだことです。
+この一歩こそが、表の数字以上に重要です。
+次の記事では、発表会の論調は語らず、直接ローカルマシンに戻ります。やはりアップグレードされていない「RTX 3060 12GB」を使い、なぜ私が最初に注目したのは「31B」ではなく「26B A4B」だったのか、という点です。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/terms&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma Terms of Use&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/apache_2&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apache License 2.0 for Gemma 4&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://foodtruckbench.com/blog/gemma-4-31b&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 31B on FoodTruck Bench&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.reddit.com/r/LocalLLaMA/comments/1san4kd/will_gemma_4_124b_moe_open_as_well/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;LocalLLaMA discussion on Gemma 4 license changes&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.googleblog.com/introducing-gemma3/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3: The Developer Guide&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer Googleが1年ぶりにGemma4モデルをリリースしました。いつものように、ローカルでのデプロイを試します。使用するのはアップグレードされていないデスクトップPCに搭載されている3060 12GBのNVIDIAグラフィックボードです。今回は初出陣でしたが、以前よく使っていたGemma3のアップグレード版が見つかりませんでした。しかし、類似のバージョンであるGemmaE4bというものがあるので、まずこれを検索して紹介してください。今回リリースされた全モデルについて、含まれる略語アルファベットがそれぞれ何を意味するのかを説明し、さらにオンライン上のGemma4に関するレビューを検索してください。重要な点として、今回のGoogleによる更新でモデルのプロトコルが変更され、利用時の制限が緩和されました。最大の驚きは、私がよく使うテスト問題です。「C++コードを書いて、コンソールに五芒星を出力しなさい」というものです。昨年の小規模パラメータのオープンソースモデルではこの問題をクリアできませんでしたが、Googleはこの回で成功させました。最初の回答は私の予想を完全に超えており、私の意図した「罠」を理解していました。コンソールでの五芒星の出力は非常に厄介なので、直接アスキーアート（文字）としてハードコーディングし、コンソールに直接出力しました。原文は以下の通りです：「純粋なテキストのコンソール（Console）で数学的なロジックだけで正確な幾何学的構造を持つ五芒星を描画するのは非常に複雑であるため（座標変換やピクセル充填が関わる）、最も古典的で視覚効果が高い方法はアスキーアート（文字芸術）を使用することです。」私が計算を強制的に要求した後も、それは成功しました。数学的な計算を通じて、五芒星を描画することに成功したのです。以前はローカルでの翻訳タスクにGemma4をよく使っていました。現在ブログにある多くの過去の記事の多言語版がこのようにして作られています。ローカルテストに使用したのは：gemma-4-26b-a4bモデルで、31bバージョンは本当に遅すぎます。しかし、レビューを見ると31bの効果は非常に良く、ランキングの成績も優れています。同時にフォーラムを閲覧し、私は「VRAMが不足している場合、モデルパラメータを上げると、生成トークンの速度が急激に低下する」ということに気づきました。なぜそうなるのか説明してください。Macではこの問題は発生しません。統一メモリを使用しているため、技術的な理由を説明してください。また、もし速度が必要な場合は、やはりNVIDIAのVRAM大容量のグラフィックボードが必要です。Macのソリューションはバックアップにはなりますが、速度が出ません。今回の内容は多岐にわたるので、シリーズ記事に分割すべきか評価してください。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第1の記事では、「今回具体的に何がリリースされたのか」と「プロトコルがなぜ重要なのか」を明確に伝えることに専念し、ローカル体験に関する話題は取り上げないようにする。&lt;/li&gt;
+&lt;li&gt;モデルラインナップの説明は、まずモデル群を分解してからアルファベットの意味を説明するという順序にし、前回のバージョンよりも論理的な流れを重視する。&lt;/li&gt;
+&lt;li&gt;プロトコルに関する部分は、「今回緩和されたのはパラメータではなく、利用制限である」という判断軸を維持する。&lt;/li&gt;
+&lt;li&gt;コミュニティの評価については、まとめに留め、ローカル体験に関する記述は過度に盛り込まないようにする。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Codex はデフォルトで medium ですが、後で high に切り替えました。</title>
+        <link>https://ttf248.life/ja/p/codex-default-medium-vs-high/</link>
+        <pubDate>Wed, 08 Apr 2026 22:57:47 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/codex-default-medium-vs-high/</guid>
+        <description>&lt;p&gt;Codex を使っている期間、ずっと気になっている問題があります。デフォルトの思考レベルが &lt;code&gt;medium&lt;/code&gt; なのですが、ネットで話題になっている &lt;code&gt;GPT-5.4&lt;/code&gt; のような話を聞くと、皆とてもすごい口ぶりをします。実際に自分で試してみると、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt; は一体どれくらい違うのか、公式からも特に分かりやすい表が出ていません。&lt;/p&gt;
+&lt;p&gt;私なりの結論はかなり明確になりました。普段のコーディングでは、私は迷わず &lt;code&gt;high&lt;/code&gt; を使う方がいいと思っています。&lt;code&gt;medium&lt;/code&gt; が使えないわけではありません。ちょっとした作業や、細かい修正、方向性を試す程度なら問題ありませんが、複数のファイルを変更したり、要求に曖昧さがあったりして、コードを見ながら判断を求められるような状況だと、&lt;code&gt;medium&lt;/code&gt; では計算能力の配分を間違えやすい気がします。逆に &lt;code&gt;xhigh&lt;/code&gt; はあまり頻繁には使いません。行き詰まった大きなタスクのために取っておくのが良いと思います。&lt;/p&gt;
+&lt;h2 id=&#34;まずmediumを明確にしておく&#34;&gt;まず「medium」を明確にしておく
+&lt;/h2&gt;&lt;p&gt;この件で最も混乱しやすいのは、「medium」が単一の意味ではない点です。
+2026年4月8日現在、OpenAIの公開ドキュメントによると、&lt;code&gt;GPT-5.4&lt;/code&gt; の &lt;code&gt;reasoning.effort&lt;/code&gt; は &lt;code&gt;none&lt;/code&gt;、&lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt; をサポートしており、デフォルトは依然として &lt;code&gt;none&lt;/code&gt; です。しかし、同じドキュメント内には &lt;code&gt;verbosity&lt;/code&gt; もあり、これには &lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt; が含まれており、しかも &lt;code&gt;GPT-5.4&lt;/code&gt; の &lt;code&gt;verbosity&lt;/code&gt; のデフォルト値は &lt;code&gt;medium&lt;/code&gt; です。
+そのため、「デフォルトは medium」という記述をオンラインで見ても、すぐに「思考レベル」に当てはめるのはやめてください。多くの場合、言及されているものは全く別のことを指しています。
+もしあなたが Codex で直接利用している状況で、デフォルトが &lt;code&gt;medium&lt;/code&gt; と表示された場合、私はそれをモデルドキュメント上の低レイヤーなデフォルト値として理解するよりも、プロダクト層から提供されるプリセットとして解釈する方が適切だと考えます。この区別をしないと、後続の議論で常に矛盾が生じてしまいます。&lt;/p&gt;
+&lt;h2 id=&#34;公式は実際には差を明確に説明していない&#34;&gt;公式は実際には差を明確に説明していない
+&lt;/h2&gt;&lt;p&gt;公式の説明を再確認します。
+公開ドキュメントから現在確認できることは以下の点です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4&lt;/code&gt; が、公式推奨の汎用コーディングデフォルトモデルであること。&lt;/li&gt;
+&lt;li&gt;コード生成ガイドラインにおいて、公式が &lt;code&gt;gpt-5.4&lt;/code&gt; に提供する例では、直接的に &lt;code&gt;reasoning: high&lt;/code&gt; が設定されていること。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.3-codex&lt;/code&gt; のような Codex 特化モデルは、公開ページで明確に &lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt; をサポートしていること。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4-pro&lt;/code&gt; は別のラインであり、単に通常の &lt;code&gt;gpt-5.4&lt;/code&gt; の設定を上げるだけではなく、「より多くの計算能力を使ってより長く考える」ための独立したモデルであること。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;しかし、公式は非常に実用的な表を提供してくれません。例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;medium&lt;/code&gt; が &lt;code&gt;high&lt;/code&gt; に比べて具体的にどの程度の成功率の差があるのか&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;high&lt;/code&gt; が &lt;code&gt;xhigh&lt;/code&gt; に比べてどれだけ時間とトークンを余分に消費するのか&lt;/li&gt;
+&lt;li&gt;コーディングのシナリオにおいて、どのタスクが直接 &lt;code&gt;xhigh&lt;/code&gt; を使う価値があるのか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;つまり、公式はノブ（ダイヤル）は渡してくれたものの、経験曲線を描き上げてくれるわけではないのです。&lt;/p&gt;
+&lt;h2 id=&#34;本当に役立つのはランキングのどの段階を見るかによる&#34;&gt;本当に役立つのは、ランキングのどの段階を見るかによる
+&lt;/h2&gt;&lt;p&gt;ひらめきが訪れ、私はArenaのコードランキングを覗いてみたところ、状況がはっきりしました。
+&lt;code&gt;arena.ai&lt;/code&gt; のコードランキングでは、レベル分けされて記載されています。ページ更新日は &lt;code&gt;2026-04-01&lt;/code&gt; であり、この記事を書いている時点でのデータは以下の通りです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4-high (codex-harness)&lt;/code&gt; は &lt;strong&gt;6位&lt;/strong&gt;、スコア &lt;strong&gt;1457&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.4-medium (codex-harness)&lt;/code&gt; は &lt;strong&gt;16位&lt;/strong&gt;、スコア &lt;strong&gt;1427&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;gpt-5.3-codex (codex-harness)&lt;/code&gt; は &lt;strong&gt;18位&lt;/strong&gt;、スコア &lt;strong&gt;1407&lt;/strong&gt;
+これら数値を並べて見ると、意味は非常に明白です。
+同じ &lt;code&gt;GPT-5.4&lt;/code&gt; において、&lt;code&gt;high&lt;/code&gt; と &lt;code&gt;medium&lt;/code&gt; の差は「ほんの少しの違い」ではなく、明確なレベル差を生んでいます。もしあなたが「GPT-5.4 はとても強力だ」という一文だけを見ていたとしても、情報が不十分です。なぜなら、ランキング自体が &lt;code&gt;high&lt;/code&gt; と &lt;code&gt;medium&lt;/code&gt; を別々の項目として提示しているからです。世間で言う「非常に強力」というのは、おそらく高い思考レベルで出た結果を指しており、&lt;code&gt;medium&lt;/code&gt; の代わりをしているわけではない可能性が高いのです。
+もちろん、このランキングはあなたのプロジェクトにおける真理ではありません。これは agentic coding + harness のシナリオを測定したものであり、あなた自身のローカルリポジトリとは異なります。しかし、方向性は非常に明確です。コーディングという行為において、推論のレベル（档位）は単に速度を変えるだけでなく、結果そのものを変えてしまうのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;今どう選ぶか&#34;&gt;今、どう選ぶか
+&lt;/h2&gt;&lt;p&gt;端的に言うと、今の私の使い方はとてもシンプルです。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;medium&lt;/code&gt; は以下のシーンのために取っておきます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;小さなファイルの修正&lt;/li&gt;
+&lt;li&gt;明らかなバグの修正&lt;/li&gt;
+&lt;li&gt;まずモデルにドラフトを出してもらいたいとき&lt;/li&gt;
+&lt;li&gt;スピードが求められ、長く待てないとき&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;high&lt;/code&gt; は日常のデフォルトとして適しています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;複数のファイルにまたがる変更&lt;/li&gt;
+&lt;li&gt;要件に少し曖昧な部分があるとき&lt;/li&gt;
+&lt;li&gt;コードを読んでから着手する必要があるとき&lt;/li&gt;
+&lt;li&gt;単なるコード補完ではなく、判断が必要なとき&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;xhigh&lt;/code&gt; は難関問題のために取っておきます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;リスクの高いリファクタリング&lt;/li&gt;
+&lt;li&gt;長い処理フローのデバッグ&lt;/li&gt;
+&lt;li&gt;アーキテクチャの変更&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;high&lt;/code&gt; を2周しても問題を解決できなかった場合&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;ここで最も重要なのは、&lt;code&gt;xhigh&lt;/code&gt; がどれだけすごいかということではなく、&lt;strong&gt;&lt;code&gt;medium&lt;/code&gt; を「万能薬」として使ってしまわないこと&lt;/strong&gt;です。&lt;code&gt;medium&lt;/code&gt; の問題は弱さではなく、複雑なタスクにおいて「もう少しでいいや」という誤った感覚を与えやすい点にあります。その結果、最初の段階で時間を節約したつもりでも、後でより多くの手戻りが発生します。&lt;/p&gt;
+&lt;h2 id=&#34;gpt-54-に戻るが結局どのレベルが強いのか&#34;&gt;GPT-5.4 に戻るが、結局どのレベルが強いのか
+&lt;/h2&gt;&lt;p&gt;というわけで、再びあの問題に戻ります。「GPT-5.4 はとても強力だ」とネットで言われているが、具体的にどのレベルのことを指しているのだろうか？
+私の判断では、グレードを明記していない「GPT-5.4 が強力」というのは、デフォルトで高い思考レベル（high）を想定するのがより信頼できると思います。少なくともコーディングのシナリオにおいては、それを単に &lt;code&gt;medium&lt;/code&gt; と理解するのは避けるべきです。もし相手が &lt;code&gt;gpt-5.4-pro&lt;/code&gt; のようなことを言っているなら、それは全く別の話であり、より重い計算能力を持つ専用バージョンです。
+前述した &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/command-line-ai-coding-interaction/&#34; &gt;コマンドラインベースのAIコーディングインタラクション&lt;/a&gt; では、主にインタラクション方法の変化について議論していました。今振り返ると、インタラクションが変わったことは一つの側面ですが、モデルが実際にどのレベルで動いているのかという点は、実は別の、より現実的な問題になってきています。
+私としては非常に明確なスタンスを持っています。日常使いなら &lt;code&gt;high&lt;/code&gt; で十分であり、それでうまくいかない場合にのみ &lt;code&gt;xhigh&lt;/code&gt; を試すべきです。このようにすることで、速度、コスト、成功率のバランス点が最も適切だと考えます。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/guides/latest-model&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Using GPT-5.4 | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/guides/code-generation&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Code generation | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/models/gpt-5.4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GPT-5.4 Model | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/models/gpt-5.4-pro&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GPT-5.4 pro Model | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/models/gpt-5.3-codex&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GPT-5.3-Codex Model | OpenAI API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arena.ai/leaderboard/code&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Code AI Leaderboard - Best AI Models for Coding&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer codex を使用している際に疑問点があります。デフォルトの思考レベルは medium ですが、残りの high や xhigh の能力差はどのくらいですか？日常的に使うべきなのはどれでしょうか？公式の説明も明確に見当たりませんし、ネット上では GPT-5.4 が非常に強力だという話や、また別のレベルの話を聞きます。ふと、大規模言語モデルのランキングを思い出し、https://arena.ai/leaderboard/code を確認しました。ここでは、各LLMの思考レベルが明確に示されていますね。GPT-5.4-high (codex-harness) が6位にいます。デフォルトで high を使うだけで十分な気がします。もしうまくいかないようでしたら、xhigh を試してみるのも良いかもしれません。コストと速度のバランスを取れると思います。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子要約&#34;&gt;ライティングの骨子（要約）
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;「日常的な使用では high を使い、xhigh でカバーする」ことを主要な判断軸とし、グレード別百科事典のような記述は避けた。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;reasoning&lt;/code&gt; と &lt;code&gt;verbosity&lt;/code&gt; を分けて説明し、公開ドキュメント内の2つの &lt;code&gt;medium&lt;/code&gt; を混同することを防いだ。&lt;/li&gt;
+&lt;li&gt;公式資料は、サポートされるグレード、デフォルト値、コード生成の例を確認するために使用し、公式が提供していない能力差の表を勝手に作成することは避けた。&lt;/li&gt;
+&lt;li&gt;Arena ランキングでは、&lt;code&gt;2026-04-01&lt;/code&gt; ページの順位とスコアを使用し、「high が medium より明らかに優れている」という点に事実上のアンカーポイント（根拠）を補強した。&lt;/li&gt;
+&lt;li&gt;構成としては、まず「なぜ混乱するのか」から説明し、次に公式の見解の境界線を示し、最後に日常的な選び方で締めくくる流れとした。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AIがブログを書くという件は、結局エンジニアリングにする必要がある（三）</title>
+        <link>https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/</link>
+        <pubDate>Fri, 03 Apr 2026 21:06:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/</guid>
+        <description>&lt;p&gt;倉庫の構成を一周確認した結果、逆に確信したことがあります。このシステムは、単体のモデルがどれだけ強力かではなく、どのレイヤーにコストを負わせるべきか、という点にかかっているということです。&lt;/p&gt;
+&lt;p&gt;最も明白なシグナルは、現在有効な &lt;code&gt;published.runtime.json&lt;/code&gt; が依然として 2026年4月2日に生成された &lt;code&gt;minimax-m2&lt;/code&gt; であることです。しかし、2026年4月3日16:38の &lt;code&gt;5f17088&lt;/code&gt; は、&lt;code&gt;blog-style-suite&lt;/code&gt; のデフォルトプロバイダーをローカルの &lt;code&gt;LM Studio&lt;/code&gt; 内の &lt;code&gt;gemma-4-26b-a4b&lt;/code&gt; に切り替えています。これは一見すると前後で矛盾しているように見えますが、実はそうではありません。むしろ、このパイプラインに分業が始まったことを示しています。&lt;/p&gt;
+&lt;p&gt;この記事群はここまでで、最初の2本で境界線を描きました。&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/why-blog-writer-had-to-exist/&#34; &gt;第1回&lt;/a&gt; では、&lt;code&gt;blog-writer&lt;/code&gt; がなぜ生まれたのかを語り、&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;第2回&lt;/a&gt; では、&lt;code&gt;blog-style-suite&lt;/code&gt; がどのようにスタイル学習とトークンコストを分離したのかを語りました。そして最後のこの記事では、最も現実的な問題に焦点を当てます。ローカルモデル、オンラインモデル、&lt;code&gt;Minimax&lt;/code&gt; は、結局どのワークステーションに置くべきなのか、という点です。&lt;/p&gt;
+&lt;h2 id=&#34;スタイルデータでのトレーニングはすべてのステップでオンラインモデルを焼く価値はない&#34;&gt;スタイルデータでのトレーニングは、すべてのステップでオンラインモデルを焼く価値はない
+&lt;/h2&gt;&lt;p&gt;スタイルデータというものは、真剣に取り組むと、トークンがすぐに現実的な問題になります。
+やりたいかどうかではなく、役割分担をしないと、このシステム全体が長く動きません。
+以前最も陥りがちだった誤解は、一つのオンラインモデルにすべての作業を任せてしまうことでした。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;過去記事のクロール&lt;/li&gt;
+&lt;li&gt;スクリーニングの実施&lt;/li&gt;
+&lt;li&gt;分類を行う&lt;/li&gt;
+&lt;li&gt;スコアリング&lt;/li&gt;
+&lt;li&gt;サンプルの抽出&lt;/li&gt;
+&lt;li&gt;スタイルの調整（トーン合わせ）&lt;/li&gt;
+&lt;li&gt;そして最後に原稿を書く
+このように行う最大の問題は、「モデルが十分強力でない」ことではなく、すべてのステップで同じコストを消費してしまうことです。
+今振り返ると、真に合理的なアプローチは逆から考えるべきです。どのステップはオンラインで行う必要があるのか、どのステップは可能な限りローカル化すべきなのか、さらにはモデルに任せるべきではないステップがあるのか、という点です。
+この境界線が不明確なままだと、どれだけ強力なモデルを導入しても、結局は本来前処理で対応できたはずの作業を繰り返すだけになってしまいます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;ローカルモデルは汚い作業重労働そして試行錯誤の繰り返しに適している&#34;&gt;ローカルモデルは「汚い作業」「重労働」、そして「試行錯誤の繰り返し」に適している
+&lt;/h2&gt;&lt;p&gt;私は今や、ローカルモデルを本番環境における「体力層（ワークホース）」として定義するようになりつつあります。
+必ずしも最強である必要はなく、毎回最も洗練されているわけでもありませんが、以下のタスクを担うのに特に適しています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;何度も実行する構築プロセス&lt;/li&gt;
+&lt;li&gt;スタイルデータの複数ラウンドにわたる圧縮実験&lt;/li&gt;
+&lt;li&gt;設定変更後の再スキャン&lt;/li&gt;
+&lt;li&gt;既存の構造に対する低リスクな再計算
+これらの作業には共通点があります。
+それは単発で価値が極めて高いことではなく、&lt;strong&gt;繰り返し実行する必要がある&lt;/strong&gt;、&lt;strong&gt;試行錯誤を許容できる&lt;/strong&gt;、そしてできれば&lt;strong&gt;毎回高額なコストを払う必要がない&lt;/strong&gt;という点です。
+現在、&lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt; は &lt;code&gt;lm-studio-gemma4&lt;/code&gt; に切り替わっており、これ自体が判断が変わっていることを示しています。ローカルの &lt;code&gt;gemma&lt;/code&gt; がオンラインモデルより必ずしも強いわけではなく、むしろ本番環境のこのパイプラインは、「実行可能か」「頻繁に実行できるか」「繰り返し変更できるか」を優先し始めたのです。
+これは、私が以前書いた &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;弱モデルに無理に高度なタスクを割り当てない&lt;/a&gt; と同じ論理に基づいています。
+ローカルモデルが複雑な記事全体をゼロから書き上げるのに適しているとは限りませんが、**「汚い作業」「重労働」「バッチ処理」**を受け持つには非常に適しています。スタイルデータの前処理は、元々このようなタスクに近いです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;オンラインモデルは仕上げに向いており全てをこなすのには向かない&#34;&gt;オンラインモデルは「仕上げ」に向いており、「全てをこなす」のには向かない
+&lt;/h2&gt;&lt;p&gt;ローカルモデルがプロダクション側に向いているからといって、オンラインモデルに価値がないわけではありません。
+オンラインモデルが真価を発揮するのは、まさに最後の「仕上げ（クロージング）」の部分です。
+例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;最新の情報に基づいて事実を補完する&lt;/li&gt;
+&lt;li&gt;より大きなコンテキストの中で論証を整理する&lt;/li&gt;
+&lt;li&gt;ネットワーク接続による検証が必要な時間的制約のある情報を処理する&lt;/li&gt;
+&lt;li&gt;すでに準備された構造化されたスタイルアセットを、公開できる記事に仕上げる
+これらの動作は、表現の質、事実の統合、コンテキスト理解といった要求が高いため、オンラインモデルがここに配置される方が価値が高いのです。
+つまり、強力なモデルはまるで総組立ラインの最後の工程のようなものです。前工程まで手を広げられるわけではありませんが、最初から最後まで全てを処理させると、コスト構造がすぐに崩れてしまいます。
+これが、&lt;code&gt;blog-writer&lt;/code&gt; が設計上、投稿済みデータである &lt;code&gt;published.runtime.json&lt;/code&gt; のみを読み取り、原稿作成時にプロバイダーを切り替えたり、スイートディレクトリ全体を再走査したりしない理由です。消費側（クライアント側）が軽いほど、より強力なモデルに記事の「仕上げ」に集中してもらうのが最適なのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;minimax-の意味は単にプロバイダーを増やしただけではない&#34;&gt;Minimax の意味は、単にプロバイダーを増やしただけではない
+&lt;/h2&gt;&lt;p&gt;多くの人は「Minimax」を見ると、「またモデルを一つ追加しただけか」と最初に思いがちです。&lt;/p&gt;
+&lt;p&gt;しかし、そうは思いません。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Minimax&lt;/code&gt; が真に価値があるのは、「複数のプロバイダーからの出力を、単一の公開契約（スキーマ）で消費できる道筋を作った」点にあります。&lt;/p&gt;
+&lt;p&gt;2026年4月2日 10:18 の &lt;code&gt;9f15199&lt;/code&gt; で &lt;code&gt;blog-style-suite&lt;/code&gt; がマルチモデル構成に変更され、出力がプロバイダーごとに分離されました。その後も README やランタイムの構造では、常に一つのことを強調しています。それは、スイートは多くの結果を生成できるが、実際に有効なのは人間が選んだ &lt;code&gt;published.runtime.json&lt;/code&gt; だけだということです。&lt;/p&gt;
+&lt;p&gt;この境界線（バウンダリー）が非常に重要です。&lt;/p&gt;
+&lt;p&gt;なぜなら、一度この境界が明確になると、&lt;code&gt;Minimax&lt;/code&gt; の役割は「執筆プロセスに組み込まれなければならないもの」から、以下のようなものへと変わるからです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本番環境での比較に参加できる&lt;/li&gt;
+&lt;li&gt;ランタイム版を生成するために使える&lt;/li&gt;
+&lt;li&gt;ローカルモデルの成果物と横断的に比較できる&lt;/li&gt;
+&lt;li&gt;最終的に人間がどのバージョンを公開するかを決定する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これにより、プロバイダーは「システムへの依存」から「交換可能な部品」へと変わりました。&lt;/p&gt;
+&lt;p&gt;これが、このエンジニアリングスタックにおける &lt;code&gt;Minimax&lt;/code&gt; の最も興味深い意義だと私は感じています。それは、エンドツーエンドの全工程を支配するために存在するのではなく、「このリンク（プロセス）がインターフェースをきれいに受け止めているかどうかを検証する」ために存在しているのです。&lt;/p&gt;
+&lt;h2 id=&#34;真の役割分担はモデルの強さによるのではなくタスクの種類によるべき&#34;&gt;真の役割分担は、モデルの強さによるのではなく、タスクの種類によるべき
+&lt;/h2&gt;&lt;p&gt;私は今、非常に古風だが実用的な分類法をより支持しています。&lt;/p&gt;
+&lt;h3 id=&#34;ルールとハード制約&#34;&gt;ルールとハード制約
+&lt;/h3&gt;&lt;p&gt;ローカルスクリプトに任せる。
+&lt;code&gt;scanner.py&lt;/code&gt;、&lt;code&gt;write_post.py&lt;/code&gt;、&lt;code&gt;write_post_series.py&lt;/code&gt; のような決定論的なツールで解決できることは、モデルに混ぜ込ませないこと。&lt;/p&gt;
+&lt;h3 id=&#34;スタイルデータ生成&#34;&gt;スタイルデータ生成
+&lt;/h3&gt;&lt;p&gt;ローカルモデルまたはコストの低いプロバイダーを優先します。
+ここでの最も重要なのは、単発の出力が最も華やかであることではなく、再現性、試行錯誤可能性、キャッシュ可能性です。&lt;/p&gt;
+&lt;h3 id=&#34;最終原稿作成と事実の締めくくり&#34;&gt;最終原稿作成と事実の締めくくり
+&lt;/h3&gt;&lt;p&gt;より長いコンテキストの統合、表現の収束、およびインターネットからの事実補完に適したモデルに任せる。
+このレイヤーこそが、オンラインモデルにお金をかける価値がある場所だ。
+このように分解すると、以前は悩んでいた問題も実はそれほど複雑ではないことがわかる。毎日「どのモデルが最強なのか」を議論する必要はなく、「このタスクはどのレイヤーに属するか」と尋ねるだけでよいのだ。&lt;/p&gt;
+&lt;h2 id=&#34;結局最も価値があるのはモデルではなく境界が明確なことである&#34;&gt;結局、最も価値があるのはモデルではなく境界が明確なことである
+&lt;/h2&gt;&lt;p&gt;第3編はここまでとさせていただきます。
+&lt;code&gt;blog-writer&lt;/code&gt; と &lt;code&gt;blog-style-suite&lt;/code&gt; という一連のものは、進化する過程で、誰を接続したか、誰に入れ替えたか、どのプロバイダーを試したかといった点よりも、最も価値があるのは境界が徐々に明確になってきたことです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;blog-writer&lt;/code&gt; は消費側を担当&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;blog-style-suite&lt;/code&gt; は生成側を担当&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;published.runtime.json&lt;/code&gt; が公開の場所である&lt;/li&gt;
+&lt;li&gt;ローカルモデルは繰り返し実行する面倒な作業や重い作業に適している&lt;/li&gt;
+&lt;li&gt;オンラインモデルは最後の仕上げに適している&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Minimax&lt;/code&gt; のようなオンラインプロバイダーは、システムの中枢というよりも交換可能な部品のようなものだ。
+境界が明確になると、ワークフロー全体がスムーズになる。
+一つのモデルパッケージだけで全てを解決できると期待したり、全てのステップを最も高価なレイヤーに積み重ねたりすることはなくなる。結局のところ、これはモデルを選ぶように見えて、実際には異なる種類のタスクに作業場所を割り当てているだけなのだ。
+端的に言えば、単一の点が強いのはもちろん良いことだ。
+しかし、長期的に見ると、境界が明確であることは、単一の点よりも強く、より重要であることが多い。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9f1519967981c5eef7bd1eb407b0406ac542ebd0&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9f1519967981c5eef7bd1eb407b0406ac542ebd0&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/5f17088391ee858b88fc50df884bc0103ff0b3c1&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;5f17088391ee858b88fc50df884bc0103ff0b3c1&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;有効なランタイム：&lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/a-long-period-of-deep-ai-programming/&#34; &gt;重度AIプログラミングの日々&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/ultimately-its-returning-to-domestic-models/&#34; &gt;結局は国産モデルに戻る&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;弱モデルに無理な強活を適用しない&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その時は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づきました。そこで、これらの作業を自動化するスキルを作成できないかと考えたのが、skill blog-writerの初稿です。さらに、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したスキルとして存在していました。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それがblog-style-suiteの誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考えたため、minimaxとも連携させました。blog-style-suiteとblog-writerの進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルのblog-writerやblog-style-suiteのコードを基にして、設計思想（どのようにトークン節約を実現したか、データ構造をどう設計したか、核となる設計思想）について説明することも可能です。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第3編では、アーキテクチャの説明を繰り返すのではなく、「モデルの役割分担」という現実的な問題に焦点を当てて締めくくる。&lt;/li&gt;
+&lt;li&gt;冒頭で、現在のリポジトリにある &lt;code&gt;published.runtime.json&lt;/code&gt; が &lt;code&gt;minimax-m2&lt;/code&gt; や &lt;code&gt;config.json&lt;/code&gt; からローカルの &lt;code&gt;gemma4&lt;/code&gt; に切り替わっているという事実を直接提示し、前置きを減らす。&lt;/li&gt;
+&lt;li&gt;重要なのは、誰がより優れているかを証明することではなく、なぜ異なるタスクを異なるコストレイヤーに割り当てるべきなのかを説明することである。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Minimax&lt;/code&gt; を「交換可能なプロバイダー」の位置で語るのは、その意義をモデルのベンチマークリストではなく、エンジニアリングの境界線に引き戻すためである。&lt;/li&gt;
+&lt;li&gt;最後に、「単一の最高性能よりも明確な境界線の方が重要である」という全体的な判断に戻り、一連の記事を締めくくる。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AIがブログを書くという件は、結局エンジニアリングにする必要がある（2）</title>
+        <link>https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/</link>
+        <pubDate>Fri, 03 Apr 2026 21:02:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/</guid>
+        <description>&lt;p&gt;トークンが十分にある場合、最も手っ取り早い方法は非常に粗暴ですが、過去の記事をそのままモデルに投入し、自分で学ばせることです。&lt;/p&gt;
+&lt;p&gt;問題は、この方法はたまに1記事書くのには適していますが、繰り返し書くのには適さないということです。もしブログ執筆を長期的なワークフローとして真剣に取り組むのであれば、「生データ（歴史的な文章）」というアプローチは、すぐに「高コストで散漫」になってしまいます。&lt;/p&gt;
+&lt;p&gt;この一連の記事では、主軸が移りました。前回の記事 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/why-blog-writer-had-to-exist/&#34; &gt;AIによるブログ執筆は、結局エンジニアリングにする必要がある（1）：blog-writerがなぜ生まれてきたか&lt;/a&gt; では、消費側（コンテンツの利用側）の自動化について取り上げました。この記事からは生産側、つまりスタイルデータがどのように生成され、どのように圧縮され、どうすればトークンを無駄に燃焼させないかという点について語ります。次の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIによるブログ執筆は、結局エンジニアリングにする必要がある（3）：ローカルモデル、オンラインモデル、そしてMinimaxの役割分担&lt;/a&gt; を続けます。&lt;/p&gt;
+&lt;h2 id=&#34;最初の一番自然な発想は過去の記事をそのまま与えることだ&#34;&gt;最初の一番自然な発想は、過去の記事をそのまま与えることだ
+&lt;/h2&gt;&lt;p&gt;この道筋は本当に自然すぎる。
+モデルにあなたの書き方を学ばせたいのなら、最も直感的な方法はもちろん、古い記事を餌として与えることだ。できれば、過去のブログの中で自分自身に一番近いと感じるものを詰め込んで、自分で要約させるのがベストだ。
+一度きりのタスクを見る限りでは、これを行っても問題はない。
+むしろ多くのケースで効果は良い。コンテキストが十分長く、モデルが十分に強力で、過去の記事が十分にあれば、スタイルを習得することは確かに可能だ。
+しかし、問題は「この記事を書き上げられるか」ではなく、「次の記事、その次の記事も、これを繰り返さなければならないのか」ということなのだ。
+毎回古い記事のバッチを再投入することは、いくつかの非常に現実的な副作用をもたらす：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同じ材料が繰り返しコンテキストを占有する&lt;/li&gt;
+&lt;li&gt;トークン消費量が執筆回数にほぼ線形に増加する&lt;/li&gt;
+&lt;li&gt;モデルが見るノイズが増えすぎ、真に有用なシグナルが逆に希釈されてしまう&lt;/li&gt;
+&lt;li&gt;執筆という動作とスタイル維持という動作が完全に結びつき、どちらも軽々しくできなくなる
+つまり、トークンが潤沢な時は、生で与えるのはもちろん可能だ。しかし、工学的な観点から常にこのようにすることはできないのだ。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;これがデータモジュールとデータ生成モジュールを分離しなければならない理由です&#34;&gt;これがデータモジュールとデータ生成モジュールを分離しなければならない理由です
+&lt;/h2&gt;&lt;p&gt;後になって考えたところ、核心は一言に尽きます。「消費側」と「生産側」を分けることです。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; が担当しているのは消費側です。これは、すでに公開されたランタイムを読み取り、固定の契約に従って記事を書き出すだけです。&lt;/p&gt;
+&lt;p&gt;一方、スタイルデータのスキャン、フィルタリング、スコアリング、圧縮、プロバイダー比較などは、別の生産側のパイプラインに置かれるべきでした。つまり、後から作られた &lt;code&gt;blog-style-suite&lt;/code&gt; のようなものです。&lt;/p&gt;
+&lt;p&gt;gitの履歴を見れば、この転換は非常に明確です。&lt;/p&gt;
+&lt;p&gt;2026年4月1日 21:47 のコミット &lt;code&gt;84a06b5&lt;/code&gt; で、元の &lt;code&gt;blog-style-maintainer&lt;/code&gt; スキルがリポジトリレベルのCLIツールに置き換えられたことが明記されています。この動きは物事を物語っています。なぜなら、&lt;code&gt;scan/build/rebuild&lt;/code&gt; があり、出力ディレクトリがあり、リカバリ機構がある時点で、それはもはや単なる「スキル」ではなく、通常のPythonプロジェクトのように見えてくるからです。&lt;/p&gt;
+&lt;p&gt;さらに2026年4月1日 23:05 のコミット &lt;code&gt;9e92b8e&lt;/code&gt; では、&lt;code&gt;blog-style-suite&lt;/code&gt; が &lt;code&gt;scanner.py&lt;/code&gt;、&lt;code&gt;builder.py&lt;/code&gt;、&lt;code&gt;compressor.py&lt;/code&gt; といったモジュールに分割され続けました。この段階に至ると、考え方はすでに非常に工学的なものになっています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;scanner.py&lt;/code&gt;: ディスクから記事をスキャンし、構造化された特徴を抽出する役割&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;builder.py&lt;/code&gt;: スコアリング、選別、キャッシュ、ランタイムアセンブリの役割&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;compressor.py&lt;/code&gt;: モデルが関与するいくつかの圧縮ステップを担当する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これは、単にスーパープロンプトを一段書くというアプローチとは、全く異なる考え方なのです。&lt;/p&gt;
+&lt;h2 id=&#34;トークンを節約するのは玄学ではなく前処理とバッチ化によるもの&#34;&gt;トークンを節約するのは、玄学ではなく前処理とバッチ化によるもの
+&lt;/h2&gt;&lt;p&gt;このエンジニアリングセットで真に価値があるのは、2026年4月2日19:41の&lt;code&gt;bc4b950&lt;/code&gt;だと思います。&lt;/p&gt;
+&lt;p&gt;あのコミットは非常に率直なことを述べていました。AIの呼び出し回数が約「2000回」から、各プロバイダーで最大「5回」に直接削減されたのです。&lt;/p&gt;
+&lt;p&gt;どうやって達成したのか？
+それは「プロンプトをより賢くする」のではなく、&lt;strong&gt;事前に処理すべきものを前もって実行する&lt;/strong&gt;ことによるものです。&lt;/p&gt;
+&lt;p&gt;現在の&lt;code&gt;blog-style-suite&lt;/code&gt;のフローは非常に明確になりました：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;scan&lt;/code&gt;フェーズは純粋にヒューリスティックであり、AI呼び出しは0回。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;build&lt;/code&gt;フェーズではまずヒューリスティックなスコアリングを行い、これもAI呼び出しは0回です。&lt;/li&gt;
+&lt;li&gt;その後、&lt;code&gt;technical / finance / essay / tooling&lt;/code&gt;の4つのレーンそれぞれで1回のバッチ選別とラベリングを行います。&lt;/li&gt;
+&lt;li&gt;最後に作者スタイルの圧縮を1回行います。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;これを計算すると、コールドスタートでも最大5回の呼び出しに抑えられます。&lt;/p&gt;
+&lt;p&gt;さらに重要なのは、この5回が各記事に分散しているのではなく、&lt;strong&gt;すでに前処理された高価値な要約材料に集中している&lt;/strong&gt;点です。&lt;/p&gt;
+&lt;p&gt;これが前処理が真にトークンを節約する部分です。単に数文字を減らすのではなく、「記事ごとに呼び出す」から「フェーズごとに集中的に呼び出す」というパラダイムシフトなのです。&lt;/p&gt;
+&lt;p&gt;その後は、キャッシュも整備されました。
+&lt;code&gt;builder.py&lt;/code&gt;にはレーンのバッチフィンガープリントがあり、プロバイダーのチェックポイント復元機能があり、さらにローカルモデルのコンテキストのために&lt;code&gt;review_pool_per_lane = 12&lt;/code&gt;のような縮小化が行われています。少しデータを変更しただけで、パイプライン全体を再実行する必要がありません。&lt;/p&gt;
+&lt;p&gt;こうした設計は一見派手ではありませんが、一つ一つが非常に実用的です。なぜなら、それらはすべて「同じトークン群を二度と無駄に燃焼させない」という問題を解決しているからです。&lt;/p&gt;
+&lt;h2 id=&#34;現在のデータ構造は本質的に真に有用なシグナルを圧縮しているものだ&#34;&gt;現在のデータ構造は、本質的に真に有用なシグナルを圧縮しているものだ
+&lt;/h2&gt;&lt;p&gt;この構造を分解すれば、データ構造も整理されるだろう。
+私は今、これを3層として理解する方がより良いと感じている。&lt;/p&gt;
+&lt;h3 id=&#34;第1層scanjson&#34;&gt;第1層：&lt;code&gt;scan.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これは共有の原料です。
+ここには、記事のパス、タイトル、日付、カテゴリ、タグ、冒頭段落、クロージングスタブ、見出し、スクリーニング結果、レーン分類といった構造化されたシグナルが格納されています。
+これは &lt;code&gt;blog-writer&lt;/code&gt; に直接渡されるものではなく、生産側でさらに加工するためのものです。&lt;/p&gt;
+&lt;h3 id=&#34;第2層providersourcejson&#34;&gt;第2層：&lt;code&gt;{provider}.source.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これはプロバイダーレベルのチェックポイントです。
+共有された原料に加え、スコアリング結果、レーン選択、フィンガープリント、キャッシュステータスといった中間状態が追加されています。つまり、「加工過程の中間製品」のようなものであり、復元可能、再利用可能、中断して再開できる点が重要です。&lt;/p&gt;
+&lt;h3 id=&#34;第3層providerruntimejson-と-publishedruntimejson&#34;&gt;第3層：&lt;code&gt;{provider}.runtime.json&lt;/code&gt; と &lt;code&gt;published.runtime.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これが消費側が真に気にする完成品です。
+ここには以下のものが保持されています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lanes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;writer_guide&lt;/code&gt;
+つまり、元々大量にあった過去の記事群を、そのまま利用できるランタイムスタイルアセットとして圧縮したものになります。
+特に &lt;code&gt;published.runtime.json&lt;/code&gt; という公開用のファイルが重要です。&lt;code&gt;blog-writer&lt;/code&gt; はこのファイルのみを読み取り、&lt;code&gt;content/post&lt;/code&gt; を再スキャンしたり、suite ディレクトリ内の全プロバイダーの完全なイメージを気にする必要がなくなります。
+この境界線が引かれることで、消費側は軽量化します。執筆モデルが見るのは、もはや原始的な古い記事の山ではなく、すでに前処理された高密度のシグナルとなるのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;すべてのことをモデルにさせるべきではない&#34;&gt;すべてのことをモデルにさせるべきではない
+&lt;/h2&gt;&lt;p&gt;最近、このエンジニアリングにおいて最も正しい判断は、「モデルを多く追加すること」ではなく、「モデルに任せるべきでないこともモデルに投げ渡さないこと」だと感じています。&lt;/p&gt;
+&lt;p&gt;以下のようなことは、ローカルルールで処理する方が適しています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;frontmatter の解析&lt;/li&gt;
+&lt;li&gt;冒頭段落の抽出&lt;/li&gt;
+&lt;li&gt;見出し（headings）の抽出&lt;/li&gt;
+&lt;li&gt;本人/転載/モデルによる署名の判断&lt;/li&gt;
+&lt;li&gt;blockquote の比率チェック&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt; や埋め込みプロンプト、本文の長さといったハードルルールでのフィルタリング&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これらの作業をモデルにやらせることは不可能というわけではなく、単に無駄です。&lt;/p&gt;
+&lt;p&gt;モデルがより適しているのは、曖昧さやトレードオフを含む部分です。例えば、「あるレーンの中でどの記事が現在の論調をよりよく代表しているか」、あるいは「高評価の記事から著者のスタイルタグを抽出する」といった作業です。&lt;/p&gt;
+&lt;p&gt;そのため、&lt;code&gt;blog-style-suite&lt;/code&gt; が真に価値があるのは、「トークンを節約できる」という点だけではなく、人間、ルール、モデルのそれぞれが担当すべき役割を再定義した点にあるのです。&lt;/p&gt;
+&lt;h2 id=&#34;前処理はトークンを節約するためではなく執筆作業を持続可能にするためである&#34;&gt;前処理はトークンを節約するためではなく、執筆作業を持続可能にするためである
+&lt;/h2&gt;&lt;p&gt;第2回の結論について、もっと直接的に伝えたい。
+トークンが潤沢な時は、過去の記事をそのまま使うのはもちろん問題ない。むしろ、本当に1〜2本だけ書くなら、頭を使う量が少ないかもしれない。
+しかし、このことを長期的なワークフローにしたいと思うなら、前処理は選択肢ではなくなる。なぜなら、前処理をしないと、執筆モデルは毎回古い素材を見直さなければならず、スタイルの維持と記事生成が常に混ざり合ってしまうからだ。
+&lt;code&gt;blog-style-suite&lt;/code&gt; の意味するところは、このごちゃ混ぜになっているものを分解することにある。
+システムに見せるためでも、プロジェクト名を増やすためでもなく、&lt;code&gt;blog-writer&lt;/code&gt; が軽快に、安定して、「執筆」という一つの動作だけに集中できるようにするためなのだ。
+ここまで来ると、次のステップの問題は自然とついてくる。
+すでに生成側が独立した以上、このコストをどのモデルに負わせるべきなのか？ローカルモデル、オンラインモデル、&lt;code&gt;Minimax&lt;/code&gt; はそれぞれどの工程に立つべきなのか？この件については、次回の記事 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIでブログを書くという行為は、結局エンジニアリングにする必要がある（三）：ローカルモデル、オンラインモデル、そして Minimax の役割分担&lt;/a&gt; で触れることにする。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/84a06b5dc743f2e9bc6e788d53496a1261bc63ae&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;84a06b5dc743f2e9bc6e788d53496a1261bc63ae&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/README.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/scanner.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/builder.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/compressor.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;有効なランタイム：&lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その際は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づいたため、これらの作業を自動化するskillを作成できないかと考えました。これがskill blog-writerの初稿の誕生につながりました。また、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したskillでした。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それがblog-style-suiteの誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いと感じたため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考え、minimaxを組み込みました。blog-style-suiteとblog-writerの進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルのblog-writerやblog-style-suiteのコードを基にして、設計思想（どのようにトークン節約を実現したか、データ構造をどう設計したか、核となる設計思想）について説明することができます。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子要約&#34;&gt;ライティングの骨子（要約）
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;本稿では、執筆という行為からデータエンジニアリングへと焦点を移し、「なぜモジュール化する必要があるのか」という核心的な問いに答えることを目指した。&lt;/li&gt;
+&lt;li&gt;冒頭で「生きた歴史の記事をそのまま使える」と認めることで、後続の分割理由に説得力を持たせている。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;scan.json&lt;/code&gt;、&lt;code&gt;source.json&lt;/code&gt;、&lt;code&gt;runtime.json&lt;/code&gt; の三層構造を重点的に展開し、単なるアーキテクチャの説明に留まらないようにした。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;bc4b950&lt;/code&gt; を中間地点の転換点として配置した。なぜなら、「約2000回から5回へ」という変化が前処理の価値を最も明確に示すためである。&lt;/li&gt;
+&lt;li&gt;最後に、消費側と生産側を再分離し、次回の記事で扱うモデルの役割分担への布石を打った。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AIがブログを書くという件、結局は工学的なものにする必要がある（1）</title>
+        <link>https://ttf248.life/ja/p/why-blog-writer-had-to-exist/</link>
+        <pubDate>Fri, 03 Apr 2026 20:58:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/why-blog-writer-had-to-exist/</guid>
+        <description>&lt;p&gt;昨年、多くの AI に関する記事を書きました。あの頃の最も手間のかかるプロセスは、まず自分でアウトラインや問題リストを整理し、大規模言語モデルに本文を出力させてもらい、その後その内容をローカルの &lt;code&gt;md&lt;/code&gt; ドキュメントにコピー＆ペーストし、フロントマター、タグ、カテゴリ、タイトルなどを補完してから公開するというものでした。
+このプロセスが使えないわけではありませんが、非常に面倒です。本当に時間がかかるのは本文ではなく、本文の外側の繰り返しの作業です。特に最近 &lt;code&gt;Codex&lt;/code&gt; を使いすぎてからは、その不自然さがより強く感じられます。それはリポジトリを読み込めるし、ファイルを編集でき、資料を補完できるだけでなく、記事を直接ディレクトリに書き込むこともできます。もし私がまだ手動でコピー＆ペーストを繰り返していると、まるで人間がツールの足を縛っているような気分になります。&lt;/p&gt;
+&lt;p&gt;この一連の記事は、実は一つのことを伝えたいのです。AI によるブログ執筆は、単なるプロンプト一つに頼るだけでは限界が来ています。今回の記事ではまず &lt;code&gt;blog-writer&lt;/code&gt; がなぜ生まれてきたのかを説明します。次の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;AIによるブログ執筆という事柄は、結局エンジニアリングとしてやる必要がある（2）：blog-style-suite でスタイル学習とトークンコストをどう分離するか&lt;/a&gt; を続けます。そして最終回は &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIによるブログ執筆という事柄は、結局エンジニアリングとしてやる必要がある（3）：ローカルモデル、オンラインモデル、Minimax は最後にどう分業するか&lt;/a&gt; で締めくくります。&lt;/p&gt;
+&lt;h2 id=&#34;本当に面倒なのは原稿を書くことではなくあの一連の機械的な動作だ&#34;&gt;本当に面倒なのは、原稿を書くことではなく、あの一連の機械的な動作だ
+&lt;/h2&gt;&lt;p&gt;初期のワークフローは、端的に言えば外部委託されたパイプラインのようだった。
+私自身がまず問題を明確にするか、あるいは大まかなアウトラインを立てる。モデルが本文を骨子として展開する。その後、人間が戻ってきて残りの公開作業を補完する。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ローカルの &lt;code&gt;md&lt;/code&gt; にコピーする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;title&lt;/code&gt;、&lt;code&gt;date&lt;/code&gt;、&lt;code&gt;slug&lt;/code&gt; を補完する&lt;/li&gt;
+&lt;li&gt;タグとカテゴリを入力する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt; を補完する&lt;/li&gt;
+&lt;li&gt;参考資料を整理する&lt;/li&gt;
+&lt;li&gt;どのディレクトリに配置するかを決定する
+この一連の作業は、一つ一つのステップを見れば難しくはないが、繋げると非常に面倒だ。面倒なのは技術的な難しさではなく、それらがすべて機械的であるにもかかわらず、やらざるを得ない点にある。
+だからこそ、私は後になって、「[コマンドラインベースのAIコーディングインタラクション](/ja/p/command-line-ai-coding-interaction/）」のような変化は、単に「入り口が変わった」だけではないと感じるようになった。AIがリポジトリ内で直接ファイルの読み書きができるようになった今、ブログ執筆がまだ「本文をローカルドキュメントにコピーする」レベルに留まっているとしたら、ワークフロー全体がすでに時代遅れになっているのだ。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;blog-writer-最初の価値は文体ではなく契約を固定化すること&#34;&gt;blog-writer 最初の価値は文体ではなく、契約を固定化すること
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; の最も初期のノードは、2026年4月1日17:00の &lt;code&gt;991536a&lt;/code&gt; です。gitコミット履歴を見ると、このバージョンではすでに &lt;code&gt;SKILL.md&lt;/code&gt;、&lt;code&gt;write_post.py&lt;/code&gt;、そして一連の初期のスタイル資料が組み込まれています。&lt;/p&gt;
+&lt;p&gt;しかし、後から振り返ってみると、このドラフトの最も価値のある点は「AI が私の文体を学んだ」ことではなく、&lt;strong&gt;執筆の契約を固定化した&lt;/strong&gt;ことです。&lt;/p&gt;
+&lt;p&gt;「契約を固定化する」とはどういうことか？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;入力には最低限、アウトラインとファクトアンカー（事実の錨点）が必要であること&lt;/li&gt;
+&lt;li&gt;出力は必ず完全なMarkdown形式であり、未完成品であってはならないこと&lt;/li&gt;
+&lt;li&gt;frontmatter は人手に頼ることはできないこと&lt;/li&gt;
+&lt;li&gt;記事はチャットウィンドウ内に留まるのではなく、直接 &lt;code&gt;content/post&lt;/code&gt; に配置されること&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;この点は非常に重要です。なぜなら、プロンプト自体が不安定だからです。「以前のように書いて」と今日言っても、それはトーンが少し似ていると解釈されるかもしれません。明日もう一度同じことを言っても、表面的な構文しか学べないかもしれません。しかし、それが &lt;code&gt;Skill&lt;/code&gt; として書かれると、ルールは「その場での即興」から「固定された工程」へと変わります。&lt;/p&gt;
+&lt;p&gt;後続のいくつかのノードも、実質的にこの契約を補強し続けています。&lt;/p&gt;
+&lt;p&gt;2026年4月2日22:54の &lt;code&gt;8eb735a&lt;/code&gt; では、著者フィールド、執筆に関する注記、元のプロンプトなどが固定されました。この段階に至ると、ブログ記事の完成は単に「本文が書き終われば完了」ではなくなり、メタ情報、トレーサビリティ（追跡可能性）、公開される注記までが標準化されたのです。&lt;/p&gt;
+&lt;p&gt;したがって、&lt;code&gt;blog-writer&lt;/code&gt; の最初の価値は、モデルをより文章を書くのが上手に見せかけることではなく、&lt;strong&gt;執筆という行為自体に、再現可能な境界線を持たせたこと&lt;/strong&gt;なのです。&lt;/p&gt;
+&lt;h2 id=&#34;シリーズ形式は実は執筆の契約をさらに一歩進めたもの&#34;&gt;シリーズ形式は、実は執筆の契約をさらに一歩進めたもの
+&lt;/h2&gt;&lt;p&gt;単発の記事で安定して書けるようになると、次の問題がすぐに浮上します。
+あるテーマは、そもそも一つの記事に詰め込むのが適していません。無理に詰め込もうとすると、結局は情報量が多すぎてメインの筋が散漫になり、どの点も深く掘り下げきれない長文になってしまいがちです。
+これが、2026年4月2日 23:55 の &lt;code&gt;1a5604e&lt;/code&gt; が重要だった理由です。あの時、シリーズ形式と &lt;code&gt;write_post_series.py&lt;/code&gt; をまとめて追加しました。記事間は &lt;code&gt;relref&lt;/code&gt; で繋ぎ、一括書き込みの際に統一的に置換するようにしたのです。
+これは単なるファイル生成スクリプトの小さなアップグレードに見えますが、実際はそうではありません。
+それは一つのことを示しています。執筆の工程化は、「この一篇をどう生成するか」だけを考える段階から、「この一連のコンテンツをどう安定して配置し、順序をどう保証し、サイト内で相互にリンクさせるか」という視点に移ってきたということです。
+翌日の2026年4月3日 09:29 の &lt;code&gt;04dccb9&lt;/code&gt; は、この件をさらに一歩進めました。シリーズ記事のタイムスタンプが分単位で増加し、もはや共通の時間を使用しないようにしたのです。この変更は非常に小さいものですが、エンジニアリング的な深みがあります。なぜなら、Hugoのリストページ、前後の記事リンク、シリーズの順序といった「実際の問題」を解決しているからです。
+端的に言えば、シリーズ形式というのは、格好良く見せるためではなく、「複数の記事をまとめて公開する」という作業が、もはや手動でのフォローアップに頼らなくて済むようにするためなのです。&lt;/p&gt;
+&lt;h2 id=&#34;しかし単一のスキルだけでは後でトークン制限にぶつかることになる&#34;&gt;しかし、単一のスキルだけでは、後でトークン制限にぶつかることになる
+&lt;/h2&gt;&lt;p&gt;問題はここにあります。
+文体学習を真剣に行い始めると、&lt;code&gt;blog-writer&lt;/code&gt; のコンテキストがすぐに肥大化します。ただ書くだけでなく、以前あなたのように書くことも期待するわけです。最も自然な方法は、過去の記事も一気に詰め込むことです。
+これなら、一度だけは実行できます。
+しかし、たまに記事を書くだけではなく、長期的なワークフローにしたいと思うと、すぐに問題が発生します：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;トークン消費量が高い&lt;/li&gt;
+&lt;li&gt;毎回同じ古い記事を繰り返し与えることになる&lt;/li&gt;
+&lt;li&gt;モデルの注意力が古い材料によって希釈される&lt;/li&gt;
+&lt;li&gt;原稿執筆とスタイル維持が絡み合い、どちらも容易ではない
+ここから、私は&lt;code&gt;blog-writer&lt;/code&gt;は、すべてを任せる側（生成側）というよりは、消費する側として使う方が適していることに気づき始めました。
+原稿執筆という動作は、できるだけ軽く、直接的に、そしてできれば公開されたバージョンのみを参照するようにすべきです。一方、スタイルデータの生成方法、選別方法、圧縮方法は、別の生産側のパイプラインの問題なのです。この判断が、私を次のステップへと導き、それが&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;AIでブログを書くという件は、結局エンジニアリングにする必要がある（2）：blog-style-suiteでスタイル学習とトークンコストをどう分離するか&lt;/a&gt;へと繋がりました。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;まずプロセスを安定させてからスタイルやモデルについて語る資格が生まれる&#34;&gt;まずプロセスを安定させてから、スタイルやモデルについて語る資格が生まれる
+&lt;/h2&gt;&lt;p&gt;今振り返ると、&lt;code&gt;blog-writer&lt;/code&gt; が生まれたのは、私が突然ブログライティングアシスタントを作りたいと思ったからではない。
+むしろ、これまでのワークフロー自体が、新しい働き方に合わなくなってきたことが原因だ。
+&lt;code&gt;Codex&lt;/code&gt; のようなツールがインターネットに接続して資料を補完できたり、リポジトリ内での読み書きができたり、スクリプトを直接呼び出せるようになった場合、「ブログを書く」という行為は「本文をローカルドキュメントにコピーする」という段階で止まっているべきではない。この部分を自動化しなければ、かえって全体のプロセスの中で最も非効率な工程になってしまう。
+そのため、最初の記事の結論はここまでとする。
+&lt;code&gt;blog-writer&lt;/code&gt; が最初に解決したのは、文体ではなく、公開作業における反復的な手作業だった。このレイヤー（層）という契約がなければ、後からトークンやデータ構造、ローカルモデルについて語っても、実際には根拠がない。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/991536a237d04aba7c44dec501b3d98c644040c8&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;991536a237d04aba7c44dec501b3d98c644040c8&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/8eb735aa8448c97deb2af1ea46b86772008fa9e3&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;8eb735aa8448c97deb2af1ea46b86772008fa9e3&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/1a5604e7e6ce0a13f260fcbb8c2c1d964cdd0892&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;1a5604e7e6ce0a13f260fcbb8c2c1d964cdd0892&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/04dccb98c55a6ea3b81408012b33a6219cf8ab77&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;04dccb98c55a6ea3b81408012b33a6219cf8ab77&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;.agents/skills/blog-writer/SKILL.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;.agents/skills/blog-writer/scripts/write_post.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;.agents/skills/blog-writer/scripts/write_post_series.py&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その時は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づきました。そこで、これらの作業を自動化するスキルを作成できないかと考えたのが、skill blog-writer の初稿です。さらに、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したスキルでした。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それが blog-style-suite の誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いと感じたため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考え、minimaxとも連携させました。blog-style-suite と blog-writer の進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルの blog-writer および blog-style-suite のコードを基にして、設計思想や、どのようにトークン節約を実現したか、データ構造はどう設計したか、といった核となる設計思想について説明することができます。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングのアイデア概要&#34;&gt;ライティングのアイデア概要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;最初の記事はワークフローのトリガーポイントに焦点を当て、トークンとモデルの役割分担を急ぎすぎず、3つの記事でメインテーマを奪い合うのを避ける。&lt;/li&gt;
+&lt;li&gt;「本文自体は難しくないが、公開前後の一連の機械的な作業が面倒である」という判断を重点的に残した。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;991536a&lt;/code&gt;、&lt;code&gt;8eb735a&lt;/code&gt;、&lt;code&gt;1a5604e&lt;/code&gt;、&lt;code&gt;04dccb9&lt;/code&gt; などのノードを通じて、「プロセスを契約化する」ことを実際のGitの進化に落とし込む。&lt;/li&gt;
+&lt;li&gt;シリーズ形式はこの記事で取り上げることで、ブログ執筆が単発の記事生成から一連の成果物（セット）へと移行したことを示すためである。&lt;/li&gt;
+&lt;li&gt;最後に意図的に問題をトークンウォールに引きつけ、次の記事でのデータエンジニアリングと前処理のための布石とする。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AI時代において、単に人々をアプリに引き込むだけでは不十分です。</title>
+        <link>https://ttf248.life/ja/p/ai-needs-value-not-just-app-traffic/</link>
+        <pubDate>Fri, 03 Apr 2026 19:44:10 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/ai-needs-value-not-just-app-traffic/</guid>
+        <description>&lt;p&gt;今年の春節、国内のいくつかのAI企業が資金を投じているのを見て、私の第一印象は賑やかさではなく、「見覚えがある」というものでした。&lt;/p&gt;
+&lt;p&gt;テンセントの元宝は2月1日に10億人民元の現金红包（お年玉）を配り、百度文心は1月26日から3月中旬まで継続して5億人民元の红包を出し、アリババの千問は2月6日には直接30億人民元の「ご馳走計画」を展開し、豆包は春節の晩番組とAIのインタラクションを利用して参入してきました。私の判断は非常に単純で、これは前時代のインターネットが残した慣性的な動きに過ぎません。まずは人々をアプリに引き込み、利用頻度を作ることが目的なのであり、それ以降は後回しにできると考えています。&lt;/p&gt;
+&lt;p&gt;しかし、AIというビジネスは、そこまでトラフィック（流量）のビジネスとは異なります。&lt;/p&gt;
+&lt;h2 id=&#34;このアプローチは本当に旧インターネットのようだ&#34;&gt;このアプローチは、本当に旧インターネットのようだ
+&lt;/h2&gt;&lt;p&gt;かつてのインターネット企業が成長を遂げるロジックは非常に単純だった。
+ユーザーが来て、滞在時間が数分伸びる、アプリのランキングが上がる、そうすればトラフィック（流入）が得られる。トラフィックがあれば広告を売れるし、資金調達のストーリーも語りやすくなる。春节のような高頻度のソーシャルイベント期間は元々自然な新規獲得の窓口なので、大企業がこの時期になるとお年玉や補助金、無料提供などを思いつくのはごく自然なことだ。
+今年のAI戦争も、根底にある考え方はこれと同じだ。澎湃新聞が指摘しているように、いくつかの大手企業は春节期間中のAIマーケティング予算がすでに50億元を優に超えているという。QuestMobileのデータも非常に分かりやすい。千問（Qwen）の2月6日の「30億無料提供」キャンペーン初日には、DAUが直接7.3倍に増加し、5848万人に達した。元宝（Yuanbao）の2月1日の紅包キャンペーン初日も、DAUが2.1倍に増加した。
+だから、「お金をばら撒く」ことに効果があるか？もちろんある。
+少なくとも、これまで自発的にAIを開いたことがなかった大量の人々に、まずクリックさせ、いくつか試してもらうことで、「原来このものも自分は使えるんだ」という心理的なハードルを取り払うことができる。問題はここではない。問題は、人たちを呼び込んだ後、AIがどうやってお金を稼ぎ戻すかだ。&lt;/p&gt;
+&lt;h2 id=&#34;ai-の勘定は単なるトラフィックの勘定ではない&#34;&gt;AI の勘定は、単なるトラフィックの勘定ではない
+&lt;/h2&gt;&lt;p&gt;これが私が多くの人がまだ完全に理解できていない点だと感じています。
+ショート動画、情報フィード、一般的なツールソフトウェアなどは、限界費用が非常に低いです。一人増えて数分間スクロールしても、サーバーへの負荷は確かに上がりますが、全体的には従来のソフトウェアと同じ計算式です。AI は違います。ユーザーが質問するたびに、検索を一度実行するたびに、コードやドキュメント、画像を生成するたびに、その背後には実際の推論コストがかかっています。
+電力、グラフィックカード、冷却、データセンター、モデル開発、蒸留、トレーニング、推論クラスターといったものが積み重なり、固定費と継続的なコストは、前時代のソフトウェアサービスよりも遥かに高くなっています。3月23日、国家データ局の局長である劉烈宏氏が、中国の日平均トークン呼び出し量がすでに140兆を超えたと明らかにしました。この数字は重要です。単に大きいからというだけでなく、AI のビジネス上の現実を白日の下に晒しているからです。ユーザーが「適当に質問する」たびに、その背後では計算能力が消費されています。
+さらに興味深いのは、当局がトークンをスマート時代の「価値のアンカーポイント」および「決済単位」として位置づけたことです。この言葉は非常に重要だと私は思います。これは、AI が単なる注意力の収益化ビジネスではなく、本質的に結果ベース、呼び出しベース、納品物ベースで清算されるビジネスに近いことを直接指摘しています。
+だからこそ、皆が資金を投じる一方で、必死にコスト管理を行い、階層化や制限の設定、無料枠の提供を行っているのです。阿里云は今もAI製品の無料トライアルを提供しており、ページ上には「100万回分の無料呼び出し枠」や「7000万トークン超の大規模モデル無料体験」と直接書かれています。これは習慣を形成しているように見えますが、実際には補助金を使って将来の有料転換を得ようとしているのです。
+問題は、もしユーザーが来て、ただお年玉を受け取ったり、少し話したり、スタンプをいくつか送るだけで終わった場合、それらのトラフィックから得られる商業的価値では、背後の計算コストの請求書を到底支えきれないということです。&lt;/p&gt;
+&lt;h2 id=&#34;ai-は価値経済に近い&#34;&gt;AI は価値経済に近い
+&lt;/h2&gt;&lt;p&gt;そのため、AI時代はアテンションエコノミーというよりも、むしろバリューエコノミーに似ていると感じるようになりました。
+アテンションエコノミーが売るのは滞在時間ですが、バリューエコノミーが売るのは結果です。この二つには大きな違いがあります。
+ユーザーがなぜAIにお金を払うのか？それはチャットができるからでもなく、アプリの作りが凝っているからでもなく、お正月期間に数円のお年玉をくれたからでもありません。本当に人がお金を払ってくれるのは、&lt;strong&gt;自分の代わりに物事をやってくれて、しかも計算して自分自身でやるよりもお得だと分かったとき&lt;/strong&gt;です。
+例えば、コードを一段落書く場合を考えてみましょう。
+以前は自分でAPIドキュメントを探し、パラメータを組み合わせて、いくつもの失敗（ハマりどころ）を踏む必要がありました。今ではAIがこの肉体的な労働の大部分を肩代わりしてくれます。さらには、最初のコード作成から、エラー修正、ドキュメント整理まで一式引き受けてくれることもあります。結果さえまともに使えれば、多くの人はお金を払う意思があります。なぜなら、これは「一緒に遊んでくれる」のではなく、「代わりに働いてくれる」からです。
+また、千問が今回の春节（春節）の戦略もそうです。表面上は補助金に見えますが、少なくとも正しい点があります。それは、ユーザーに長くチャットしてもらうことに満足するのではなく、AIを**「実務で役立つもの」へと押し上げようとしている&lt;strong&gt;点です。注文をする、外食を予約する、買い物をする、ナビゲーションなど、こうしたアクションが実際に繋がれば、単なるチャットよりも商業的なロジックがずっと強固になります。なぜなら、それはデリバリー（成果物の提供）に近づいているからです。
+端的に言えば、AIが真に価値を持つ場所は、人をチャットボックスに閉じ込めることではなく、&lt;/strong&gt;「ニーズを結果に変える」こと**にあります。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;午後のコーディング作業を減らしてくれるなら、価値がある。&lt;/li&gt;
+&lt;li&gt;表のデータクレンジング（整形）の回数を減らしてくれるなら、価値がある。&lt;/li&gt;
+&lt;li&gt;フリーランスの外注費を削減してくれる、あるいは調査時間を一日分節約してくれるなら、それも価値がある。
+このような価値は直感的で計算でき、ユーザーが最も支払いを受け入れやすい部分なのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;紅包は人を入口まで連れてくるだけ&#34;&gt;紅包は人を入口まで連れてくるだけ
+&lt;/h2&gt;&lt;p&gt;そのため、今回の春节における国内AIベンダーによる資金投入について、私は悲観的でも興奮しているわけでもありません。
+それは役に立つが、あくまで前菜に過ぎません。
+紅包（赤い封筒）、無料化、春節の番組での露出といったものは、「とりあえず使ってもらう」ことはできます。しかし、AIというビジネスで最後に勝つのは、誰がユーザーを一度引き込めるかではなく、誰が物事を継続して完了させられるか、そしてそれを人手よりも速く、安く、安定して行えるかです。
+もし古いインターネットのやり方に沿って進み、ダウンロード数、滞在時間、祝日のDAU（日間アクティブユーザー）ばかりを注視していると、最終的にはAIのコスト構造がこのような粗放的なアプローチを根本的に支えていないことに気づくでしょう。
+逆に、あるモデルが本当に安定してコードを書いたり、資料を整理したり、検索を行ったり、ワークフローを実行したり、消費決定を完了させたりできるのであれば、ユーザーは留まるだけでなく、お金を払いたくなるはずです。なぜなら、そのお金の価値が「アプリにどれだけ滞在したか」ではなく、「あなたのおかげでどれだけの時間と人件費を節約できたか」「どれだけのことを成し遂げられたか」になるからです。
+これこそが私が理解するAIの商業化です。
+人をアプリに引き込むことではありません。
+ユーザーに「このお金を使う価値がある」と感じてもらうことです。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://m.thepaper.cn/newsDetail_forward_32550563&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;内蔵AIを過小評価しない&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://m.thepaper.cn/newsDetail_forward_32473851&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;15億を投下、テンセントの元宝と百度文心は「AIグループチャット」で陣取り、アリババの千問はどう「退群」した？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://m.thepaper.cn/newsDetail_forward_32512118&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;元宝が10億をばら撒く！馬化騰が春節の紅包戦争に第一弾の砲撃、しかしAIの一般化は難しい？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.36kr.com/p/3671286529291012&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;千問の30億「重火力」カバーに対し、豆包と元宝はいかに対応するか？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://finance.sina.com.cn/jjxw/2026-02-10/doc-inhmihnh4560547.shtml&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;QuestMobile：AI紅包効果がユーザー数の急増を牽引、千問の春節イベント初日のDAUは7.3倍に増加&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.szzg.gov.cn/2026/xwzx/szkx/202603/t20260325_5300173.htm&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;日平均トークン呼び出し量の爆発的増加が映し出す中国AI産業の新たな風景&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.stcn.com/article/detail/3708924.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;「トークン」が導く知能時代の価値の錨点 ファンドマネージャーが波を越えて金のなる山を探る&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://free.aliyun.com/product/ai&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;阿里云 AI 製品無料お試し&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;プロンプト：春節期間、国内のメーカーはユーザーの習慣形成のために資金を投じ、ユーザーにAIを使わせようとする。何でもいいから使ってもらい、とにかく使ってもらうことが重要だ。私から見ると、これは慣性的な思考だ。前時代のインターネットは「アテンションエコノミー（注意経済）」が主流だった。ユーザーが来れば、そのユーザーをアプリ内に留めさえすれば、私はトラフィックを得て、資金調達ができ、さらにユーザーの注意力を広告として販売できた。AI時代は2点で違う。コストだ。電力＋グラフィックボード＋冷却＋モデル開発といった固定費が、以前のソフトウェアサービスよりも遥かに高い。AI時代はより「バリューエコノミー（価値経済）」であり、その直接的な現れは、「コードを書きたい」というニーズに対し、AIが代わりにやってくれることであり、人を探してやってもらうよりも安上がりだ。ユーザーはAIにお金を払うことを受け入れられるようになっている。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;「春節に現金を撒くのは旧インターネットの慣性的な行動」という核となる判断は維持し、単なる「春節AI戦争ニュース概説」にはしなかった。&lt;/li&gt;
+&lt;li&gt;テンセント、百度、アリババが2026年の春節期間に行った補助金（キャッシュバック）の動きを使い、「習慣化のための資金投入」に明確な事実上のアンカーポイントを補強した。&lt;/li&gt;
+&lt;li&gt;論証の重点をトラフィックやダウンロード数から、トークン、推論コスト、計算リソースの請求書、そして決済単位へと移行させた。&lt;/li&gt;
+&lt;li&gt;「人を雇うよりコードを書いた方がお得だ」という例を用いて、抽象的なビジネス化の問題を「ユーザーが喜んでお金を払ってくれるか否か」という点に引き戻した。&lt;/li&gt;
+&lt;li&gt;構成としては、まずなぜこの戦術が馴染み深いのかを述べ、次にAIのコスト構造がトラフィックビジネスのみを支えられない理由を説明し、最後に「結果に対して対価を支払う」という結論で締めくくる。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>Skill は新しいプロンプトではなく、エージェントに職種マニュアルを提供するものです。</title>
+        <link>https://ttf248.life/ja/p/skill-is-an-agent-handbook/</link>
+        <pubDate>Thu, 02 Apr 2026 22:43:16 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/skill-is-an-agent-handbook/</guid>
+        <description>&lt;p&gt;この数日、AIプログラミングについて見てきましたが、さっきまでみんなが&lt;code&gt;MCP&lt;/code&gt;の話をしていて、次の瞬間にはまた&lt;code&gt;Skill&lt;/code&gt;の話をしています。この言葉を初めて目にする人は、本能的にこれをまた新しいプロトコルか、あるいは高度なプロンプトだと捉えがちです。&lt;/p&gt;
+&lt;p&gt;私の判断は非常にシンプルで、&lt;code&gt;Skill&lt;/code&gt;は&lt;code&gt;MCP&lt;/code&gt;の座を奪いに来たものではなく、むしろエージェントに職種マニュアルのようなものを提供している感じです。&lt;code&gt;MCP&lt;/code&gt;が解決するのは「エージェントが外部世界と接続できるか」という点であり、&lt;code&gt;Skill&lt;/code&gt;が解決するのは「接続した後、どのような手順で確実にタスクを遂行するか」という点です。これらは代替関係ではなく、むしろ前後関係に近いです。&lt;/p&gt;
+&lt;p&gt;端的に言えば、&lt;code&gt;MCP&lt;/code&gt;はエージェントに手足を与え、&lt;code&gt;Skill&lt;/code&gt;はエージェントが勝手に動かないようにするためのものです。&lt;/p&gt;
+&lt;h2 id=&#34;skill-とは一体何なのか&#34;&gt;Skill とは一体何なのか
+&lt;/h2&gt;&lt;p&gt;最も分かりやすい言葉で説明するなら、こう言います。
+ベテラン社員の頭の中にある熟練したやり方を、再利用可能で、トリガーでき、実際に実行できるマニュアルとしてまとめたものが &lt;code&gt;Skill&lt;/code&gt; です。&lt;/p&gt;
+&lt;p&gt;OpenAI の公式ドキュメントの定義も非常に直接的です。&lt;code&gt;Skill&lt;/code&gt; は特定のタスクに向けた能力パッケージの一種であり、指示（プロンプト）、参考資料、そしてオプションのスクリプトを格納できます。目的はモデルを「より賢くする」ことではなく、ある種のタスクにおいて固定されたワークフローに従って安定的に出力をさせることです。&lt;/p&gt;
+&lt;p&gt;何に最も近いか？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;通常のプロンプトとは異なり、一度話して終わりではないからです。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;MCP&lt;/code&gt; とも異なります。なぜなら、ツールやデータソースを接続する責任を持たないからです。&lt;/li&gt;
+&lt;li&gt;また、&lt;code&gt;AGENTS.md&lt;/code&gt; のようなものでもないからです。全リポジトリで通用するルールではないからです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;むしろ、専門の SOP（標準作業手順書）や、職種マニュアルのようなものです。&lt;/p&gt;
+&lt;p&gt;例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;GitHub PR のコメントを処理する場合：まずどのコメントを処理すべきかを確認し、次にユーザーにどのコメントを処理するか尋ね、コードを修正し、最後に結果をフィードバックする。&lt;/li&gt;
+&lt;li&gt;CI の失敗を調査する場合：まず GitHub Actions のログを取得し、次に失敗した部分を抽出して要約し、修復計画を立て、承認されてから作業に取り掛かる。&lt;/li&gt;
+&lt;li&gt;ブログ記事を書く場合：まず固定の文体でタイトルを生成し、次に事実情報を補完し、さらにフロントマター（メタデータ）を追加し、最後に公開する。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これらの事柄に共通しているのは、「モデルがどう回答すべきか知らない」ということではなく、「モデルのやり方が毎回異なり、逸脱しやすい」という点です。ここで &lt;code&gt;Skill&lt;/code&gt; の価値が出てくるのです。&lt;/p&gt;
+&lt;h2 id=&#34;skill-と-mcp結局どこが違うのか&#34;&gt;Skill と MCP、結局どこが違うのか
+&lt;/h2&gt;&lt;p&gt;これは実際のワークフローに当てはめて見ないと分かりにくいので、単なる説明だけでは誤解を招きやすいです。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;MCP&lt;/code&gt; はインターフェース層のようなものです。&lt;/p&gt;
+&lt;p&gt;公式における &lt;code&gt;MCP&lt;/code&gt; の定義は、「AI アプリケーションを外部システムに接続するためのオープンスタンダード」です。ファイル、ローカルデータベース、検索エンジン、デザイン稿、サードパーティサービスなど、これらすべてを &lt;code&gt;MCP&lt;/code&gt; を通じて取り込むことができます。つまり、これが解決しているのは「&lt;strong&gt;取り込み（コネクション）&lt;/strong&gt;」の部分です。&lt;/p&gt;
+&lt;p&gt;一方、&lt;code&gt;Skill&lt;/code&gt; はプロセス層のようなものです。&lt;/p&gt;
+&lt;p&gt;OpenAI の &lt;code&gt;Agent Skills&lt;/code&gt; ドキュメントには明確に書かれていますが、&lt;code&gt;Skill&lt;/code&gt; は再利用可能なワークフローを記述するためのフォーマットです。一つの &lt;code&gt;Skill&lt;/code&gt; には最低限 &lt;code&gt;SKILL.md&lt;/code&gt; が必要で、さらに &lt;code&gt;scripts/&lt;/code&gt;、&lt;code&gt;references/&lt;/code&gt;、&lt;code&gt;assets/&lt;/code&gt; を含めることができます。Codex はまずその &lt;code&gt;name&lt;/code&gt; と &lt;code&gt;description&lt;/code&gt; を読み込み、実際に使用する必要があると判断した場合にのみ、完全な説明をコンテキストにロードします。これが公式が言う「&lt;strong&gt;プログレッシブ・ディスクロージャー（段階的開示）&lt;/strong&gt;」です。&lt;/p&gt;
+&lt;p&gt;したがって、両者の役割分担は非常に明確です。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;MCP&lt;/code&gt;: 能力を取り込む（コネクションする）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Skill&lt;/code&gt;: 行う手順の順序を定める&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;非常に分かりやすい例で言うと、「Figma からコードへの変換」のような作業です。もしエージェントがデザイン稿自体を読み取れていない場合、まず補うべきなのは &lt;code&gt;MCP&lt;/code&gt; です。しかし、すでにデザイン稿を読み取れるようになったのに、毎回バラバラにコーディングしてしまう（今日はコンポーネントから書き始め、明日はページ分割から始め、明後日にはビジュアルチェックを忘れる）という状況であれば、補うべきは &lt;code&gt;Skill&lt;/code&gt; なのです。&lt;/p&gt;
+&lt;h2 id=&#34;スキルの開発方法&#34;&gt;スキルの開発方法
+&lt;/h2&gt;&lt;p&gt;これは思ったほど重くありません。
+OpenAIの公式推奨では、まず組み込みの&lt;code&gt;$skill-creator&lt;/code&gt;を使用し、トリガー条件、範囲、スクリプトが必要かどうかといった骨格部分を構築してもらうことです。デフォルトではinstruction-only（指示のみ）が優先されるため、焦ってスクリプトを書くのではなく、まずは説明を明確にすることが重要です。
+手動で記述する場合でも、最小限の構造は非常にシンプルです：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;my-skill/
+├── SKILL.md
+├── scripts/
+├── references/
+└── assets/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;この中で真に必要なのは&lt;code&gt;SKILL.md&lt;/code&gt;だけです。そして、このファイルには最低限2つのメタデータが必要です：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;---
+name: skill-name
+description: Explain exactly when this skill should and should not trigger.
+---
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;私が考えるに、&lt;code&gt;Skill&lt;/code&gt;を開発する上で最も重要なのは以下のステップです。&lt;/p&gt;
+&lt;h3 id=&#34;1-繰り返し現れるバイアスを探す&#34;&gt;1. 「繰り返し現れるバイアス」を探す
+&lt;/h3&gt;&lt;p&gt;すべてのタスクが &lt;code&gt;Skill&lt;/code&gt; にする価値があるわけではありません。
+エージェントに単発で作業をさせるだけであれば、通常のプロンプトで十分です。真に &lt;code&gt;Skill&lt;/code&gt; として抽出するのに適しているのは、通常以下のようなケースです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同じことを何度も繰り返して指示している場合&lt;/li&gt;
+&lt;li&gt;エージェントには能力があるはずなのに、実行順序がいつも変わってしまう場合&lt;/li&gt;
+&lt;li&gt;間違いが発生する箇所が毎回似ている場合
+つまり、「能力不足」なのではなく、「手順（ノウハウ）が安定していない」ということです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-description-をトリガー条件として記述し宣伝文句にしないこと&#34;&gt;2. &lt;code&gt;description&lt;/code&gt; をトリガー条件として記述し、宣伝文句にしないこと
+&lt;/h3&gt;&lt;p&gt;このステップは非常に重要です。
+公式ドキュメントでは、Codex がどの &lt;code&gt;Skill&lt;/code&gt; を暗黙的に呼び出すかについて、&lt;code&gt;description&lt;/code&gt; に大きく依存すると強調しています。「これはとても便利なスキルだ」といった表現ではなく、「いつ使うべきか、いつ使ってはいけないか」を記述してください。
+例えば、&lt;code&gt;gh-fix-ci&lt;/code&gt; の公式スキルの説明は非常に明確です：「ユーザーが GitHub PR チェックの失敗をデバッグまたは修正してほしい場合に使用する」というものです。重要なのは、ログを確認し、失敗の原因を要約し、修正計画を提示することであり、そして明示的な承認を得てから実行することです。これを見るだけで、その境界線がどこにあるかがわかります。&lt;/p&gt;
+&lt;h3 id=&#34;3-説明で対応できるならまずスクリプト化しない&#34;&gt;3. 説明で対応できるなら、まずスクリプト化しない
+&lt;/h3&gt;&lt;p&gt;OpenAIのドキュメントでも非常に実用的なアドバイスをしています。明確な決定論的動作や外部ツールが必要でない限りは、いきなりスクリプトにするのではなく、まずは説明（プロンプト）を使うべきです。
+なぜか？スクリプトが増えれば増えるほど、メンテナンスコストが上がってくるからです。
+多くの&lt;code&gt;Skill&lt;/code&gt;は、最初は単に手順を明確に説明するだけで十分です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;何から始めるか&lt;/li&gt;
+&lt;li&gt;次に何をするか&lt;/li&gt;
+&lt;li&gt;出力形式はどうするか&lt;/li&gt;
+&lt;li&gt;どのような状況でユーザーに確認を求めるべきか
+これだけでも大半の問題は解決します。
+あるステップが非常に安定していて、非常に機械的で、自動化に適している場合にのみ、&lt;code&gt;scripts/&lt;/code&gt;に落とし込むようにしましょう。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-資料テンプレートリソースを分離する&#34;&gt;4. 資料、テンプレート、リソースを分離する
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;Skill&lt;/code&gt; は書き進めるうちに、非常に長い説明文になりがちです。そんな時は分割すべきです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;SKILL.md&lt;/code&gt; はルールと手順を担当する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;references/&lt;/code&gt; には背景ドキュメントや参照資料を置く&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;assets/&lt;/code&gt; にはテンプレート、アイコン、サンプルを置く&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;scripts/&lt;/code&gt; には安定して実行できるアクションを置く
+このようにすることで、2つの利点があります。
+第一に、メインファイルが肥大化しすぎるのを防げます。第二に、モデルが必要なときだけ詳細を読み込む形になり、「プログレッシブ・ディスクロージャー（段階的開示）」という考え方に沿えます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;5-ローカルで先に使いプロジェクトをまたいで配布する&#34;&gt;5. ローカルで先に使い、プロジェクトをまたいで配布する
+&lt;/h3&gt;&lt;p&gt;公式ドキュメントでもこの点は明確に分けられています。
+もしご自身の現在のリポジトリでのみ使用するのであれば、&lt;code&gt;.agents/skills/&lt;/code&gt; に配置するだけで十分です。Codex はリポジトリ、ユーザー、システムなどの場所からスキルディレクトリをスキャンします。
+しかし、この仕組みが単一のリポジトリだけでなく複数の場所で使えることに気づいた場合や、複数のスキルをまとめてパッケージ化して配布したい場合は、skill folderの層に留まらず、&lt;code&gt;plugin&lt;/code&gt; を検討すべきです。OpenAI公式ドキュメントの記述も非常に明確で、&lt;code&gt;Skill&lt;/code&gt; はワークフローそのものであり、真にインストールおよび配布に適した単位は &lt;code&gt;plugin&lt;/code&gt; です。&lt;/p&gt;
+&lt;h2 id=&#34;スキルが適しているシナリオ&#34;&gt;スキルが適しているシナリオ
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;Skill&lt;/code&gt; は多ければ良いというものではなく、以下の種類のタスクに最も適しています。&lt;/p&gt;
+&lt;h3 id=&#34;高頻度で繰り返すタスク&#34;&gt;高頻度で繰り返すタスク
+&lt;/h3&gt;&lt;p&gt;毎週行う、そして毎回手順がほぼ同じもの。
+例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;PRレビューコメントの処理&lt;/li&gt;
+&lt;li&gt;ブログ記事の執筆とフロントマターの追記&lt;/li&gt;
+&lt;li&gt;CI失敗の調査&lt;/li&gt;
+&lt;li&gt;リリース前のチェック
+このような作業は、モデルができないことよりも、毎回説明し直さなければならないことが一番面倒です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;固定フローのタスク&#34;&gt;固定フローのタスク
+&lt;/h3&gt;&lt;p&gt;ある事柄には、生まれながらにして順序があるものがあります。
+例えば問題の調査をする場合、まずログを確認し、次に範囲を絞り込み、それから計画を立て、そして修正するという流れになります。このような場面では、&lt;code&gt;Skill&lt;/code&gt; が特に適しています。なぜなら、順番を固定できるため、モデルがその場しのぎで対応するのを減らせるからです。&lt;/p&gt;
+&lt;h3 id=&#34;専門的な文脈に紐づける必要があるタスク&#34;&gt;専門的な文脈に紐づける必要があるタスク
+&lt;/h3&gt;&lt;p&gt;手順が固定されているだけでなく、強い制約を伴うタスクもあります。
+例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;公式ドキュメントのみを参照すること&lt;/li&gt;
+&lt;li&gt;特定のレビュー形式で出力しなければならないこと&lt;/li&gt;
+&lt;li&gt;チーム内の既存の用語を保持しなければならないこと&lt;/li&gt;
+&lt;li&gt;特定のリポジトリの記述または開発規約を遵守しなければならないこと
+このような作業は、毎回プロンプトに頼って一時的に指示を出すだけでは、漏れが生じやすいです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;ツールとプロセスを併用するタスク&#34;&gt;ツールとプロセスを併用するタスク
+&lt;/h3&gt;&lt;p&gt;このシナリオは特に典型的なものです。
+単に「GitHubに接続する」だけで終わるのではなく、接続した後も、何らかの方法でログを確認し、問題を分類し、修正が必要かどうかを判断し、最後にどのようにフィードバックするかという一連の作業が必要です。つまり、外部接続と内部プロセスが組み合わさって機能しなければなりません。
+このような場合、しばしば &lt;code&gt;MCP + Skill&lt;/code&gt; が組み合わさって登場します。&lt;/p&gt;
+&lt;h2 id=&#34;スキルとして実装する必要がないシナリオ&#34;&gt;スキルとして実装する必要がないシナリオ
+&lt;/h2&gt;&lt;p&gt;逆に、どこまでを「スキル」とするのかを明確に伝える必要があります。そうしないと、何でもかんでも&lt;code&gt;Skill&lt;/code&gt;にしようとしてしまいがちです。&lt;/p&gt;
+&lt;h3 id=&#34;一回限りの気軽なタスク&#34;&gt;一回限りの気軽なタスク
+&lt;/h3&gt;&lt;p&gt;ユーザーが一時的に質問する場合、通常のプロンプトで十分なことが多いです。&lt;/p&gt;
+&lt;h3 id=&#34;あなたが望んでいるのは外部システムへの接続だけだ&#34;&gt;あなたが望んでいるのは「外部システムへの接続」だけだ
+&lt;/h3&gt;&lt;p&gt;その場合は、&lt;code&gt;Skill&lt;/code&gt; ではなく &lt;code&gt;MCP&lt;/code&gt; を優先的に検討してください。&lt;/p&gt;
+&lt;h3 id=&#34;リポジトリ全体の長期的な振る舞いを制約したい場合&#34;&gt;リポジトリ全体の長期的な振る舞いを制約したい場合
+&lt;/h3&gt;&lt;p&gt;これは &lt;code&gt;Skill&lt;/code&gt; の仕事というよりは、&lt;code&gt;AGENTS.md&lt;/code&gt; の仕事に近いです。
+したがって、簡単にまとめると以下のようになります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;接続が不足している場合、&lt;code&gt;MCP&lt;/code&gt; を使う&lt;/li&gt;
+&lt;li&gt;プロセスが不足している場合、&lt;code&gt;Skill&lt;/code&gt; を使う&lt;/li&gt;
+&lt;li&gt;グローバルなルールが不足している場合、&lt;code&gt;AGENTS.md&lt;/code&gt; を使う&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;代表的な事例をいくつか&#34;&gt;代表的な事例をいくつか
+&lt;/h2&gt;&lt;p&gt;概念をどれだけ説明しても、実際の事例を見る方が良いです。&lt;/p&gt;
+&lt;h3 id=&#34;1-roll-dice最小限の入門ケース&#34;&gt;1. &lt;code&gt;roll-dice&lt;/code&gt;：最小限の入門ケース
+&lt;/h3&gt;&lt;p&gt;このケースはOpenAI公式の&lt;code&gt;Agent Skills&lt;/code&gt;ドキュメントからのものです。
+非常に小さく、ディレクトリ内にはほとんど&lt;code&gt;SKILL.md&lt;/code&gt;しかなく、エージェントがユーザーからサイコロを振るよう要求された際に、PowerShellの乱数コマンドを呼び出すようにします。
+なぜこの例が良いのか？
+それは&lt;code&gt;Skill&lt;/code&gt;の最も核となる骨格を直接示しているからです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;明確なトリガー条件がある&lt;/li&gt;
+&lt;li&gt;明確な実行方法がある&lt;/li&gt;
+&lt;li&gt;明確な境界線がある
+これは、&lt;code&gt;Skill&lt;/code&gt;が必ずしも大きくなくて良いことを示しています。あることが繰り返し発生し、モデルに無作為な振る舞いをさせたくない場合、それを&lt;code&gt;Skill&lt;/code&gt;として実装できるということです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-gh-address-commentsgithub-コメント処理のワークフロー例&#34;&gt;2. &lt;code&gt;gh-address-comments&lt;/code&gt;：GitHub コメント処理のワークフロー例
+&lt;/h3&gt;&lt;p&gt;このケースは、OpenAI 公式の &lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;openai/skills&lt;/code&gt;&lt;/a&gt; リポジトリから来ました。
+目的は「GitHubに接続する」ことではなく、「現在のブランチのPRのコメントを処理する」という一連のプロセスを固定化することです。公式バージョンでの手順が非常に典型的です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;まず&lt;code&gt;gh&lt;/code&gt;が認証済みか確認する&lt;/li&gt;
+&lt;li&gt;次に、現在のPRのコメントとレビュースレッドを取得する&lt;/li&gt;
+&lt;li&gt;これらのコメントに番号を振り、要約する&lt;/li&gt;
+&lt;li&gt;ユーザーにどのコメントを処理するか明確に選択させる&lt;/li&gt;
+&lt;li&gt;その後で初めて処理を開始する
+この例は、&lt;code&gt;Skill&lt;/code&gt; の価値を特に示しています。
+多くのエンジニアリングタスクにおいて、難しさは「モデルがGitHubとは何かを知っているか」という点ではなく、「正しい順序で物事を処理できるか」という点にあります。&lt;code&gt;gh-address-comments&lt;/code&gt; が解決しているのは、まさにこのような順序の問題です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-gh-fix-cici-失敗のエンジニアリングケースの調査&#34;&gt;3. &lt;code&gt;gh-fix-ci&lt;/code&gt;：CI 失敗のエンジニアリングケースの調査
+&lt;/h3&gt;&lt;p&gt;これも &lt;code&gt;openai/skills&lt;/code&gt; リポジトリ内の公式スキルです。
+これは別の非常に典型的なエンジニアリングタスクを対象としています。それは、PR のチェックが失敗したとき、「直すべきか」「どう直すか」というものです。
+この &lt;code&gt;Skill&lt;/code&gt; で定義されているワークフローも非常に代表的です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;まず &lt;code&gt;gh&lt;/code&gt; のログイン状態を確認する&lt;/li&gt;
+&lt;li&gt;現在の PR を見つける&lt;/li&gt;
+&lt;li&gt;GitHub Actions の失敗したチェックとログを取得する&lt;/li&gt;
+&lt;li&gt;失敗した部分を抽出する&lt;/li&gt;
+&lt;li&gt;まず修正計画を立てる&lt;/li&gt;
+&lt;li&gt;承認を得てから実行する
+これは、「CI がなぜ失敗したか見て」という単なるプロンプトでは安定して対応できないシナリオです。なぜなら、権限、ログ、外部ツール、承認の境界線、実行順序など、これらすべてを定義する必要があるからです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-リポジトリ固有のスキルチーム独自のノウハウを蓄積する&#34;&gt;4. リポジトリ固有のスキル：チーム独自のノウハウを蓄積する
+&lt;/h3&gt;&lt;p&gt;公式なサンプル例以外で、私が考える &lt;code&gt;Skill&lt;/code&gt; のより大きな価値は、実はプライベートリポジトリ内にあります。
+例えば、目の前のブログリポジトリにある &lt;code&gt;blog-writer&lt;/code&gt; は、本質的には非常に典型的な repo-scoped skill です。これは「モデルに中国語の書き方を学ばせる」ことを担当しているのではなく、このリポジトリで既に固定された文体、構造、ファクトチェック、出力パス、データ保存形式などをワークフローとして記述したものです。
+このような &lt;code&gt;Skill&lt;/code&gt; は、最も現実的な価値を持つことが多いです。なぜなら、すべての人に向けられているわけではなく、「あなたはこのリポジトリで、どのような種類の作業が繰り返し発生し、かつ逸脱しやすいか」という点に特化して解決するものだからです。&lt;/p&gt;
+&lt;h2 id=&#34;実際にskillを使うべき時&#34;&gt;実際に「Skill」を使うべき時
+&lt;/h2&gt;&lt;p&gt;そこで、最後に最も実用的な問題に戻ります。いつ真剣に &lt;code&gt;Skill&lt;/code&gt; を作るべきでしょうか？
+私の答えは以下の通りです。
+それは、問題がもはや「モデルの能力不足」ではなく、「毎回同じ行動が安定しない」と感じたときです。
+この段階でプロンプトを積み重ねても、得られる利益は通常低くなる一方です。今日一文追加し、明日また一文追加するうちに、プロンプトはまるで出来事の羅列になり、モデルはやはりミスを犯します。
+むしろ、それを &lt;code&gt;Skill&lt;/code&gt; として整理し、トリガー条件、手順、境界線、スクリプト、資料などを分けて管理する方が、効果が安定しやすく、再利用性も高まります。
+&lt;code&gt;MCP&lt;/code&gt; は外部世界と接続し、&lt;code&gt;Skill&lt;/code&gt; は内部のノウハウを固定化します。
+前者は「できるかどうか」を解決し、後者は「どうすれば安定してできるか」を解決します。
+これが私が今理解している &lt;code&gt;Skill&lt;/code&gt; です。
+それは新しいプロンプトでも、新しいプロトコルでもありません。
+むしろ、エージェントに職種マニュアルを渡すようなものです。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/codex/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Agent Skills - Codex | OpenAI Developers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/blog/skills-agents-sdk&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Using skills to accelerate OSS maintenance | OpenAI Developers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://modelcontextprotocol.io/docs/getting-started/intro&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;What is the Model Context Protocol (MCP)? | Model Context Protocol&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;openai/skills | GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills/blob/main/skills/.curated/gh-address-comments/SKILL.md&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gh-address-comments/SKILL.md | openai/skills&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills/blob/main/skills/.curated/gh-fix-ci/SKILL.md&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gh-fix-ci/SKILL.md | openai/skills&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;プロンプト：AI大規模言語モデルによるプログラミングについて、まずMCPが登場し、次にSkillが登場しました。平易な言葉で、Skillが何か、どのようにSkillを開発するか、どのようなシナリオに適しているか、それぞれ具体的な代表的な事例を挙げて説明してください。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;「&lt;code&gt;MCP&lt;/code&gt; と &lt;code&gt;Skill&lt;/code&gt; の概念レビュー」として繰り返し書くのではなく、重点を &lt;code&gt;Skill&lt;/code&gt; の役割と使用範囲に置いた。&lt;/li&gt;
+&lt;li&gt;「職種マニュアル」「特定作業手順書（SOP）」といった平易な比喩を用いて、抽象的な定義を実際のワークフローに落とし込んだ。&lt;/li&gt;
+&lt;li&gt;開発部分は公式ドキュメントの実構造に沿って記述し、&lt;code&gt;description&lt;/code&gt;、&lt;code&gt;progressive disclosure&lt;/code&gt;、&lt;code&gt;instruction-only&lt;/code&gt; といった重要な点を保持した。&lt;/li&gt;
+&lt;li&gt;ケーススタディは可能な限り公式ソースを選定し、それぞれ公式ドキュメント内の &lt;code&gt;roll-dice&lt;/code&gt;、および &lt;code&gt;openai/skills&lt;/code&gt; リポジトリ内の &lt;code&gt;gh-address-comments&lt;/code&gt; と &lt;code&gt;gh-fix-ci&lt;/code&gt; を使用した。&lt;/li&gt;
+&lt;li&gt;最後に、読者が読み終えた後も混同しないよう、&lt;code&gt;MCP&lt;/code&gt;、&lt;code&gt;Skill&lt;/code&gt;、&lt;code&gt;AGENTS.md&lt;/code&gt; の三者の境界線を改めて整理した。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>弱いモデルに無理に強いものを適用しない</title>
+        <link>https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/</link>
+        <pubDate>Thu, 02 Apr 2026 22:05:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/</guid>
+        <description>&lt;p&gt;最近、いくつかの端的な作業を &lt;code&gt;MiniMax&lt;/code&gt; やローカルモデルに移行させているが、使うほど「最強モデル」という基準で物事を測るのは違うと感じるようになった。&lt;/p&gt;
+&lt;p&gt;私の判断は非常にシンプルだ。弱いモデルに無理に難しいタスクを割り当ててはいけない。「MiniMax」のようなモデルは、能力が劣っているのは事実だが、複雑なコーディング、長尺の推論、曖昧な要件の分解といった作業には確かに物足りない。しかし、データクレンジング、ドキュメント作成、提案資料の検索といったタスクであれば、これらは十分にこなせる。同じロジックで、ローカルの12Bクラスのモデルも同様だ。翻訳、フォーマットの書き直し、バッチ処理でのクレンジングなど、むしろそちらが本来適している場所なのだ。&lt;/p&gt;
+&lt;p&gt;端的に言えば、モデルに価値がないのではなく、単に間違った場所に配置されているだけだ。&lt;/p&gt;
+&lt;h2 id=&#34;本当の問題はモデルがどれだけ強力かではなくどれだけ生きているかである&#34;&gt;本当の問題は、モデルがどれだけ強力かではなく、どれだけ「生きている」かである
+&lt;/h2&gt;&lt;p&gt;多くの人が大規模言語モデルについて話すとき、頭の中では最も難しいタスクを思い浮かべがちです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;複雑なエンジニアリングを単独で書くこと&lt;/li&gt;
+&lt;li&gt;システム全体を一度に分解すること&lt;/li&gt;
+&lt;li&gt;長いコンテキスト内での複数ターンにわたる推論の処理&lt;/li&gt;
+&lt;li&gt;検索しながら計画し、実行する
+これらはもちろん重要です。しかし、現実の業務で机の上に積み重なっているものの多くは、このような作業ではありません。
+むしろ多いのは以下の類です：&lt;/li&gt;
+&lt;li&gt;一連の汚れたフィールドをクリーンアップすること&lt;/li&gt;
+&lt;li&gt;ばらばらの資料を読みやすいドキュメントに整理すること&lt;/li&gt;
+&lt;li&gt;長文を要約、FAQ、アウトラインに変更すること&lt;/li&gt;
+&lt;li&gt;中文と英文が混在する内容を統一フォーマットにすること&lt;/li&gt;
+&lt;li&gt;複数のウェブページから資料を探し出し、ついでに提案書の草稿としてまとめること
+このようなタスクで最も必要なのは、「モデルが天才のように考える」ことではなく、以下の3点です：&lt;/li&gt;
+&lt;li&gt;指示追従性が極端すぎないこと（常識的であること）&lt;/li&gt;
+&lt;li&gt;出力構造が可能な限り安定していること&lt;/li&gt;
+&lt;li&gt;コストが十分に低く、何度も使いたくなるほど低いこと
+だからこそ、私は弱いモデルは役に立たないのではなく、単にフラッグシップモデルと同じ戦場に持ち出せないだけだと考えているのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;minimax-が真に得意なこと&#34;&gt;MiniMax が真に得意なこと
+&lt;/h2&gt;&lt;p&gt;まず &lt;code&gt;MiniMax&lt;/code&gt; についてです。&lt;/p&gt;
+&lt;p&gt;公式は &lt;code&gt;MiniMax-M2.5&lt;/code&gt; の位置づけを非常に高く設定しており、プレスリリースやオープンプラットフォームのドキュメントでは、プログラミング、ツール呼び出し、検索、オフィス生産性といったシナリオに重点を置いています。さらには速度と価格の優位性を強調しています。これらの主張を完全に信じられないわけではありませんが、私はそれを分解して見る方が好みです。&lt;/p&gt;
+&lt;p&gt;私にとって、&lt;code&gt;MiniMax&lt;/code&gt; が真に使いやすいのは、「最も複雑な開発タスク」ではなく、以下の点です：&lt;/p&gt;
+&lt;h3 id=&#34;データクレンジング&#34;&gt;データクレンジング
+&lt;/h3&gt;&lt;p&gt;データクレンジングと一口に言っても、半構造化テキストの肉体労働です。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;名称の統一&lt;/li&gt;
+&lt;li&gt;フィールドのマッピング&lt;/li&gt;
+&lt;li&gt;外れ値のアノテーション&lt;/li&gt;
+&lt;li&gt;分類ラベル付け&lt;/li&gt;
+&lt;li&gt;表形式フィールドの補完
+このような作業が最も恐れるのは、モデルが「愚か」なことではなく、フォーマットが不安定であったり、出力が拡散したりすることです。モデルが &lt;code&gt;JSON&lt;/code&gt;、表、固定テンプレートに従って結果を出力できれば、実は十分な場合が多いです。高性能なモデルももちろん可能ですが、最も高価なモデルをフィールドクレンジングに使うのは、多くの場合費用対効果が悪いです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;ドキュメント作成&#34;&gt;ドキュメント作成
+&lt;/h3&gt;&lt;p&gt;ドキュメント作成は面倒くさい、難しいわけではない。
+インターフェースが変わる、プロセスが変わる、フィールドが変更される、といったたびに説明書を修正しなければならない。この過程には、モデルに高い創造性が求められるというよりは、むしろ余計なことをして元の明確な情報を曖昧にしてしまわないように注意することが重要だ。
+&lt;code&gt;MiniMax&lt;/code&gt; はこのような作業において、想像以上に信頼できることが多い。特にコンテキスト（文脈）を準備しておけば、真のエンジニアというよりも、実務ができるドキュメントアシスタントのような存在になる。&lt;/p&gt;
+&lt;h3 id=&#34;方案資料検索&#34;&gt;方案資料検索
+&lt;/h3&gt;&lt;p&gt;公式側も検索やツール呼び出しを推進しているので、この方向性は問題ありません。
+多くの場合、私たちが求めているのはモデルに「空から答えを思いつかせる」ことではなく、ウェブページ、ドキュメント、お知らせ、資料などをまず探し出してきて、それから整理してもらうことです。このようなシナリオでは、&lt;code&gt;MiniMax&lt;/code&gt; のような安価なモデルの価値が非常に高くなります。なぜなら、検索、要約、統合といった作業は元々頻繁に行う雑務だからです。
+したがって、私の実際の見解は以下の通りです：&lt;code&gt;MiniMax&lt;/code&gt; がダメなのではなく、むしろ生産パイプラインの中での「汚い仕事」「面倒な仕事」「繰り返しの仕事」に向いているということです。雑用をさせるなら、合格点であることが多いですが、すべてを包括的に担当させようとすると、がっかりする確率が高くなります。&lt;/p&gt;
+&lt;h2 id=&#34;ローカルの12bモデルは持ち帰るのに最も適したタスクがある&#34;&gt;ローカルの12Bモデルは、持ち帰るのに最も適したタスクがある
+&lt;/h2&gt;&lt;p&gt;さらに下を見ると、ローカルデプロイメントは基本的に同じロジックです。
+多くの人が「ローカルモデル」と言うと、どうしても一つの疑問が浮かびます。「クラウド上のフラッグシップに取って代われるのか？」と。
+しかし、この質問自体が最初から偏っていると思います。
+ローカルの&lt;code&gt;12B&lt;/code&gt;程度のモデルが持つ真の価値は、「自分も最強クラスのタスクをこなせることを証明する」ことではなく、安定していて、反復的で、機密性が高く、利益率は低いが頻度の高い作業を持ち帰ることなのです。&lt;/p&gt;
+&lt;h3 id=&#34;翻訳&#34;&gt;翻訳
+&lt;/h3&gt;&lt;p&gt;これはローカルモデルにとって得意なシナリオの一つです。
+&lt;code&gt;Qwen2.5&lt;/code&gt; の公式ブログでも明記されているように、長文生成、構造化データ理解、&lt;code&gt;JSON&lt;/code&gt; 出力などが強化されており、さらに29以上の言語をサポートしています。この組み合わせは、翻訳、バイリンガルでの書き直し、フォーマットの統一、専門用語の標準化といった作業に本質的に適しています。
+技術ドキュメント、フィールドの説明、製品紹介、インターフェースコメントなどは、構造が安定しており、専門用語が固定されていることが多いため、ローカルモデルが最もエレガントに翻訳できるとは限りませんが、通常は十分な品質です。&lt;/p&gt;
+&lt;h3 id=&#34;データクレンジング-1&#34;&gt;データクレンジング
+&lt;/h3&gt;&lt;p&gt;ここがローカルモデルが特に現実味を帯びている点です。
+多くの表、ドキュメント、業務資料は、クラウドにアップロードしたくないものがあります。特に内部データ、顧客情報、議事録、未完成の提案書などは、プライバシーや権限が関わるため、ローカルで実行する方がずっと安心できます。
+このような状況において、ローカルの「12B」程度のモデルの意義は、「どれだけ賢いか」ではなく、「自分のマシン上で動作し、こうした面倒な作業を安定してこなせるか」という点にあります。&lt;/p&gt;
+&lt;h3 id=&#34;固定フォーマットへの書き換え&#34;&gt;固定フォーマットへの書き換え
+&lt;/h3&gt;&lt;p&gt;例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;会議議事録を固定テンプレートに整理する&lt;/li&gt;
+&lt;li&gt;商品タイトルを統一の命名規則にクレンジングする&lt;/li&gt;
+&lt;li&gt;バグの説明を工單形式に書き直す&lt;/li&gt;
+&lt;li&gt;中英が混在したテキストを単語バージョンにクレンジングする
+このようなタスクは共通の特徴を持っています：ルールが明確、バッチ処理が大きい、繰り返しが多い、単発あたりの価値は高くないが、総量が多いのが面倒。
+これこそがローカルモデルが最も適している仕事です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;3060-12gb-で-12b-クラスのモデルを動かせるのか&#34;&gt;3060 12GB で 12B クラスのモデルを動かせるのか
+&lt;/h2&gt;&lt;p&gt;この件については、もっと現実的に書く方が良いと思います。「&lt;strong&gt;動かすことはできるが、あまり期待しすぎないでください。&lt;/strong&gt;」という感じです。&lt;/p&gt;
+&lt;p&gt;Google は &lt;code&gt;Gemma 3&lt;/code&gt; の公式ドキュメントで、非常に参考になるVRAM使用量の表を公開しています。&lt;code&gt;Gemma 3 12B&lt;/code&gt; を動かすには、おおよそ以下のメモリが必要です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;全精度バージョンをロードする場合：約 &lt;strong&gt;20 GB&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;中程度の量子化バージョンをロードする場合：約 &lt;strong&gt;12.2 GB&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;より低いVRAM使用量のバージョンをロードする場合：約 &lt;strong&gt;8.7 GB&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;公式はまた、これがモデルのロードに必要なメモリ量のみであり、プロンプトや実行時の追加オーバーヘッドは含まれていないと注意喚起しています。&lt;/p&gt;
+&lt;p&gt;この一文が非常に重要です。&lt;/p&gt;
+&lt;p&gt;これはどういう意味か？
+&lt;code&gt;3060 12GB&lt;/code&gt; のようなグラボで &lt;code&gt;12B&lt;/code&gt; クラスのモデルを動かすことが不可能だということではなく、&lt;strong&gt;前提条件がある&lt;/strong&gt;ということです。その前提とは通常以下の通りです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;量子化されたバージョンを使用していること&lt;/li&gt;
+&lt;li&gt;コンテキスト（プロンプト）を長すぎないようにすること&lt;/li&gt;
+&lt;li&gt;タスクが複雑すぎないこと&lt;/li&gt;
+&lt;li&gt;速度が平均的、あるいは遅くても許容できること&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;もしあなたがこれらの前提を受け入れる意思があるなら、ローカルで &lt;code&gt;12B&lt;/code&gt; クラスのモデルを動かすことは確かに可能です。少なくとも翻訳、要約、表のクレンジング、固定フォーマットへの変換といったタスクであれば、大げさな要求ではありません。&lt;/p&gt;
+&lt;p&gt;また、&lt;code&gt;Qwen2.5-14B-Instruct-GGUF&lt;/code&gt; の公式リポジトリ自体が複数の量子化形式を提供しており、これはすでに考え方を非常に明確に示しています。このクラスのモデルは、本来ローカル推論のエコシステムを念頭に置いて適応されているのです。&lt;/p&gt;
+&lt;p&gt;したがって、私の結論は一貫して「3060 12GB が 12B モデルを楽々こなせる」というものではなく、むしろ：
+**「このようなモデルを動かすことはできるが、期待値が低く、反復性が高く、プライバシーが重要な作業に向いている」**ということです。&lt;/p&gt;
+&lt;h2 id=&#34;安価なモデルとローカルモデルを使うことで節約できるのはapi費用だけではない&#34;&gt;安価なモデルとローカルモデルを使うことで節約できるのはAPI費用だけではない
+&lt;/h2&gt;&lt;p&gt;この件について話している人の多くは、まず「お金を節約できる」という反応をします。
+もちろん、お金の節約は重要です。しかし、私が思うより大きな価値は、以前は面倒だと避けていた雑務を、思い切って外部に委託できるようになることです。
+以前なら、数百件のデータクレンジングのために専用のスクリプトを書くことはなかったかもしれませんし、数十ページの日英資料のフォーマット統一のために手作業で少しずつ修正することもなかったでしょう。また、一時的な提案書のために資料を集める際も、ウェブページを一つ一つ読み込んで整理することさえなかったはずです。
+しかし、今は違います。
+コストが十分に低く、ハードルが十分に低い限り、「やる価値がない」と思われていたこれらの作業が一気に「やる価値がある」ものになります。あなたは「やるべきか？」と悩むのではなく、まず安価なモデルやローカルモデルに実行させるだけです。
+これが私が目にする最も現実的な変化です。
+強力なモデルは難題に取り組むことに専念し、弱いモデルは雑務をこなし、ローカルモデルが最終的な保証とバッチ処理を担当する。
+このように役割分担することで、ワークフロー全体がスムーズになるのです。&lt;/p&gt;
+&lt;h2 id=&#34;まとめ&#34;&gt;まとめ
+&lt;/h2&gt;&lt;p&gt;だから最後に言いたいのは、一つのモデルで全てを解決しようと考えすぎるなということです。
+&lt;code&gt;MiniMax&lt;/code&gt; のようなモデルは、能力が弱いという点はあるものの、使い物になりません。これを複雑なエンジニアリング、曖昧な要件定義、多段階の推論にぶつけても、当然ながらがっかりさせられるでしょう。しかし、データクレンジング、ドキュメント作成、ソリューション資料の検索といった作業に使えば、かえって非常に扱いやすいことが多いです。
+ローカルで動作する &lt;code&gt;12B&lt;/code&gt; 程度のモデルも同じです。これらは「もうクラウド上のフラッグシップは必要ない」と証明するためではなく、安定していて、反復的で、機密性が高く、バッチ処理の大きいタスクを、地道に自分自身のマシン上に持ち帰るためにあるのです。
+つまり、苦手なことを弱いモデルにやらせてはいけないということです。
+適切な場所（用途）に置けば、それ自体が現実的な価値を持つわけです。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.minimax.io/news/minimax-m25&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MiniMax M2.5: Built for Real-World Productivity&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://platform.minimaxi.com/docs/guides/text-generation&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MiniMax オープンプラットフォーム：テキスト生成&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://qwenlm.github.io/blog/qwen2.5/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Qwen2.5: A Party of Foundation Models!&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Qwen2.5-14B-Instruct-GGUF&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3 model overview&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;minimax の大規模言語モデルは、能力が弱いのは弱いが、データクレンジング作業やドキュメント作成、提案資料の検索などを行う分には問題ない。同じロジックで、ローカルに大規模言語モデルをデプロイし、翻訳などの作業やデータクレンジング作業を行うのも良い。モデルのパラメータ数は12b程度で、ローカルの3060 12GBのグラフィックボードでも動かせるはずだ。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングの思考プロセス要約&#34;&gt;ライティングの思考プロセス要約
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;「弱いモデルに無理なタスクを割り当てない」という核となる判断は維持し、モデルランキング比較としては記述しませんでした。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;MiniMax&lt;/code&gt; の部分は、公式が定義するプログラミング、検索、オフィス作業といった用途に基づき、その判断をデータクレンジング、ドキュメント作成、資料検索といった現実的なタスクに落とし込みました。&lt;/li&gt;
+&lt;li&gt;ローカルモデルの部分では、公式ソースから &lt;code&gt;Qwen2.5&lt;/code&gt; と &lt;code&gt;Gemma 3&lt;/code&gt; の2つを選択しました。一方は多言語対応と構造化出力をサポートし、もう一方は &lt;code&gt;12B&lt;/code&gt; パラメータとVRAM使用量を考慮したものです。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;3060 12GB&lt;/code&gt; に関する記述は、「帯域幅はあるが、あまり期待しすぎないでほしい」というニュアンスを意図的に含め、量子化推論を絶対的な結論として扱わないようにしました。&lt;/li&gt;
+&lt;li&gt;最後に、強力なモデル、弱いモデル、ローカルモデルという分類を用いて締めくくり、メインの論旨に焦点を絞りました。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
+        <title>過去2年間のAIに関する記事を振り返った結果、次に書くべきテーマとしてこの8つを選びました。</title>
+        <link>https://ttf248.life/ja/p/next-8-ai-topics-after-reviewing-two-years-of-posts/</link>
+        <pubDate>Mon, 30 Mar 2026 22:20:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/next-8-ai-topics-after-reviewing-two-years-of-posts/</guid>
+        <description>&lt;p&gt;最近、ブログ内の過去2年間にわたるAI関連の記事を遡って読み返したところ、内容は当初の「あるモデルが使えるかどうかの単純な体験談」という段階から進化し、より明確な一本の筋道を描いていることに気づきました。それは、**「AIがどのようにして私の開発ワークフローに真に入り込み、どのような効率性、コスト、そして新たな制約をもたらしたか」**という点です。&lt;/p&gt;
+&lt;p&gt;ここでいう「ここ2年」は、現在の日付から遡って考えると、おおよそ&lt;code&gt;2024-03-30&lt;/code&gt;から&lt;code&gt;2026-03-30&lt;/code&gt;の間を指します。実際に読み返すと、非常に明白な現象として、&lt;code&gt;2024&lt;/code&gt;年には真に意味のあるAIテーマの記事がほとんどなく、集中的な発信は&lt;code&gt;2025-01&lt;/code&gt;になってから始まったという点です。
+この事実はそれ自体が興味深いです。これは私にとって、AIが最初から安定した利用期に入ったわけではなく、仕事や執筆の中で徐々に浸透し、適切なツールやタスクの形に遭遇してから、継続的な記録として形成されていったことを示しています。&lt;/p&gt;
+&lt;h2 id=&#34;この2年間のaiに関する記事は大まかに3つの段階に分けることができます&#34;&gt;この2年間のAIに関する記事は、大まかに3つの段階に分けることができます
+&lt;/h2&gt;&lt;h3 id=&#34;フェーズ1ツールの試用まず使えるかどうかの確認&#34;&gt;フェーズ1：ツールの試用、まず使えるかどうかの確認
+&lt;/h3&gt;&lt;p&gt;このフェーズを代表する記事には以下のようなものがあります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;『Cursor AI 開発環境（IDE）の試用』&lt;/li&gt;
+&lt;li&gt;『ollamaによるdeepseek-R1のローカルデプロイ』&lt;/li&gt;
+&lt;li&gt;『コードを書かず、自選股モジュールを設計・開発する』&lt;/li&gt;
+&lt;li&gt;『AIの発展は2年間：Dockerリリース前の状況に似ている』
+このフェーズにおける中心的な問いは非常に素朴です。&lt;strong&gt;「AIは本当に私の代わりに作業をしてくれるのか？」&lt;/strong&gt;
+当時の関心事は、よりツールレベルに留まっていました：&lt;/li&gt;
+&lt;li&gt;IDEの使い勝手が良いか&lt;/li&gt;
+&lt;li&gt;ローカルへのデプロイが動作するかどうか&lt;/li&gt;
+&lt;li&gt;モデルが生成したコードで時間を節約できるか&lt;/li&gt;
+&lt;li&gt;複雑な要求に直面した際、AIは途中で行き詰まらないか
+振り返ってみると、このフェーズの記事群は、その後の本格的な利用に向けての「土台作り」のようなものです。多くの結論は今でも当てはまります。例えば、「AIは基本的な開発効率を明らかに向上させるが、複雑なタスクには依然として手動での分解が必要である」「ローカルモデルは試すには良いが、実際の高頻度ワークフローに組み込むには、安定性と速度が鍵となる」といった点です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;第二段階ワークフローへの導入とそれに伴う副作用の出現&#34;&gt;第二段階：ワークフローへの導入と、それに伴う副作用の出現
+&lt;/h3&gt;&lt;p&gt;この段階を代表する記事は以下の通りです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;『AIを使いすぎると、ちょっとした後遺症が出る』&lt;/li&gt;
+&lt;li&gt;『Claude 4リリースに伴い試みた開発：hugoタグ、超リンク翻訳アシスタント』&lt;/li&gt;
+&lt;li&gt;『最近の大規模モデルに関する使用経験』&lt;/li&gt;
+&lt;li&gt;『ByteDance AIコーディングの新パラダイム SOLO』&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;ここまで来ると、AIはもはや「たまに試すツール」ではなくなり、直接的に関与し始めるようになります。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ブログツールの開発チェーン&lt;/li&gt;
+&lt;li&gt;翻訳キャッシュとバッチ処理フロー&lt;/li&gt;
+&lt;li&gt;UIデザインとコードの往復作業&lt;/li&gt;
+&lt;li&gt;モデルの役割分担とシナリオ選択&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;同時に、問題意識もより具体的になってきます。
+以前は「AIはコードを書けるのか？」という疑問でしたが、その後は以下のような疑問に変わってきました。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;コードは書かれたが、どうやって受け入れ（検証）するのか？&lt;/li&gt;
+&lt;li&gt;文章は生成されたが、リアリティがあるのか？&lt;/li&gt;
+&lt;li&gt;ドキュメントは同期更新されたが、自分自身は本当に理解したのか？&lt;/li&gt;
+&lt;li&gt;ツールはどんどん強力になるが、人間の思考の負荷は低下しているのではないか？&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これも私がこの一連の記事の中で最も価値があると感じる部分です。「AIはすごい」という空論よりも、少し居心地の悪さを伴うような記録の方が、むしろ真実味を帯びているからです。&lt;/p&gt;
+&lt;h3 id=&#34;第3フェーズ単一ツール体験からプロトコルワークフロー安定性コストへ&#34;&gt;第3フェーズ：単一ツール体験からプロトコル、ワークフロー、安定性、コストへ
+&lt;/h3&gt;&lt;p&gt;この段階を代表する記事には以下のようなものがあります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;「コマンドラインベースのAIコーディングインタラクション」&lt;/li&gt;
+&lt;li&gt;「プロトコル制約からインテリジェントな解放へ：MCPとSkillの深掘り比較」&lt;/li&gt;
+&lt;li&gt;「ヘビーAIプログラミングの日々」&lt;/li&gt;
+&lt;li&gt;「低価格API中継地点の終焉：3月のLLM体験と不可能性の三角関係」
+この段階になると、関心事が明確に高度化しています。
+もはや「どのモデルがより賢く回答するか」というレベルではなく、以下のような点に焦点が当たっています。&lt;/li&gt;
+&lt;li&gt;ターミナルインタラクションとIDEインタラクション、どちらが継続的な開発に適しているか&lt;/li&gt;
+&lt;li&gt;MCPやSkillといった能力拡張方式には、具体的にどのような境界線の違いがあるのか&lt;/li&gt;
+&lt;li&gt;ヘビーAIプログラミングを行う際、人間はどの部分で介入すべきか&lt;/li&gt;
+&lt;li&gt;コスト、安定性、品質の間で、どのように現実的な選択をするか
+こうしたトピックはもはや単なる製品レビューではなく、&lt;strong&gt;ワークフロー設計&lt;/strong&gt;に近づいています。これが現在ブログにおけるAIテーマの中で最も安定しており、識別性の高いラインとなっています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;この記事群の最大の強みはトレンドを追うことではない点です&#34;&gt;この記事群の最大の強みは、トレンドを追うことではない点です。
+&lt;/h2&gt;&lt;p&gt;振り返ってみると、ブログに既に存在するAIの記事で、真に差別化できるポイントは、あなたが他の人より早く特定のモデルを書いたからでも、パラメータやランキング、ベンチマークスコアをより網羅的に書いたからでもなく、以下のいくつかの点にあります。&lt;/p&gt;
+&lt;h3 id=&#34;1-すべて実際の利用シーンから生まれたもの&#34;&gt;1. すべて実際の利用シーンから生まれたもの
+&lt;/h3&gt;&lt;p&gt;自選股モジュール、ブログ翻訳ツール、コマンドラインでのコーディング、APIの中継地点の試行錯誤記録など、ほとんどの内容は思いつきで書かれたものではなく、実際に使用する中で問題に直面した後に書いたものです。
+このようなコンテンツの良い点は、空虚になりにくいことです。&lt;/p&gt;
+&lt;h3 id=&#34;2-関心はどうやってaiをプロセスに組み込むかにある&#34;&gt;2. 関心は「どうやってAIをプロセスに組み込むか」にある
+&lt;/h3&gt;&lt;p&gt;多くのAIに関する記事はモデルの能力に焦点を当てがちですが、現在の手持ちの記事群はむしろ以下の点に関心を寄せています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;タスクの分解方法&lt;/li&gt;
+&lt;li&gt;プロジェクトへの組み込み方&lt;/li&gt;
+&lt;li&gt;ドキュメントの保守方法&lt;/li&gt;
+&lt;li&gt;コンテキストの制御方法&lt;/li&gt;
+&lt;li&gt;異なるモデル間での役割分担の方法
+こうした内容のライフサイクルは、単なるモデル評価よりも長い傾向があります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-副作用とコストを認識し始めた段階&#34;&gt;3. 副作用とコストを認識し始めた段階
+&lt;/h3&gt;&lt;p&gt;『AIを使いすぎると後遺症が出る』から『格安APIの中継地点の終焉』に至るまで、実は非常に一貫した思考の流れが形成されています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;AIは効率を向上させる&lt;/li&gt;
+&lt;li&gt;しかし、人間の検索や思考の習慣を変えてしまう&lt;/li&gt;
+&lt;li&gt;安い＝本当に節約できているわけではない&lt;/li&gt;
+&lt;li&gt;品質、安定性、コストパフォーマンスが良いというものは同時に成立するのが難しい
+このような判断は、個人的な利用経験から積み重ねたものであり、単にネット上の意見を繰り返しているわけではありません。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;しかしいくつかの明白な情報の欠落点もあります&#34;&gt;しかし、いくつかの明白な情報の欠落点もあります
+&lt;/h2&gt;&lt;p&gt;既存の記事はすでに骨子がありますが、もし書き進めるのであれば、いくつか目立ったギャップがあると感じています。&lt;/p&gt;
+&lt;h3 id=&#34;1-体系的な受け入れ方法論の欠如&#34;&gt;1. 体系的な「受け入れ方法論」の欠如
+&lt;/h3&gt;&lt;p&gt;これまでに多くのAIプログラミング体験について記述し、単体テスト、性能テスト、ドキュメント同期についても触れてきましたが、「AIが書いたものをどう検証するか」という点を完全に解説した記事がまだありません。&lt;/p&gt;
+&lt;h3 id=&#34;2-チーム視点の欠如&#34;&gt;2. チーム視点の欠如
+&lt;/h3&gt;&lt;p&gt;現状では、ほとんどが個人開発や個人のワークフローの視点に留まっています。この視点は優れていますが、さらに記述を進める場合、以下のように拡張できます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;複数人での共同作業時にAIによる修正範囲をどのように制限するか&lt;/li&gt;
+&lt;li&gt;コードレビューにおいてAI生成コードをどう評価するか&lt;/li&gt;
+&lt;li&gt;ドキュメント、コミットログ、テスト記録などをどのように連携させるか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-セキュリティと権限境界に関する議論の欠如&#34;&gt;3. セキュリティと権限境界に関する議論の欠如
+&lt;/h3&gt;&lt;p&gt;最近のトレンドはますます明らかになってきており、AI は単なるチャットボックスではなくなり、以下のものを制御し始めています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ターミナルコマンド&lt;/li&gt;
+&lt;li&gt;リポジトリの読み書き&lt;/li&gt;
+&lt;li&gt;ブラウザ操作&lt;/li&gt;
+&lt;li&gt;サードパーティツール呼び出し
+能力が強くなるほど、権限境界について記述する価値が高まります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-長期知識ベースの視点の欠如&#34;&gt;4. 「長期知識ベース」の視点の欠如
+&lt;/h3&gt;&lt;p&gt;現在、記事には翻訳キャッシュ、スラッグ、タグといった基本的な機能はありますが、「もしブログ自体が個人のナレッジベースであるとしたら、それをAIによる消費、検索、加工に適したコンテンツ資産としてどのように整理するか」という点について、体系的な記述がまだなっていません。&lt;/p&gt;
+&lt;h2 id=&#34;次に書くのに最適だと考える-8-つのテーマ&#34;&gt;次に書くのに最適だと考える 8 つのテーマ
+&lt;/h2&gt;&lt;p&gt;以下の 8 つの分野は、「現在の執筆スタイルに最も合致しているか」と「独自の内容を書きやすいか」という観点から並べました。&lt;/p&gt;
+&lt;h3 id=&#34;1-ai-プログラミングの受け入れ受入体制をどう構築するか&#34;&gt;1. AI プログラミングの受け入れ（受入）体制をどう構築するか
+&lt;/h3&gt;&lt;p&gt;これが私が最優先で執筆することを推奨する記事です。
+以下の内容に重点を置くと良いでしょう：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;どの変更に対して単体テストを追加する必要があるか&lt;/li&gt;
+&lt;li&gt;どのモジュールでリグレッションテストを実行する必要があるか&lt;/li&gt;
+&lt;li&gt;どのリファクタリングで性能比較が必要か&lt;/li&gt;
+&lt;li&gt;どのドキュメントを同期的にメンテナンスすべきか&lt;/li&gt;
+&lt;li&gt;人間によるレビュー（review）時に重点的に確認すべき点
+この記事が完成すれば、後続の多くのAIプログラミングに関する記事から繰り返しリンクさせることができます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-mcp-が真に役立つシナリオは接続できる数が多いことではない&#34;&gt;2. MCP が真に役立つシナリオは、「接続できる数が多いこと」ではない
+&lt;/h3&gt;&lt;p&gt;現在、MCP はますます注目されていますが、ほとんどの議論は概念的なレベルに留まっています。
+より書くべきなのは以下の点です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;どのツールを接続することで本当に効率が向上するか&lt;/li&gt;
+&lt;li&gt;単に見た目がクールなだけで、実際には不要なものは何か&lt;/li&gt;
+&lt;li&gt;ローカルファイル、ドキュメント、イシュー、監視データ、デザイン稿など、どれから優先的に連携すべきか&lt;/li&gt;
+&lt;li&gt;プロトコル化された接続と「長いプロンプトを詰め込む」のとでは、具体的にどのような違いがあるのか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-claude-codecodexgemini-cli国産cliモデルの横断的な実戦比較&#34;&gt;3. Claude Code、Codex、Gemini CLI、国産CLIモデルの横断的な実戦比較
+&lt;/h3&gt;&lt;p&gt;単に「どれが良いか」と書くのではなく、統一されたタスクセットで横並び比較を行います。
+例えば、以下の項目を固定して比較します：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;要件分解能力&lt;/li&gt;
+&lt;li&gt;指示追従度&lt;/li&gt;
+&lt;li&gt;コード修正範囲の制御性&lt;/li&gt;
+&lt;li&gt;テストコード補完能力&lt;/li&gt;
+&lt;li&gt;ドキュメント同期能力&lt;/li&gt;
+&lt;li&gt;コストと待ち時間
+このような記事は読者が最も参考にしやすい形式です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-ai-プログラミングにおけるコンテキスト管理&#34;&gt;4. AI プログラミングにおけるコンテキスト管理
+&lt;/h3&gt;&lt;p&gt;多くの場合、モデルが弱いのではなく、コンテキストが汚れている、長すぎる、または漂っていることが原因です。
+このテーマは特化して書くことができます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;いつコンテキストをクリアすべきか&lt;/li&gt;
+&lt;li&gt;いつ新しいスレッドを開くべきか&lt;/li&gt;
+&lt;li&gt;いつタスクを分割すべきか&lt;/li&gt;
+&lt;li&gt;いつ複数のエージェントを並行させるのが適切か&lt;/li&gt;
+&lt;li&gt;どのような状況で現在の状態を手動で再要約する必要があるか
+このトピックは非常に具体的であり、自身の実際の事例と結びつけやすいものです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;5-ide-からターミナルへそしてマルチエージェント協調へ&#34;&gt;5. IDE からターミナルへ、そしてマルチエージェント協調へ
+&lt;/h3&gt;&lt;p&gt;過去1年で、AIプログラミングインタラクションの焦点は明らかに変化しました。
+以前はIDE内での補完、チャット、局所的なコード修正が中心でしたが、現在ではますます多くのツールが以下の点を重視し始めています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ターミナル操作（ターミナルインタラクション）&lt;/li&gt;
+&lt;li&gt;リポジトリ全体を理解すること（リポジトリレベルの理解）&lt;/li&gt;
+&lt;li&gt;マルチスレッドなコンテキスト管理&lt;/li&gt;
+&lt;li&gt;並行エージェント&lt;/li&gt;
+&lt;li&gt;worktreeによる隔離開発
+このテーマは、これまでのCursor、Trae、Claude Code、Codexといった記事群を結びつけるのに適しています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;6-ai-プログラミングのセキュリティ面が拡大している&#34;&gt;6. AI プログラミングのセキュリティ面が拡大している
+&lt;/h3&gt;&lt;p&gt;この方向性は書き甲斐があり、まだ十分にカバーされていません。
+以下の角度から切り込むことができます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;コマンドの自動実行に伴うリスク&lt;/li&gt;
+&lt;li&gt;サードパーティのMCPサービスにおける信頼境界&lt;/li&gt;
+&lt;li&gt;プライベートリポジトリや機密情報の漏洩問題&lt;/li&gt;
+&lt;li&gt;プロンプトインジェクションと悪意のあるコンテキスト汚染&lt;/li&gt;
+&lt;li&gt;自動化スクリプトと人間による確認の境界線
+単に「AI は非常に優秀だ」という内容だけでは、記事は徐々に似通ってしまいます。セキュリティの境界線を盛り込むことで、コンテンツの階層性が格段に高まります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;7-ローカルモデルの真の立ち位置&#34;&gt;7. ローカルモデルの真の立ち位置
+&lt;/h3&gt;&lt;p&gt;以前は「ローカルモデルが動くか」という点に焦点が当たりがちでしたが、今より重要視すべきなのは以下の点です。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;どのようなタスクに適しているか&lt;/li&gt;
+&lt;li&gt;どのようなタスクに向いていないか&lt;/li&gt;
+&lt;li&gt;プライバシー、オフライン動作、低コストといった利点がいつ真に成立するのか&lt;/li&gt;
+&lt;li&gt;いつからローカル案を固執することが、逆に時間の浪費になるのか
+これらは単なるデプロイメントチュートリアルよりも、より継続的な価値を持ちます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;8-ブログをaiフレンドリーなナレッジアセットとして整理する方法&#34;&gt;8. ブログをAIフレンドリーなナレッジアセットとして整理する方法
+&lt;/h3&gt;&lt;p&gt;この方向性は、既存のブログシステムと最も密接に結びつきます。
+以下のような内容が書けます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;slug、タグ、要約、カテゴリの統一的な設計方法&lt;/li&gt;
+&lt;li&gt;多言語コンテンツにおけるリンクドリフトの削減方法&lt;/li&gt;
+&lt;li&gt;記事のメタデータがその後の検索をどのように支援するか&lt;/li&gt;
+&lt;li&gt;過去の記事をAIによる検索、要約、引用に適した形にする方法
+この記事を書けば、AIというテーマを扱いながら、同時にブログシステム全体に貢献することができます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;今後注目すべきトレンド&#34;&gt;今後注目すべきトレンド
+&lt;/h2&gt;&lt;p&gt;最近の業界の変化がいくつかあり、今後のトピック選定判断にも影響を与えます。&lt;/p&gt;
+&lt;p&gt;第一に、AIプログラミングは、「補完ツール」から「エージェントワークフロー」へと、ますます明確に移行しています。&lt;code&gt;Codex&lt;/code&gt;や&lt;code&gt;Claude Code&lt;/code&gt;のような製品が強調しているのは、単発の回答ではなく、タスクの分解、ツール呼び出し、並列処理、そしてコンテキストの継続的な維持です。&lt;/p&gt;
+&lt;p&gt;第二に、MCPのようなプロトコル化された接続方式は、「新しい概念」から「インフラストラクチャ」になりつつあります。今後真に価値のある記事は、単にプロトコルの定義を再説明するのではなく、**「どの接続シナリオが本当に有効で、どれがただ先進的に見えるだけなのか」**を明確に記述することになるでしょう。&lt;/p&gt;
+&lt;p&gt;第三に、デザイン稿、ドキュメント、コード、コマンドライン間での往復が増えています。以前はツール間で分断されていましたが、今AIはそのリンクを繋げようとしており、これは「ワークフロー設計」が「モデルの羅列（ランキング）」よりも長期的に価値があることを意味します。&lt;/p&gt;
+&lt;p&gt;第四に、安定性、コスト、権限のリスクは消えません。むしろ、モデルの能力が強くなるほど、これらの問題はより重要になります。&lt;/p&gt;
+&lt;h2 id=&#34;最終的な考察&#34;&gt;最終的な考察
+&lt;/h2&gt;&lt;p&gt;もしAIについて書き続けるとしたら、私が最も堅持すべきだと感じることは、毎回モデルがリリースされるたびにベンチマークを行うことではなく、より具体的な問題に焦点を当てて掘り下げることです。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;「AIはどのようにして実際の開発や執筆のワークフローに段階的に組み込まれていくのか？それはどの部分で真に効率を向上させ、またどの部分で問題を人間に差し戻しているのか。」&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;この論点は、あなたはすでに書き出していますが、まだ完全に形になっていないだけです。
+次に最も適切なアプローチは、テーマを広げることではなく、「実用ツール」「プロセス設計」「境界制御（限界設定）」「長期的な知識資産」というこれら4つのサブラインに沿って掘り下げることです。このように書いたものは、時間が経つにつれて、すぐに陳腐化するトレンドの記録ではなく、自分自身のものとして蓄積されやすくなります。&lt;/p&gt;</description>
+        </item>
+        <item>
+        <title>低価格API中継地点の終着点：3月の大規模言語モデル体験と不可能性の三角形</title>
+        <link>https://ttf248.life/ja/p/the-end-of-low-cost-api-relays/</link>
+        <pubDate>Mon, 30 Mar 2026 20:00:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/the-end-of-low-cost-api-relays/</guid>
+        <description>&lt;p&gt;3月を通して、私は様々な大規模言語モデル（LLM）APIのトランジットポイント間を行き来して試していました。&lt;/p&gt;
+&lt;p&gt;安さについては、確かに安いものでした。月にあまりお金をかけずに、ChatGPT、Claude、Geminiといった海外のモデルをすべて触ることができ、表面上は非常にコストパフォーマンスの高い解決策を見つけたように思えました。しかし、実際に使ってみるうちに、この道筋が最初から「&lt;strong&gt;品質、安定性、費用対効果&lt;/strong&gt;」という不可能な三角形から逃れられないと感じるようになりました。これら三つが同時に成立するのは難しいのです。&lt;/p&gt;
+&lt;p&gt;先週末には、この件はほぼ白日の下に晒されました。2026年3月28日から2026年3月29日までの二日間で、ChatGPT関連のチャネルの風控（リスク管理）が明らかに厳しくなり、Claudeも同様でした。以前はなんとか使えていた低価格なトランジットサービスも突然不安定になったり、完全に機能しなくなったりしました。私にとっては、これは低価格APIトランジットモデルの段階的な終焉を告げるものとなりました。&lt;/p&gt;
+&lt;h2 id=&#34;中継ステーションとは何か&#34;&gt;中継ステーションとは何か
+&lt;/h2&gt;&lt;p&gt;まず概念を明確にしましょう。
+いわゆる&lt;strong&gt;API中継ステーション&lt;/strong&gt;は、本質的にモデルベンダーが公式に提供するサービスではなく、ユーザーと上流のモデルの間にある「転送層」のようなものです。リクエストを中継ステーションに送り、中継ステーションが代わりにOpenAIやAnthropicなどの他のモデルサービスプロバイダーにリクエストを転送し、最後に結果をあなたに返します。
+ユーザーの視点から見ると、それはより安価で、より「柔軟な」統一のエントリーポイントのようです。技術的およびビジネスモデルの観点からは、上流のリソースを再パッケージ化し、再配布しているようなものです。
+このようなサービスがこれまで利用され続けている理由は非常にシンプルです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;価格が安い&lt;/li&gt;
+&lt;li&gt;利用開始のハードルが低い&lt;/li&gt;
+&lt;li&gt;モデルの種類が多い&lt;/li&gt;
+&lt;li&gt;国内ユーザーにとって、登録、支払い、ネットワーク環境に関する手間を省ける
+しかし、問題もまさにこの点にあります。これは公式な経路ではないため、多くの利便性は、安定したライセンスに基づいているのではなく、「余分な層を追加している」ことに本質的に基づいています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;彼らは通常どのように機能しますか&#34;&gt;彼らは通常どのように機能しますか
+&lt;/h2&gt;&lt;p&gt;プラットフォームによってアプローチは異なりますが、一般的なパターンはいくつかの種類に大別されます。&lt;/p&gt;
+&lt;h3 id=&#34;1-主要な二次ディストリビューション再販&#34;&gt;1. 主要な二次ディストリビューション（再販）
+&lt;/h3&gt;&lt;p&gt;一部のプラットフォームは、本質的に自社のアップストリームAPIキーを統一して転送し、そのクレジットをダウンストリームユーザーに分割して提供しています。購入しているのは、OpenAIやAnthropicが直接販売するプランではなく、彼らが提供する一層目のパッケージです。
+このモデルの問題点は、アップストリームのキーが制限されたり、クレジットが上限に達したり、ポリシーが調整されたりすると、ダウンストリームでの体験が即座に不安定になることです。&lt;/p&gt;
+&lt;h3 id=&#34;2-アカウントプールのローテーション&#34;&gt;2. アカウントプールのローテーション
+&lt;/h3&gt;&lt;p&gt;業界でよく使われる「&lt;strong&gt;号池&lt;/strong&gt;」とは、アカウントリソースをプール化して管理することを指します。プラットフォームが複数のアカウントを集約し、リクエストに応じて順番に呼び出すことで、クォータ（割り当て枠）の負荷や不正検知のリスクを分散させます。
+ここでの「号池」は、モデルベンダーの公式な専門用語ではなく、より俗語的で裏話的な表現です。これは製品の機能性そのものよりも、リソースのスケジューリング方法に重点を置いています。どのプールの規模が大きいかによって、短期的に安定しているように見えますが、上流側から一斉にクリーンアップ（監視・制限）が始まると、この安定性はあっという間に失われることがあります。&lt;/p&gt;
+&lt;h3 id=&#34;3-リバースエンジニアリングによるラッパー化逆アセンブル&#34;&gt;3. リバースエンジニアリングによるラッパー化（逆アセンブル）
+&lt;/h3&gt;&lt;p&gt;もう一つの手法として、本質的には公開されている標準の公式APIを利用するのではなく、ウェブページやクライアント側のリクエスト方法を調査し、その呼び出しプロセスを「あたかもAPIであるかのように」再構築してユーザーに提供する方法があります。
+この「&lt;strong&gt;リバース（逆行）&lt;/strong&gt;」という言葉は、簡単に言えば、公式が用意した入り口から入るのではなく、裏口や窓、さらにはパイプラインなどからシステム間の通信方法を理解し、自分自身でラッパー層を設けるということです。
+この手法の弱点も非常に明白です。今日使えるからといって、明日も使えるとは限りません。ページの構造、認証方式、デバイス検証、行動ポリシーなどが少し変わるだけで、エンドツーエンドの処理全体が機能しなくなる可能性があります。&lt;/p&gt;
+&lt;h2 id=&#34;3月の実体験について&#34;&gt;3月の実体験について
+&lt;/h2&gt;&lt;p&gt;この3月度の集中的な体験を経て、私が最も感じたのは「安いから良い」という感覚ではなく、「不確実性を継続的に我慢しなければならない」ということです。&lt;/p&gt;
+&lt;p&gt;同じ要求であっても、今日のある中継地点（プロバイダー）ではうまく答えられるのに、明日になると知能が落ち始めることがあります。午前中は安定して出力できるのに、夜になるとエラーが出たり、タイムアウトしたり、コンテキストが失われたりします。自分がモデルの能力を買っていると思いがちですが、実際には多くの場面で絶えず変動する「確率的なサービス」を購入しているにすぎません。&lt;/p&gt;
+&lt;p&gt;一時的にモデルを試したり、軽い質疑応答を行うだけであれば、この変動は我慢できます。しかし、それを実際のワークフローに組み込むと、問題が非常に明白になります。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;品質が不安定で、出力レベルが高低差がある&lt;/li&gt;
+&lt;li&gt;安定性に欠け、タイムアウトやエラー、途切れが発生しやすい&lt;/li&gt;
+&lt;li&gt;コンテキストの連続性が低く、長時間のタスクでの体験が悪い&lt;/li&gt;
+&lt;li&gt;プラットフォームを上流（プロバイダー）に切り替えると、モデルの個性やスタイルが漂流する&lt;/li&gt;
+&lt;li&gt;同じ時間を費やして問題を調査しても、目に見えないコストは低いわけではない&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;つまり、安価な中継地点の最大の問題点は、「安くない」ということではなく、本来公式プラットフォームが負うべき「確実性」を、ユーザー自身に再転嫁させている点です。&lt;/p&gt;
+&lt;p&gt;表面上は費用を節約しているように見えますが、実際には時間、精神力、そしてワークフローの予測可能性というコストを多く払っているのです。&lt;/p&gt;
+&lt;h2 id=&#34;なぜ私はそれが不可能性の三角形に入り込むと言ったのか&#34;&gt;なぜ私はそれが不可能性の三角形に入り込むと言ったのか
+&lt;/h2&gt;&lt;p&gt;最近繰り返し使ってみて、このような中継サービスは必然的に「不可能性の三角形」に陥ると感じています。&lt;/p&gt;
+&lt;h3 id=&#34;品質&#34;&gt;品質
+&lt;/h3&gt;&lt;p&gt;品質を高く保つためには、実際に利用可能なアップストリームモデルの確保、十分なクレジット枠の確保、そしてできるだけ少ないサンプリングやダウングレードが不可欠です。このこと自体が安くはありません。&lt;/p&gt;
+&lt;h3 id=&#34;安定性&#34;&gt;安定性
+&lt;/h3&gt;&lt;p&gt;安定性を高めるためには、より多くのリスク管理、アカウントの損失、ネットワークの変動、レート制限、バックアップ回線などを処理する必要があり、さらにはより複雑なスケジューリングやフォールバック機構を自前で構築する必要があります。これらはすべてコストになります。&lt;/p&gt;
+&lt;h3 id=&#34;お得な価格設定について&#34;&gt;お得な価格設定について
+&lt;/h3&gt;&lt;p&gt;最初の2つのことをしっかりと固めれば、価格をこれ以上低く抑え続けることは不可能になります。長期にわたって超低価格を維持できる場合、それはコストが真に解決されていないだけであり、単に先送りされたか、あるいは将来の何らかの集団的な失敗に分散されていることを示していることがよくあります。
+そのため、多くの仲介業者は「高い費用対効果」を実現しているように見えますが、実際には脆い均衡を保っているだけであることが多いです。平穏な時には成立しますが、上流側のリスク管理が厳しくなると、この均衡は容易に崩壊します。&lt;/p&gt;
+&lt;h2 id=&#34;先週末はほぼ明牌だった&#34;&gt;先週末は、ほぼ明牌だった
+&lt;/h2&gt;&lt;p&gt;私に「もうこれ以上深入りするのはやめよう」と決意させたのは、&lt;code&gt;2026-03-28&lt;/code&gt; から &lt;code&gt;2026-03-29&lt;/code&gt; のこのローテーションでした。&lt;/p&gt;
+&lt;p&gt;私自身の体感では、ChatGPT関連のチャネルがその二日間で非常に顕著な集中絞り込みを見せ、Claude側のリスク管理も同時に強化されていました。以前は、回線を変えたり、モデルを変えたり、プランを変えたりすることで「なんとか使える」状態を保つことができましたが、それが突然通用しなくなりました。&lt;/p&gt;
+&lt;p&gt;ここでは、「業界全体が完全に死んだ」といった断定的な表現は避けたいと思っています。結局のところ、自分たちにはまだ別のチャネルがあると言う人は必ずいるからです。しかし、一般ユーザーの実用価値という観点から見ると、低価格なAPI中継ルートというのは、少なくとも私がこれ以上時間を費やす価値はないと感じています。&lt;/p&gt;
+&lt;p&gt;「安い」ということは、「タスクを安定して完了できる」という前提があって初めて意味を持ちます。基本的な信頼性すら維持できなくなれば、安さというのは単なる錯覚になってしまいます。&lt;/p&gt;
+&lt;h2 id=&#34;なぜこのパターンは元々脆弱なのか&#34;&gt;なぜこのパターンは元々脆弱なのか
+&lt;/h2&gt;&lt;p&gt;表面だけを見ると、メーカーが「意図的に利用を制限している」ように感じられるかもしれません。しかし、深く考えてみると、実はこうしたパターン自体が非常に脆い土台の上に成り立っているのです。&lt;/p&gt;
+&lt;p&gt;OpenAIやAnthropicといった企業は、そもそも「二次的なグレーな再販」というロジックで製品を設計したわけではありません。公式の利用規約には、APIキーの売買・譲渡、制限の回避、リバースエンジニアリング、保護措置の迂回などについて、明確な制限が設けられています。OpenAIのサービス規約では、「APIキーの売買または譲渡」「レート制限や保護措置の回避」「使用制限の回避」を禁止行為として明記していますし、Anthropicの商用利用規約も、違反利用、不正アクセス、サービス乱用に対する制約空間を明確に留保しています。&lt;/p&gt;
+&lt;p&gt;言い換えれば、これらの仲介業者は、公式が推奨するエコシステムの中でイノベーションを起こしているのではなく、公式なガバナンスの隙間を縫って生き延びようとしているだけです。モデル提供元が真剣に清掃（対策）を始めた場合、このパターンは自然と最初に打撃を受ける運命にあります。&lt;/p&gt;
+&lt;p&gt;さらに、非常に現実的な背景があります。多くの海外のモデルサービスには、もともと地域、支払い、アカウントシステム上の障壁が存在します。公式がサポートする地域が限られているため、多くのユーザーが門前払いとなり、それが仲介（中継）需要を生み出しています。しかし、需要があるからといって、そのパターンが盤石であるとは限りません。それは単に、「グレーな代替案」に市場があることを示しているだけであり、長期的な確実性を持っているわけではないのです。&lt;/p&gt;
+&lt;h2 id=&#34;最終的な結論&#34;&gt;最終的な結論
+&lt;/h2&gt;&lt;p&gt;色々試した結果、今の私の結論はかえってシンプルになりました。
+&lt;code&gt;codex&lt;/code&gt; の方がコストパフォーマンスが高いと感じています。少なくとも私自身の使用経験からすると、本番環境に導入する用途にはこちらの方が適しています。国内で大規模なアカウント停止のフィードバックをあまり聞かないこと、そして全体的な心理的負担も低い点も理由の一つです。
+もちろん、&lt;code&gt;codex&lt;/code&gt; に制約がないわけではありません。5時間の制限や週ごとの制限は存在しますし、今使うときには、以前のように無計画に何でも質問したり、すべてを任せきりにしたりすることはなくなりました。多くの問題については、まず頭の中で一度シミュレーションしたり、自分で分解してから、今回のクレジットを使うかどうかを判断するようになりました。
+こう考えると、制限というのは必ずしも悪いことばかりではありません。客観的に見て、人間に再び思考プロセスに参加することを強制し、問題を整理させ、判断させ、取捨選択させることを強いるためであり、すべての思考を外部に丸投げすることを防いでくれます。以前も書きましたが、モデルが少し「賢くない」ことは、必ずしも悪いことではなく、むしろ利用者に基本的な思考強度を維持するよう促してくれるからです。今振り返ってみても、この判断は依然として正しいと思います。
+&lt;code&gt;Claude&lt;/code&gt; は現時点では考慮していません。能力が低いわけではありません。それどころか、非常に強力です。しかし、個人での正規購入であってもアカウント停止の不確実性が残っている以上、今の段階でメインのソリューションとするには適さないと考えています。
+国内のモデルについては、引き続き様子を見ることにします。まだ長期的に深くコミットできる段階ではないからです。
+そのため、結局は非常に素朴な選択に戻りました。&lt;code&gt;ChatGPT Plus&lt;/code&gt; を購入し、とりあえず使いながら、大規模言語モデル業界が今後どのように進化していくのかを見守る、という形です。多くの場面で、一番安いプランが必ずしも一番お金がかからないわけではなく、一番気が楽な（ストレスの少ない）プランこそが真のコストパフォーマンスを秘めているのです。&lt;/p&gt;
+&lt;h2 id=&#34;参考リンク&#34;&gt;参考リンク
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;OpenAI 対応地域：&lt;a class=&#34;link&#34; href=&#34;https://help.openai.com/en/articles/5347006-which-countries-and-territories-are-supported-by-openai&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://help.openai.com/en/articles/5347006-which-countries-and-territories-are-supported-by-openai&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;OpenAI サービス規約：&lt;a class=&#34;link&#34; href=&#34;https://openai.com/policies/services-agreement/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://openai.com/policies/services-agreement/&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Anthropic 商用利用規約：&lt;a class=&#34;link&#34; href=&#34;https://www.anthropic.com/legal/commercial-terms&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;https://www.anthropic.com/legal/commercial-terms&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>計算能力の優位性とバリュエーションの「逆転」：私たちは高価な新時代に突入している</title>
         <link>https://ttf248.life/ja/p/computing-power-hegemony-and-valuation-bubble-we-are-entering-a-costly-new-era/</link>
         <pubDate>Wed, 18 Mar 2026 13:09:26 +0800</pubDate>

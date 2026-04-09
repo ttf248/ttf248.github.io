@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="When I recently wrote the algorithm service, as soon as I implemented modules like twap and vwap, this old problem popped up again.\nIf we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like TwapOrderManager, VwapOrderManager, and AlgoOrderManager sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of namespace isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native package system.\n">
+<title>What is this process of layering folders and then wrapping them in a namespace called?</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/cpp-folder-namespace-what-is-it-called/'>
+
+<link rel="stylesheet" href="/scss/style.min.989aa97a25e023e9a3a706c4fe4a8ba5d8e0fdaa68698a5434411a1cb9be0136.css"><meta property='og:title' content="What is this process of layering folders and then wrapping them in a namespace called?">
+<meta property='og:description' content="When I recently wrote the algorithm service, as soon as I implemented modules like twap and vwap, this old problem popped up again.\nIf we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like TwapOrderManager, VwapOrderManager, and AlgoOrderManager sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of namespace isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native package system.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/cpp-folder-namespace-what-is-it-called/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='Software Engineering' /><meta property='article:tag' content='Architecture Design' /><meta property='article:tag' content='AI Inspiration Hub' /><meta property='article:published_time' content='2026-04-09T02:31:07&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T15:45:31&#43;08:00'/>
+<meta name="twitter:title" content="What is this process of layering folders and then wrapping them in a namespace called?">
+<meta name="twitter:description" content="When I recently wrote the algorithm service, as soon as I implemented modules like twap and vwap, this old problem popped up again.\nIf we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like TwapOrderManager, VwapOrderManager, and AlgoOrderManager sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of namespace isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native package system.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#to-state-the-conclusion-first">To state the conclusion first</a></li>
+    <li><a href="#what-is-actually-solved-here-is-not-just-about-looking-good">What is actually solved here is not just about &ldquo;looking good&rdquo;</a></li>
+    <li><a href="#this-is-more-like-packaging-by-feature">This is more like &ldquo;packaging by feature&rdquo;</a></li>
+    <li><a href="#taking-it-one-step-further-its-about-high-cohesion-and-low-coupling">Taking it one step further, it&rsquo;s about high cohesion and low coupling</a></li>
+    <li><a href="#when-its-not-enough-anymore">When It&rsquo;s Not Enough Anymore</a>
+      <ol>
+        <li><a href="#directory-and-namespace-mismatch">Directory and Namespace Mismatch</a></li>
+        <li><a href="#module-boundaries-are-false-boundaries">Module Boundaries are False Boundaries</a></li>
+        <li><a href="#the-longer-the-common-directory-the-fatter-it-gets">The longer the <code>common</code> directory, the fatter it gets</a></li>
+        <li><a href="#structure-by-layer-only-not-by-business-domain">Structure by Layer Only, Not by Business Domain</a></li>
+      </ol>
+    </li>
+    <li><a href="#so-what-should-it-be-called">So, what should it be called?</a></li>
+    <li><a href="#the-last-sentence">The Last Sentence</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#writing-notes">Writing Notes</a>
+      <ol>
+        <li><a href="#original-prompt">Original Prompt</a></li>
+        <li><a href="#writing-approach-summary">Writing Approach Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/cpp-folder-namespace-what-is-it-called/">What is this process of layering folders and then wrapping them in a namespace called?</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Apr 09, 2026</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            5 minute read
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            GPT-5
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/cpp-folder-namespace-what-is-it-called/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/ja/p/cpp-folder-namespace-what-is-it-called/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>When I recently wrote the algorithm service, as soon as I implemented modules like <code>twap</code> and <code>vwap</code>, this old problem popped up again.</p>
+<p>If we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like <code>TwapOrderManager</code>, <code>VwapOrderManager</code>, and <code>AlgoOrderManager</code> sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of <code>namespace</code> isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native <code>package</code> system.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="to-state-the-conclusion-first">To state the conclusion first
+</h2><p>If I have to find a software engineering term that is the closest, I think the two words that should be mentioned are:</p>
+<ul>
+<li><strong>Modularization</strong></li>
+<li><strong>Namespace management</strong></li>
+</ul>
+<p>If I want to be more precise, this type of directory organization is often doing:</p>
+<ul>
+<li><strong>Packaging by feature / Packaging by domain</strong>, which is commonly referred to as <code>package by feature</code></li>
+<li>If the business boundaries are already very strong, it will also carry a bit of <strong>bounded context</strong>.</li>
+</ul>
+<p>In other words, it is not a small concept with a single standard translation name; rather, it is more like several design principles stacked together.</p>
+<h2 id="what-is-actually-solved-here-is-not-just-about-looking-good">What is actually solved here is not just about &ldquo;looking good&rdquo;
+</h2><p>When many people first see a <code>namespace</code>, their immediate thought is to avoid name collisions. This is certainly true; the <code>namespace</code> in C++ standards was originally designed to prevent naming conflicts in large projects <a class="link" href="https://en.cppreference.com/w/cpp/language/namespace"  target="_blank" rel="noopener"
+    >cppreference</a>. However, when it comes to actual business code, its value goes far beyond that.</p>
+<p>Once the directory structure and <code>namespace</code> are aligned, class names no longer need to repeat the higher-level semantics.</p>
+<p>For example, previously one might write something like this:</p>
+<pre><code class="language-cpp">class TwapOrderManager;
+class TwapScheduleEngine;
+class VwapOrderManager;
+class VwapScheduleEngine;
+</code></pre>
+<p>After adopting directories and namespaces, a more natural way to write it is usually:</p>
+<pre><code class="language-cpp">namespace algo::twap {
+class OrderManager;
+class ScheduleEngine;
+}
+
+namespace algo::vwap {
+class OrderManager;
+class ScheduleEngine;
+}
+</code></pre>
+<p>This removes the redundant prefix, making the semantics clearer. Because &ldquo;which context it belongs to&rdquo; is no longer stuffed into the class name, but rather expressed by the directory and <code>namespace</code>.</p>
+<p>Therefore, this approach essentially involves <strong>extracting contextual information from the names and letting the structure carry it</strong>.</p>
+<h2 id="this-is-more-like-packaging-by-feature">This is more like &ldquo;packaging by feature&rdquo;
+</h2><p>If your directory looks like this:</p>
+<pre><code class="language-text">strategy/
+  twap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+  vwap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+</code></pre>
+<p>Then you are no longer doing traditional &ldquo;packaging by technical layer.&rdquo;</p>
+<p>The traditional way is more like this:</p>
+<pre><code class="language-text">models/
+services/
+utils/
+controllers/
+</code></pre>
+<p>This structure looks neat at the beginning, but as the business logic grows, the <code>service</code> directory will look like a junk heap. Classes related to one feature get scattered across different directories, making it hard to read the code because your mind keeps jumping around.</p>
+<p>Whereas the <code>twap</code> or <code>vwap</code> approach is closer to <code>package by feature</code>. This means a directory first answers the question, &ldquo;What is this business module about?&rdquo;, and then places all the objects and processes needed for that specific business module inside it. This concept is more common in the Java world, but it works just as well in C++; the difference is that what carries it isn&rsquo;t a native <code>package</code>, but rather a combination of &ldquo;directory + <code>namespace</code> + header file boundaries.&rdquo;</p>
+<p>Simply put, you are <strong>organizing code by the reason for change, not by the appearance of the code.</strong></p>
+<h2 id="taking-it-one-step-further-its-about-high-cohesion-and-low-coupling">Taking it one step further, it&rsquo;s about high cohesion and low coupling
+</h2><p>The frequently mentioned phrase in software engineering, &ldquo;high cohesion, low coupling,&rdquo; actually falls into this area.</p>
+<p>Since the objects under <code>twap</code> collaborate frequently with each other, they should be placed closer together, and their namespaces should also be close; <code>vwap</code> is similar to it but not quite the same, so it deserves its own boundary. Doing this has several direct benefits:</p>
+<ul>
+<li>Class names within the same module can be shorter</li>
+<li>Dependencies between modules are easier to see</li>
+<li>It&rsquo;s easier to judge during refactoring whether changes might propagate to other areas</li>
+<li>If you eventually need to split a certain capability into an independent library, the cost will be smaller.</li>
+</ul>
+<p>This is also why many mature projects end up looking like they have consistent &ldquo;directory boundaries + namespace boundaries + compilation boundaries.&rdquo; In projects like QuickFIX, you can see a similar idea: types and extension points are kept under clear namespaces rather than being artificially separated by very long class prefixes <a class="link" href="https://quickfixengine.org/c/"  target="_blank" rel="noopener"
+    >QuickFIX</a> <a class="link" href="https://github.com/quickfix/quickfix"  target="_blank" rel="noopener"
+    >GitHub</a>.</p>
+<h2 id="when-its-not-enough-anymore">When It&rsquo;s Not Enough Anymore
+</h2><p>However, don&rsquo;t mythologize this either.</p>
+<p>Simply layering folders and wrapping them in a <code>namespace</code> can only indicate that you are moving towards modularization; it doesn&rsquo;t mean the architecture is automatically sound. Several common pitfalls are also obvious:</p>
+<h3 id="directory-and-namespace-mismatch">Directory and Namespace Mismatch
+</h3><p>The directory is <code>twap/</code>, but the code contains scattered global classes, or <code>namespace common</code> floating everywhere. This is basically useless.</p>
+<h3 id="module-boundaries-are-false-boundaries">Module Boundaries are False Boundaries
+</h3><p>There are <code>twap</code> and <code>vwap</code> on the surface, but they actually <code>#include</code> each other. The common logic can leak through freely, and in the end, it just moves the files around without reducing any coupling.</p>
+<h3 id="the-longer-the-common-directory-the-fatter-it-gets">The longer the <code>common</code> directory, the fatter it gets
+</h3><p>This is the most common issue. Many projects are structured quite well at first, but later find it troublesome and start dumping things into <code>common</code>, <code>base</code>, or <code>util</code>. By the end, instead of having truly stable abstractions that have been properly developed, they end up with a massive pitfall that everyone can touch and everyone depends on.</p>
+<h3 id="structure-by-layer-only-not-by-business-domain">Structure by Layer Only, Not by Business Domain
+</h3><p>If your directory structure is always <code>api</code>, <code>service</code>, <code>dao</code>, <code>model</code>, then many business concepts actually have no home. Class names are forced to get longer and longer, cramming everything that should be expressed by the structure back into the name itself.</p>
+<h2 id="so-what-should-it-be-called">So, what should it be called?
+</h2><p>If I were communicating this within a team, I think there are three levels of description:</p>
+<ul>
+<li>If you just want to speak plain language: <strong>Modularization based on directories and namespaces</strong></li>
+<li>If you want to sound more engineering-focused: <strong>Package organization by feature, combined with hierarchical namespaces</strong></li>
+<li>If these boundaries are already strongly bound to business semantics: <strong>Module division with a bounded context feel</strong></li>
+</ul>
+<p>I personally lean towards the second option. Because it is closest to the scenario you described.</p>
+<p>What you&rsquo;re doing isn&rsquo;t about C++ syntax tricks, nor is it just about naming conventions; you are doing something more substantial: <strong>Using structure to carry semantics, allowing names to return to their true meaning</strong>.</p>
+<p>When class names get shorter and file names get shorter, what you first see when reading the code is an object with clear context like <code>twap::OrderManager</code>, rather than something that mixes directory responsibility, naming responsibility, and implementation responsibility all together like <code>TwapOrderManagerImpl</code>.</p>
+<p>Only then does the code start to feel somewhat like Java after its package structure has matured.</p>
+<h2 id="the-last-sentence">The Last Sentence
+</h2><p>So, in software engineering, there are corresponding concepts, but there isn&rsquo;t one single standard answer.</p>
+<p>Broadly speaking, it&rsquo;s called modularization. In terms of code organization, it&rsquo;s called feature-based packaging, plus namespace management. In terms of domain boundaries, it has something to do with bounded context.</p>
+<p>How should I put it? The most valuable aspect of this practice is never that &ldquo;the names look neat,&rdquo; but rather that you finally don&rsquo;t have to rely on super long prefixes to compensate for structural deficiencies.</p>
+<h2 id="references">References
+</h2><ul>
+<li><a class="link" href="https://en.cppreference.com/w/cpp/language/namespace"  target="_blank" rel="noopener"
+    >cppreference: Namespaces</a></li>
+<li><a class="link" href="https://quickfixengine.org/c/"  target="_blank" rel="noopener"
+    >QuickFIX/C++ Official Site</a></li>
+<li><a class="link" href="https://github.com/quickfix/quickfix"  target="_blank" rel="noopener"
+    >QuickFIX GitHub Repository</a></li>
+<li><a class="link" href="https://www.javapractices.com/home/HomeAction.do"  target="_blank" rel="noopener"
+    >Java Practices: Package by feature, not layer</a></li>
+<li><a class="link" href="https://martinfowler.com/bliki/BoundedContext.html"  target="_blank" rel="noopener"
+    >Martin Fowler: Bounded Context</a></li>
+</ul>
+<h2 id="writing-notes">Writing Notes
+</h2><h3 id="original-prompt">Original Prompt
+</h3><blockquote>
+<p>Prompt: When developing code in C++, a good practice is to organize it by folders and then wrap each class with a namespace, similar to Java&rsquo;s package. This can effectively reduce redundant content in file names and class names. A classic project is QuickFIX, and we have recently used a similar design for algorithm services. Many functional modules like TWAP and VWAP are similar. Is there a specific concept in software engineering for this?</p></blockquote>
+<h3 id="writing-approach-summary">Writing Approach Summary
+</h3><ul>
+<li>Start by focusing on the actual trigger points of <code>twap</code> and <code>vwap</code> in algorithm services, making the judgment clear first.</li>
+<li>Instead of forcing the problem into a single noun, it is broken down into more accurate levels such as modularization, namespace management, and packaging by feature.</li>
+<li>The correspondence between QuickFIX and Java packages has been retained to illustrate that C++ often needs directories and namespaces to supplement structural semantics.</li>
+<li>The focus is on &ldquo;using structure to carry semantics,&rdquo; rather than remaining at a superficial explanation like &ldquo;avoiding name collisions.&rdquo;</li>
+<li>Added reference links for <code>namespace</code>, <code>package by feature</code>, and <code>bounded context</code> to facilitate further development.</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/c-/">C&#43;&#43;</a>
+        
+            <a href="/en/tags/software-engineering/">Software Engineering</a>
+        
+            <a href="/en/tags/architecture-design/">Architecture Design</a>
+        
+            <a href="/en/tags/ai-inspiration-hub/">AI Inspiration Hub</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                GPT-5
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Apr 09, 2026 15:45
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">Related content</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/en/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Deep Dive: Memory Corruption and Cache Pollution in C&#43;&#43; with Static Lambdas</h3>
+                            <time class="related-content__date" datetime='2026-03-16T20:18:18&#43;08:00'>Mar 16, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google has released Gemma 4 this time (III)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google released Gemma 4 this time (Part II)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-models-and-license/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google has released Gemma 4 this time (Part 1)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:48:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/codex-default-medium-vs-high/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex defaults to medium, but I later switched to high.</h3>
+                            <time class="related-content__date" datetime='2026-04-08T22:57:47&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

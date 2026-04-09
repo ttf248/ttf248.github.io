@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Token on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/token/</link>
+        <description>Recent content in Token on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/token/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Making the &#34;AI writes blog&#34; thing into an engineering project later (Part II)</title>
+        <link>https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/</link>
+        <pubDate>Fri, 03 Apr 2026 21:02:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/</guid>
+        <description>&lt;p&gt;If there are enough tokens, the least effort method is actually quite crude: just feed the model historical articles and let it learn on its own.
+The problem with this method is that it only suits occasional writing, not continuous work. If you treat blogging as a long-term workflow, relying solely on raw historical articles will quickly go from &amp;ldquo;simple and direct&amp;rdquo; to &amp;ldquo;expensive and messy.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;With these articles, the main thread has shifted. The previous article, &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/why-blog-writer-had-to-exist/&#34; &gt;AI Writing Blogs: It Eventually Needs to Become an Engineering Process (Part 1): Why a blog-writer is inevitable&lt;/a&gt;, discussed automation on the consumption side. This article starts discussing the production side—how to generate style data, how to compress it, and how not to waste tokens; the next article will continue this in &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AI Writing Blogs: It Eventually Needs to Become an Engineering Process (Part 3): Local Models, Online Models, and Minimax—How They Finally Divide Labor&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;the-most-natural-initial-thought-is-to-just-feed-it-historical-articles&#34;&gt;The most natural initial thought is to just feed it historical articles.
+&lt;/h2&gt;&lt;p&gt;This path feels too natural.
+If you want the model to learn your writing style, the most intuitive way is certainly to feed it old articles. It&amp;rsquo;s best to include all the posts from your history that are most like your own, and let it summarize them itself.
+For a single task, this approach has no flaws.
+In fact, many times the results are quite good. If the context is long enough, the model is powerful enough, and there are enough historical articles, the style can indeed be captured.
+But the problem isn&amp;rsquo;t &amp;ldquo;can it write this one article,&amp;rdquo; the problem is &amp;ldquo;for the next one, the one after that, do we have to repeat this process?&amp;rdquo;
+Feeding a new batch of old articles every time brings several very practical side effects:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The same batch of material repeatedly occupies the context window.&lt;/li&gt;
+&lt;li&gt;Token overhead grows almost linearly with the number of drafts written.&lt;/li&gt;
+&lt;li&gt;The model sees more and more noise, causing genuinely useful signals to become diluted.&lt;/li&gt;
+&lt;li&gt;The drafting action and style maintenance action become completely bound together; neither can be easily reduced.
+In other words, when tokens are abundant, eating it raw certainly works. But from an engineering perspective, we cannot keep doing that forever.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;this-is-also-why-the-data-module-and-the-data-generation-module-must-be-separated&#34;&gt;This is also why the data module and the data generation module must be separated
+&lt;/h2&gt;&lt;p&gt;I later realized that the core idea can be summarized in one sentence: separating the consumption side from the production side.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; is responsible for the consumption side. It only reads an already published runtime and then writes out the article according to a fixed contract.&lt;/p&gt;
+&lt;p&gt;Meanwhile, scanning, filtering, scoring, compressing style data, and provider comparison—all of this should be placed in another production pipeline. This is what later became &lt;code&gt;blog-style-suite&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Looking at the git history, this turning point is very clear.&lt;/p&gt;
+&lt;p&gt;The commit &lt;code&gt;84a06b5&lt;/code&gt; on April 1, 2026, at 21:47 clearly replaced the original &lt;code&gt;blog-style-maintainer&lt;/code&gt; skill with a repository-level CLI tool. This action speaks volumes because once you have &lt;code&gt;scan/build/rebuild&lt;/code&gt;, an output directory, and a recovery mechanism, it&amp;rsquo;s no longer like a simple skill; it&amp;rsquo;s more like a normal Python project.&lt;/p&gt;
+&lt;p&gt;By the commit &lt;code&gt;9e92b8e&lt;/code&gt; on April 1, 2026, at 23:05, &lt;code&gt;blog-style-suite&lt;/code&gt; was further broken down into modules like &lt;code&gt;scanner.py&lt;/code&gt;, &lt;code&gt;builder.py&lt;/code&gt;, and &lt;code&gt;compressor.py&lt;/code&gt;. By this stage, the thinking process was already highly engineered:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;scanner.py&lt;/code&gt; is responsible for scanning articles from disk and extracting structured features.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;builder.py&lt;/code&gt; is responsible for scoring, selecting, caching, and runtime assembly.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;compressor.py&lt;/code&gt; is responsible for the compression steps that involve the model.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This represents a completely different approach compared to simply writing a super prompt.&lt;/p&gt;
+&lt;h2 id=&#34;saving-tokens-not-by-magic-but-by-preprocessing-and-batching&#34;&gt;Saving Tokens: Not by Magic, But by Preprocessing and Batching
+&lt;/h2&gt;&lt;p&gt;The most valuable part of this entire engineering setup, I think, is the commit &lt;code&gt;bc4b950&lt;/code&gt; from April 2, 2026, at 19:41.
+That commit was very direct: it reduced AI calls from about &lt;code&gt;2000&lt;/code&gt; times down to a maximum of &lt;code&gt;5&lt;/code&gt; times per provider.
+How was this achieved?
+It wasn&amp;rsquo;t by &amp;ldquo;making the prompt smarter,&amp;rdquo; but by doing the necessary preprocessing beforehand.
+The current flow in &lt;code&gt;blog-style-suite&lt;/code&gt; is very clear:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;The &lt;code&gt;scan&lt;/code&gt; stage is purely heuristic, requiring 0 AI calls.&lt;/li&gt;
+&lt;li&gt;The &lt;code&gt;build&lt;/code&gt; stage first performs heuristic scoring, also requiring 0 AI calls.&lt;/li&gt;
+&lt;li&gt;Then, it performs one batch selection and labeling for each of the four lanes: &lt;code&gt;technical / finance / essay / tooling&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Finally, there is one author style compression step.
+Counting this up, the cold start requires at most 5 calls.
+More critically, these 5 calls are not spread across every single article; they are concentrated on high-value summary materials that have already been preprocessed.
+This is where preprocessing truly saves tokens. It&amp;rsquo;s not about saving a few words; it&amp;rsquo;s about changing the process from &amp;ldquo;calling per article&amp;rdquo; to &amp;ldquo;batch calling by stage.&amp;rdquo;
+Furthermore, caching has been implemented.
+In &lt;code&gt;builder.py&lt;/code&gt;, there are lane batch fingerprints, provider checkpoint recovery, and contractions like &lt;code&gt;review_pool_per_lane = 12&lt;/code&gt; for local model context. If you change a small amount of data, the entire pipeline doesn&amp;rsquo;t need to rerun.
+These kinds of designs might not look flashy, but every single one is highly practical because they solve the problem of &amp;ldquo;don&amp;rsquo;t let the same batch of tokens burn twice.&amp;rdquo;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;essentially-this-data-structure-is-compressing-the-truly-useful-signal&#34;&gt;Essentially, this data structure is compressing the truly useful signal.
+&lt;/h2&gt;&lt;p&gt;Once this is broken down, the data structure will be smooth.
+I am now more willing to understand it as three layers.&lt;/p&gt;
+&lt;h3 id=&#34;layer-one-scanjson&#34;&gt;Layer One: &lt;code&gt;scan.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is the shared raw material.
+It contains structured signals such as article path, title, date, category, tags, opening paragraph, closing stub, headings, screening results, and lane classification.
+It is not directly consumed by &lt;code&gt;blog-writer&lt;/code&gt;; rather, it is passed to the production side for further processing.&lt;/p&gt;
+&lt;h3 id=&#34;second-layer-providersourcejson&#34;&gt;Second Layer: &lt;code&gt;{provider}.source.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is the provider-level checkpoint.
+Building upon the shared raw materials, it includes intermediate states such as scoring results, lane selection, fingerprint, and cache status. In other words, it is more like a &amp;ldquo;semi-finished product during processing,&amp;rdquo; with an emphasis on being recoverable, reusable, and resumable.&lt;/p&gt;
+&lt;h3 id=&#34;layer-three-providerruntimejson-and-publishedruntimejson&#34;&gt;Layer Three: &lt;code&gt;{provider}.runtime.json&lt;/code&gt; and &lt;code&gt;published.runtime.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is what the consumption side truly cares about—the finished product.
+It retains:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lanes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;writer_guide&lt;/code&gt;
+In essence, it compresses a large collection of historical articles into one ready-to-consume runtime style asset.
+The &lt;code&gt;published.runtime.json&lt;/code&gt; in particular is crucial for the publishing stage. The &lt;code&gt;blog-writer&lt;/code&gt; only reads this file and does not need to scan &lt;code&gt;content/post&lt;/code&gt;, nor does it need to care about the complete images of all providers in the suite directory.
+Once this boundary is established, the consumption side becomes much lighter. The writing model no longer sees a pile of raw old articles, but rather a pre-processed, high-density signal.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;not-everything-should-be-left-to-the-model&#34;&gt;Not Everything Should Be Left to the Model
+&lt;/h2&gt;&lt;p&gt;I&amp;rsquo;m increasingly feeling that the most correct judgment in this entire engineering process isn&amp;rsquo;t &amp;ldquo;add more models,&amp;rdquo; but rather &amp;ldquo;don&amp;rsquo;t throw tasks that shouldn&amp;rsquo;t be done by a model onto it.&amp;rdquo;
+Things like these are much better handled by local rules first:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Frontmatter parsing&lt;/li&gt;
+&lt;li&gt;Extracting introductory paragraphs&lt;/li&gt;
+&lt;li&gt;Headings extraction&lt;/li&gt;
+&lt;li&gt;Determining author/repost/model attribution&lt;/li&gt;
+&lt;li&gt;Detecting blockquote ratios&lt;/li&gt;
+&lt;li&gt;Hard rule filtering for things like &lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt;, embedded prompts, and body length.
+Having the model do these tasks isn&amp;rsquo;t impossible, but it&amp;rsquo;s wasteful.
+What models are better suited for are parts that involve ambiguity or trade-offs. For example, which few articles in a lane best represent the current sentiment, or extracting author style tags from high-scoring articles.
+Therefore, what makes &lt;code&gt;blog-style-suite&lt;/code&gt; truly valuable isn&amp;rsquo;t just &amp;ldquo;saving tokens,&amp;rdquo; but rather its re-division of labor among humans, rules, and models—assigning each party the tasks they are best suited for.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;preprocessing-isnt-about-saving-a-few-tokens-its-about-making-the-act-of-writing-sustainable&#34;&gt;Preprocessing isn&amp;rsquo;t about saving a few tokens; it&amp;rsquo;s about making the act of writing sustainable.
+&lt;/h2&gt;&lt;p&gt;For the conclusion in the second article, I want to make it more direct.&lt;/p&gt;
+&lt;p&gt;When you have plenty of tokens, reading historical articles raw is fine. In fact, if you only write one or two pieces, it might even be less mentally taxing.&lt;/p&gt;
+&lt;p&gt;But as soon as you want to turn this into a long-term workflow, preprocessing becomes non-negotiable. Because without preprocessing, the writing model has to re-read old materials every time, and style maintenance and article generation are always mixed together.&lt;/p&gt;
+&lt;p&gt;The significance of &lt;code&gt;blog-style-suite&lt;/code&gt; is to untangle this mess.&lt;/p&gt;
+&lt;p&gt;It&amp;rsquo;s not about making the system look complex, nor is it just for another project name; it&amp;rsquo;s so that &lt;code&gt;blog-writer&lt;/code&gt; can remain lightweight, stable, and focused on &amp;ldquo;only the action of writing.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;Having reached this point, the next question naturally follows.&lt;/p&gt;
+&lt;p&gt;Since the production side has been separated, what model should bear this cost? Local models, online models, or &lt;code&gt;Minimax&lt;/code&gt;—where should each one stand in the workflow? I&amp;rsquo;ll save this for the next article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AI Writing Blogs: How It Eventually Has to Become Engineering (Part 3): The Division of Labor Between Local Models, Online Models, and Minimax&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/84a06b5dc743f2e9bc6e788d53496a1261bc63ae&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;84a06b5dc743f2e9bc6e788d53496a1261bc63ae&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/README.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/scanner.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/builder.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/compressor.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Effective Runtime: &lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer This content is quite extensive, so I&#39;ve split it into a series of articles: Last year, many drafts were written using large models. Back then, the process was to create an outline or a list of questions myself, and then have the AI generate the draft, copy the content into a local md document, fill in header information, tag information, and publish the article; recently, I used Codex a lot and found that its web search capability is very strong. So, could I write a skill to automate these tasks? This led to the first draft of the skill blog-writer. I also thought about having the AI learn my previous writing style, which caused blog-writer to consume a lot of tokens when running. Subsequently, I optimized blog-writer in several versions, splitting out the data module and the data generation module. The original data generation module was still an independent skill. As I continued writing, I realized that it would be better as a Python project, which led to blog-style-suite. Then, I found that training on style data also consumes a lot of tokens, so I wanted to use a local large model and connected to a local LLM. I then thought about comparing the differences between the local LLM and the online version, so I integrated minimax; the evolution history of blog-style-suite and blog-writer can be analyzed from the git commit history. Additionally, based on the code for local blog-writer and blog-style-suite, I can discuss the design ideas, how token saving was achieved, and how the data structure was designed—the core design concepts. If tokens are abundant, it can consume entire historical articles; preprocessing can save a lot of tokens.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-outline-summary&#34;&gt;Writing Outline Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;This article shifts the focus from the act of writing drafts to data engineering, with the core answer being &amp;ldquo;why modularization is necessary.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;The introduction directly acknowledges that &amp;ldquo;using raw historical articles works,&amp;rdquo; which makes the subsequent arguments for splitting more convincing.&lt;/li&gt;
+&lt;li&gt;It elaborates on the three structural layers: &lt;code&gt;scan.json&lt;/code&gt;, &lt;code&gt;source.json&lt;/code&gt;, and &lt;code&gt;runtime.json&lt;/code&gt;, avoiding vague architectural discussions.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;bc4b950&lt;/code&gt; is placed in the middle as a turning point because &amp;ldquo;reducing from about 2000 times to 5 times&amp;rdquo; best illustrates the value of preprocessing.&lt;/li&gt;
+&lt;li&gt;The conclusion re-separates the consumption side and the production side, setting the stage for model division in the third article.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>VRAM (Video Random Access Memory) on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/vram-video-random-access-memory/</link>
+        <description>Recent content in VRAM (Video Random Access Memory) on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/vram-video-random-access-memory/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Google has released Gemma 4 this time (III)</title>
+        <link>https://ttf248.life/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</link>
+        <pubDate>Wed, 08 Apr 2026 23:56:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/</guid>
+        <description>&lt;p&gt;While browsing the forum this time, what struck me most wasn&amp;rsquo;t which company released another leaderboard, but a very basic statement: &amp;ldquo;Not enough VRAM; no matter how large the parameters are, it&amp;rsquo;s useless.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;Previously, I always understood &amp;ldquo;slow model&amp;rdquo; as a computational power issue. However, the more I read, the clearer it became that often, the problem isn&amp;rsquo;t that the GPU can&amp;rsquo;t compute it, but rather that the data cannot reside in the right place. Just by changing the memory path, the token speed doesn&amp;rsquo;t just slow down; it drops drastically.&lt;/p&gt;
+&lt;p&gt;The previous two posts covered the preliminary issues. &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/gemma-4-series-models-and-license/&#34; &gt;First Post&lt;/a&gt; discussed the release and protocol, and &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/gemma-4-series-local-test-on-rtx-3060/&#34; &gt;Second Post&lt;/a&gt; explained why we should first look at &lt;code&gt;26B A4B&lt;/code&gt; on the 3060 12GB. This final post will only discuss how speed actually collapses.&lt;/p&gt;
+&lt;h2 id=&#34;out-of-vram-and-not-just-a-little-bit-slow&#34;&gt;Out of VRAM, and Not Just a Little Bit Slow
+&lt;/h2&gt;&lt;p&gt;When you break down the process of inference, there are two particularly critical components:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Model weights&lt;/li&gt;
+&lt;li&gt;KV cache&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The weights define the model itself, while the KV cache records the state of previous tokens. The longer the context, the larger the KV cache. As long as both these parts can be stably kept in the GPU VRAM, generating a token basically involves reading data, performing calculations, and writing back results within high-bandwidth memory, and the speed is usually quite good.&lt;/p&gt;
+&lt;p&gt;The real problem is when you run out of VRAM.
+Once it doesn&amp;rsquo;t fit, the inference framework has to compromise:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Storing some weights in system memory&lt;/li&gt;
+&lt;li&gt;Or storing some KV cache in system memory&lt;/li&gt;
+&lt;li&gt;Or even shuttling data back and forth between the CPU and GPU&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;At this point, the issue is no longer about &amp;ldquo;a little bit of extra computation,&amp;rdquo; but rather &amp;ldquo;waiting for data with every single token.&amp;rdquo;&lt;/p&gt;
+&lt;h2 id=&#34;why-the-cliff-not-a-linear-slowdown&#34;&gt;Why the Cliff, Not a Linear Slowdown
+&lt;/h2&gt;&lt;p&gt;When many people first encounter this pitfall, their intuition is that if the model goes from &lt;code&gt;14B&lt;/code&gt; to &lt;code&gt;31B&lt;/code&gt;, it will just be more than twice as slow, which they can tolerate.&lt;/p&gt;
+&lt;p&gt;Reality is not like that.&lt;/p&gt;
+&lt;p&gt;The real dividing line isn&amp;rsquo;t doubling the parameters; it&amp;rsquo;s whether or not the working set crosses the VRAM boundary.&lt;/p&gt;
+&lt;p&gt;As long as it hasn&amp;rsquo;t crossed, increasing model size usually results in a predictable slowdown.&lt;/p&gt;
+&lt;p&gt;Once it crosses, the system state changes:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Previously, it was an &amp;ldquo;on-chip closed loop&amp;rdquo; within VRAM.&lt;/li&gt;
+&lt;li&gt;Now, it becomes &amp;ldquo;VRAM + System RAM + Bus Transfer.&amp;rdquo;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Changing the path completely changes the cost. This is especially true during the decoding stage, which inherently proceeds token by token with a small batch size. At this point, what is most feared is having every single token wait for a batch of data to be transferred across devices.&lt;/p&gt;
+&lt;p&gt;So, you see a very typical phenomenon:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The model isn&amp;rsquo;t unable to run.&lt;/li&gt;
+&lt;li&gt;The GPU isn&amp;rsquo;t completely idle either.&lt;/li&gt;
+&lt;li&gt;But the tokens/s rate is extremely poor.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This is what people call the &amp;ldquo;cliff.&amp;rdquo; It&amp;rsquo;s not that the model suddenly got dumber; it&amp;rsquo;s that the memory path suddenly became inefficient.&lt;/p&gt;
+&lt;h2 id=&#34;why-26b-a4b-is-friendlier-to-local-players&#34;&gt;Why &lt;code&gt;26B A4B&lt;/code&gt; is Friendlier to Local Players
+&lt;/h2&gt;&lt;p&gt;This also explains why I have consistently favored &lt;code&gt;26B A4B&lt;/code&gt; in my previous article.
+Its total parameter count is certainly not small, but only about &lt;code&gt;3.8B&lt;/code&gt; are actually activated per token. This means that under similar deployment conditions, the pressure it puts on computation and VRAM paths is often easier to control compared to dense large models.
+This isn&amp;rsquo;t magic.
+If your context window gets too long, or if quantization and framework support are inadequate, it will struggle just like any other model. However, compared to a dense model that immediately maxes out the entire VRAM, &lt;code&gt;26B A4B&lt;/code&gt; feels more like a realistic path for consumer-grade GPUs.
+So, often the issue isn&amp;rsquo;t whether &lt;code&gt;31B&lt;/code&gt; is weak, but rather which model is better suited for long-term coexistence with local hardware.&lt;/p&gt;
+&lt;h2 id=&#34;why-macs-seem-less-prone-to-running-out-of-memory&#34;&gt;Why Macs seem &amp;ldquo;less prone to running out of memory&amp;rdquo;
+&lt;/h2&gt;&lt;p&gt;What&amp;rsquo;s most different about Mac is not the model, but the memory architecture.
+&lt;code&gt;Apple silicon&lt;/code&gt; uses unified memory. The CPU and GPU share a single pool of memory, unlike dedicated graphics machines where there are separate VRAM and main memory that have to be moved across a bus.
+The biggest advantage of this structure is that many models which would &amp;ldquo;not fit in VRAM at all&amp;rdquo; on dedicated graphics machines can take on a different state on Mac:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;It might not be fast,&lt;/li&gt;
+&lt;li&gt;But it can probably fit into the memory first.
+In other words, Macs are less likely to hit that very rigid &amp;ldquo;VRAM wall&amp;rdquo; right from the start.
+This is why many people feel that Macs are particularly suitable for running large models locally as a fallback option. It solves the problem of &amp;ldquo;whether the entire working set can be loaded into the same memory pool.&amp;rdquo;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;but-unified-memory-doesnt-mean-high-speed-for-you&#34;&gt;But Unified Memory Doesn&amp;rsquo;t Mean High Speed for You
+&lt;/h2&gt;&lt;p&gt;You must look at this part separately.
+What did unified memory solve?&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;It solved the hard separation between dedicated VRAM and main memory.&lt;/li&gt;
+&lt;li&gt;It solved many cases where models couldn&amp;rsquo;t fit directly onto cards with small VRAM.&lt;/li&gt;
+&lt;li&gt;It solved some very ugly cross-device data transfers.
+But what didn&amp;rsquo;t it solve?&lt;/li&gt;
+&lt;li&gt;It didn&amp;rsquo;t change large model inference from &amp;ldquo;massive memory reads&amp;rdquo; to something else.&lt;/li&gt;
+&lt;li&gt;It didn&amp;rsquo;t make large models suddenly stop being bandwidth-hungry.&lt;/li&gt;
+&lt;li&gt;It didn&amp;rsquo;t automatically give all inference frameworks the mature ecosystem of CUDA.
+So, the comfort of Mac is not the same thing as the speed of a high-VRAM NVIDIA card.
+Mac is more like:&lt;/li&gt;
+&lt;li&gt;Quiet machine operation&lt;/li&gt;
+&lt;li&gt;Large total memory&lt;/li&gt;
+&lt;li&gt;Unified architecture&lt;/li&gt;
+&lt;li&gt;Finally allowing models that previously wouldn&amp;rsquo;t fit to run first.
+NVIDIA&amp;rsquo;s high-VRAM card is more like:&lt;/li&gt;
+&lt;li&gt;Mature ecosystem&lt;/li&gt;
+&lt;li&gt;Complete CUDA toolchain&lt;/li&gt;
+&lt;li&gt;When you truly keep the model and cache on the GPU, speed can be much easier to boost.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;why-speed-ultimately-depends-on-nvidias-large-vram&#34;&gt;Why Speed Ultimately Depends on NVIDIA&amp;rsquo;s Large VRAM
+&lt;/h2&gt;&lt;p&gt;This is not an emotional judgment, but a practical conclusion drawn after wrestling with local deployment.
+If you are pursuing these things:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Local assistant always running&lt;/li&gt;
+&lt;li&gt;Multi-turn long conversations&lt;/li&gt;
+&lt;li&gt;Long context windows&lt;/li&gt;
+&lt;li&gt;Higher token/s rate&lt;/li&gt;
+&lt;li&gt;Minimizing waiting time as much as possible
+Then ultimately, the large VRAM NVIDIA card is what matters. Because what you are truly buying is the ability to keep the model and cache stably on the GPU.
+Mac also works, but it is better suited for a different set of requirements:&lt;/li&gt;
+&lt;li&gt;I want a machine that can load an even larger model into it first.&lt;/li&gt;
+&lt;li&gt;I accept average speed, but I don&amp;rsquo;t want to mess with drivers and peripherals.&lt;/li&gt;
+&lt;li&gt;I care more about overall experience, power consumption, and noise.
+Both paths are reasonable; they just solve different problems.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;back-to-gemma-4-my-final-verdict&#34;&gt;Back to Gemma 4, My Final Verdict
+&lt;/h2&gt;&lt;p&gt;This time with &lt;code&gt;Gemma 4&lt;/code&gt;, I really feel that local open-source models have reached a stage where hardware discussion is more warranted.
+But just because the model gets stronger doesn&amp;rsquo;t mean the laws of physics loosen up accordingly.
+No matter how strong the &lt;code&gt;31B&lt;/code&gt; model is, it will slow down if VRAM is insufficient.
+Even with the practical &lt;code&gt;26B A4B&lt;/code&gt;, long contexts still put pressure on the system.
+And while Apple&amp;rsquo;s unified memory is comfortable, it only makes it easier to &amp;ldquo;get something running&amp;rdquo;; it won&amp;rsquo;t give you the speed of a large VRAM CUDA card for free.
+So, I&amp;rsquo;ll end with this rather blunt summary:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;For &lt;strong&gt;speed&lt;/strong&gt;, prioritize NVIDIA with large VRAM.&lt;/li&gt;
+&lt;li&gt;For &lt;strong&gt;reliability/fallback&lt;/strong&gt;, Mac&amp;rsquo;s unified memory is indeed comfortable.&lt;/li&gt;
+&lt;li&gt;If you plan to run on hardware like the &lt;code&gt;3060 12GB&lt;/code&gt; long-term, don&amp;rsquo;t always aim for dense, massive models; a path like &lt;code&gt;26B A4B&lt;/code&gt; is more realistic.
+With this set of articles, I will wrap up here.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4: Byte for byte, the most capable open models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core/model_card_4&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 4 model card&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M3, M3 Pro, and M3 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/newsroom/2023/01/apple-unveils-m2-pro-and-m2-max-next-generation-chips-for-next-level-workflows/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Apple unveils M2 Pro and M2 Max&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.apple.com/macbook-pro/specs/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MacBook Pro Tech Specs&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer Google has released the Gemma4 model after a year. As usual, I&#39;m trying to deploy it locally on that old desktop with an unupgraded NVIDIA 3060 12GB graphics card. This time I caught the initial release, but I couldn&#39;t find an upgraded version of the commonly used Gemma3. However, there is a similar version called GemmaE4b. Please first search and introduce all the models released this time, what the letters in their abbreviations mean, and then search for online reviews about Gemma4. The key point is that Google updated the model&#39;s protocol this time, so the restrictions for users are fewer. The biggest surprise: my usual test question—write a piece of C++ code to output a five-pointed star in the console. Last year&#39;s smaller parameter open-source models couldn&#39;t handle this problem, but Google managed it this time. In the first version, it gave the answer, completely exceeding my expectations. It knew about my trap; outputting a five-pointed star to the console is very difficult, so it directly hardcoded a string of a five-pointed star for direct console output. This is the original text: Because drawing a five-pointed star with precise geometric structure using mathematical logic in a pure text console (Console) is very complex (involving coordinate system transformation and pixel filling), the most classic and visually best method is to use ASCII Art. After I forced it to perform calculations, it also managed it through mathematical calculation, successfully drawing the five-pointed star. Previously, I often used Gemma4 for local translation tasks; many multilingual versions of historical articles on current blogs are like this. The model used for local testing: gemma-4-26b-a4b. The 31b version is indeed too slow. But looking at the reviews, the 31b effect is very good, and its ranking performance is excellent. While browsing forums, I realized that if the VRAM is insufficient and the model parameters are increased, the token generation speed will drop drastically. Can you explain why? Macs don&#39;t have this problem because they use unified memory; please explain the technical reason. Also, if speed is required, then an NVIDIA card with large VRAM is still necessary. The Mac solution can serve as a fallback, but it cannot match the speed. This content is very extensive; please evaluate whether it should be split into a series of articles.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-outline-summary&#34;&gt;Writing Outline Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;The third article will only retain the two threads: &amp;ldquo;Why speed collapses&amp;rdquo; and &amp;ldquo;Why Mac does not equal fast,&amp;rdquo; without revisiting the content of the previous two articles.&lt;/li&gt;
+&lt;li&gt;Start by discussing VRAM limitations, then move to non-linear slowdowns; this logic is smoother than the previous version.&lt;/li&gt;
+&lt;li&gt;Mac and Nvidia will be discussed as two different dimensions—one focusing on reliability/fallback, and one focusing on speed.&lt;/li&gt;
+&lt;li&gt;The conclusion will only retain hardware judgment, without repeating the explanation of why series separation occurred.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

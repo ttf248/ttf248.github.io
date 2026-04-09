@@ -6,7 +6,769 @@
         <description>Recent content in プログラミング on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Mon, 16 Mar 2026 21:09:23 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>AIがブログを書くという件は、結局エンジニアリングにする必要がある（三）</title>
+        <link>https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/</link>
+        <pubDate>Fri, 03 Apr 2026 21:06:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/</guid>
+        <description>&lt;p&gt;倉庫の構成を一周確認した結果、逆に確信したことがあります。このシステムは、単体のモデルがどれだけ強力かではなく、どのレイヤーにコストを負わせるべきか、という点にかかっているということです。&lt;/p&gt;
+&lt;p&gt;最も明白なシグナルは、現在有効な &lt;code&gt;published.runtime.json&lt;/code&gt; が依然として 2026年4月2日に生成された &lt;code&gt;minimax-m2&lt;/code&gt; であることです。しかし、2026年4月3日16:38の &lt;code&gt;5f17088&lt;/code&gt; は、&lt;code&gt;blog-style-suite&lt;/code&gt; のデフォルトプロバイダーをローカルの &lt;code&gt;LM Studio&lt;/code&gt; 内の &lt;code&gt;gemma-4-26b-a4b&lt;/code&gt; に切り替えています。これは一見すると前後で矛盾しているように見えますが、実はそうではありません。むしろ、このパイプラインに分業が始まったことを示しています。&lt;/p&gt;
+&lt;p&gt;この記事群はここまでで、最初の2本で境界線を描きました。&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/why-blog-writer-had-to-exist/&#34; &gt;第1回&lt;/a&gt; では、&lt;code&gt;blog-writer&lt;/code&gt; がなぜ生まれたのかを語り、&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;第2回&lt;/a&gt; では、&lt;code&gt;blog-style-suite&lt;/code&gt; がどのようにスタイル学習とトークンコストを分離したのかを語りました。そして最後のこの記事では、最も現実的な問題に焦点を当てます。ローカルモデル、オンラインモデル、&lt;code&gt;Minimax&lt;/code&gt; は、結局どのワークステーションに置くべきなのか、という点です。&lt;/p&gt;
+&lt;h2 id=&#34;スタイルデータでのトレーニングはすべてのステップでオンラインモデルを焼く価値はない&#34;&gt;スタイルデータでのトレーニングは、すべてのステップでオンラインモデルを焼く価値はない
+&lt;/h2&gt;&lt;p&gt;スタイルデータというものは、真剣に取り組むと、トークンがすぐに現実的な問題になります。
+やりたいかどうかではなく、役割分担をしないと、このシステム全体が長く動きません。
+以前最も陥りがちだった誤解は、一つのオンラインモデルにすべての作業を任せてしまうことでした。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;過去記事のクロール&lt;/li&gt;
+&lt;li&gt;スクリーニングの実施&lt;/li&gt;
+&lt;li&gt;分類を行う&lt;/li&gt;
+&lt;li&gt;スコアリング&lt;/li&gt;
+&lt;li&gt;サンプルの抽出&lt;/li&gt;
+&lt;li&gt;スタイルの調整（トーン合わせ）&lt;/li&gt;
+&lt;li&gt;そして最後に原稿を書く
+このように行う最大の問題は、「モデルが十分強力でない」ことではなく、すべてのステップで同じコストを消費してしまうことです。
+今振り返ると、真に合理的なアプローチは逆から考えるべきです。どのステップはオンラインで行う必要があるのか、どのステップは可能な限りローカル化すべきなのか、さらにはモデルに任せるべきではないステップがあるのか、という点です。
+この境界線が不明確なままだと、どれだけ強力なモデルを導入しても、結局は本来前処理で対応できたはずの作業を繰り返すだけになってしまいます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;ローカルモデルは汚い作業重労働そして試行錯誤の繰り返しに適している&#34;&gt;ローカルモデルは「汚い作業」「重労働」、そして「試行錯誤の繰り返し」に適している
+&lt;/h2&gt;&lt;p&gt;私は今や、ローカルモデルを本番環境における「体力層（ワークホース）」として定義するようになりつつあります。
+必ずしも最強である必要はなく、毎回最も洗練されているわけでもありませんが、以下のタスクを担うのに特に適しています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;何度も実行する構築プロセス&lt;/li&gt;
+&lt;li&gt;スタイルデータの複数ラウンドにわたる圧縮実験&lt;/li&gt;
+&lt;li&gt;設定変更後の再スキャン&lt;/li&gt;
+&lt;li&gt;既存の構造に対する低リスクな再計算
+これらの作業には共通点があります。
+それは単発で価値が極めて高いことではなく、&lt;strong&gt;繰り返し実行する必要がある&lt;/strong&gt;、&lt;strong&gt;試行錯誤を許容できる&lt;/strong&gt;、そしてできれば&lt;strong&gt;毎回高額なコストを払う必要がない&lt;/strong&gt;という点です。
+現在、&lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt; は &lt;code&gt;lm-studio-gemma4&lt;/code&gt; に切り替わっており、これ自体が判断が変わっていることを示しています。ローカルの &lt;code&gt;gemma&lt;/code&gt; がオンラインモデルより必ずしも強いわけではなく、むしろ本番環境のこのパイプラインは、「実行可能か」「頻繁に実行できるか」「繰り返し変更できるか」を優先し始めたのです。
+これは、私が以前書いた &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;弱モデルに無理に高度なタスクを割り当てない&lt;/a&gt; と同じ論理に基づいています。
+ローカルモデルが複雑な記事全体をゼロから書き上げるのに適しているとは限りませんが、**「汚い作業」「重労働」「バッチ処理」**を受け持つには非常に適しています。スタイルデータの前処理は、元々このようなタスクに近いです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;オンラインモデルは仕上げに向いており全てをこなすのには向かない&#34;&gt;オンラインモデルは「仕上げ」に向いており、「全てをこなす」のには向かない
+&lt;/h2&gt;&lt;p&gt;ローカルモデルがプロダクション側に向いているからといって、オンラインモデルに価値がないわけではありません。
+オンラインモデルが真価を発揮するのは、まさに最後の「仕上げ（クロージング）」の部分です。
+例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;最新の情報に基づいて事実を補完する&lt;/li&gt;
+&lt;li&gt;より大きなコンテキストの中で論証を整理する&lt;/li&gt;
+&lt;li&gt;ネットワーク接続による検証が必要な時間的制約のある情報を処理する&lt;/li&gt;
+&lt;li&gt;すでに準備された構造化されたスタイルアセットを、公開できる記事に仕上げる
+これらの動作は、表現の質、事実の統合、コンテキスト理解といった要求が高いため、オンラインモデルがここに配置される方が価値が高いのです。
+つまり、強力なモデルはまるで総組立ラインの最後の工程のようなものです。前工程まで手を広げられるわけではありませんが、最初から最後まで全てを処理させると、コスト構造がすぐに崩れてしまいます。
+これが、&lt;code&gt;blog-writer&lt;/code&gt; が設計上、投稿済みデータである &lt;code&gt;published.runtime.json&lt;/code&gt; のみを読み取り、原稿作成時にプロバイダーを切り替えたり、スイートディレクトリ全体を再走査したりしない理由です。消費側（クライアント側）が軽いほど、より強力なモデルに記事の「仕上げ」に集中してもらうのが最適なのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;minimax-の意味は単にプロバイダーを増やしただけではない&#34;&gt;Minimax の意味は、単にプロバイダーを増やしただけではない
+&lt;/h2&gt;&lt;p&gt;多くの人は「Minimax」を見ると、「またモデルを一つ追加しただけか」と最初に思いがちです。&lt;/p&gt;
+&lt;p&gt;しかし、そうは思いません。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Minimax&lt;/code&gt; が真に価値があるのは、「複数のプロバイダーからの出力を、単一の公開契約（スキーマ）で消費できる道筋を作った」点にあります。&lt;/p&gt;
+&lt;p&gt;2026年4月2日 10:18 の &lt;code&gt;9f15199&lt;/code&gt; で &lt;code&gt;blog-style-suite&lt;/code&gt; がマルチモデル構成に変更され、出力がプロバイダーごとに分離されました。その後も README やランタイムの構造では、常に一つのことを強調しています。それは、スイートは多くの結果を生成できるが、実際に有効なのは人間が選んだ &lt;code&gt;published.runtime.json&lt;/code&gt; だけだということです。&lt;/p&gt;
+&lt;p&gt;この境界線（バウンダリー）が非常に重要です。&lt;/p&gt;
+&lt;p&gt;なぜなら、一度この境界が明確になると、&lt;code&gt;Minimax&lt;/code&gt; の役割は「執筆プロセスに組み込まれなければならないもの」から、以下のようなものへと変わるからです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本番環境での比較に参加できる&lt;/li&gt;
+&lt;li&gt;ランタイム版を生成するために使える&lt;/li&gt;
+&lt;li&gt;ローカルモデルの成果物と横断的に比較できる&lt;/li&gt;
+&lt;li&gt;最終的に人間がどのバージョンを公開するかを決定する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これにより、プロバイダーは「システムへの依存」から「交換可能な部品」へと変わりました。&lt;/p&gt;
+&lt;p&gt;これが、このエンジニアリングスタックにおける &lt;code&gt;Minimax&lt;/code&gt; の最も興味深い意義だと私は感じています。それは、エンドツーエンドの全工程を支配するために存在するのではなく、「このリンク（プロセス）がインターフェースをきれいに受け止めているかどうかを検証する」ために存在しているのです。&lt;/p&gt;
+&lt;h2 id=&#34;真の役割分担はモデルの強さによるのではなくタスクの種類によるべき&#34;&gt;真の役割分担は、モデルの強さによるのではなく、タスクの種類によるべき
+&lt;/h2&gt;&lt;p&gt;私は今、非常に古風だが実用的な分類法をより支持しています。&lt;/p&gt;
+&lt;h3 id=&#34;ルールとハード制約&#34;&gt;ルールとハード制約
+&lt;/h3&gt;&lt;p&gt;ローカルスクリプトに任せる。
+&lt;code&gt;scanner.py&lt;/code&gt;、&lt;code&gt;write_post.py&lt;/code&gt;、&lt;code&gt;write_post_series.py&lt;/code&gt; のような決定論的なツールで解決できることは、モデルに混ぜ込ませないこと。&lt;/p&gt;
+&lt;h3 id=&#34;スタイルデータ生成&#34;&gt;スタイルデータ生成
+&lt;/h3&gt;&lt;p&gt;ローカルモデルまたはコストの低いプロバイダーを優先します。
+ここでの最も重要なのは、単発の出力が最も華やかであることではなく、再現性、試行錯誤可能性、キャッシュ可能性です。&lt;/p&gt;
+&lt;h3 id=&#34;最終原稿作成と事実の締めくくり&#34;&gt;最終原稿作成と事実の締めくくり
+&lt;/h3&gt;&lt;p&gt;より長いコンテキストの統合、表現の収束、およびインターネットからの事実補完に適したモデルに任せる。
+このレイヤーこそが、オンラインモデルにお金をかける価値がある場所だ。
+このように分解すると、以前は悩んでいた問題も実はそれほど複雑ではないことがわかる。毎日「どのモデルが最強なのか」を議論する必要はなく、「このタスクはどのレイヤーに属するか」と尋ねるだけでよいのだ。&lt;/p&gt;
+&lt;h2 id=&#34;結局最も価値があるのはモデルではなく境界が明確なことである&#34;&gt;結局、最も価値があるのはモデルではなく境界が明確なことである
+&lt;/h2&gt;&lt;p&gt;第3編はここまでとさせていただきます。
+&lt;code&gt;blog-writer&lt;/code&gt; と &lt;code&gt;blog-style-suite&lt;/code&gt; という一連のものは、進化する過程で、誰を接続したか、誰に入れ替えたか、どのプロバイダーを試したかといった点よりも、最も価値があるのは境界が徐々に明確になってきたことです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;blog-writer&lt;/code&gt; は消費側を担当&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;blog-style-suite&lt;/code&gt; は生成側を担当&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;published.runtime.json&lt;/code&gt; が公開の場所である&lt;/li&gt;
+&lt;li&gt;ローカルモデルは繰り返し実行する面倒な作業や重い作業に適している&lt;/li&gt;
+&lt;li&gt;オンラインモデルは最後の仕上げに適している&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Minimax&lt;/code&gt; のようなオンラインプロバイダーは、システムの中枢というよりも交換可能な部品のようなものだ。
+境界が明確になると、ワークフロー全体がスムーズになる。
+一つのモデルパッケージだけで全てを解決できると期待したり、全てのステップを最も高価なレイヤーに積み重ねたりすることはなくなる。結局のところ、これはモデルを選ぶように見えて、実際には異なる種類のタスクに作業場所を割り当てているだけなのだ。
+端的に言えば、単一の点が強いのはもちろん良いことだ。
+しかし、長期的に見ると、境界が明確であることは、単一の点よりも強く、より重要であることが多い。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9f1519967981c5eef7bd1eb407b0406ac542ebd0&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9f1519967981c5eef7bd1eb407b0406ac542ebd0&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/5f17088391ee858b88fc50df884bc0103ff0b3c1&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;5f17088391ee858b88fc50df884bc0103ff0b3c1&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;有効なランタイム：&lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/a-long-period-of-deep-ai-programming/&#34; &gt;重度AIプログラミングの日々&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/ultimately-its-returning-to-domestic-models/&#34; &gt;結局は国産モデルに戻る&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;弱モデルに無理な強活を適用しない&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その時は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づきました。そこで、これらの作業を自動化するスキルを作成できないかと考えたのが、skill blog-writerの初稿です。さらに、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したスキルとして存在していました。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それがblog-style-suiteの誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考えたため、minimaxとも連携させました。blog-style-suiteとblog-writerの進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルのblog-writerやblog-style-suiteのコードを基にして、設計思想（どのようにトークン節約を実現したか、データ構造をどう設計したか、核となる設計思想）について説明することも可能です。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第3編では、アーキテクチャの説明を繰り返すのではなく、「モデルの役割分担」という現実的な問題に焦点を当てて締めくくる。&lt;/li&gt;
+&lt;li&gt;冒頭で、現在のリポジトリにある &lt;code&gt;published.runtime.json&lt;/code&gt; が &lt;code&gt;minimax-m2&lt;/code&gt; や &lt;code&gt;config.json&lt;/code&gt; からローカルの &lt;code&gt;gemma4&lt;/code&gt; に切り替わっているという事実を直接提示し、前置きを減らす。&lt;/li&gt;
+&lt;li&gt;重要なのは、誰がより優れているかを証明することではなく、なぜ異なるタスクを異なるコストレイヤーに割り当てるべきなのかを説明することである。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Minimax&lt;/code&gt; を「交換可能なプロバイダー」の位置で語るのは、その意義をモデルのベンチマークリストではなく、エンジニアリングの境界線に引き戻すためである。&lt;/li&gt;
+&lt;li&gt;最後に、「単一の最高性能よりも明確な境界線の方が重要である」という全体的な判断に戻り、一連の記事を締めくくる。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AIがブログを書くという件は、結局エンジニアリングにする必要がある（2）</title>
+        <link>https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/</link>
+        <pubDate>Fri, 03 Apr 2026 21:02:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/</guid>
+        <description>&lt;p&gt;トークンが十分にある場合、最も手っ取り早い方法は非常に粗暴ですが、過去の記事をそのままモデルに投入し、自分で学ばせることです。&lt;/p&gt;
+&lt;p&gt;問題は、この方法はたまに1記事書くのには適していますが、繰り返し書くのには適さないということです。もしブログ執筆を長期的なワークフローとして真剣に取り組むのであれば、「生データ（歴史的な文章）」というアプローチは、すぐに「高コストで散漫」になってしまいます。&lt;/p&gt;
+&lt;p&gt;この一連の記事では、主軸が移りました。前回の記事 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/why-blog-writer-had-to-exist/&#34; &gt;AIによるブログ執筆は、結局エンジニアリングにする必要がある（1）：blog-writerがなぜ生まれてきたか&lt;/a&gt; では、消費側（コンテンツの利用側）の自動化について取り上げました。この記事からは生産側、つまりスタイルデータがどのように生成され、どのように圧縮され、どうすればトークンを無駄に燃焼させないかという点について語ります。次の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIによるブログ執筆は、結局エンジニアリングにする必要がある（3）：ローカルモデル、オンラインモデル、そしてMinimaxの役割分担&lt;/a&gt; を続けます。&lt;/p&gt;
+&lt;h2 id=&#34;最初の一番自然な発想は過去の記事をそのまま与えることだ&#34;&gt;最初の一番自然な発想は、過去の記事をそのまま与えることだ
+&lt;/h2&gt;&lt;p&gt;この道筋は本当に自然すぎる。
+モデルにあなたの書き方を学ばせたいのなら、最も直感的な方法はもちろん、古い記事を餌として与えることだ。できれば、過去のブログの中で自分自身に一番近いと感じるものを詰め込んで、自分で要約させるのがベストだ。
+一度きりのタスクを見る限りでは、これを行っても問題はない。
+むしろ多くのケースで効果は良い。コンテキストが十分長く、モデルが十分に強力で、過去の記事が十分にあれば、スタイルを習得することは確かに可能だ。
+しかし、問題は「この記事を書き上げられるか」ではなく、「次の記事、その次の記事も、これを繰り返さなければならないのか」ということなのだ。
+毎回古い記事のバッチを再投入することは、いくつかの非常に現実的な副作用をもたらす：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同じ材料が繰り返しコンテキストを占有する&lt;/li&gt;
+&lt;li&gt;トークン消費量が執筆回数にほぼ線形に増加する&lt;/li&gt;
+&lt;li&gt;モデルが見るノイズが増えすぎ、真に有用なシグナルが逆に希釈されてしまう&lt;/li&gt;
+&lt;li&gt;執筆という動作とスタイル維持という動作が完全に結びつき、どちらも軽々しくできなくなる
+つまり、トークンが潤沢な時は、生で与えるのはもちろん可能だ。しかし、工学的な観点から常にこのようにすることはできないのだ。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;これがデータモジュールとデータ生成モジュールを分離しなければならない理由です&#34;&gt;これがデータモジュールとデータ生成モジュールを分離しなければならない理由です
+&lt;/h2&gt;&lt;p&gt;後になって考えたところ、核心は一言に尽きます。「消費側」と「生産側」を分けることです。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; が担当しているのは消費側です。これは、すでに公開されたランタイムを読み取り、固定の契約に従って記事を書き出すだけです。&lt;/p&gt;
+&lt;p&gt;一方、スタイルデータのスキャン、フィルタリング、スコアリング、圧縮、プロバイダー比較などは、別の生産側のパイプラインに置かれるべきでした。つまり、後から作られた &lt;code&gt;blog-style-suite&lt;/code&gt; のようなものです。&lt;/p&gt;
+&lt;p&gt;gitの履歴を見れば、この転換は非常に明確です。&lt;/p&gt;
+&lt;p&gt;2026年4月1日 21:47 のコミット &lt;code&gt;84a06b5&lt;/code&gt; で、元の &lt;code&gt;blog-style-maintainer&lt;/code&gt; スキルがリポジトリレベルのCLIツールに置き換えられたことが明記されています。この動きは物事を物語っています。なぜなら、&lt;code&gt;scan/build/rebuild&lt;/code&gt; があり、出力ディレクトリがあり、リカバリ機構がある時点で、それはもはや単なる「スキル」ではなく、通常のPythonプロジェクトのように見えてくるからです。&lt;/p&gt;
+&lt;p&gt;さらに2026年4月1日 23:05 のコミット &lt;code&gt;9e92b8e&lt;/code&gt; では、&lt;code&gt;blog-style-suite&lt;/code&gt; が &lt;code&gt;scanner.py&lt;/code&gt;、&lt;code&gt;builder.py&lt;/code&gt;、&lt;code&gt;compressor.py&lt;/code&gt; といったモジュールに分割され続けました。この段階に至ると、考え方はすでに非常に工学的なものになっています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;scanner.py&lt;/code&gt;: ディスクから記事をスキャンし、構造化された特徴を抽出する役割&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;builder.py&lt;/code&gt;: スコアリング、選別、キャッシュ、ランタイムアセンブリの役割&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;compressor.py&lt;/code&gt;: モデルが関与するいくつかの圧縮ステップを担当する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これは、単にスーパープロンプトを一段書くというアプローチとは、全く異なる考え方なのです。&lt;/p&gt;
+&lt;h2 id=&#34;トークンを節約するのは玄学ではなく前処理とバッチ化によるもの&#34;&gt;トークンを節約するのは、玄学ではなく前処理とバッチ化によるもの
+&lt;/h2&gt;&lt;p&gt;このエンジニアリングセットで真に価値があるのは、2026年4月2日19:41の&lt;code&gt;bc4b950&lt;/code&gt;だと思います。&lt;/p&gt;
+&lt;p&gt;あのコミットは非常に率直なことを述べていました。AIの呼び出し回数が約「2000回」から、各プロバイダーで最大「5回」に直接削減されたのです。&lt;/p&gt;
+&lt;p&gt;どうやって達成したのか？
+それは「プロンプトをより賢くする」のではなく、&lt;strong&gt;事前に処理すべきものを前もって実行する&lt;/strong&gt;ことによるものです。&lt;/p&gt;
+&lt;p&gt;現在の&lt;code&gt;blog-style-suite&lt;/code&gt;のフローは非常に明確になりました：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;scan&lt;/code&gt;フェーズは純粋にヒューリスティックであり、AI呼び出しは0回。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;build&lt;/code&gt;フェーズではまずヒューリスティックなスコアリングを行い、これもAI呼び出しは0回です。&lt;/li&gt;
+&lt;li&gt;その後、&lt;code&gt;technical / finance / essay / tooling&lt;/code&gt;の4つのレーンそれぞれで1回のバッチ選別とラベリングを行います。&lt;/li&gt;
+&lt;li&gt;最後に作者スタイルの圧縮を1回行います。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;これを計算すると、コールドスタートでも最大5回の呼び出しに抑えられます。&lt;/p&gt;
+&lt;p&gt;さらに重要なのは、この5回が各記事に分散しているのではなく、&lt;strong&gt;すでに前処理された高価値な要約材料に集中している&lt;/strong&gt;点です。&lt;/p&gt;
+&lt;p&gt;これが前処理が真にトークンを節約する部分です。単に数文字を減らすのではなく、「記事ごとに呼び出す」から「フェーズごとに集中的に呼び出す」というパラダイムシフトなのです。&lt;/p&gt;
+&lt;p&gt;その後は、キャッシュも整備されました。
+&lt;code&gt;builder.py&lt;/code&gt;にはレーンのバッチフィンガープリントがあり、プロバイダーのチェックポイント復元機能があり、さらにローカルモデルのコンテキストのために&lt;code&gt;review_pool_per_lane = 12&lt;/code&gt;のような縮小化が行われています。少しデータを変更しただけで、パイプライン全体を再実行する必要がありません。&lt;/p&gt;
+&lt;p&gt;こうした設計は一見派手ではありませんが、一つ一つが非常に実用的です。なぜなら、それらはすべて「同じトークン群を二度と無駄に燃焼させない」という問題を解決しているからです。&lt;/p&gt;
+&lt;h2 id=&#34;現在のデータ構造は本質的に真に有用なシグナルを圧縮しているものだ&#34;&gt;現在のデータ構造は、本質的に真に有用なシグナルを圧縮しているものだ
+&lt;/h2&gt;&lt;p&gt;この構造を分解すれば、データ構造も整理されるだろう。
+私は今、これを3層として理解する方がより良いと感じている。&lt;/p&gt;
+&lt;h3 id=&#34;第1層scanjson&#34;&gt;第1層：&lt;code&gt;scan.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これは共有の原料です。
+ここには、記事のパス、タイトル、日付、カテゴリ、タグ、冒頭段落、クロージングスタブ、見出し、スクリーニング結果、レーン分類といった構造化されたシグナルが格納されています。
+これは &lt;code&gt;blog-writer&lt;/code&gt; に直接渡されるものではなく、生産側でさらに加工するためのものです。&lt;/p&gt;
+&lt;h3 id=&#34;第2層providersourcejson&#34;&gt;第2層：&lt;code&gt;{provider}.source.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これはプロバイダーレベルのチェックポイントです。
+共有された原料に加え、スコアリング結果、レーン選択、フィンガープリント、キャッシュステータスといった中間状態が追加されています。つまり、「加工過程の中間製品」のようなものであり、復元可能、再利用可能、中断して再開できる点が重要です。&lt;/p&gt;
+&lt;h3 id=&#34;第3層providerruntimejson-と-publishedruntimejson&#34;&gt;第3層：&lt;code&gt;{provider}.runtime.json&lt;/code&gt; と &lt;code&gt;published.runtime.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これが消費側が真に気にする完成品です。
+ここには以下のものが保持されています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lanes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;writer_guide&lt;/code&gt;
+つまり、元々大量にあった過去の記事群を、そのまま利用できるランタイムスタイルアセットとして圧縮したものになります。
+特に &lt;code&gt;published.runtime.json&lt;/code&gt; という公開用のファイルが重要です。&lt;code&gt;blog-writer&lt;/code&gt; はこのファイルのみを読み取り、&lt;code&gt;content/post&lt;/code&gt; を再スキャンしたり、suite ディレクトリ内の全プロバイダーの完全なイメージを気にする必要がなくなります。
+この境界線が引かれることで、消費側は軽量化します。執筆モデルが見るのは、もはや原始的な古い記事の山ではなく、すでに前処理された高密度のシグナルとなるのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;すべてのことをモデルにさせるべきではない&#34;&gt;すべてのことをモデルにさせるべきではない
+&lt;/h2&gt;&lt;p&gt;最近、このエンジニアリングにおいて最も正しい判断は、「モデルを多く追加すること」ではなく、「モデルに任せるべきでないこともモデルに投げ渡さないこと」だと感じています。&lt;/p&gt;
+&lt;p&gt;以下のようなことは、ローカルルールで処理する方が適しています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;frontmatter の解析&lt;/li&gt;
+&lt;li&gt;冒頭段落の抽出&lt;/li&gt;
+&lt;li&gt;見出し（headings）の抽出&lt;/li&gt;
+&lt;li&gt;本人/転載/モデルによる署名の判断&lt;/li&gt;
+&lt;li&gt;blockquote の比率チェック&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt; や埋め込みプロンプト、本文の長さといったハードルルールでのフィルタリング&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これらの作業をモデルにやらせることは不可能というわけではなく、単に無駄です。&lt;/p&gt;
+&lt;p&gt;モデルがより適しているのは、曖昧さやトレードオフを含む部分です。例えば、「あるレーンの中でどの記事が現在の論調をよりよく代表しているか」、あるいは「高評価の記事から著者のスタイルタグを抽出する」といった作業です。&lt;/p&gt;
+&lt;p&gt;そのため、&lt;code&gt;blog-style-suite&lt;/code&gt; が真に価値があるのは、「トークンを節約できる」という点だけではなく、人間、ルール、モデルのそれぞれが担当すべき役割を再定義した点にあるのです。&lt;/p&gt;
+&lt;h2 id=&#34;前処理はトークンを節約するためではなく執筆作業を持続可能にするためである&#34;&gt;前処理はトークンを節約するためではなく、執筆作業を持続可能にするためである
+&lt;/h2&gt;&lt;p&gt;第2回の結論について、もっと直接的に伝えたい。
+トークンが潤沢な時は、過去の記事をそのまま使うのはもちろん問題ない。むしろ、本当に1〜2本だけ書くなら、頭を使う量が少ないかもしれない。
+しかし、このことを長期的なワークフローにしたいと思うなら、前処理は選択肢ではなくなる。なぜなら、前処理をしないと、執筆モデルは毎回古い素材を見直さなければならず、スタイルの維持と記事生成が常に混ざり合ってしまうからだ。
+&lt;code&gt;blog-style-suite&lt;/code&gt; の意味するところは、このごちゃ混ぜになっているものを分解することにある。
+システムに見せるためでも、プロジェクト名を増やすためでもなく、&lt;code&gt;blog-writer&lt;/code&gt; が軽快に、安定して、「執筆」という一つの動作だけに集中できるようにするためなのだ。
+ここまで来ると、次のステップの問題は自然とついてくる。
+すでに生成側が独立した以上、このコストをどのモデルに負わせるべきなのか？ローカルモデル、オンラインモデル、&lt;code&gt;Minimax&lt;/code&gt; はそれぞれどの工程に立つべきなのか？この件については、次回の記事 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIでブログを書くという行為は、結局エンジニアリングにする必要がある（三）：ローカルモデル、オンラインモデル、そして Minimax の役割分担&lt;/a&gt; で触れることにする。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/84a06b5dc743f2e9bc6e788d53496a1261bc63ae&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;84a06b5dc743f2e9bc6e788d53496a1261bc63ae&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/README.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/scanner.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/builder.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/compressor.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;有効なランタイム：&lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その際は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づいたため、これらの作業を自動化するskillを作成できないかと考えました。これがskill blog-writerの初稿の誕生につながりました。また、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したskillでした。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それがblog-style-suiteの誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いと感じたため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考え、minimaxを組み込みました。blog-style-suiteとblog-writerの進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルのblog-writerやblog-style-suiteのコードを基にして、設計思想（どのようにトークン節約を実現したか、データ構造をどう設計したか、核となる設計思想）について説明することができます。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子要約&#34;&gt;ライティングの骨子（要約）
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;本稿では、執筆という行為からデータエンジニアリングへと焦点を移し、「なぜモジュール化する必要があるのか」という核心的な問いに答えることを目指した。&lt;/li&gt;
+&lt;li&gt;冒頭で「生きた歴史の記事をそのまま使える」と認めることで、後続の分割理由に説得力を持たせている。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;scan.json&lt;/code&gt;、&lt;code&gt;source.json&lt;/code&gt;、&lt;code&gt;runtime.json&lt;/code&gt; の三層構造を重点的に展開し、単なるアーキテクチャの説明に留まらないようにした。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;bc4b950&lt;/code&gt; を中間地点の転換点として配置した。なぜなら、「約2000回から5回へ」という変化が前処理の価値を最も明確に示すためである。&lt;/li&gt;
+&lt;li&gt;最後に、消費側と生産側を再分離し、次回の記事で扱うモデルの役割分担への布石を打った。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AIがブログを書くという件、結局は工学的なものにする必要がある（1）</title>
+        <link>https://ttf248.life/ja/p/why-blog-writer-had-to-exist/</link>
+        <pubDate>Fri, 03 Apr 2026 20:58:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/why-blog-writer-had-to-exist/</guid>
+        <description>&lt;p&gt;昨年、多くの AI に関する記事を書きました。あの頃の最も手間のかかるプロセスは、まず自分でアウトラインや問題リストを整理し、大規模言語モデルに本文を出力させてもらい、その後その内容をローカルの &lt;code&gt;md&lt;/code&gt; ドキュメントにコピー＆ペーストし、フロントマター、タグ、カテゴリ、タイトルなどを補完してから公開するというものでした。
+このプロセスが使えないわけではありませんが、非常に面倒です。本当に時間がかかるのは本文ではなく、本文の外側の繰り返しの作業です。特に最近 &lt;code&gt;Codex&lt;/code&gt; を使いすぎてからは、その不自然さがより強く感じられます。それはリポジトリを読み込めるし、ファイルを編集でき、資料を補完できるだけでなく、記事を直接ディレクトリに書き込むこともできます。もし私がまだ手動でコピー＆ペーストを繰り返していると、まるで人間がツールの足を縛っているような気分になります。&lt;/p&gt;
+&lt;p&gt;この一連の記事は、実は一つのことを伝えたいのです。AI によるブログ執筆は、単なるプロンプト一つに頼るだけでは限界が来ています。今回の記事ではまず &lt;code&gt;blog-writer&lt;/code&gt; がなぜ生まれてきたのかを説明します。次の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;AIによるブログ執筆という事柄は、結局エンジニアリングとしてやる必要がある（2）：blog-style-suite でスタイル学習とトークンコストをどう分離するか&lt;/a&gt; を続けます。そして最終回は &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIによるブログ執筆という事柄は、結局エンジニアリングとしてやる必要がある（3）：ローカルモデル、オンラインモデル、Minimax は最後にどう分業するか&lt;/a&gt; で締めくくります。&lt;/p&gt;
+&lt;h2 id=&#34;本当に面倒なのは原稿を書くことではなくあの一連の機械的な動作だ&#34;&gt;本当に面倒なのは、原稿を書くことではなく、あの一連の機械的な動作だ
+&lt;/h2&gt;&lt;p&gt;初期のワークフローは、端的に言えば外部委託されたパイプラインのようだった。
+私自身がまず問題を明確にするか、あるいは大まかなアウトラインを立てる。モデルが本文を骨子として展開する。その後、人間が戻ってきて残りの公開作業を補完する。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ローカルの &lt;code&gt;md&lt;/code&gt; にコピーする&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;title&lt;/code&gt;、&lt;code&gt;date&lt;/code&gt;、&lt;code&gt;slug&lt;/code&gt; を補完する&lt;/li&gt;
+&lt;li&gt;タグとカテゴリを入力する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt; を補完する&lt;/li&gt;
+&lt;li&gt;参考資料を整理する&lt;/li&gt;
+&lt;li&gt;どのディレクトリに配置するかを決定する
+この一連の作業は、一つ一つのステップを見れば難しくはないが、繋げると非常に面倒だ。面倒なのは技術的な難しさではなく、それらがすべて機械的であるにもかかわらず、やらざるを得ない点にある。
+だからこそ、私は後になって、「[コマンドラインベースのAIコーディングインタラクション](/ja/p/command-line-ai-coding-interaction/）」のような変化は、単に「入り口が変わった」だけではないと感じるようになった。AIがリポジトリ内で直接ファイルの読み書きができるようになった今、ブログ執筆がまだ「本文をローカルドキュメントにコピーする」レベルに留まっているとしたら、ワークフロー全体がすでに時代遅れになっているのだ。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;blog-writer-最初の価値は文体ではなく契約を固定化すること&#34;&gt;blog-writer 最初の価値は文体ではなく、契約を固定化すること
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; の最も初期のノードは、2026年4月1日17:00の &lt;code&gt;991536a&lt;/code&gt; です。gitコミット履歴を見ると、このバージョンではすでに &lt;code&gt;SKILL.md&lt;/code&gt;、&lt;code&gt;write_post.py&lt;/code&gt;、そして一連の初期のスタイル資料が組み込まれています。&lt;/p&gt;
+&lt;p&gt;しかし、後から振り返ってみると、このドラフトの最も価値のある点は「AI が私の文体を学んだ」ことではなく、&lt;strong&gt;執筆の契約を固定化した&lt;/strong&gt;ことです。&lt;/p&gt;
+&lt;p&gt;「契約を固定化する」とはどういうことか？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;入力には最低限、アウトラインとファクトアンカー（事実の錨点）が必要であること&lt;/li&gt;
+&lt;li&gt;出力は必ず完全なMarkdown形式であり、未完成品であってはならないこと&lt;/li&gt;
+&lt;li&gt;frontmatter は人手に頼ることはできないこと&lt;/li&gt;
+&lt;li&gt;記事はチャットウィンドウ内に留まるのではなく、直接 &lt;code&gt;content/post&lt;/code&gt; に配置されること&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;この点は非常に重要です。なぜなら、プロンプト自体が不安定だからです。「以前のように書いて」と今日言っても、それはトーンが少し似ていると解釈されるかもしれません。明日もう一度同じことを言っても、表面的な構文しか学べないかもしれません。しかし、それが &lt;code&gt;Skill&lt;/code&gt; として書かれると、ルールは「その場での即興」から「固定された工程」へと変わります。&lt;/p&gt;
+&lt;p&gt;後続のいくつかのノードも、実質的にこの契約を補強し続けています。&lt;/p&gt;
+&lt;p&gt;2026年4月2日22:54の &lt;code&gt;8eb735a&lt;/code&gt; では、著者フィールド、執筆に関する注記、元のプロンプトなどが固定されました。この段階に至ると、ブログ記事の完成は単に「本文が書き終われば完了」ではなくなり、メタ情報、トレーサビリティ（追跡可能性）、公開される注記までが標準化されたのです。&lt;/p&gt;
+&lt;p&gt;したがって、&lt;code&gt;blog-writer&lt;/code&gt; の最初の価値は、モデルをより文章を書くのが上手に見せかけることではなく、&lt;strong&gt;執筆という行為自体に、再現可能な境界線を持たせたこと&lt;/strong&gt;なのです。&lt;/p&gt;
+&lt;h2 id=&#34;シリーズ形式は実は執筆の契約をさらに一歩進めたもの&#34;&gt;シリーズ形式は、実は執筆の契約をさらに一歩進めたもの
+&lt;/h2&gt;&lt;p&gt;単発の記事で安定して書けるようになると、次の問題がすぐに浮上します。
+あるテーマは、そもそも一つの記事に詰め込むのが適していません。無理に詰め込もうとすると、結局は情報量が多すぎてメインの筋が散漫になり、どの点も深く掘り下げきれない長文になってしまいがちです。
+これが、2026年4月2日 23:55 の &lt;code&gt;1a5604e&lt;/code&gt; が重要だった理由です。あの時、シリーズ形式と &lt;code&gt;write_post_series.py&lt;/code&gt; をまとめて追加しました。記事間は &lt;code&gt;relref&lt;/code&gt; で繋ぎ、一括書き込みの際に統一的に置換するようにしたのです。
+これは単なるファイル生成スクリプトの小さなアップグレードに見えますが、実際はそうではありません。
+それは一つのことを示しています。執筆の工程化は、「この一篇をどう生成するか」だけを考える段階から、「この一連のコンテンツをどう安定して配置し、順序をどう保証し、サイト内で相互にリンクさせるか」という視点に移ってきたということです。
+翌日の2026年4月3日 09:29 の &lt;code&gt;04dccb9&lt;/code&gt; は、この件をさらに一歩進めました。シリーズ記事のタイムスタンプが分単位で増加し、もはや共通の時間を使用しないようにしたのです。この変更は非常に小さいものですが、エンジニアリング的な深みがあります。なぜなら、Hugoのリストページ、前後の記事リンク、シリーズの順序といった「実際の問題」を解決しているからです。
+端的に言えば、シリーズ形式というのは、格好良く見せるためではなく、「複数の記事をまとめて公開する」という作業が、もはや手動でのフォローアップに頼らなくて済むようにするためなのです。&lt;/p&gt;
+&lt;h2 id=&#34;しかし単一のスキルだけでは後でトークン制限にぶつかることになる&#34;&gt;しかし、単一のスキルだけでは、後でトークン制限にぶつかることになる
+&lt;/h2&gt;&lt;p&gt;問題はここにあります。
+文体学習を真剣に行い始めると、&lt;code&gt;blog-writer&lt;/code&gt; のコンテキストがすぐに肥大化します。ただ書くだけでなく、以前あなたのように書くことも期待するわけです。最も自然な方法は、過去の記事も一気に詰め込むことです。
+これなら、一度だけは実行できます。
+しかし、たまに記事を書くだけではなく、長期的なワークフローにしたいと思うと、すぐに問題が発生します：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;トークン消費量が高い&lt;/li&gt;
+&lt;li&gt;毎回同じ古い記事を繰り返し与えることになる&lt;/li&gt;
+&lt;li&gt;モデルの注意力が古い材料によって希釈される&lt;/li&gt;
+&lt;li&gt;原稿執筆とスタイル維持が絡み合い、どちらも容易ではない
+ここから、私は&lt;code&gt;blog-writer&lt;/code&gt;は、すべてを任せる側（生成側）というよりは、消費する側として使う方が適していることに気づき始めました。
+原稿執筆という動作は、できるだけ軽く、直接的に、そしてできれば公開されたバージョンのみを参照するようにすべきです。一方、スタイルデータの生成方法、選別方法、圧縮方法は、別の生産側のパイプラインの問題なのです。この判断が、私を次のステップへと導き、それが&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;AIでブログを書くという件は、結局エンジニアリングにする必要がある（2）：blog-style-suiteでスタイル学習とトークンコストをどう分離するか&lt;/a&gt;へと繋がりました。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;まずプロセスを安定させてからスタイルやモデルについて語る資格が生まれる&#34;&gt;まずプロセスを安定させてから、スタイルやモデルについて語る資格が生まれる
+&lt;/h2&gt;&lt;p&gt;今振り返ると、&lt;code&gt;blog-writer&lt;/code&gt; が生まれたのは、私が突然ブログライティングアシスタントを作りたいと思ったからではない。
+むしろ、これまでのワークフロー自体が、新しい働き方に合わなくなってきたことが原因だ。
+&lt;code&gt;Codex&lt;/code&gt; のようなツールがインターネットに接続して資料を補完できたり、リポジトリ内での読み書きができたり、スクリプトを直接呼び出せるようになった場合、「ブログを書く」という行為は「本文をローカルドキュメントにコピーする」という段階で止まっているべきではない。この部分を自動化しなければ、かえって全体のプロセスの中で最も非効率な工程になってしまう。
+そのため、最初の記事の結論はここまでとする。
+&lt;code&gt;blog-writer&lt;/code&gt; が最初に解決したのは、文体ではなく、公開作業における反復的な手作業だった。このレイヤー（層）という契約がなければ、後からトークンやデータ構造、ローカルモデルについて語っても、実際には根拠がない。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/991536a237d04aba7c44dec501b3d98c644040c8&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;991536a237d04aba7c44dec501b3d98c644040c8&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/8eb735aa8448c97deb2af1ea46b86772008fa9e3&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;8eb735aa8448c97deb2af1ea46b86772008fa9e3&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/1a5604e7e6ce0a13f260fcbb8c2c1d964cdd0892&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;1a5604e7e6ce0a13f260fcbb8c2c1d964cdd0892&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/04dccb98c55a6ea3b81408012b33a6219cf8ab77&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;04dccb98c55a6ea3b81408012b33a6219cf8ab77&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;.agents/skills/blog-writer/SKILL.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;.agents/skills/blog-writer/scripts/write_post.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;.agents/skills/blog-writer/scripts/write_post_series.py&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その時は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づきました。そこで、これらの作業を自動化するスキルを作成できないかと考えたのが、skill blog-writer の初稿です。さらに、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したスキルでした。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それが blog-style-suite の誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いと感じたため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考え、minimaxとも連携させました。blog-style-suite と blog-writer の進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルの blog-writer および blog-style-suite のコードを基にして、設計思想や、どのようにトークン節約を実現したか、データ構造はどう設計したか、といった核となる設計思想について説明することができます。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングのアイデア概要&#34;&gt;ライティングのアイデア概要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;最初の記事はワークフローのトリガーポイントに焦点を当て、トークンとモデルの役割分担を急ぎすぎず、3つの記事でメインテーマを奪い合うのを避ける。&lt;/li&gt;
+&lt;li&gt;「本文自体は難しくないが、公開前後の一連の機械的な作業が面倒である」という判断を重点的に残した。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;991536a&lt;/code&gt;、&lt;code&gt;8eb735a&lt;/code&gt;、&lt;code&gt;1a5604e&lt;/code&gt;、&lt;code&gt;04dccb9&lt;/code&gt; などのノードを通じて、「プロセスを契約化する」ことを実際のGitの進化に落とし込む。&lt;/li&gt;
+&lt;li&gt;シリーズ形式はこの記事で取り上げることで、ブログ執筆が単発の記事生成から一連の成果物（セット）へと移行したことを示すためである。&lt;/li&gt;
+&lt;li&gt;最後に意図的に問題をトークンウォールに引きつけ、次の記事でのデータエンジニアリングと前処理のための布石とする。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Skill は新しいプロンプトではなく、エージェントに職種マニュアルを提供するものです。</title>
+        <link>https://ttf248.life/ja/p/skill-is-an-agent-handbook/</link>
+        <pubDate>Thu, 02 Apr 2026 22:43:16 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/skill-is-an-agent-handbook/</guid>
+        <description>&lt;p&gt;この数日、AIプログラミングについて見てきましたが、さっきまでみんなが&lt;code&gt;MCP&lt;/code&gt;の話をしていて、次の瞬間にはまた&lt;code&gt;Skill&lt;/code&gt;の話をしています。この言葉を初めて目にする人は、本能的にこれをまた新しいプロトコルか、あるいは高度なプロンプトだと捉えがちです。&lt;/p&gt;
+&lt;p&gt;私の判断は非常にシンプルで、&lt;code&gt;Skill&lt;/code&gt;は&lt;code&gt;MCP&lt;/code&gt;の座を奪いに来たものではなく、むしろエージェントに職種マニュアルのようなものを提供している感じです。&lt;code&gt;MCP&lt;/code&gt;が解決するのは「エージェントが外部世界と接続できるか」という点であり、&lt;code&gt;Skill&lt;/code&gt;が解決するのは「接続した後、どのような手順で確実にタスクを遂行するか」という点です。これらは代替関係ではなく、むしろ前後関係に近いです。&lt;/p&gt;
+&lt;p&gt;端的に言えば、&lt;code&gt;MCP&lt;/code&gt;はエージェントに手足を与え、&lt;code&gt;Skill&lt;/code&gt;はエージェントが勝手に動かないようにするためのものです。&lt;/p&gt;
+&lt;h2 id=&#34;skill-とは一体何なのか&#34;&gt;Skill とは一体何なのか
+&lt;/h2&gt;&lt;p&gt;最も分かりやすい言葉で説明するなら、こう言います。
+ベテラン社員の頭の中にある熟練したやり方を、再利用可能で、トリガーでき、実際に実行できるマニュアルとしてまとめたものが &lt;code&gt;Skill&lt;/code&gt; です。&lt;/p&gt;
+&lt;p&gt;OpenAI の公式ドキュメントの定義も非常に直接的です。&lt;code&gt;Skill&lt;/code&gt; は特定のタスクに向けた能力パッケージの一種であり、指示（プロンプト）、参考資料、そしてオプションのスクリプトを格納できます。目的はモデルを「より賢くする」ことではなく、ある種のタスクにおいて固定されたワークフローに従って安定的に出力をさせることです。&lt;/p&gt;
+&lt;p&gt;何に最も近いか？&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;通常のプロンプトとは異なり、一度話して終わりではないからです。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;MCP&lt;/code&gt; とも異なります。なぜなら、ツールやデータソースを接続する責任を持たないからです。&lt;/li&gt;
+&lt;li&gt;また、&lt;code&gt;AGENTS.md&lt;/code&gt; のようなものでもないからです。全リポジトリで通用するルールではないからです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;むしろ、専門の SOP（標準作業手順書）や、職種マニュアルのようなものです。&lt;/p&gt;
+&lt;p&gt;例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;GitHub PR のコメントを処理する場合：まずどのコメントを処理すべきかを確認し、次にユーザーにどのコメントを処理するか尋ね、コードを修正し、最後に結果をフィードバックする。&lt;/li&gt;
+&lt;li&gt;CI の失敗を調査する場合：まず GitHub Actions のログを取得し、次に失敗した部分を抽出して要約し、修復計画を立て、承認されてから作業に取り掛かる。&lt;/li&gt;
+&lt;li&gt;ブログ記事を書く場合：まず固定の文体でタイトルを生成し、次に事実情報を補完し、さらにフロントマター（メタデータ）を追加し、最後に公開する。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これらの事柄に共通しているのは、「モデルがどう回答すべきか知らない」ということではなく、「モデルのやり方が毎回異なり、逸脱しやすい」という点です。ここで &lt;code&gt;Skill&lt;/code&gt; の価値が出てくるのです。&lt;/p&gt;
+&lt;h2 id=&#34;skill-と-mcp結局どこが違うのか&#34;&gt;Skill と MCP、結局どこが違うのか
+&lt;/h2&gt;&lt;p&gt;これは実際のワークフローに当てはめて見ないと分かりにくいので、単なる説明だけでは誤解を招きやすいです。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;MCP&lt;/code&gt; はインターフェース層のようなものです。&lt;/p&gt;
+&lt;p&gt;公式における &lt;code&gt;MCP&lt;/code&gt; の定義は、「AI アプリケーションを外部システムに接続するためのオープンスタンダード」です。ファイル、ローカルデータベース、検索エンジン、デザイン稿、サードパーティサービスなど、これらすべてを &lt;code&gt;MCP&lt;/code&gt; を通じて取り込むことができます。つまり、これが解決しているのは「&lt;strong&gt;取り込み（コネクション）&lt;/strong&gt;」の部分です。&lt;/p&gt;
+&lt;p&gt;一方、&lt;code&gt;Skill&lt;/code&gt; はプロセス層のようなものです。&lt;/p&gt;
+&lt;p&gt;OpenAI の &lt;code&gt;Agent Skills&lt;/code&gt; ドキュメントには明確に書かれていますが、&lt;code&gt;Skill&lt;/code&gt; は再利用可能なワークフローを記述するためのフォーマットです。一つの &lt;code&gt;Skill&lt;/code&gt; には最低限 &lt;code&gt;SKILL.md&lt;/code&gt; が必要で、さらに &lt;code&gt;scripts/&lt;/code&gt;、&lt;code&gt;references/&lt;/code&gt;、&lt;code&gt;assets/&lt;/code&gt; を含めることができます。Codex はまずその &lt;code&gt;name&lt;/code&gt; と &lt;code&gt;description&lt;/code&gt; を読み込み、実際に使用する必要があると判断した場合にのみ、完全な説明をコンテキストにロードします。これが公式が言う「&lt;strong&gt;プログレッシブ・ディスクロージャー（段階的開示）&lt;/strong&gt;」です。&lt;/p&gt;
+&lt;p&gt;したがって、両者の役割分担は非常に明確です。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;MCP&lt;/code&gt;: 能力を取り込む（コネクションする）&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Skill&lt;/code&gt;: 行う手順の順序を定める&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;非常に分かりやすい例で言うと、「Figma からコードへの変換」のような作業です。もしエージェントがデザイン稿自体を読み取れていない場合、まず補うべきなのは &lt;code&gt;MCP&lt;/code&gt; です。しかし、すでにデザイン稿を読み取れるようになったのに、毎回バラバラにコーディングしてしまう（今日はコンポーネントから書き始め、明日はページ分割から始め、明後日にはビジュアルチェックを忘れる）という状況であれば、補うべきは &lt;code&gt;Skill&lt;/code&gt; なのです。&lt;/p&gt;
+&lt;h2 id=&#34;スキルの開発方法&#34;&gt;スキルの開発方法
+&lt;/h2&gt;&lt;p&gt;これは思ったほど重くありません。
+OpenAIの公式推奨では、まず組み込みの&lt;code&gt;$skill-creator&lt;/code&gt;を使用し、トリガー条件、範囲、スクリプトが必要かどうかといった骨格部分を構築してもらうことです。デフォルトではinstruction-only（指示のみ）が優先されるため、焦ってスクリプトを書くのではなく、まずは説明を明確にすることが重要です。
+手動で記述する場合でも、最小限の構造は非常にシンプルです：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;my-skill/
+├── SKILL.md
+├── scripts/
+├── references/
+└── assets/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;この中で真に必要なのは&lt;code&gt;SKILL.md&lt;/code&gt;だけです。そして、このファイルには最低限2つのメタデータが必要です：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;---
+name: skill-name
+description: Explain exactly when this skill should and should not trigger.
+---
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;私が考えるに、&lt;code&gt;Skill&lt;/code&gt;を開発する上で最も重要なのは以下のステップです。&lt;/p&gt;
+&lt;h3 id=&#34;1-繰り返し現れるバイアスを探す&#34;&gt;1. 「繰り返し現れるバイアス」を探す
+&lt;/h3&gt;&lt;p&gt;すべてのタスクが &lt;code&gt;Skill&lt;/code&gt; にする価値があるわけではありません。
+エージェントに単発で作業をさせるだけであれば、通常のプロンプトで十分です。真に &lt;code&gt;Skill&lt;/code&gt; として抽出するのに適しているのは、通常以下のようなケースです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同じことを何度も繰り返して指示している場合&lt;/li&gt;
+&lt;li&gt;エージェントには能力があるはずなのに、実行順序がいつも変わってしまう場合&lt;/li&gt;
+&lt;li&gt;間違いが発生する箇所が毎回似ている場合
+つまり、「能力不足」なのではなく、「手順（ノウハウ）が安定していない」ということです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-description-をトリガー条件として記述し宣伝文句にしないこと&#34;&gt;2. &lt;code&gt;description&lt;/code&gt; をトリガー条件として記述し、宣伝文句にしないこと
+&lt;/h3&gt;&lt;p&gt;このステップは非常に重要です。
+公式ドキュメントでは、Codex がどの &lt;code&gt;Skill&lt;/code&gt; を暗黙的に呼び出すかについて、&lt;code&gt;description&lt;/code&gt; に大きく依存すると強調しています。「これはとても便利なスキルだ」といった表現ではなく、「いつ使うべきか、いつ使ってはいけないか」を記述してください。
+例えば、&lt;code&gt;gh-fix-ci&lt;/code&gt; の公式スキルの説明は非常に明確です：「ユーザーが GitHub PR チェックの失敗をデバッグまたは修正してほしい場合に使用する」というものです。重要なのは、ログを確認し、失敗の原因を要約し、修正計画を提示することであり、そして明示的な承認を得てから実行することです。これを見るだけで、その境界線がどこにあるかがわかります。&lt;/p&gt;
+&lt;h3 id=&#34;3-説明で対応できるならまずスクリプト化しない&#34;&gt;3. 説明で対応できるなら、まずスクリプト化しない
+&lt;/h3&gt;&lt;p&gt;OpenAIのドキュメントでも非常に実用的なアドバイスをしています。明確な決定論的動作や外部ツールが必要でない限りは、いきなりスクリプトにするのではなく、まずは説明（プロンプト）を使うべきです。
+なぜか？スクリプトが増えれば増えるほど、メンテナンスコストが上がってくるからです。
+多くの&lt;code&gt;Skill&lt;/code&gt;は、最初は単に手順を明確に説明するだけで十分です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;何から始めるか&lt;/li&gt;
+&lt;li&gt;次に何をするか&lt;/li&gt;
+&lt;li&gt;出力形式はどうするか&lt;/li&gt;
+&lt;li&gt;どのような状況でユーザーに確認を求めるべきか
+これだけでも大半の問題は解決します。
+あるステップが非常に安定していて、非常に機械的で、自動化に適している場合にのみ、&lt;code&gt;scripts/&lt;/code&gt;に落とし込むようにしましょう。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-資料テンプレートリソースを分離する&#34;&gt;4. 資料、テンプレート、リソースを分離する
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;Skill&lt;/code&gt; は書き進めるうちに、非常に長い説明文になりがちです。そんな時は分割すべきです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;SKILL.md&lt;/code&gt; はルールと手順を担当する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;references/&lt;/code&gt; には背景ドキュメントや参照資料を置く&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;assets/&lt;/code&gt; にはテンプレート、アイコン、サンプルを置く&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;scripts/&lt;/code&gt; には安定して実行できるアクションを置く
+このようにすることで、2つの利点があります。
+第一に、メインファイルが肥大化しすぎるのを防げます。第二に、モデルが必要なときだけ詳細を読み込む形になり、「プログレッシブ・ディスクロージャー（段階的開示）」という考え方に沿えます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;5-ローカルで先に使いプロジェクトをまたいで配布する&#34;&gt;5. ローカルで先に使い、プロジェクトをまたいで配布する
+&lt;/h3&gt;&lt;p&gt;公式ドキュメントでもこの点は明確に分けられています。
+もしご自身の現在のリポジトリでのみ使用するのであれば、&lt;code&gt;.agents/skills/&lt;/code&gt; に配置するだけで十分です。Codex はリポジトリ、ユーザー、システムなどの場所からスキルディレクトリをスキャンします。
+しかし、この仕組みが単一のリポジトリだけでなく複数の場所で使えることに気づいた場合や、複数のスキルをまとめてパッケージ化して配布したい場合は、skill folderの層に留まらず、&lt;code&gt;plugin&lt;/code&gt; を検討すべきです。OpenAI公式ドキュメントの記述も非常に明確で、&lt;code&gt;Skill&lt;/code&gt; はワークフローそのものであり、真にインストールおよび配布に適した単位は &lt;code&gt;plugin&lt;/code&gt; です。&lt;/p&gt;
+&lt;h2 id=&#34;スキルが適しているシナリオ&#34;&gt;スキルが適しているシナリオ
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;Skill&lt;/code&gt; は多ければ良いというものではなく、以下の種類のタスクに最も適しています。&lt;/p&gt;
+&lt;h3 id=&#34;高頻度で繰り返すタスク&#34;&gt;高頻度で繰り返すタスク
+&lt;/h3&gt;&lt;p&gt;毎週行う、そして毎回手順がほぼ同じもの。
+例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;PRレビューコメントの処理&lt;/li&gt;
+&lt;li&gt;ブログ記事の執筆とフロントマターの追記&lt;/li&gt;
+&lt;li&gt;CI失敗の調査&lt;/li&gt;
+&lt;li&gt;リリース前のチェック
+このような作業は、モデルができないことよりも、毎回説明し直さなければならないことが一番面倒です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;固定フローのタスク&#34;&gt;固定フローのタスク
+&lt;/h3&gt;&lt;p&gt;ある事柄には、生まれながらにして順序があるものがあります。
+例えば問題の調査をする場合、まずログを確認し、次に範囲を絞り込み、それから計画を立て、そして修正するという流れになります。このような場面では、&lt;code&gt;Skill&lt;/code&gt; が特に適しています。なぜなら、順番を固定できるため、モデルがその場しのぎで対応するのを減らせるからです。&lt;/p&gt;
+&lt;h3 id=&#34;専門的な文脈に紐づける必要があるタスク&#34;&gt;専門的な文脈に紐づける必要があるタスク
+&lt;/h3&gt;&lt;p&gt;手順が固定されているだけでなく、強い制約を伴うタスクもあります。
+例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;公式ドキュメントのみを参照すること&lt;/li&gt;
+&lt;li&gt;特定のレビュー形式で出力しなければならないこと&lt;/li&gt;
+&lt;li&gt;チーム内の既存の用語を保持しなければならないこと&lt;/li&gt;
+&lt;li&gt;特定のリポジトリの記述または開発規約を遵守しなければならないこと
+このような作業は、毎回プロンプトに頼って一時的に指示を出すだけでは、漏れが生じやすいです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;ツールとプロセスを併用するタスク&#34;&gt;ツールとプロセスを併用するタスク
+&lt;/h3&gt;&lt;p&gt;このシナリオは特に典型的なものです。
+単に「GitHubに接続する」だけで終わるのではなく、接続した後も、何らかの方法でログを確認し、問題を分類し、修正が必要かどうかを判断し、最後にどのようにフィードバックするかという一連の作業が必要です。つまり、外部接続と内部プロセスが組み合わさって機能しなければなりません。
+このような場合、しばしば &lt;code&gt;MCP + Skill&lt;/code&gt; が組み合わさって登場します。&lt;/p&gt;
+&lt;h2 id=&#34;スキルとして実装する必要がないシナリオ&#34;&gt;スキルとして実装する必要がないシナリオ
+&lt;/h2&gt;&lt;p&gt;逆に、どこまでを「スキル」とするのかを明確に伝える必要があります。そうしないと、何でもかんでも&lt;code&gt;Skill&lt;/code&gt;にしようとしてしまいがちです。&lt;/p&gt;
+&lt;h3 id=&#34;一回限りの気軽なタスク&#34;&gt;一回限りの気軽なタスク
+&lt;/h3&gt;&lt;p&gt;ユーザーが一時的に質問する場合、通常のプロンプトで十分なことが多いです。&lt;/p&gt;
+&lt;h3 id=&#34;あなたが望んでいるのは外部システムへの接続だけだ&#34;&gt;あなたが望んでいるのは「外部システムへの接続」だけだ
+&lt;/h3&gt;&lt;p&gt;その場合は、&lt;code&gt;Skill&lt;/code&gt; ではなく &lt;code&gt;MCP&lt;/code&gt; を優先的に検討してください。&lt;/p&gt;
+&lt;h3 id=&#34;リポジトリ全体の長期的な振る舞いを制約したい場合&#34;&gt;リポジトリ全体の長期的な振る舞いを制約したい場合
+&lt;/h3&gt;&lt;p&gt;これは &lt;code&gt;Skill&lt;/code&gt; の仕事というよりは、&lt;code&gt;AGENTS.md&lt;/code&gt; の仕事に近いです。
+したがって、簡単にまとめると以下のようになります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;接続が不足している場合、&lt;code&gt;MCP&lt;/code&gt; を使う&lt;/li&gt;
+&lt;li&gt;プロセスが不足している場合、&lt;code&gt;Skill&lt;/code&gt; を使う&lt;/li&gt;
+&lt;li&gt;グローバルなルールが不足している場合、&lt;code&gt;AGENTS.md&lt;/code&gt; を使う&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;代表的な事例をいくつか&#34;&gt;代表的な事例をいくつか
+&lt;/h2&gt;&lt;p&gt;概念をどれだけ説明しても、実際の事例を見る方が良いです。&lt;/p&gt;
+&lt;h3 id=&#34;1-roll-dice最小限の入門ケース&#34;&gt;1. &lt;code&gt;roll-dice&lt;/code&gt;：最小限の入門ケース
+&lt;/h3&gt;&lt;p&gt;このケースはOpenAI公式の&lt;code&gt;Agent Skills&lt;/code&gt;ドキュメントからのものです。
+非常に小さく、ディレクトリ内にはほとんど&lt;code&gt;SKILL.md&lt;/code&gt;しかなく、エージェントがユーザーからサイコロを振るよう要求された際に、PowerShellの乱数コマンドを呼び出すようにします。
+なぜこの例が良いのか？
+それは&lt;code&gt;Skill&lt;/code&gt;の最も核となる骨格を直接示しているからです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;明確なトリガー条件がある&lt;/li&gt;
+&lt;li&gt;明確な実行方法がある&lt;/li&gt;
+&lt;li&gt;明確な境界線がある
+これは、&lt;code&gt;Skill&lt;/code&gt;が必ずしも大きくなくて良いことを示しています。あることが繰り返し発生し、モデルに無作為な振る舞いをさせたくない場合、それを&lt;code&gt;Skill&lt;/code&gt;として実装できるということです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-gh-address-commentsgithub-コメント処理のワークフロー例&#34;&gt;2. &lt;code&gt;gh-address-comments&lt;/code&gt;：GitHub コメント処理のワークフロー例
+&lt;/h3&gt;&lt;p&gt;このケースは、OpenAI 公式の &lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;openai/skills&lt;/code&gt;&lt;/a&gt; リポジトリから来ました。
+目的は「GitHubに接続する」ことではなく、「現在のブランチのPRのコメントを処理する」という一連のプロセスを固定化することです。公式バージョンでの手順が非常に典型的です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;まず&lt;code&gt;gh&lt;/code&gt;が認証済みか確認する&lt;/li&gt;
+&lt;li&gt;次に、現在のPRのコメントとレビュースレッドを取得する&lt;/li&gt;
+&lt;li&gt;これらのコメントに番号を振り、要約する&lt;/li&gt;
+&lt;li&gt;ユーザーにどのコメントを処理するか明確に選択させる&lt;/li&gt;
+&lt;li&gt;その後で初めて処理を開始する
+この例は、&lt;code&gt;Skill&lt;/code&gt; の価値を特に示しています。
+多くのエンジニアリングタスクにおいて、難しさは「モデルがGitHubとは何かを知っているか」という点ではなく、「正しい順序で物事を処理できるか」という点にあります。&lt;code&gt;gh-address-comments&lt;/code&gt; が解決しているのは、まさにこのような順序の問題です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-gh-fix-cici-失敗のエンジニアリングケースの調査&#34;&gt;3. &lt;code&gt;gh-fix-ci&lt;/code&gt;：CI 失敗のエンジニアリングケースの調査
+&lt;/h3&gt;&lt;p&gt;これも &lt;code&gt;openai/skills&lt;/code&gt; リポジトリ内の公式スキルです。
+これは別の非常に典型的なエンジニアリングタスクを対象としています。それは、PR のチェックが失敗したとき、「直すべきか」「どう直すか」というものです。
+この &lt;code&gt;Skill&lt;/code&gt; で定義されているワークフローも非常に代表的です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;まず &lt;code&gt;gh&lt;/code&gt; のログイン状態を確認する&lt;/li&gt;
+&lt;li&gt;現在の PR を見つける&lt;/li&gt;
+&lt;li&gt;GitHub Actions の失敗したチェックとログを取得する&lt;/li&gt;
+&lt;li&gt;失敗した部分を抽出する&lt;/li&gt;
+&lt;li&gt;まず修正計画を立てる&lt;/li&gt;
+&lt;li&gt;承認を得てから実行する
+これは、「CI がなぜ失敗したか見て」という単なるプロンプトでは安定して対応できないシナリオです。なぜなら、権限、ログ、外部ツール、承認の境界線、実行順序など、これらすべてを定義する必要があるからです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-リポジトリ固有のスキルチーム独自のノウハウを蓄積する&#34;&gt;4. リポジトリ固有のスキル：チーム独自のノウハウを蓄積する
+&lt;/h3&gt;&lt;p&gt;公式なサンプル例以外で、私が考える &lt;code&gt;Skill&lt;/code&gt; のより大きな価値は、実はプライベートリポジトリ内にあります。
+例えば、目の前のブログリポジトリにある &lt;code&gt;blog-writer&lt;/code&gt; は、本質的には非常に典型的な repo-scoped skill です。これは「モデルに中国語の書き方を学ばせる」ことを担当しているのではなく、このリポジトリで既に固定された文体、構造、ファクトチェック、出力パス、データ保存形式などをワークフローとして記述したものです。
+このような &lt;code&gt;Skill&lt;/code&gt; は、最も現実的な価値を持つことが多いです。なぜなら、すべての人に向けられているわけではなく、「あなたはこのリポジトリで、どのような種類の作業が繰り返し発生し、かつ逸脱しやすいか」という点に特化して解決するものだからです。&lt;/p&gt;
+&lt;h2 id=&#34;実際にskillを使うべき時&#34;&gt;実際に「Skill」を使うべき時
+&lt;/h2&gt;&lt;p&gt;そこで、最後に最も実用的な問題に戻ります。いつ真剣に &lt;code&gt;Skill&lt;/code&gt; を作るべきでしょうか？
+私の答えは以下の通りです。
+それは、問題がもはや「モデルの能力不足」ではなく、「毎回同じ行動が安定しない」と感じたときです。
+この段階でプロンプトを積み重ねても、得られる利益は通常低くなる一方です。今日一文追加し、明日また一文追加するうちに、プロンプトはまるで出来事の羅列になり、モデルはやはりミスを犯します。
+むしろ、それを &lt;code&gt;Skill&lt;/code&gt; として整理し、トリガー条件、手順、境界線、スクリプト、資料などを分けて管理する方が、効果が安定しやすく、再利用性も高まります。
+&lt;code&gt;MCP&lt;/code&gt; は外部世界と接続し、&lt;code&gt;Skill&lt;/code&gt; は内部のノウハウを固定化します。
+前者は「できるかどうか」を解決し、後者は「どうすれば安定してできるか」を解決します。
+これが私が今理解している &lt;code&gt;Skill&lt;/code&gt; です。
+それは新しいプロンプトでも、新しいプロトコルでもありません。
+むしろ、エージェントに職種マニュアルを渡すようなものです。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/codex/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Agent Skills - Codex | OpenAI Developers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/blog/skills-agents-sdk&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Using skills to accelerate OSS maintenance | OpenAI Developers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://modelcontextprotocol.io/docs/getting-started/intro&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;What is the Model Context Protocol (MCP)? | Model Context Protocol&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;openai/skills | GitHub&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills/blob/main/skills/.curated/gh-address-comments/SKILL.md&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gh-address-comments/SKILL.md | openai/skills&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openai/skills/blob/main/skills/.curated/gh-fix-ci/SKILL.md&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gh-fix-ci/SKILL.md | openai/skills&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;プロンプト：AI大規模言語モデルによるプログラミングについて、まずMCPが登場し、次にSkillが登場しました。平易な言葉で、Skillが何か、どのようにSkillを開発するか、どのようなシナリオに適しているか、それぞれ具体的な代表的な事例を挙げて説明してください。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;「&lt;code&gt;MCP&lt;/code&gt; と &lt;code&gt;Skill&lt;/code&gt; の概念レビュー」として繰り返し書くのではなく、重点を &lt;code&gt;Skill&lt;/code&gt; の役割と使用範囲に置いた。&lt;/li&gt;
+&lt;li&gt;「職種マニュアル」「特定作業手順書（SOP）」といった平易な比喩を用いて、抽象的な定義を実際のワークフローに落とし込んだ。&lt;/li&gt;
+&lt;li&gt;開発部分は公式ドキュメントの実構造に沿って記述し、&lt;code&gt;description&lt;/code&gt;、&lt;code&gt;progressive disclosure&lt;/code&gt;、&lt;code&gt;instruction-only&lt;/code&gt; といった重要な点を保持した。&lt;/li&gt;
+&lt;li&gt;ケーススタディは可能な限り公式ソースを選定し、それぞれ公式ドキュメント内の &lt;code&gt;roll-dice&lt;/code&gt;、および &lt;code&gt;openai/skills&lt;/code&gt; リポジトリ内の &lt;code&gt;gh-address-comments&lt;/code&gt; と &lt;code&gt;gh-fix-ci&lt;/code&gt; を使用した。&lt;/li&gt;
+&lt;li&gt;最後に、読者が読み終えた後も混同しないよう、&lt;code&gt;MCP&lt;/code&gt;、&lt;code&gt;Skill&lt;/code&gt;、&lt;code&gt;AGENTS.md&lt;/code&gt; の三者の境界線を改めて整理した。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>過去2年間のAIに関する記事を振り返った結果、次に書くべきテーマとしてこの8つを選びました。</title>
+        <link>https://ttf248.life/ja/p/next-8-ai-topics-after-reviewing-two-years-of-posts/</link>
+        <pubDate>Mon, 30 Mar 2026 22:20:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/next-8-ai-topics-after-reviewing-two-years-of-posts/</guid>
+        <description>&lt;p&gt;最近、ブログ内の過去2年間にわたるAI関連の記事を遡って読み返したところ、内容は当初の「あるモデルが使えるかどうかの単純な体験談」という段階から進化し、より明確な一本の筋道を描いていることに気づきました。それは、**「AIがどのようにして私の開発ワークフローに真に入り込み、どのような効率性、コスト、そして新たな制約をもたらしたか」**という点です。&lt;/p&gt;
+&lt;p&gt;ここでいう「ここ2年」は、現在の日付から遡って考えると、おおよそ&lt;code&gt;2024-03-30&lt;/code&gt;から&lt;code&gt;2026-03-30&lt;/code&gt;の間を指します。実際に読み返すと、非常に明白な現象として、&lt;code&gt;2024&lt;/code&gt;年には真に意味のあるAIテーマの記事がほとんどなく、集中的な発信は&lt;code&gt;2025-01&lt;/code&gt;になってから始まったという点です。
+この事実はそれ自体が興味深いです。これは私にとって、AIが最初から安定した利用期に入ったわけではなく、仕事や執筆の中で徐々に浸透し、適切なツールやタスクの形に遭遇してから、継続的な記録として形成されていったことを示しています。&lt;/p&gt;
+&lt;h2 id=&#34;この2年間のaiに関する記事は大まかに3つの段階に分けることができます&#34;&gt;この2年間のAIに関する記事は、大まかに3つの段階に分けることができます
+&lt;/h2&gt;&lt;h3 id=&#34;フェーズ1ツールの試用まず使えるかどうかの確認&#34;&gt;フェーズ1：ツールの試用、まず使えるかどうかの確認
+&lt;/h3&gt;&lt;p&gt;このフェーズを代表する記事には以下のようなものがあります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;『Cursor AI 開発環境（IDE）の試用』&lt;/li&gt;
+&lt;li&gt;『ollamaによるdeepseek-R1のローカルデプロイ』&lt;/li&gt;
+&lt;li&gt;『コードを書かず、自選股モジュールを設計・開発する』&lt;/li&gt;
+&lt;li&gt;『AIの発展は2年間：Dockerリリース前の状況に似ている』
+このフェーズにおける中心的な問いは非常に素朴です。&lt;strong&gt;「AIは本当に私の代わりに作業をしてくれるのか？」&lt;/strong&gt;
+当時の関心事は、よりツールレベルに留まっていました：&lt;/li&gt;
+&lt;li&gt;IDEの使い勝手が良いか&lt;/li&gt;
+&lt;li&gt;ローカルへのデプロイが動作するかどうか&lt;/li&gt;
+&lt;li&gt;モデルが生成したコードで時間を節約できるか&lt;/li&gt;
+&lt;li&gt;複雑な要求に直面した際、AIは途中で行き詰まらないか
+振り返ってみると、このフェーズの記事群は、その後の本格的な利用に向けての「土台作り」のようなものです。多くの結論は今でも当てはまります。例えば、「AIは基本的な開発効率を明らかに向上させるが、複雑なタスクには依然として手動での分解が必要である」「ローカルモデルは試すには良いが、実際の高頻度ワークフローに組み込むには、安定性と速度が鍵となる」といった点です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;第二段階ワークフローへの導入とそれに伴う副作用の出現&#34;&gt;第二段階：ワークフローへの導入と、それに伴う副作用の出現
+&lt;/h3&gt;&lt;p&gt;この段階を代表する記事は以下の通りです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;『AIを使いすぎると、ちょっとした後遺症が出る』&lt;/li&gt;
+&lt;li&gt;『Claude 4リリースに伴い試みた開発：hugoタグ、超リンク翻訳アシスタント』&lt;/li&gt;
+&lt;li&gt;『最近の大規模モデルに関する使用経験』&lt;/li&gt;
+&lt;li&gt;『ByteDance AIコーディングの新パラダイム SOLO』&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;ここまで来ると、AIはもはや「たまに試すツール」ではなくなり、直接的に関与し始めるようになります。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ブログツールの開発チェーン&lt;/li&gt;
+&lt;li&gt;翻訳キャッシュとバッチ処理フロー&lt;/li&gt;
+&lt;li&gt;UIデザインとコードの往復作業&lt;/li&gt;
+&lt;li&gt;モデルの役割分担とシナリオ選択&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;同時に、問題意識もより具体的になってきます。
+以前は「AIはコードを書けるのか？」という疑問でしたが、その後は以下のような疑問に変わってきました。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;コードは書かれたが、どうやって受け入れ（検証）するのか？&lt;/li&gt;
+&lt;li&gt;文章は生成されたが、リアリティがあるのか？&lt;/li&gt;
+&lt;li&gt;ドキュメントは同期更新されたが、自分自身は本当に理解したのか？&lt;/li&gt;
+&lt;li&gt;ツールはどんどん強力になるが、人間の思考の負荷は低下しているのではないか？&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これも私がこの一連の記事の中で最も価値があると感じる部分です。「AIはすごい」という空論よりも、少し居心地の悪さを伴うような記録の方が、むしろ真実味を帯びているからです。&lt;/p&gt;
+&lt;h3 id=&#34;第3フェーズ単一ツール体験からプロトコルワークフロー安定性コストへ&#34;&gt;第3フェーズ：単一ツール体験からプロトコル、ワークフロー、安定性、コストへ
+&lt;/h3&gt;&lt;p&gt;この段階を代表する記事には以下のようなものがあります：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;「コマンドラインベースのAIコーディングインタラクション」&lt;/li&gt;
+&lt;li&gt;「プロトコル制約からインテリジェントな解放へ：MCPとSkillの深掘り比較」&lt;/li&gt;
+&lt;li&gt;「ヘビーAIプログラミングの日々」&lt;/li&gt;
+&lt;li&gt;「低価格API中継地点の終焉：3月のLLM体験と不可能性の三角関係」
+この段階になると、関心事が明確に高度化しています。
+もはや「どのモデルがより賢く回答するか」というレベルではなく、以下のような点に焦点が当たっています。&lt;/li&gt;
+&lt;li&gt;ターミナルインタラクションとIDEインタラクション、どちらが継続的な開発に適しているか&lt;/li&gt;
+&lt;li&gt;MCPやSkillといった能力拡張方式には、具体的にどのような境界線の違いがあるのか&lt;/li&gt;
+&lt;li&gt;ヘビーAIプログラミングを行う際、人間はどの部分で介入すべきか&lt;/li&gt;
+&lt;li&gt;コスト、安定性、品質の間で、どのように現実的な選択をするか
+こうしたトピックはもはや単なる製品レビューではなく、&lt;strong&gt;ワークフロー設計&lt;/strong&gt;に近づいています。これが現在ブログにおけるAIテーマの中で最も安定しており、識別性の高いラインとなっています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;この記事群の最大の強みはトレンドを追うことではない点です&#34;&gt;この記事群の最大の強みは、トレンドを追うことではない点です。
+&lt;/h2&gt;&lt;p&gt;振り返ってみると、ブログに既に存在するAIの記事で、真に差別化できるポイントは、あなたが他の人より早く特定のモデルを書いたからでも、パラメータやランキング、ベンチマークスコアをより網羅的に書いたからでもなく、以下のいくつかの点にあります。&lt;/p&gt;
+&lt;h3 id=&#34;1-すべて実際の利用シーンから生まれたもの&#34;&gt;1. すべて実際の利用シーンから生まれたもの
+&lt;/h3&gt;&lt;p&gt;自選股モジュール、ブログ翻訳ツール、コマンドラインでのコーディング、APIの中継地点の試行錯誤記録など、ほとんどの内容は思いつきで書かれたものではなく、実際に使用する中で問題に直面した後に書いたものです。
+このようなコンテンツの良い点は、空虚になりにくいことです。&lt;/p&gt;
+&lt;h3 id=&#34;2-関心はどうやってaiをプロセスに組み込むかにある&#34;&gt;2. 関心は「どうやってAIをプロセスに組み込むか」にある
+&lt;/h3&gt;&lt;p&gt;多くのAIに関する記事はモデルの能力に焦点を当てがちですが、現在の手持ちの記事群はむしろ以下の点に関心を寄せています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;タスクの分解方法&lt;/li&gt;
+&lt;li&gt;プロジェクトへの組み込み方&lt;/li&gt;
+&lt;li&gt;ドキュメントの保守方法&lt;/li&gt;
+&lt;li&gt;コンテキストの制御方法&lt;/li&gt;
+&lt;li&gt;異なるモデル間での役割分担の方法
+こうした内容のライフサイクルは、単なるモデル評価よりも長い傾向があります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-副作用とコストを認識し始めた段階&#34;&gt;3. 副作用とコストを認識し始めた段階
+&lt;/h3&gt;&lt;p&gt;『AIを使いすぎると後遺症が出る』から『格安APIの中継地点の終焉』に至るまで、実は非常に一貫した思考の流れが形成されています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;AIは効率を向上させる&lt;/li&gt;
+&lt;li&gt;しかし、人間の検索や思考の習慣を変えてしまう&lt;/li&gt;
+&lt;li&gt;安い＝本当に節約できているわけではない&lt;/li&gt;
+&lt;li&gt;品質、安定性、コストパフォーマンスが良いというものは同時に成立するのが難しい
+このような判断は、個人的な利用経験から積み重ねたものであり、単にネット上の意見を繰り返しているわけではありません。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;しかしいくつかの明白な情報の欠落点もあります&#34;&gt;しかし、いくつかの明白な情報の欠落点もあります
+&lt;/h2&gt;&lt;p&gt;既存の記事はすでに骨子がありますが、もし書き進めるのであれば、いくつか目立ったギャップがあると感じています。&lt;/p&gt;
+&lt;h3 id=&#34;1-体系的な受け入れ方法論の欠如&#34;&gt;1. 体系的な「受け入れ方法論」の欠如
+&lt;/h3&gt;&lt;p&gt;これまでに多くのAIプログラミング体験について記述し、単体テスト、性能テスト、ドキュメント同期についても触れてきましたが、「AIが書いたものをどう検証するか」という点を完全に解説した記事がまだありません。&lt;/p&gt;
+&lt;h3 id=&#34;2-チーム視点の欠如&#34;&gt;2. チーム視点の欠如
+&lt;/h3&gt;&lt;p&gt;現状では、ほとんどが個人開発や個人のワークフローの視点に留まっています。この視点は優れていますが、さらに記述を進める場合、以下のように拡張できます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;複数人での共同作業時にAIによる修正範囲をどのように制限するか&lt;/li&gt;
+&lt;li&gt;コードレビューにおいてAI生成コードをどう評価するか&lt;/li&gt;
+&lt;li&gt;ドキュメント、コミットログ、テスト記録などをどのように連携させるか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-セキュリティと権限境界に関する議論の欠如&#34;&gt;3. セキュリティと権限境界に関する議論の欠如
+&lt;/h3&gt;&lt;p&gt;最近のトレンドはますます明らかになってきており、AI は単なるチャットボックスではなくなり、以下のものを制御し始めています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ターミナルコマンド&lt;/li&gt;
+&lt;li&gt;リポジトリの読み書き&lt;/li&gt;
+&lt;li&gt;ブラウザ操作&lt;/li&gt;
+&lt;li&gt;サードパーティツール呼び出し
+能力が強くなるほど、権限境界について記述する価値が高まります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-長期知識ベースの視点の欠如&#34;&gt;4. 「長期知識ベース」の視点の欠如
+&lt;/h3&gt;&lt;p&gt;現在、記事には翻訳キャッシュ、スラッグ、タグといった基本的な機能はありますが、「もしブログ自体が個人のナレッジベースであるとしたら、それをAIによる消費、検索、加工に適したコンテンツ資産としてどのように整理するか」という点について、体系的な記述がまだなっていません。&lt;/p&gt;
+&lt;h2 id=&#34;次に書くのに最適だと考える-8-つのテーマ&#34;&gt;次に書くのに最適だと考える 8 つのテーマ
+&lt;/h2&gt;&lt;p&gt;以下の 8 つの分野は、「現在の執筆スタイルに最も合致しているか」と「独自の内容を書きやすいか」という観点から並べました。&lt;/p&gt;
+&lt;h3 id=&#34;1-ai-プログラミングの受け入れ受入体制をどう構築するか&#34;&gt;1. AI プログラミングの受け入れ（受入）体制をどう構築するか
+&lt;/h3&gt;&lt;p&gt;これが私が最優先で執筆することを推奨する記事です。
+以下の内容に重点を置くと良いでしょう：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;どの変更に対して単体テストを追加する必要があるか&lt;/li&gt;
+&lt;li&gt;どのモジュールでリグレッションテストを実行する必要があるか&lt;/li&gt;
+&lt;li&gt;どのリファクタリングで性能比較が必要か&lt;/li&gt;
+&lt;li&gt;どのドキュメントを同期的にメンテナンスすべきか&lt;/li&gt;
+&lt;li&gt;人間によるレビュー（review）時に重点的に確認すべき点
+この記事が完成すれば、後続の多くのAIプログラミングに関する記事から繰り返しリンクさせることができます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-mcp-が真に役立つシナリオは接続できる数が多いことではない&#34;&gt;2. MCP が真に役立つシナリオは、「接続できる数が多いこと」ではない
+&lt;/h3&gt;&lt;p&gt;現在、MCP はますます注目されていますが、ほとんどの議論は概念的なレベルに留まっています。
+より書くべきなのは以下の点です：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;どのツールを接続することで本当に効率が向上するか&lt;/li&gt;
+&lt;li&gt;単に見た目がクールなだけで、実際には不要なものは何か&lt;/li&gt;
+&lt;li&gt;ローカルファイル、ドキュメント、イシュー、監視データ、デザイン稿など、どれから優先的に連携すべきか&lt;/li&gt;
+&lt;li&gt;プロトコル化された接続と「長いプロンプトを詰め込む」のとでは、具体的にどのような違いがあるのか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-claude-codecodexgemini-cli国産cliモデルの横断的な実戦比較&#34;&gt;3. Claude Code、Codex、Gemini CLI、国産CLIモデルの横断的な実戦比較
+&lt;/h3&gt;&lt;p&gt;単に「どれが良いか」と書くのではなく、統一されたタスクセットで横並び比較を行います。
+例えば、以下の項目を固定して比較します：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;要件分解能力&lt;/li&gt;
+&lt;li&gt;指示追従度&lt;/li&gt;
+&lt;li&gt;コード修正範囲の制御性&lt;/li&gt;
+&lt;li&gt;テストコード補完能力&lt;/li&gt;
+&lt;li&gt;ドキュメント同期能力&lt;/li&gt;
+&lt;li&gt;コストと待ち時間
+このような記事は読者が最も参考にしやすい形式です。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-ai-プログラミングにおけるコンテキスト管理&#34;&gt;4. AI プログラミングにおけるコンテキスト管理
+&lt;/h3&gt;&lt;p&gt;多くの場合、モデルが弱いのではなく、コンテキストが汚れている、長すぎる、または漂っていることが原因です。
+このテーマは特化して書くことができます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;いつコンテキストをクリアすべきか&lt;/li&gt;
+&lt;li&gt;いつ新しいスレッドを開くべきか&lt;/li&gt;
+&lt;li&gt;いつタスクを分割すべきか&lt;/li&gt;
+&lt;li&gt;いつ複数のエージェントを並行させるのが適切か&lt;/li&gt;
+&lt;li&gt;どのような状況で現在の状態を手動で再要約する必要があるか
+このトピックは非常に具体的であり、自身の実際の事例と結びつけやすいものです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;5-ide-からターミナルへそしてマルチエージェント協調へ&#34;&gt;5. IDE からターミナルへ、そしてマルチエージェント協調へ
+&lt;/h3&gt;&lt;p&gt;過去1年で、AIプログラミングインタラクションの焦点は明らかに変化しました。
+以前はIDE内での補完、チャット、局所的なコード修正が中心でしたが、現在ではますます多くのツールが以下の点を重視し始めています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ターミナル操作（ターミナルインタラクション）&lt;/li&gt;
+&lt;li&gt;リポジトリ全体を理解すること（リポジトリレベルの理解）&lt;/li&gt;
+&lt;li&gt;マルチスレッドなコンテキスト管理&lt;/li&gt;
+&lt;li&gt;並行エージェント&lt;/li&gt;
+&lt;li&gt;worktreeによる隔離開発
+このテーマは、これまでのCursor、Trae、Claude Code、Codexといった記事群を結びつけるのに適しています。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;6-ai-プログラミングのセキュリティ面が拡大している&#34;&gt;6. AI プログラミングのセキュリティ面が拡大している
+&lt;/h3&gt;&lt;p&gt;この方向性は書き甲斐があり、まだ十分にカバーされていません。
+以下の角度から切り込むことができます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;コマンドの自動実行に伴うリスク&lt;/li&gt;
+&lt;li&gt;サードパーティのMCPサービスにおける信頼境界&lt;/li&gt;
+&lt;li&gt;プライベートリポジトリや機密情報の漏洩問題&lt;/li&gt;
+&lt;li&gt;プロンプトインジェクションと悪意のあるコンテキスト汚染&lt;/li&gt;
+&lt;li&gt;自動化スクリプトと人間による確認の境界線
+単に「AI は非常に優秀だ」という内容だけでは、記事は徐々に似通ってしまいます。セキュリティの境界線を盛り込むことで、コンテンツの階層性が格段に高まります。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;7-ローカルモデルの真の立ち位置&#34;&gt;7. ローカルモデルの真の立ち位置
+&lt;/h3&gt;&lt;p&gt;以前は「ローカルモデルが動くか」という点に焦点が当たりがちでしたが、今より重要視すべきなのは以下の点です。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;どのようなタスクに適しているか&lt;/li&gt;
+&lt;li&gt;どのようなタスクに向いていないか&lt;/li&gt;
+&lt;li&gt;プライバシー、オフライン動作、低コストといった利点がいつ真に成立するのか&lt;/li&gt;
+&lt;li&gt;いつからローカル案を固執することが、逆に時間の浪費になるのか
+これらは単なるデプロイメントチュートリアルよりも、より継続的な価値を持ちます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;8-ブログをaiフレンドリーなナレッジアセットとして整理する方法&#34;&gt;8. ブログをAIフレンドリーなナレッジアセットとして整理する方法
+&lt;/h3&gt;&lt;p&gt;この方向性は、既存のブログシステムと最も密接に結びつきます。
+以下のような内容が書けます：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;slug、タグ、要約、カテゴリの統一的な設計方法&lt;/li&gt;
+&lt;li&gt;多言語コンテンツにおけるリンクドリフトの削減方法&lt;/li&gt;
+&lt;li&gt;記事のメタデータがその後の検索をどのように支援するか&lt;/li&gt;
+&lt;li&gt;過去の記事をAIによる検索、要約、引用に適した形にする方法
+この記事を書けば、AIというテーマを扱いながら、同時にブログシステム全体に貢献することができます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;今後注目すべきトレンド&#34;&gt;今後注目すべきトレンド
+&lt;/h2&gt;&lt;p&gt;最近の業界の変化がいくつかあり、今後のトピック選定判断にも影響を与えます。&lt;/p&gt;
+&lt;p&gt;第一に、AIプログラミングは、「補完ツール」から「エージェントワークフロー」へと、ますます明確に移行しています。&lt;code&gt;Codex&lt;/code&gt;や&lt;code&gt;Claude Code&lt;/code&gt;のような製品が強調しているのは、単発の回答ではなく、タスクの分解、ツール呼び出し、並列処理、そしてコンテキストの継続的な維持です。&lt;/p&gt;
+&lt;p&gt;第二に、MCPのようなプロトコル化された接続方式は、「新しい概念」から「インフラストラクチャ」になりつつあります。今後真に価値のある記事は、単にプロトコルの定義を再説明するのではなく、**「どの接続シナリオが本当に有効で、どれがただ先進的に見えるだけなのか」**を明確に記述することになるでしょう。&lt;/p&gt;
+&lt;p&gt;第三に、デザイン稿、ドキュメント、コード、コマンドライン間での往復が増えています。以前はツール間で分断されていましたが、今AIはそのリンクを繋げようとしており、これは「ワークフロー設計」が「モデルの羅列（ランキング）」よりも長期的に価値があることを意味します。&lt;/p&gt;
+&lt;p&gt;第四に、安定性、コスト、権限のリスクは消えません。むしろ、モデルの能力が強くなるほど、これらの問題はより重要になります。&lt;/p&gt;
+&lt;h2 id=&#34;最終的な考察&#34;&gt;最終的な考察
+&lt;/h2&gt;&lt;p&gt;もしAIについて書き続けるとしたら、私が最も堅持すべきだと感じることは、毎回モデルがリリースされるたびにベンチマークを行うことではなく、より具体的な問題に焦点を当てて掘り下げることです。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;「AIはどのようにして実際の開発や執筆のワークフローに段階的に組み込まれていくのか？それはどの部分で真に効率を向上させ、またどの部分で問題を人間に差し戻しているのか。」&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;この論点は、あなたはすでに書き出していますが、まだ完全に形になっていないだけです。
+次に最も適切なアプローチは、テーマを広げることではなく、「実用ツール」「プロセス設計」「境界制御（限界設定）」「長期的な知識資産」というこれら4つのサブラインに沿って掘り下げることです。このように書いたものは、時間が経つにつれて、すぐに陳腐化するトレンドの記録ではなく、自分自身のものとして蓄積されやすくなります。&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>重度のAIプログラミングの数年間の日々</title>
         <link>https://ttf248.life/ja/p/a-long-period-of-deep-ai-programming/</link>
         <pubDate>Mon, 16 Mar 2026 20:44:42 +0800</pubDate>

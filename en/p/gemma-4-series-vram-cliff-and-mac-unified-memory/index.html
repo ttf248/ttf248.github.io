@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="While browsing the forum this time, what struck me most wasn&rsquo;t which company released another leaderboard, but a very basic statement: &ldquo;Not enough VRAM; no matter how large the parameters are, it&rsquo;s useless.&rdquo;\nPreviously, I always understood &ldquo;slow model&rdquo; as a computational power issue. However, the more I read, the clearer it became that often, the problem isn&rsquo;t that the GPU can&rsquo;t compute it, but rather that the data cannot reside in the right place. Just by changing the memory path, the token speed doesn&rsquo;t just slow down; it drops drastically.\n">
+<title>Google has released Gemma 4 this time (III)</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/'>
+
+<link rel="stylesheet" href="/scss/style.min.989aa97a25e023e9a3a706c4fe4a8ba5d8e0fdaa68698a5434411a1cb9be0136.css"><meta property='og:title' content="Google has released Gemma 4 this time (III)">
+<meta property='og:description' content="While browsing the forum this time, what struck me most wasn&rsquo;t which company released another leaderboard, but a very basic statement: &ldquo;Not enough VRAM; no matter how large the parameters are, it&rsquo;s useless.&rdquo;\nPreviously, I always understood &ldquo;slow model&rdquo; as a computational power issue. However, the more I read, the clearer it became that often, the problem isn&rsquo;t that the GPU can&rsquo;t compute it, but rather that the data cannot reside in the right place. Just by changing the memory path, the token speed doesn&rsquo;t just slow down; it drops drastically.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI Inspiration Hub' /><meta property='article:tag' content='ai' /><meta property='article:tag' content='gemma' /><meta property='article:tag' content='VRAM (Video Random Access Memory)' /><meta property='article:tag' content='Mac' /><meta property='article:tag' content='NVIDIA' /><meta property='article:published_time' content='2026-04-08T23:56:20&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T15:45:31&#43;08:00'/>
+<meta name="twitter:title" content="Google has released Gemma 4 this time (III)">
+<meta name="twitter:description" content="While browsing the forum this time, what struck me most wasn&rsquo;t which company released another leaderboard, but a very basic statement: &ldquo;Not enough VRAM; no matter how large the parameters are, it&rsquo;s useless.&rdquo;\nPreviously, I always understood &ldquo;slow model&rdquo; as a computational power issue. However, the more I read, the clearer it became that often, the problem isn&rsquo;t that the GPU can&rsquo;t compute it, but rather that the data cannot reside in the right place. Just by changing the memory path, the token speed doesn&rsquo;t just slow down; it drops drastically.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#out-of-vram-and-not-just-a-little-bit-slow">Out of VRAM, and Not Just a Little Bit Slow</a></li>
+    <li><a href="#why-the-cliff-not-a-linear-slowdown">Why the Cliff, Not a Linear Slowdown</a></li>
+    <li><a href="#why-26b-a4b-is-friendlier-to-local-players">Why <code>26B A4B</code> is Friendlier to Local Players</a></li>
+    <li><a href="#why-macs-seem-less-prone-to-running-out-of-memory">Why Macs seem &ldquo;less prone to running out of memory&rdquo;</a></li>
+    <li><a href="#but-unified-memory-doesnt-mean-high-speed-for-you">But Unified Memory Doesn&rsquo;t Mean High Speed for You</a></li>
+    <li><a href="#why-speed-ultimately-depends-on-nvidias-large-vram">Why Speed Ultimately Depends on NVIDIA&rsquo;s Large VRAM</a></li>
+    <li><a href="#back-to-gemma-4-my-final-verdict">Back to Gemma 4, My Final Verdict</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#writing-notes">Writing Notes</a>
+      <ol>
+        <li><a href="#original-prompt">Original Prompt</a></li>
+        <li><a href="#writing-outline-summary">Writing Outline Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/">Google has released Gemma 4 this time (III)</a>
+        </h2>
+    
+        
+        
+        <h3 class="article-subtitle">
+            显存不够为什么会断崖，Mac 为什么能兜底却快不起来
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Apr 08, 2026</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            6 minute read
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/ja/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>While browsing the forum this time, what struck me most wasn&rsquo;t which company released another leaderboard, but a very basic statement: &ldquo;Not enough VRAM; no matter how large the parameters are, it&rsquo;s useless.&rdquo;</p>
+<p>Previously, I always understood &ldquo;slow model&rdquo; as a computational power issue. However, the more I read, the clearer it became that often, the problem isn&rsquo;t that the GPU can&rsquo;t compute it, but rather that the data cannot reside in the right place. Just by changing the memory path, the token speed doesn&rsquo;t just slow down; it drops drastically.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <p>The previous two posts covered the preliminary issues. <a class="link" href="/en/p/gemma-4-series-models-and-license/" >First Post</a> discussed the release and protocol, and <a class="link" href="/en/p/gemma-4-series-local-test-on-rtx-3060/" >Second Post</a> explained why we should first look at <code>26B A4B</code> on the 3060 12GB. This final post will only discuss how speed actually collapses.</p>
+<h2 id="out-of-vram-and-not-just-a-little-bit-slow">Out of VRAM, and Not Just a Little Bit Slow
+</h2><p>When you break down the process of inference, there are two particularly critical components:</p>
+<ul>
+<li>Model weights</li>
+<li>KV cache</li>
+</ul>
+<p>The weights define the model itself, while the KV cache records the state of previous tokens. The longer the context, the larger the KV cache. As long as both these parts can be stably kept in the GPU VRAM, generating a token basically involves reading data, performing calculations, and writing back results within high-bandwidth memory, and the speed is usually quite good.</p>
+<p>The real problem is when you run out of VRAM.
+Once it doesn&rsquo;t fit, the inference framework has to compromise:</p>
+<ul>
+<li>Storing some weights in system memory</li>
+<li>Or storing some KV cache in system memory</li>
+<li>Or even shuttling data back and forth between the CPU and GPU</li>
+</ul>
+<p>At this point, the issue is no longer about &ldquo;a little bit of extra computation,&rdquo; but rather &ldquo;waiting for data with every single token.&rdquo;</p>
+<h2 id="why-the-cliff-not-a-linear-slowdown">Why the Cliff, Not a Linear Slowdown
+</h2><p>When many people first encounter this pitfall, their intuition is that if the model goes from <code>14B</code> to <code>31B</code>, it will just be more than twice as slow, which they can tolerate.</p>
+<p>Reality is not like that.</p>
+<p>The real dividing line isn&rsquo;t doubling the parameters; it&rsquo;s whether or not the working set crosses the VRAM boundary.</p>
+<p>As long as it hasn&rsquo;t crossed, increasing model size usually results in a predictable slowdown.</p>
+<p>Once it crosses, the system state changes:</p>
+<ul>
+<li>Previously, it was an &ldquo;on-chip closed loop&rdquo; within VRAM.</li>
+<li>Now, it becomes &ldquo;VRAM + System RAM + Bus Transfer.&rdquo;</li>
+</ul>
+<p>Changing the path completely changes the cost. This is especially true during the decoding stage, which inherently proceeds token by token with a small batch size. At this point, what is most feared is having every single token wait for a batch of data to be transferred across devices.</p>
+<p>So, you see a very typical phenomenon:</p>
+<ul>
+<li>The model isn&rsquo;t unable to run.</li>
+<li>The GPU isn&rsquo;t completely idle either.</li>
+<li>But the tokens/s rate is extremely poor.</li>
+</ul>
+<p>This is what people call the &ldquo;cliff.&rdquo; It&rsquo;s not that the model suddenly got dumber; it&rsquo;s that the memory path suddenly became inefficient.</p>
+<h2 id="why-26b-a4b-is-friendlier-to-local-players">Why <code>26B A4B</code> is Friendlier to Local Players
+</h2><p>This also explains why I have consistently favored <code>26B A4B</code> in my previous article.
+Its total parameter count is certainly not small, but only about <code>3.8B</code> are actually activated per token. This means that under similar deployment conditions, the pressure it puts on computation and VRAM paths is often easier to control compared to dense large models.
+This isn&rsquo;t magic.
+If your context window gets too long, or if quantization and framework support are inadequate, it will struggle just like any other model. However, compared to a dense model that immediately maxes out the entire VRAM, <code>26B A4B</code> feels more like a realistic path for consumer-grade GPUs.
+So, often the issue isn&rsquo;t whether <code>31B</code> is weak, but rather which model is better suited for long-term coexistence with local hardware.</p>
+<h2 id="why-macs-seem-less-prone-to-running-out-of-memory">Why Macs seem &ldquo;less prone to running out of memory&rdquo;
+</h2><p>What&rsquo;s most different about Mac is not the model, but the memory architecture.
+<code>Apple silicon</code> uses unified memory. The CPU and GPU share a single pool of memory, unlike dedicated graphics machines where there are separate VRAM and main memory that have to be moved across a bus.
+The biggest advantage of this structure is that many models which would &ldquo;not fit in VRAM at all&rdquo; on dedicated graphics machines can take on a different state on Mac:</p>
+<ul>
+<li>It might not be fast,</li>
+<li>But it can probably fit into the memory first.
+In other words, Macs are less likely to hit that very rigid &ldquo;VRAM wall&rdquo; right from the start.
+This is why many people feel that Macs are particularly suitable for running large models locally as a fallback option. It solves the problem of &ldquo;whether the entire working set can be loaded into the same memory pool.&rdquo;</li>
+</ul>
+<h2 id="but-unified-memory-doesnt-mean-high-speed-for-you">But Unified Memory Doesn&rsquo;t Mean High Speed for You
+</h2><p>You must look at this part separately.
+What did unified memory solve?</p>
+<ul>
+<li>It solved the hard separation between dedicated VRAM and main memory.</li>
+<li>It solved many cases where models couldn&rsquo;t fit directly onto cards with small VRAM.</li>
+<li>It solved some very ugly cross-device data transfers.
+But what didn&rsquo;t it solve?</li>
+<li>It didn&rsquo;t change large model inference from &ldquo;massive memory reads&rdquo; to something else.</li>
+<li>It didn&rsquo;t make large models suddenly stop being bandwidth-hungry.</li>
+<li>It didn&rsquo;t automatically give all inference frameworks the mature ecosystem of CUDA.
+So, the comfort of Mac is not the same thing as the speed of a high-VRAM NVIDIA card.
+Mac is more like:</li>
+<li>Quiet machine operation</li>
+<li>Large total memory</li>
+<li>Unified architecture</li>
+<li>Finally allowing models that previously wouldn&rsquo;t fit to run first.
+NVIDIA&rsquo;s high-VRAM card is more like:</li>
+<li>Mature ecosystem</li>
+<li>Complete CUDA toolchain</li>
+<li>When you truly keep the model and cache on the GPU, speed can be much easier to boost.</li>
+</ul>
+<h2 id="why-speed-ultimately-depends-on-nvidias-large-vram">Why Speed Ultimately Depends on NVIDIA&rsquo;s Large VRAM
+</h2><p>This is not an emotional judgment, but a practical conclusion drawn after wrestling with local deployment.
+If you are pursuing these things:</p>
+<ul>
+<li>Local assistant always running</li>
+<li>Multi-turn long conversations</li>
+<li>Long context windows</li>
+<li>Higher token/s rate</li>
+<li>Minimizing waiting time as much as possible
+Then ultimately, the large VRAM NVIDIA card is what matters. Because what you are truly buying is the ability to keep the model and cache stably on the GPU.
+Mac also works, but it is better suited for a different set of requirements:</li>
+<li>I want a machine that can load an even larger model into it first.</li>
+<li>I accept average speed, but I don&rsquo;t want to mess with drivers and peripherals.</li>
+<li>I care more about overall experience, power consumption, and noise.
+Both paths are reasonable; they just solve different problems.</li>
+</ul>
+<h2 id="back-to-gemma-4-my-final-verdict">Back to Gemma 4, My Final Verdict
+</h2><p>This time with <code>Gemma 4</code>, I really feel that local open-source models have reached a stage where hardware discussion is more warranted.
+But just because the model gets stronger doesn&rsquo;t mean the laws of physics loosen up accordingly.
+No matter how strong the <code>31B</code> model is, it will slow down if VRAM is insufficient.
+Even with the practical <code>26B A4B</code>, long contexts still put pressure on the system.
+And while Apple&rsquo;s unified memory is comfortable, it only makes it easier to &ldquo;get something running&rdquo;; it won&rsquo;t give you the speed of a large VRAM CUDA card for free.
+So, I&rsquo;ll end with this rather blunt summary:</p>
+<ul>
+<li>For <strong>speed</strong>, prioritize NVIDIA with large VRAM.</li>
+<li>For <strong>reliability/fallback</strong>, Mac&rsquo;s unified memory is indeed comfortable.</li>
+<li>If you plan to run on hardware like the <code>3060 12GB</code> long-term, don&rsquo;t always aim for dense, massive models; a path like <code>26B A4B</code> is more realistic.
+With this set of articles, I will wrap up here.</li>
+</ul>
+<h2 id="references">References
+</h2><ul>
+<li><a class="link" href="https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/"  target="_blank" rel="noopener"
+    >Gemma 4: Byte for byte, the most capable open models</a></li>
+<li><a class="link" href="https://ai.google.dev/gemma/docs/core/model_card_4"  target="_blank" rel="noopener"
+    >Gemma 4 model card</a></li>
+<li><a class="link" href="https://www.apple.com/newsroom/2023/10/apple-unveils-m3-m3-pro-and-m3-max-the-most-advanced-chips-for-a-personal-computer/"  target="_blank" rel="noopener"
+    >Apple unveils M3, M3 Pro, and M3 Max</a></li>
+<li><a class="link" href="https://www.apple.com/newsroom/2023/01/apple-unveils-m2-pro-and-m2-max-next-generation-chips-for-next-level-workflows/"  target="_blank" rel="noopener"
+    >Apple unveils M2 Pro and M2 Max</a></li>
+<li><a class="link" href="https://www.apple.com/macbook-pro/specs/"  target="_blank" rel="noopener"
+    >MacBook Pro Tech Specs</a></li>
+</ul>
+<h2 id="writing-notes">Writing Notes
+</h2><h3 id="original-prompt">Original Prompt
+</h3><pre><code class="language-text">$blog-writer Google has released the Gemma4 model after a year. As usual, I'm trying to deploy it locally on that old desktop with an unupgraded NVIDIA 3060 12GB graphics card. This time I caught the initial release, but I couldn't find an upgraded version of the commonly used Gemma3. However, there is a similar version called GemmaE4b. Please first search and introduce all the models released this time, what the letters in their abbreviations mean, and then search for online reviews about Gemma4. The key point is that Google updated the model's protocol this time, so the restrictions for users are fewer. The biggest surprise: my usual test question—write a piece of C++ code to output a five-pointed star in the console. Last year's smaller parameter open-source models couldn't handle this problem, but Google managed it this time. In the first version, it gave the answer, completely exceeding my expectations. It knew about my trap; outputting a five-pointed star to the console is very difficult, so it directly hardcoded a string of a five-pointed star for direct console output. This is the original text: Because drawing a five-pointed star with precise geometric structure using mathematical logic in a pure text console (Console) is very complex (involving coordinate system transformation and pixel filling), the most classic and visually best method is to use ASCII Art. After I forced it to perform calculations, it also managed it through mathematical calculation, successfully drawing the five-pointed star. Previously, I often used Gemma4 for local translation tasks; many multilingual versions of historical articles on current blogs are like this. The model used for local testing: gemma-4-26b-a4b. The 31b version is indeed too slow. But looking at the reviews, the 31b effect is very good, and its ranking performance is excellent. While browsing forums, I realized that if the VRAM is insufficient and the model parameters are increased, the token generation speed will drop drastically. Can you explain why? Macs don't have this problem because they use unified memory; please explain the technical reason. Also, if speed is required, then an NVIDIA card with large VRAM is still necessary. The Mac solution can serve as a fallback, but it cannot match the speed. This content is very extensive; please evaluate whether it should be split into a series of articles.
+</code></pre>
+<h3 id="writing-outline-summary">Writing Outline Summary
+</h3><ul>
+<li>The third article will only retain the two threads: &ldquo;Why speed collapses&rdquo; and &ldquo;Why Mac does not equal fast,&rdquo; without revisiting the content of the previous two articles.</li>
+<li>Start by discussing VRAM limitations, then move to non-linear slowdowns; this logic is smoother than the previous version.</li>
+<li>Mac and Nvidia will be discussed as two different dimensions—one focusing on reliability/fallback, and one focusing on speed.</li>
+<li>The conclusion will only retain hardware judgment, without repeating the explanation of why series separation occurred.</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/ai-inspiration-hub/">AI Inspiration Hub</a>
+        
+            <a href="/en/tags/ai/">Ai</a>
+        
+            <a href="/en/tags/gemma/">Gemma</a>
+        
+            <a href="/en/tags/vram-video-random-access-memory/">VRAM (Video Random Access Memory)</a>
+        
+            <a href="/en/tags/mac/">Mac</a>
+        
+            <a href="/en/tags/nvidia/">NVIDIA</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Apr 09, 2026 15:45
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">Related content</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google released Gemma 4 this time (Part II)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-models-and-license/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google has released Gemma 4 this time (Part 1)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:48:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/codex-default-medium-vs-high/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex defaults to medium, but I later switched to high.</h3>
+                            <time class="related-content__date" datetime='2026-04-08T22:57:47&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/how-i-split-local-online-and-minimax-models/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)</h3>
+                            <time class="related-content__date" datetime='2026-04-03T21:06:02&#43;08:00'>Apr 03, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/how-blog-style-suite-split-style-and-token-cost/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Making the &#34;AI writes blog&#34; thing into an engineering project later (Part II)</h3>
+                            <time class="related-content__date" datetime='2026-04-03T21:02:02&#43;08:00'>Apr 03, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

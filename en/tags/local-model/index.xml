@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Local Model on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/local-model/</link>
+        <description>Recent content in Local Model on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/local-model/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)</title>
+        <link>https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/</link>
+        <pubDate>Fri, 03 Apr 2026 21:06:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/</guid>
+        <description>&lt;p&gt;After going through all the configurations in the repository, I am even more certain about one thing: what matters in the end is not how strong any single model is, but rather who should bear the cost at each layer.&lt;/p&gt;
+&lt;p&gt;The most obvious signal is that the currently active &lt;code&gt;published.runtime.json&lt;/code&gt; is still the one generated on April 2, 2026, for &lt;code&gt;minimax-m2&lt;/code&gt;, yet the entry from April 3, 2026, at 16:38, labeled &lt;code&gt;5f17088&lt;/code&gt;, has switched the default provider for &lt;code&gt;blog-style-suite&lt;/code&gt; to the local &lt;code&gt;gemma-4-26b-a4b&lt;/code&gt; in &lt;code&gt;LM Studio&lt;/code&gt;. This might look inconsistent, but it actually isn&amp;rsquo;t; it precisely illustrates that this pipeline has begun to specialize.&lt;/p&gt;
+&lt;p&gt;With these articles, the first two have laid out the boundaries. &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/why-blog-writer-had-to-exist/&#34; &gt;The first article&lt;/a&gt; discusses why &lt;code&gt;blog-writer&lt;/code&gt; emerged, and &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;the second article&lt;/a&gt; discusses how &lt;code&gt;blog-style-suite&lt;/code&gt; separates style learning from token costs. This final article settles on the most practical question: where should local models, online models, and &lt;code&gt;Minimax&lt;/code&gt; ultimately be placed?&lt;/p&gt;
+&lt;h2 id=&#34;training-style-data-not-worth-burning-online-models-at-every-step&#34;&gt;Training Style Data, Not Worth Burning Online Models at Every Step
+&lt;/h2&gt;&lt;p&gt;The issue of style data, once you start taking it seriously, quickly becomes a practical problem with tokens.
+It&amp;rsquo;s not about whether you &lt;em&gt;want&lt;/em&gt; to save costs; if you don&amp;rsquo;t divide the labor, this whole setup won&amp;rsquo;t run for long.
+The most common mistake in the past was letting one online model handle everything.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Scraping historical articles&lt;/li&gt;
+&lt;li&gt;Performing filtering&lt;/li&gt;
+&lt;li&gt;Doing categorization&lt;/li&gt;
+&lt;li&gt;Scoring&lt;/li&gt;
+&lt;li&gt;Sampling&lt;/li&gt;
+&lt;li&gt;Enforcing style&lt;/li&gt;
+&lt;li&gt;Finally writing the draft
+The biggest problem with doing it this way isn&amp;rsquo;t that &amp;ldquo;the model isn&amp;rsquo;t strong enough,&amp;rdquo; but rather that every step burns the same level of cost.
+Looking back now, the truly reasonable approach should be to think in reverse: which steps &lt;em&gt;must&lt;/em&gt; be online, which steps should ideally be localized, and which steps shouldn&amp;rsquo;t even be given to a model at all.
+As long as this boundary isn&amp;rsquo;t clear, no matter how powerful the model is, it will just end up helping you repeat a bunch of tasks that could have been pre-processed away.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;local-models-are-better-suited-for-dirty-heavy-and-iterative-tasks&#34;&gt;Local Models are Better Suited for Dirty, Heavy, and Iterative Tasks
+&lt;/h2&gt;&lt;p&gt;I am increasingly inclined to define local models as the &amp;ldquo;physical layer&amp;rdquo; for production use.
+They might not be the strongest, nor perfect every time, but they are particularly suited for tasks such as:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Building through repeated runs/iterations&lt;/li&gt;
+&lt;li&gt;Multi-round compression experiments on style data&lt;/li&gt;
+&lt;li&gt;Re-scanning after configuration changes&lt;/li&gt;
+&lt;li&gt;Low-risk recalculation on existing structures&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;These types of tasks share a clear commonality.
+The value isn&amp;rsquo;t in a single, extremely high-value output, but rather in the ability to run repeatedly, tolerate errors, and ideally avoid paying high costs every single round.
+Currently, &lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt; has switched to &lt;code&gt;lm-studio-gemma4&lt;/code&gt;, which itself indicates a shift in judgment. It&amp;rsquo;s not that local &lt;code&gt;gemma&lt;/code&gt; is necessarily stronger than online models, but for the production pipeline, we are finally starting to prioritize &amp;ldquo;runnability, frequency of use, and ability to iterate/modify repeatedly.&amp;rdquo;
+This point actually aligns with the logic I wrote previously in &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;Don&amp;rsquo;t force strong tasks onto weak models&lt;/a&gt;.
+Local models might not be suitable for writing complex, comprehensive articles from scratch, but they are excellent for handling dirty, heavy, and batch processing tasks. Preprocessing style data is inherently more like this category of task.&lt;/p&gt;
+&lt;h2 id=&#34;online-models-are-better-suited-for-the-final-polish-not-for-doing-everything-from-scratch&#34;&gt;Online models are better suited for the final polish, not for doing everything from scratch
+&lt;/h2&gt;&lt;p&gt;Just because local models are suitable for the production side doesn&amp;rsquo;t mean online models have no value.
+The real value of an online model lies precisely in that final polishing touch.
+For example:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Supplementing facts based on the latest information&lt;/li&gt;
+&lt;li&gt;Structuring arguments within a larger context&lt;/li&gt;
+&lt;li&gt;Handling time-sensitive information that requires internet verification&lt;/li&gt;
+&lt;li&gt;Transforming already prepared structured style assets into a publishable article
+These tasks require higher demands on expression quality, factual integration, and contextual understanding, making online models more valuable here.
+In other words, the powerful model is more like the final few assembly line steps. It&amp;rsquo;s not that it &lt;em&gt;can&amp;rsquo;t&lt;/em&gt; do more upfront work, but if you make it scan from beginning to end, the entire cost structure will quickly become distorted.
+This is also why &lt;code&gt;blog-writer&lt;/code&gt; is designed to only read from the published location &lt;code&gt;published.runtime.json&lt;/code&gt;, rather than having to switch providers or re-scan the suite directory while drafting. The lighter the consumption side, the better it is for a more powerful model to focus on finalizing the article.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;the-significance-of-minimax-its-not-just-another-provider-connection&#34;&gt;The Significance of Minimax: It&amp;rsquo;s Not Just Another Provider Connection
+&lt;/h2&gt;&lt;p&gt;Many people who see &lt;code&gt;Minimax&lt;/code&gt; might first think: &amp;ldquo;It&amp;rsquo;s just another model being connected.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;I don&amp;rsquo;t think so.&lt;/p&gt;
+&lt;p&gt;The truly valuable aspect of &lt;code&gt;Minimax&lt;/code&gt; is that it has successfully paved the way for &lt;strong&gt;&amp;ldquo;multiple provider outputs consumed by a single publishing contract.&amp;rdquo;&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The change on April 2, 2026, at 10:18 (&lt;code&gt;9f15199&lt;/code&gt;) modified &lt;code&gt;blog-style-suite&lt;/code&gt; to support multi-model configurations, with outputs isolated per provider. Subsequently, the README and runtime structure have consistently emphasized one thing: while the suite can generate many sets of results, only the manually selected &lt;code&gt;published.runtime.json&lt;/code&gt; is actually effective.&lt;/p&gt;
+&lt;p&gt;This boundary is extremely important.&lt;/p&gt;
+&lt;p&gt;Because once this boundary is clear, the role of &lt;code&gt;Minimax&lt;/code&gt; changes from being &amp;ldquo;something that must be bound within the drafting process&amp;rdquo; to becoming:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Something that can participate in production-side comparisons.&lt;/li&gt;
+&lt;li&gt;Something that can be used to generate a runtime version.&lt;/li&gt;
+&lt;li&gt;Something that can be compared horizontally with local model artifacts.&lt;/li&gt;
+&lt;li&gt;Finally, something whose publication is decided by human judgment.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This transforms the provider from a &amp;ldquo;system dependency&amp;rdquo; into a &amp;ldquo;replaceable component.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;I believe this is the most interesting significance of &lt;code&gt;Minimax&lt;/code&gt; within this engineering setup. It isn&amp;rsquo;t here to dominate the entire pipeline; it&amp;rsquo;s here to validate whether this pipeline has successfully cleaned up its interfaces.&lt;/p&gt;
+&lt;h2 id=&#34;true-specialization-is-not-based-on-model-strength-but-on-task-type&#34;&gt;True specialization is not based on model strength, but on task type
+&lt;/h2&gt;&lt;p&gt;I now favor a classification method that is quite rudimentary, but very effective.&lt;/p&gt;
+&lt;h3 id=&#34;rules-and-hard-constraints&#34;&gt;Rules and Hard Constraints
+&lt;/h3&gt;&lt;p&gt;Leave to local scripts.
+If it can be solved with deterministic tools like &lt;code&gt;scanner.py&lt;/code&gt;, &lt;code&gt;write_post.py&lt;/code&gt;, or &lt;code&gt;write_post_series.py&lt;/code&gt;, don&amp;rsquo;t let the model get involved.&lt;/p&gt;
+&lt;h3 id=&#34;style-data-generation&#34;&gt;Style Data Generation
+&lt;/h3&gt;&lt;p&gt;Prioritize local models or lower-cost providers.
+Because what is most important here is reproducibility, room for iteration/error, and cacheability, not necessarily the most dazzling single output.&lt;/p&gt;
+&lt;h3 id=&#34;final-drafting-and-fact-consolidation&#34;&gt;Final Drafting and Fact Consolidation
+&lt;/h3&gt;&lt;p&gt;Hand this off to a model better suited for long-context integration, expression consolidation, and fact-checking/web retrieval.
+This layer is where spending money on online models is most worthwhile.
+When broken down like this, many previously confusing issues are actually not that complex. You don&amp;rsquo;t need to argue every day about &amp;ldquo;which model is the strongest&amp;rdquo;; you just need to ask: which layer does this task belong to?&lt;/p&gt;
+&lt;h2 id=&#34;ultimately-what-is-most-valuable-is-not-the-model-but-the-clear-boundaries&#34;&gt;Ultimately, what is most valuable is not the model, but the clear boundaries.
+&lt;/h2&gt;&lt;p&gt;This concludes my third article.
+As &lt;code&gt;blog-writer&lt;/code&gt; and &lt;code&gt;blog-style-suite&lt;/code&gt; have evolved, I feel that what is most valuable is not which provider we connected next, or who we replaced, or which one we tested.
+What is most valuable is that the boundaries are finally becoming clearer.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;blog-writer&lt;/code&gt; handles the consumption side.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;blog-style-suite&lt;/code&gt; handles the production side.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;published.runtime.json&lt;/code&gt; is the publishing point.&lt;/li&gt;
+&lt;li&gt;Local models are better suited for dirty and heavy lifting that needs to be run repeatedly.&lt;/li&gt;
+&lt;li&gt;Online models are better suited for the final polish/wrap-up.&lt;/li&gt;
+&lt;li&gt;Online providers like &lt;code&gt;Minimax&lt;/code&gt; feel more like replaceable components rather than the central hub of the system.
+Once the boundaries are clear, the entire workflow flows smoothly.
+You won&amp;rsquo;t expect one model package to conquer everything, nor will you stack every step onto the most expensive layer. In the end, while it looks like selecting a model, what we are actually doing is assigning workstations for different types of tasks.
+Simply put, having a single strong point is certainly good.
+But in the long run, clear boundaries are often more important and stronger than any single point solution.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9f1519967981c5eef7bd1eb407b0406ac542ebd0&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9f1519967981c5eef7bd1eb407b0406ac542ebd0&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/5f17088391ee858b88fc50df884bc0103ff0b3c1&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;5f17088391ee858b88fc50df884bc0103ff0b3c1&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Effective Runtime: &lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Related Old Article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/a-long-period-of-deep-ai-programming/&#34; &gt;A Period of Heavy AI Programming&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Related Old Article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/ultimately-its-returning-to-domestic-models/&#34; &gt;Ultimately Returning to Domestic Models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Related Old Article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;Don&amp;rsquo;t Force Strong Tasks with Weak Models&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer This content is quite extensive, so I&#39;ve split it into a series of articles: Last year, many drafts were written using large models. Back then, the process was to create an outline or a list of questions myself, and then have the AI generate the draft, copy the content into a local md document, fill in header information, tag information, and publish the article; recently, I used Codex a lot and found that its web search capability is very strong. So, could I write a skill to automate these tasks? This led to the first draft of the skill blog-writer. I also thought about having the AI learn my previous writing style, which caused blog-writer to consume a lot of tokens when running. Subsequently, I optimized blog-writer in several versions, splitting out the data module and the data generation module. The original data generation module was still an independent skill. As I continued writing, I realized that it would be better as a Python project, which led to blog-style-suite. Then, I found that training on style data also consumes a lot of tokens, so I wanted to use a local large model and connected to a local LLM. I then thought about comparing the differences between the local LLM and the online version, so I integrated minimax; the evolution history of blog-style-suite and blog-writer can be analyzed from the git commit history. Additionally, based on the code for local blog-writer and blog-style-suite, I can discuss the design ideas, how token saving was achieved, and how the data structure was designed—the core design concepts. If tokens are abundant, it can consume entire historical articles; preprocessing can save a lot of tokens.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-strategy-summary&#34;&gt;Writing Strategy Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;The third article will no longer repeat the discussion on architecture, but instead focus solely on the practical issue of &amp;ldquo;model specialization/division of labor.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;Start directly by stating the current reality—whether to use &lt;code&gt;published.runtime.json&lt;/code&gt; from the current repository or if it&amp;rsquo;s switched locally to &lt;code&gt;gemma4&lt;/code&gt; via &lt;code&gt;minimax-m2&lt;/code&gt; or &lt;code&gt;config.json&lt;/code&gt;—to reduce filler content.&lt;/li&gt;
+&lt;li&gt;The focus should not be on proving which model is stronger, but rather on explaining &lt;em&gt;why&lt;/em&gt; different tasks should be assigned to different cost layers.&lt;/li&gt;
+&lt;li&gt;Placing &lt;code&gt;Minimax&lt;/code&gt; in the &amp;ldquo;replaceable provider&amp;rdquo; section aims to pull its significance back into the engineering boundary, rather than treating it as just another entry on a model leaderboard.&lt;/li&gt;
+&lt;li&gt;Conclude by returning to the overarching judgment: &amp;ldquo;Clear boundaries are more important than single points of strength,&amp;rdquo; serving as the closing statement for the entire series of articles.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Don&#39;t force weak models onto hard tasks.</title>
+        <link>https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/</link>
+        <pubDate>Thu, 02 Apr 2026 22:05:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/</guid>
+        <description>&lt;p&gt;Recently, I&amp;rsquo;ve been migrating some edge cases to &lt;code&gt;MiniMax&lt;/code&gt; and local models. The more I use them, the more I feel that we shouldn&amp;rsquo;t always measure things by the standard of &amp;ldquo;the most powerful model.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;My judgment is straightforward: don&amp;rsquo;t force weak models into hard tasks. Models like &lt;code&gt;MiniMax&lt;/code&gt; are indeed limited in capability, but for complex coding, long-chain reasoning, or ambiguous requirement decomposition, they fall a bit short. However, if you ask it to do data cleaning, document writing, or searching for proposal materials—these kinds of tasks—it can handle them perfectly well. The same logic applies to local models around the &lt;code&gt;12B&lt;/code&gt; size; translation, format rewriting, and batch cleaning are actually where they are best suited.&lt;/p&gt;
+&lt;p&gt;To put it plainly, it&amp;rsquo;s not that the models lack value; it&amp;rsquo;s just that we shouldn&amp;rsquo;t place them in the wrong roles.&lt;/p&gt;
+&lt;h2 id=&#34;the-real-problem-isnt-how-strong-the-model-is-but-whether-it-works-correctly&#34;&gt;The real problem isn&amp;rsquo;t how strong the model is, but whether it works correctly.
+&lt;/h2&gt;&lt;p&gt;Many people who talk about large models automatically think of the most difficult tasks.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Writing complex engineering code independently&lt;/li&gt;
+&lt;li&gt;Deconstructing an entire system in one go&lt;/li&gt;
+&lt;li&gt;Multi-turn reasoning over long contexts&lt;/li&gt;
+&lt;li&gt;Planning and executing while searching
+These are certainly important. But in real-world work, what is actually piled on your desk most often isn&amp;rsquo;t these kinds of tasks.
+It&amp;rsquo;s more like:&lt;/li&gt;
+&lt;li&gt;Cleaning up a pile of dirty fields&lt;/li&gt;
+&lt;li&gt;Organizing scattered information into readable documents&lt;/li&gt;
+&lt;li&gt;Converting long texts into summaries, FAQs, or outlines&lt;/li&gt;
+&lt;li&gt;Standardizing mixed Chinese and English content formats&lt;/li&gt;
+&lt;li&gt;Gathering data from multiple web pages and then compiling it into a draft proposal
+For these types of tasks, what is most needed is not &amp;ldquo;the model thinking like a genius,&amp;rdquo; but three things:&lt;/li&gt;
+&lt;li&gt;Instruction following must be reasonably accurate.&lt;/li&gt;
+&lt;li&gt;Output structure should be as stable as possible.&lt;/li&gt;
+&lt;li&gt;The cost must be low enough that you are willing to use it repeatedly.
+This is why I always feel that weak models are not useless; they just cannot be used in the same kind of battle as flagship models.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;minimax-whats-actually-suitable-for-it&#34;&gt;MiniMax: What&amp;rsquo;s Actually Suitable for It
+&lt;/h2&gt;&lt;p&gt;First, let&amp;rsquo;s talk about &lt;code&gt;MiniMax&lt;/code&gt;.
+The official positioning of &lt;code&gt;MiniMax-M2.5&lt;/code&gt; is actually quite high. In press releases and open platform documentation, they push it towards scenarios like programming, tool calling, search, and office productivity, even emphasizing speed and cost advantages. I don&amp;rsquo;t completely disbelieve these claims, but I prefer to break them down.
+For me, what &lt;code&gt;MiniMax&lt;/code&gt; is genuinely good at isn&amp;rsquo;t &amp;ldquo;the most complex development tasks,&amp;rdquo; but rather the following:&lt;/p&gt;
+&lt;h3 id=&#34;data-cleaning&#34;&gt;Data Cleaning
+&lt;/h3&gt;&lt;p&gt;A lot of data cleaning is essentially manual labor involving semi-structured text.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Name unification&lt;/li&gt;
+&lt;li&gt;Field mapping&lt;/li&gt;
+&lt;li&gt;Anomaly labeling&lt;/li&gt;
+&lt;li&gt;Classification tagging&lt;/li&gt;
+&lt;li&gt;Table field completion
+What these types of tasks fear most is not the model being &amp;ldquo;dumb,&amp;rdquo; but rather inconsistent formatting or divergent outputs. As long as the model can reliably output results in &lt;code&gt;JSON&lt;/code&gt;, tables, or fixed templates, it&amp;rsquo;s actually sufficient. While powerful models certainly can do this, using the most expensive tier of model just to clean fields is often not cost-effective.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;documentation-writing&#34;&gt;Documentation Writing
+&lt;/h3&gt;&lt;p&gt;Writing documentation is annoying, not difficult.
+When an interface changes, a process changes, or a field is modified, the documentation has to change accordingly. This process doesn&amp;rsquo;t actually require the model to have strong creativity; rather, it requires it &lt;em&gt;not&lt;/em&gt; to over-exert itself and alter clearly defined things into something ambiguous.
+&lt;code&gt;MiniMax&lt;/code&gt; is often more reliable for these kinds of tasks than one might expect. Especially when you have already prepared the context, it acts more like a capable documentation assistant rather than an actual engineer.&lt;/p&gt;
+&lt;h3 id=&#34;solution-material-search&#34;&gt;Solution Material Search
+&lt;/h3&gt;&lt;p&gt;The official platform is also promoting search and tool calling, so this direction is fine.
+Many times, what we need is not for the model to &amp;ldquo;come up with an answer out of thin air,&amp;rdquo; but rather for it to first find relevant web pages, documents, announcements, or materials, and then organize them neatly. In this scenario, cheaper models like &lt;code&gt;MiniMax&lt;/code&gt; are very valuable because searching, summarizing, and integrating are inherently high-frequency, mundane tasks.
+So my actual view is: &lt;code&gt;MiniMax&lt;/code&gt; isn&amp;rsquo;t incapable; rather, it is better suited for the dirty, tiring, and repetitive tasks within a production pipeline. If you let it act as an assistant or general laborer, it is often competent; but if you ask it to handle the entire engineering process, the probability of disappointment increases.&lt;/p&gt;
+&lt;h2 id=&#34;local-12b-models-best-suited-for-bringing-back-these-tasks&#34;&gt;Local 12B Models, Best Suited for Bringing Back These Tasks
+&lt;/h2&gt;&lt;p&gt;Looking further down, the logic for local deployment is actually the same.
+When many people talk about local models, they inevitably ask one question: Can it replace the flagship cloud models?
+I think this question is flawed from the start.
+For local models around &lt;code&gt;12B&lt;/code&gt;, what has real practical value isn&amp;rsquo;t &amp;ldquo;proving that it can handle the most powerful tasks,&amp;rdquo; but rather bringing back those stable, repetitive, sensitive, low-profit, yet high-frequency tasks.&lt;/p&gt;
+&lt;h3 id=&#34;translation&#34;&gt;Translation
+&lt;/h3&gt;&lt;p&gt;This is one of the most natural scenarios for local models.
+As explicitly mentioned in the official blog of &lt;code&gt;Qwen2.5&lt;/code&gt;, it has enhanced capabilities for long-text generation, structured data understanding, and &lt;code&gt;JSON&lt;/code&gt; output, and supports over 29 languages. This combination is inherently suitable for tasks like translation, bilingual rewriting, format standardization, and terminology normalization.
+Technical documentation, field descriptions, product introductions, and API comments—these items often have stable structures and fixed terminology. While local models might not produce the most elegant translations, they are usually sufficient.&lt;/p&gt;
+&lt;h3 id=&#34;data-cleaning-1&#34;&gt;Data Cleaning
+&lt;/h3&gt;&lt;p&gt;This is also where local models are particularly realistic.
+Many spreadsheets, documents, and business materials that you might not want to upload to the cloud. Especially internal data, customer records, meeting minutes, and draft proposals—when privacy and permissions are involved, running it locally provides much more peace of mind.
+At this point, the significance of a local model around &lt;code&gt;12B&lt;/code&gt; isn&amp;rsquo;t &amp;ldquo;how smart it is,&amp;rdquo; but rather that &amp;ldquo;it&amp;rsquo;s on my machine, and it can reliably handle these dirty tasks.&amp;rdquo;&lt;/p&gt;
+&lt;h3 id=&#34;fixed-format-rewriting&#34;&gt;Fixed Format Rewriting
+&lt;/h3&gt;&lt;p&gt;For example:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Meeting minutes organized into a fixed template&lt;/li&gt;
+&lt;li&gt;Product titles cleaned into a unified naming convention&lt;/li&gt;
+&lt;li&gt;Bug descriptions rewritten into ticket format&lt;/li&gt;
+&lt;li&gt;Mixed Chinese and English text cleaned into single-language versions&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;These types of tasks share consistent characteristics: clear rules, large batches, high repetition, low value per instance, but significant cumulative effort.
+This is exactly what local models are best suited for.&lt;/p&gt;
+&lt;h2 id=&#34;can-the-3060-12gb-actually-run-a-model-around-12b&#34;&gt;Can the 3060 12GB actually run a model around 12B?
+&lt;/h2&gt;&lt;p&gt;I prefer to write about this realistically: &amp;ldquo;It can run it, but don&amp;rsquo;t get your hopes up too high.&amp;rdquo;
+Google provided a very useful VRAM table in the official documentation for &lt;code&gt;Gemma 3&lt;/code&gt;. The &lt;code&gt;Gemma 3 12B&lt;/code&gt; roughly requires:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;About &lt;code&gt;20 GB&lt;/code&gt; of VRAM to load the full precision version.&lt;/li&gt;
+&lt;li&gt;About &lt;code&gt;12.2 GB&lt;/code&gt; to load the medium quantization version.&lt;/li&gt;
+&lt;li&gt;About &lt;code&gt;8.7 GB&lt;/code&gt; to load a lower VRAM consumption version.
+The official documentation also specifically reminds that this is only for model loading, and does not include prompt or runtime overhead.
+This sentence is very key.
+What does it mean?
+It means that running a model around 12B on a card like the &lt;code&gt;3060 12GB&lt;/code&gt; is not impossible, but the prerequisites are usually:&lt;/li&gt;
+&lt;li&gt;You are running a quantized version.&lt;/li&gt;
+&lt;li&gt;The context length should not be too long.&lt;/li&gt;
+&lt;li&gt;The task shouldn&amp;rsquo;t be too complex.&lt;/li&gt;
+&lt;li&gt;You accept average, or even slow, speed.
+If you are willing to accept these premises, then running a local 12B model is indeed feasible. Tasks like translation, summarization, table cleaning, and fixed format conversion are not exaggerated in this regard.
+Furthermore, the official repository for &lt;code&gt;Qwen2.5-14B-Instruct-GGUF&lt;/code&gt; itself provides multiple quantization formats, which actually makes the intention very clear: models in this category are inherently adapted for the local inference ecosystem.
+So my conclusion has never been that &amp;ldquo;the 3060 12GB can easily handle a 12B model,&amp;rdquo; but rather:
+It can run these types of models, but it is better suited for work with low expectations, high repetition, and high privacy requirements.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;cheap-models-and-local-models-its-not-just-about-saving-api-costs&#34;&gt;Cheap Models and Local Models: It&amp;rsquo;s Not Just About Saving API Costs
+&lt;/h2&gt;&lt;p&gt;When people talk about this, the first reaction is always saving money.
+Of course, saving money is important. But I think the greater value is that you start daring to outsource all those little tasks you used to avoid doing.
+Before, you might not have written a dedicated script just to clean up a few hundred data points. You also wouldn&amp;rsquo;t manually adjust dozens of pages of mixed Chinese and English documents to achieve uniform formatting. And you certainly wouldn&amp;rsquo;t read through every single webpage to gather materials for an ad-hoc proposal.
+Things are different now.
+As long as the cost is low enough and the barrier is low enough, these tasks that were previously considered &amp;ldquo;not worth the effort&amp;rdquo; suddenly become worthwhile. You no longer hesitate over whether or not to do it; instead, you just throw it to a cheap model or a local model to run through first.
+This is what I see as the most realistic change.
+Powerful models are responsible for tackling core problems, weaker models handle miscellaneous tasks, and local models provide fallback and batch processing.
+With this division of labor, the entire workflow becomes smooth.&lt;/p&gt;
+&lt;h2 id=&#34;conclusion&#34;&gt;Conclusion
+&lt;/h2&gt;&lt;p&gt;So, the final word remains: don&amp;rsquo;t always try to make one model conquer everything.
+Models like &lt;code&gt;MiniMax&lt;/code&gt; are weak in capability, but they aren&amp;rsquo;t useless. If you use them to tackle complex engineering tasks, vague requirements, or multi-turn reasoning, you will naturally be disappointed; however, if you use them for data cleaning, document drafting, or searching for proposal materials, they often work quite smoothly.
+The same applies to local models around &lt;code&gt;12B&lt;/code&gt;. Their purpose isn&amp;rsquo;t to prove that &amp;ldquo;I no longer need cloud flagships,&amp;rdquo; but rather to reliably move stable, repetitive, sensitive, and high-volume tasks back onto their own machines.
+Simply put: don&amp;rsquo;t let a weak model do what it is not good at.
+Place them in the right role, and they will have real value.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.minimax.io/news/minimax-m25&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MiniMax M2.5: Built for Real-World Productivity&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://platform.minimaxi.com/docs/guides/text-generation&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;MiniMax Open Platform: Text Generation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://qwenlm.github.io/blog/qwen2.5/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Qwen2.5: A Party of Foundation Models!&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Qwen2.5-14B-Instruct-GGUF&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ai.google.dev/gemma/docs/core&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Gemma 3 model overview&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;Minimax&amp;rsquo;s large model is weak in capability, but it&amp;rsquo;s fine for tasks like data cleaning, document writing, and searching for proposal materials; with the same logic, deploying a large model locally for translation or data cleaning work is also good. The model parameter count is around 12b, and even a local GPU like the RTX 3060 with 12GB can handle it.&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;writing-outline-summary&#34;&gt;Writing Outline Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Retained the core judgment of &amp;ldquo;don&amp;rsquo;t force weak models onto hard tasks,&amp;rdquo; and did not write it as a model leaderboard comparison.&lt;/li&gt;
+&lt;li&gt;The &lt;code&gt;MiniMax&lt;/code&gt; section is mainly based on the official positioning for programming, searching, and office work, then applies this judgment back to real-world tasks like data cleaning, document handling, and information retrieval.&lt;/li&gt;
+&lt;li&gt;For local models, I selected two officially sourced options: &lt;code&gt;Qwen2.5&lt;/code&gt; and &lt;code&gt;Gemma 3&lt;/code&gt;, one supporting multilingual and structured output, and the other supporting &lt;code&gt;12B&lt;/code&gt; size and VRAM usage.&lt;/li&gt;
+&lt;li&gt;The description for the &lt;code&gt;3060 12GB&lt;/code&gt; was intentionally phrased as &amp;ldquo;capable, but don&amp;rsquo;t get too carried away,&amp;rdquo; to avoid presenting quantized inference as an absolute conclusion.&lt;/li&gt;
+&lt;li&gt;In the conclusion, I re-categorized strong models, weak models, and local models based on their respective roles, making the main thread more focused.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

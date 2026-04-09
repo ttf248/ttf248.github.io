@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="Recently, I&rsquo;ve been migrating some edge cases to MiniMax and local models. The more I use them, the more I feel that we shouldn&rsquo;t always measure things by the standard of &ldquo;the most powerful model.&rdquo;\nMy judgment is straightforward: don&rsquo;t force weak models into hard tasks. Models like MiniMax are indeed limited in capability, but for complex coding, long-chain reasoning, or ambiguous requirement decomposition, they fall a bit short. However, if you ask it to do data cleaning, document writing, or searching for proposal materials—these kinds of tasks—it can handle them perfectly well. The same logic applies to local models around the 12B size; translation, format rewriting, and batch cleaning are actually where they are best suited.\nTo put it plainly, it&rsquo;s not that the models lack value; it&rsquo;s just that we shouldn&rsquo;t place them in the wrong roles.\n">
+<title>Don&#39;t force weak models onto hard tasks.</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/'>
+
+<link rel="stylesheet" href="/scss/style.min.989aa97a25e023e9a3a706c4fe4a8ba5d8e0fdaa68698a5434411a1cb9be0136.css"><meta property='og:title' content="Don't force weak models onto hard tasks.">
+<meta property='og:description' content="Recently, I&rsquo;ve been migrating some edge cases to MiniMax and local models. The more I use them, the more I feel that we shouldn&rsquo;t always measure things by the standard of &ldquo;the most powerful model.&rdquo;\nMy judgment is straightforward: don&rsquo;t force weak models into hard tasks. Models like MiniMax are indeed limited in capability, but for complex coding, long-chain reasoning, or ambiguous requirement decomposition, they fall a bit short. However, if you ask it to do data cleaning, document writing, or searching for proposal materials—these kinds of tasks—it can handle them perfectly well. The same logic applies to local models around the 12B size; translation, format rewriting, and batch cleaning are actually where they are best suited.\nTo put it plainly, it&rsquo;s not that the models lack value; it&rsquo;s just that we shouldn&rsquo;t place them in the wrong roles.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='ai' /><meta property='article:tag' content='minimax' /><meta property='article:tag' content='Local Model' /><meta property='article:tag' content='qwen' /><meta property='article:tag' content='gemma' /><meta property='article:published_time' content='2026-04-02T22:05:00&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T15:45:31&#43;08:00'/>
+<meta name="twitter:title" content="Don't force weak models onto hard tasks.">
+<meta name="twitter:description" content="Recently, I&rsquo;ve been migrating some edge cases to MiniMax and local models. The more I use them, the more I feel that we shouldn&rsquo;t always measure things by the standard of &ldquo;the most powerful model.&rdquo;\nMy judgment is straightforward: don&rsquo;t force weak models into hard tasks. Models like MiniMax are indeed limited in capability, but for complex coding, long-chain reasoning, or ambiguous requirement decomposition, they fall a bit short. However, if you ask it to do data cleaning, document writing, or searching for proposal materials—these kinds of tasks—it can handle them perfectly well. The same logic applies to local models around the 12B size; translation, format rewriting, and batch cleaning are actually where they are best suited.\nTo put it plainly, it&rsquo;s not that the models lack value; it&rsquo;s just that we shouldn&rsquo;t place them in the wrong roles.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#the-real-problem-isnt-how-strong-the-model-is-but-whether-it-works-correctly">The real problem isn&rsquo;t how strong the model is, but whether it works correctly.</a></li>
+    <li><a href="#minimax-whats-actually-suitable-for-it">MiniMax: What&rsquo;s Actually Suitable for It</a>
+      <ol>
+        <li><a href="#data-cleaning">Data Cleaning</a></li>
+        <li><a href="#documentation-writing">Documentation Writing</a></li>
+        <li><a href="#solution-material-search">Solution Material Search</a></li>
+      </ol>
+    </li>
+    <li><a href="#local-12b-models-best-suited-for-bringing-back-these-tasks">Local 12B Models, Best Suited for Bringing Back These Tasks</a>
+      <ol>
+        <li><a href="#translation">Translation</a></li>
+        <li><a href="#data-cleaning-1">Data Cleaning</a></li>
+        <li><a href="#fixed-format-rewriting">Fixed Format Rewriting</a></li>
+      </ol>
+    </li>
+    <li><a href="#can-the-3060-12gb-actually-run-a-model-around-12b">Can the 3060 12GB actually run a model around 12B?</a></li>
+    <li><a href="#cheap-models-and-local-models-its-not-just-about-saving-api-costs">Cheap Models and Local Models: It&rsquo;s Not Just About Saving API Costs</a></li>
+    <li><a href="#conclusion">Conclusion</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#writing-notes">Writing Notes</a>
+      <ol>
+        <li><a href="#original-prompt">Original Prompt</a></li>
+        <li><a href="#writing-outline-summary">Writing Outline Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/weaker-models-shouldnt-do-frontier-work/">Don&#39;t force weak models onto hard tasks.</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Apr 02, 2026</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            7 minute read
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/weaker-models-shouldnt-do-frontier-work/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>Recently, I&rsquo;ve been migrating some edge cases to <code>MiniMax</code> and local models. The more I use them, the more I feel that we shouldn&rsquo;t always measure things by the standard of &ldquo;the most powerful model.&rdquo;</p>
+<p>My judgment is straightforward: don&rsquo;t force weak models into hard tasks. Models like <code>MiniMax</code> are indeed limited in capability, but for complex coding, long-chain reasoning, or ambiguous requirement decomposition, they fall a bit short. However, if you ask it to do data cleaning, document writing, or searching for proposal materials—these kinds of tasks—it can handle them perfectly well. The same logic applies to local models around the <code>12B</code> size; translation, format rewriting, and batch cleaning are actually where they are best suited.</p>
+<p>To put it plainly, it&rsquo;s not that the models lack value; it&rsquo;s just that we shouldn&rsquo;t place them in the wrong roles.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="the-real-problem-isnt-how-strong-the-model-is-but-whether-it-works-correctly">The real problem isn&rsquo;t how strong the model is, but whether it works correctly.
+</h2><p>Many people who talk about large models automatically think of the most difficult tasks.</p>
+<ul>
+<li>Writing complex engineering code independently</li>
+<li>Deconstructing an entire system in one go</li>
+<li>Multi-turn reasoning over long contexts</li>
+<li>Planning and executing while searching
+These are certainly important. But in real-world work, what is actually piled on your desk most often isn&rsquo;t these kinds of tasks.
+It&rsquo;s more like:</li>
+<li>Cleaning up a pile of dirty fields</li>
+<li>Organizing scattered information into readable documents</li>
+<li>Converting long texts into summaries, FAQs, or outlines</li>
+<li>Standardizing mixed Chinese and English content formats</li>
+<li>Gathering data from multiple web pages and then compiling it into a draft proposal
+For these types of tasks, what is most needed is not &ldquo;the model thinking like a genius,&rdquo; but three things:</li>
+<li>Instruction following must be reasonably accurate.</li>
+<li>Output structure should be as stable as possible.</li>
+<li>The cost must be low enough that you are willing to use it repeatedly.
+This is why I always feel that weak models are not useless; they just cannot be used in the same kind of battle as flagship models.</li>
+</ul>
+<h2 id="minimax-whats-actually-suitable-for-it">MiniMax: What&rsquo;s Actually Suitable for It
+</h2><p>First, let&rsquo;s talk about <code>MiniMax</code>.
+The official positioning of <code>MiniMax-M2.5</code> is actually quite high. In press releases and open platform documentation, they push it towards scenarios like programming, tool calling, search, and office productivity, even emphasizing speed and cost advantages. I don&rsquo;t completely disbelieve these claims, but I prefer to break them down.
+For me, what <code>MiniMax</code> is genuinely good at isn&rsquo;t &ldquo;the most complex development tasks,&rdquo; but rather the following:</p>
+<h3 id="data-cleaning">Data Cleaning
+</h3><p>A lot of data cleaning is essentially manual labor involving semi-structured text.</p>
+<ul>
+<li>Name unification</li>
+<li>Field mapping</li>
+<li>Anomaly labeling</li>
+<li>Classification tagging</li>
+<li>Table field completion
+What these types of tasks fear most is not the model being &ldquo;dumb,&rdquo; but rather inconsistent formatting or divergent outputs. As long as the model can reliably output results in <code>JSON</code>, tables, or fixed templates, it&rsquo;s actually sufficient. While powerful models certainly can do this, using the most expensive tier of model just to clean fields is often not cost-effective.</li>
+</ul>
+<h3 id="documentation-writing">Documentation Writing
+</h3><p>Writing documentation is annoying, not difficult.
+When an interface changes, a process changes, or a field is modified, the documentation has to change accordingly. This process doesn&rsquo;t actually require the model to have strong creativity; rather, it requires it <em>not</em> to over-exert itself and alter clearly defined things into something ambiguous.
+<code>MiniMax</code> is often more reliable for these kinds of tasks than one might expect. Especially when you have already prepared the context, it acts more like a capable documentation assistant rather than an actual engineer.</p>
+<h3 id="solution-material-search">Solution Material Search
+</h3><p>The official platform is also promoting search and tool calling, so this direction is fine.
+Many times, what we need is not for the model to &ldquo;come up with an answer out of thin air,&rdquo; but rather for it to first find relevant web pages, documents, announcements, or materials, and then organize them neatly. In this scenario, cheaper models like <code>MiniMax</code> are very valuable because searching, summarizing, and integrating are inherently high-frequency, mundane tasks.
+So my actual view is: <code>MiniMax</code> isn&rsquo;t incapable; rather, it is better suited for the dirty, tiring, and repetitive tasks within a production pipeline. If you let it act as an assistant or general laborer, it is often competent; but if you ask it to handle the entire engineering process, the probability of disappointment increases.</p>
+<h2 id="local-12b-models-best-suited-for-bringing-back-these-tasks">Local 12B Models, Best Suited for Bringing Back These Tasks
+</h2><p>Looking further down, the logic for local deployment is actually the same.
+When many people talk about local models, they inevitably ask one question: Can it replace the flagship cloud models?
+I think this question is flawed from the start.
+For local models around <code>12B</code>, what has real practical value isn&rsquo;t &ldquo;proving that it can handle the most powerful tasks,&rdquo; but rather bringing back those stable, repetitive, sensitive, low-profit, yet high-frequency tasks.</p>
+<h3 id="translation">Translation
+</h3><p>This is one of the most natural scenarios for local models.
+As explicitly mentioned in the official blog of <code>Qwen2.5</code>, it has enhanced capabilities for long-text generation, structured data understanding, and <code>JSON</code> output, and supports over 29 languages. This combination is inherently suitable for tasks like translation, bilingual rewriting, format standardization, and terminology normalization.
+Technical documentation, field descriptions, product introductions, and API comments—these items often have stable structures and fixed terminology. While local models might not produce the most elegant translations, they are usually sufficient.</p>
+<h3 id="data-cleaning-1">Data Cleaning
+</h3><p>This is also where local models are particularly realistic.
+Many spreadsheets, documents, and business materials that you might not want to upload to the cloud. Especially internal data, customer records, meeting minutes, and draft proposals—when privacy and permissions are involved, running it locally provides much more peace of mind.
+At this point, the significance of a local model around <code>12B</code> isn&rsquo;t &ldquo;how smart it is,&rdquo; but rather that &ldquo;it&rsquo;s on my machine, and it can reliably handle these dirty tasks.&rdquo;</p>
+<h3 id="fixed-format-rewriting">Fixed Format Rewriting
+</h3><p>For example:</p>
+<ul>
+<li>Meeting minutes organized into a fixed template</li>
+<li>Product titles cleaned into a unified naming convention</li>
+<li>Bug descriptions rewritten into ticket format</li>
+<li>Mixed Chinese and English text cleaned into single-language versions</li>
+</ul>
+<p>These types of tasks share consistent characteristics: clear rules, large batches, high repetition, low value per instance, but significant cumulative effort.
+This is exactly what local models are best suited for.</p>
+<h2 id="can-the-3060-12gb-actually-run-a-model-around-12b">Can the 3060 12GB actually run a model around 12B?
+</h2><p>I prefer to write about this realistically: &ldquo;It can run it, but don&rsquo;t get your hopes up too high.&rdquo;
+Google provided a very useful VRAM table in the official documentation for <code>Gemma 3</code>. The <code>Gemma 3 12B</code> roughly requires:</p>
+<ul>
+<li>About <code>20 GB</code> of VRAM to load the full precision version.</li>
+<li>About <code>12.2 GB</code> to load the medium quantization version.</li>
+<li>About <code>8.7 GB</code> to load a lower VRAM consumption version.
+The official documentation also specifically reminds that this is only for model loading, and does not include prompt or runtime overhead.
+This sentence is very key.
+What does it mean?
+It means that running a model around 12B on a card like the <code>3060 12GB</code> is not impossible, but the prerequisites are usually:</li>
+<li>You are running a quantized version.</li>
+<li>The context length should not be too long.</li>
+<li>The task shouldn&rsquo;t be too complex.</li>
+<li>You accept average, or even slow, speed.
+If you are willing to accept these premises, then running a local 12B model is indeed feasible. Tasks like translation, summarization, table cleaning, and fixed format conversion are not exaggerated in this regard.
+Furthermore, the official repository for <code>Qwen2.5-14B-Instruct-GGUF</code> itself provides multiple quantization formats, which actually makes the intention very clear: models in this category are inherently adapted for the local inference ecosystem.
+So my conclusion has never been that &ldquo;the 3060 12GB can easily handle a 12B model,&rdquo; but rather:
+It can run these types of models, but it is better suited for work with low expectations, high repetition, and high privacy requirements.</li>
+</ul>
+<h2 id="cheap-models-and-local-models-its-not-just-about-saving-api-costs">Cheap Models and Local Models: It&rsquo;s Not Just About Saving API Costs
+</h2><p>When people talk about this, the first reaction is always saving money.
+Of course, saving money is important. But I think the greater value is that you start daring to outsource all those little tasks you used to avoid doing.
+Before, you might not have written a dedicated script just to clean up a few hundred data points. You also wouldn&rsquo;t manually adjust dozens of pages of mixed Chinese and English documents to achieve uniform formatting. And you certainly wouldn&rsquo;t read through every single webpage to gather materials for an ad-hoc proposal.
+Things are different now.
+As long as the cost is low enough and the barrier is low enough, these tasks that were previously considered &ldquo;not worth the effort&rdquo; suddenly become worthwhile. You no longer hesitate over whether or not to do it; instead, you just throw it to a cheap model or a local model to run through first.
+This is what I see as the most realistic change.
+Powerful models are responsible for tackling core problems, weaker models handle miscellaneous tasks, and local models provide fallback and batch processing.
+With this division of labor, the entire workflow becomes smooth.</p>
+<h2 id="conclusion">Conclusion
+</h2><p>So, the final word remains: don&rsquo;t always try to make one model conquer everything.
+Models like <code>MiniMax</code> are weak in capability, but they aren&rsquo;t useless. If you use them to tackle complex engineering tasks, vague requirements, or multi-turn reasoning, you will naturally be disappointed; however, if you use them for data cleaning, document drafting, or searching for proposal materials, they often work quite smoothly.
+The same applies to local models around <code>12B</code>. Their purpose isn&rsquo;t to prove that &ldquo;I no longer need cloud flagships,&rdquo; but rather to reliably move stable, repetitive, sensitive, and high-volume tasks back onto their own machines.
+Simply put: don&rsquo;t let a weak model do what it is not good at.
+Place them in the right role, and they will have real value.</p>
+<h2 id="references">References
+</h2><ul>
+<li><a class="link" href="https://www.minimax.io/news/minimax-m25"  target="_blank" rel="noopener"
+    >MiniMax M2.5: Built for Real-World Productivity</a></li>
+<li><a class="link" href="https://platform.minimaxi.com/docs/guides/text-generation"  target="_blank" rel="noopener"
+    >MiniMax Open Platform: Text Generation</a></li>
+<li><a class="link" href="https://qwenlm.github.io/blog/qwen2.5/"  target="_blank" rel="noopener"
+    >Qwen2.5: A Party of Foundation Models!</a></li>
+<li><a class="link" href="https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF"  target="_blank" rel="noopener"
+    >Qwen2.5-14B-Instruct-GGUF</a></li>
+<li><a class="link" href="https://ai.google.dev/gemma/docs/core"  target="_blank" rel="noopener"
+    >Gemma 3 model overview</a></li>
+</ul>
+<h2 id="writing-notes">Writing Notes
+</h2><h3 id="original-prompt">Original Prompt
+</h3><blockquote>
+<p>Minimax&rsquo;s large model is weak in capability, but it&rsquo;s fine for tasks like data cleaning, document writing, and searching for proposal materials; with the same logic, deploying a large model locally for translation or data cleaning work is also good. The model parameter count is around 12b, and even a local GPU like the RTX 3060 with 12GB can handle it.</p></blockquote>
+<h3 id="writing-outline-summary">Writing Outline Summary
+</h3><ul>
+<li>Retained the core judgment of &ldquo;don&rsquo;t force weak models onto hard tasks,&rdquo; and did not write it as a model leaderboard comparison.</li>
+<li>The <code>MiniMax</code> section is mainly based on the official positioning for programming, searching, and office work, then applies this judgment back to real-world tasks like data cleaning, document handling, and information retrieval.</li>
+<li>For local models, I selected two officially sourced options: <code>Qwen2.5</code> and <code>Gemma 3</code>, one supporting multilingual and structured output, and the other supporting <code>12B</code> size and VRAM usage.</li>
+<li>The description for the <code>3060 12GB</code> was intentionally phrased as &ldquo;capable, but don&rsquo;t get too carried away,&rdquo; to avoid presenting quantized inference as an absolute conclusion.</li>
+<li>In the conclusion, I re-categorized strong models, weak models, and local models based on their respective roles, making the main thread more focused.</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/ai/">Ai</a>
+        
+            <a href="/en/tags/minimax/">Minimax</a>
+        
+            <a href="/en/tags/local-model/">Local Model</a>
+        
+            <a href="/en/tags/qwen/">Qwen</a>
+        
+            <a href="/en/tags/gemma/">Gemma</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Apr 09, 2026 15:45
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">Related content</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/en/p/how-i-split-local-online-and-minimax-models/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)</h3>
+                            <time class="related-content__date" datetime='2026-04-03T21:06:02&#43;08:00'>Apr 03, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google has released Gemma 4 this time (III)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google released Gemma 4 this time (Part II)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-models-and-license/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google has released Gemma 4 this time (Part 1)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:48:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/codex-default-medium-vs-high/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex defaults to medium, but I later switched to high.</h3>
+                            <time class="related-content__date" datetime='2026-04-08T22:57:47&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

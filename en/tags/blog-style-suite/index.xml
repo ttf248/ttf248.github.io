@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Blog-Style-Suite on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/blog-style-suite/</link>
+        <description>Recent content in Blog-Style-Suite on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/blog-style-suite/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)</title>
+        <link>https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/</link>
+        <pubDate>Fri, 03 Apr 2026 21:06:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/</guid>
+        <description>&lt;p&gt;After going through all the configurations in the repository, I am even more certain about one thing: what matters in the end is not how strong any single model is, but rather who should bear the cost at each layer.&lt;/p&gt;
+&lt;p&gt;The most obvious signal is that the currently active &lt;code&gt;published.runtime.json&lt;/code&gt; is still the one generated on April 2, 2026, for &lt;code&gt;minimax-m2&lt;/code&gt;, yet the entry from April 3, 2026, at 16:38, labeled &lt;code&gt;5f17088&lt;/code&gt;, has switched the default provider for &lt;code&gt;blog-style-suite&lt;/code&gt; to the local &lt;code&gt;gemma-4-26b-a4b&lt;/code&gt; in &lt;code&gt;LM Studio&lt;/code&gt;. This might look inconsistent, but it actually isn&amp;rsquo;t; it precisely illustrates that this pipeline has begun to specialize.&lt;/p&gt;
+&lt;p&gt;With these articles, the first two have laid out the boundaries. &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/why-blog-writer-had-to-exist/&#34; &gt;The first article&lt;/a&gt; discusses why &lt;code&gt;blog-writer&lt;/code&gt; emerged, and &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;the second article&lt;/a&gt; discusses how &lt;code&gt;blog-style-suite&lt;/code&gt; separates style learning from token costs. This final article settles on the most practical question: where should local models, online models, and &lt;code&gt;Minimax&lt;/code&gt; ultimately be placed?&lt;/p&gt;
+&lt;h2 id=&#34;training-style-data-not-worth-burning-online-models-at-every-step&#34;&gt;Training Style Data, Not Worth Burning Online Models at Every Step
+&lt;/h2&gt;&lt;p&gt;The issue of style data, once you start taking it seriously, quickly becomes a practical problem with tokens.
+It&amp;rsquo;s not about whether you &lt;em&gt;want&lt;/em&gt; to save costs; if you don&amp;rsquo;t divide the labor, this whole setup won&amp;rsquo;t run for long.
+The most common mistake in the past was letting one online model handle everything.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Scraping historical articles&lt;/li&gt;
+&lt;li&gt;Performing filtering&lt;/li&gt;
+&lt;li&gt;Doing categorization&lt;/li&gt;
+&lt;li&gt;Scoring&lt;/li&gt;
+&lt;li&gt;Sampling&lt;/li&gt;
+&lt;li&gt;Enforcing style&lt;/li&gt;
+&lt;li&gt;Finally writing the draft
+The biggest problem with doing it this way isn&amp;rsquo;t that &amp;ldquo;the model isn&amp;rsquo;t strong enough,&amp;rdquo; but rather that every step burns the same level of cost.
+Looking back now, the truly reasonable approach should be to think in reverse: which steps &lt;em&gt;must&lt;/em&gt; be online, which steps should ideally be localized, and which steps shouldn&amp;rsquo;t even be given to a model at all.
+As long as this boundary isn&amp;rsquo;t clear, no matter how powerful the model is, it will just end up helping you repeat a bunch of tasks that could have been pre-processed away.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;local-models-are-better-suited-for-dirty-heavy-and-iterative-tasks&#34;&gt;Local Models are Better Suited for Dirty, Heavy, and Iterative Tasks
+&lt;/h2&gt;&lt;p&gt;I am increasingly inclined to define local models as the &amp;ldquo;physical layer&amp;rdquo; for production use.
+They might not be the strongest, nor perfect every time, but they are particularly suited for tasks such as:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Building through repeated runs/iterations&lt;/li&gt;
+&lt;li&gt;Multi-round compression experiments on style data&lt;/li&gt;
+&lt;li&gt;Re-scanning after configuration changes&lt;/li&gt;
+&lt;li&gt;Low-risk recalculation on existing structures&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;These types of tasks share a clear commonality.
+The value isn&amp;rsquo;t in a single, extremely high-value output, but rather in the ability to run repeatedly, tolerate errors, and ideally avoid paying high costs every single round.
+Currently, &lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt; has switched to &lt;code&gt;lm-studio-gemma4&lt;/code&gt;, which itself indicates a shift in judgment. It&amp;rsquo;s not that local &lt;code&gt;gemma&lt;/code&gt; is necessarily stronger than online models, but for the production pipeline, we are finally starting to prioritize &amp;ldquo;runnability, frequency of use, and ability to iterate/modify repeatedly.&amp;rdquo;
+This point actually aligns with the logic I wrote previously in &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;Don&amp;rsquo;t force strong tasks onto weak models&lt;/a&gt;.
+Local models might not be suitable for writing complex, comprehensive articles from scratch, but they are excellent for handling dirty, heavy, and batch processing tasks. Preprocessing style data is inherently more like this category of task.&lt;/p&gt;
+&lt;h2 id=&#34;online-models-are-better-suited-for-the-final-polish-not-for-doing-everything-from-scratch&#34;&gt;Online models are better suited for the final polish, not for doing everything from scratch
+&lt;/h2&gt;&lt;p&gt;Just because local models are suitable for the production side doesn&amp;rsquo;t mean online models have no value.
+The real value of an online model lies precisely in that final polishing touch.
+For example:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Supplementing facts based on the latest information&lt;/li&gt;
+&lt;li&gt;Structuring arguments within a larger context&lt;/li&gt;
+&lt;li&gt;Handling time-sensitive information that requires internet verification&lt;/li&gt;
+&lt;li&gt;Transforming already prepared structured style assets into a publishable article
+These tasks require higher demands on expression quality, factual integration, and contextual understanding, making online models more valuable here.
+In other words, the powerful model is more like the final few assembly line steps. It&amp;rsquo;s not that it &lt;em&gt;can&amp;rsquo;t&lt;/em&gt; do more upfront work, but if you make it scan from beginning to end, the entire cost structure will quickly become distorted.
+This is also why &lt;code&gt;blog-writer&lt;/code&gt; is designed to only read from the published location &lt;code&gt;published.runtime.json&lt;/code&gt;, rather than having to switch providers or re-scan the suite directory while drafting. The lighter the consumption side, the better it is for a more powerful model to focus on finalizing the article.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;the-significance-of-minimax-its-not-just-another-provider-connection&#34;&gt;The Significance of Minimax: It&amp;rsquo;s Not Just Another Provider Connection
+&lt;/h2&gt;&lt;p&gt;Many people who see &lt;code&gt;Minimax&lt;/code&gt; might first think: &amp;ldquo;It&amp;rsquo;s just another model being connected.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;I don&amp;rsquo;t think so.&lt;/p&gt;
+&lt;p&gt;The truly valuable aspect of &lt;code&gt;Minimax&lt;/code&gt; is that it has successfully paved the way for &lt;strong&gt;&amp;ldquo;multiple provider outputs consumed by a single publishing contract.&amp;rdquo;&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The change on April 2, 2026, at 10:18 (&lt;code&gt;9f15199&lt;/code&gt;) modified &lt;code&gt;blog-style-suite&lt;/code&gt; to support multi-model configurations, with outputs isolated per provider. Subsequently, the README and runtime structure have consistently emphasized one thing: while the suite can generate many sets of results, only the manually selected &lt;code&gt;published.runtime.json&lt;/code&gt; is actually effective.&lt;/p&gt;
+&lt;p&gt;This boundary is extremely important.&lt;/p&gt;
+&lt;p&gt;Because once this boundary is clear, the role of &lt;code&gt;Minimax&lt;/code&gt; changes from being &amp;ldquo;something that must be bound within the drafting process&amp;rdquo; to becoming:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Something that can participate in production-side comparisons.&lt;/li&gt;
+&lt;li&gt;Something that can be used to generate a runtime version.&lt;/li&gt;
+&lt;li&gt;Something that can be compared horizontally with local model artifacts.&lt;/li&gt;
+&lt;li&gt;Finally, something whose publication is decided by human judgment.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This transforms the provider from a &amp;ldquo;system dependency&amp;rdquo; into a &amp;ldquo;replaceable component.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;I believe this is the most interesting significance of &lt;code&gt;Minimax&lt;/code&gt; within this engineering setup. It isn&amp;rsquo;t here to dominate the entire pipeline; it&amp;rsquo;s here to validate whether this pipeline has successfully cleaned up its interfaces.&lt;/p&gt;
+&lt;h2 id=&#34;true-specialization-is-not-based-on-model-strength-but-on-task-type&#34;&gt;True specialization is not based on model strength, but on task type
+&lt;/h2&gt;&lt;p&gt;I now favor a classification method that is quite rudimentary, but very effective.&lt;/p&gt;
+&lt;h3 id=&#34;rules-and-hard-constraints&#34;&gt;Rules and Hard Constraints
+&lt;/h3&gt;&lt;p&gt;Leave to local scripts.
+If it can be solved with deterministic tools like &lt;code&gt;scanner.py&lt;/code&gt;, &lt;code&gt;write_post.py&lt;/code&gt;, or &lt;code&gt;write_post_series.py&lt;/code&gt;, don&amp;rsquo;t let the model get involved.&lt;/p&gt;
+&lt;h3 id=&#34;style-data-generation&#34;&gt;Style Data Generation
+&lt;/h3&gt;&lt;p&gt;Prioritize local models or lower-cost providers.
+Because what is most important here is reproducibility, room for iteration/error, and cacheability, not necessarily the most dazzling single output.&lt;/p&gt;
+&lt;h3 id=&#34;final-drafting-and-fact-consolidation&#34;&gt;Final Drafting and Fact Consolidation
+&lt;/h3&gt;&lt;p&gt;Hand this off to a model better suited for long-context integration, expression consolidation, and fact-checking/web retrieval.
+This layer is where spending money on online models is most worthwhile.
+When broken down like this, many previously confusing issues are actually not that complex. You don&amp;rsquo;t need to argue every day about &amp;ldquo;which model is the strongest&amp;rdquo;; you just need to ask: which layer does this task belong to?&lt;/p&gt;
+&lt;h2 id=&#34;ultimately-what-is-most-valuable-is-not-the-model-but-the-clear-boundaries&#34;&gt;Ultimately, what is most valuable is not the model, but the clear boundaries.
+&lt;/h2&gt;&lt;p&gt;This concludes my third article.
+As &lt;code&gt;blog-writer&lt;/code&gt; and &lt;code&gt;blog-style-suite&lt;/code&gt; have evolved, I feel that what is most valuable is not which provider we connected next, or who we replaced, or which one we tested.
+What is most valuable is that the boundaries are finally becoming clearer.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;blog-writer&lt;/code&gt; handles the consumption side.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;blog-style-suite&lt;/code&gt; handles the production side.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;published.runtime.json&lt;/code&gt; is the publishing point.&lt;/li&gt;
+&lt;li&gt;Local models are better suited for dirty and heavy lifting that needs to be run repeatedly.&lt;/li&gt;
+&lt;li&gt;Online models are better suited for the final polish/wrap-up.&lt;/li&gt;
+&lt;li&gt;Online providers like &lt;code&gt;Minimax&lt;/code&gt; feel more like replaceable components rather than the central hub of the system.
+Once the boundaries are clear, the entire workflow flows smoothly.
+You won&amp;rsquo;t expect one model package to conquer everything, nor will you stack every step onto the most expensive layer. In the end, while it looks like selecting a model, what we are actually doing is assigning workstations for different types of tasks.
+Simply put, having a single strong point is certainly good.
+But in the long run, clear boundaries are often more important and stronger than any single point solution.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9f1519967981c5eef7bd1eb407b0406ac542ebd0&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9f1519967981c5eef7bd1eb407b0406ac542ebd0&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/5f17088391ee858b88fc50df884bc0103ff0b3c1&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;5f17088391ee858b88fc50df884bc0103ff0b3c1&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Effective Runtime: &lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Related Old Article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/a-long-period-of-deep-ai-programming/&#34; &gt;A Period of Heavy AI Programming&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Related Old Article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/ultimately-its-returning-to-domestic-models/&#34; &gt;Ultimately Returning to Domestic Models&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Related Old Article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;Don&amp;rsquo;t Force Strong Tasks with Weak Models&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer This content is quite extensive, so I&#39;ve split it into a series of articles: Last year, many drafts were written using large models. Back then, the process was to create an outline or a list of questions myself, and then have the AI generate the draft, copy the content into a local md document, fill in header information, tag information, and publish the article; recently, I used Codex a lot and found that its web search capability is very strong. So, could I write a skill to automate these tasks? This led to the first draft of the skill blog-writer. I also thought about having the AI learn my previous writing style, which caused blog-writer to consume a lot of tokens when running. Subsequently, I optimized blog-writer in several versions, splitting out the data module and the data generation module. The original data generation module was still an independent skill. As I continued writing, I realized that it would be better as a Python project, which led to blog-style-suite. Then, I found that training on style data also consumes a lot of tokens, so I wanted to use a local large model and connected to a local LLM. I then thought about comparing the differences between the local LLM and the online version, so I integrated minimax; the evolution history of blog-style-suite and blog-writer can be analyzed from the git commit history. Additionally, based on the code for local blog-writer and blog-style-suite, I can discuss the design ideas, how token saving was achieved, and how the data structure was designed—the core design concepts. If tokens are abundant, it can consume entire historical articles; preprocessing can save a lot of tokens.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-strategy-summary&#34;&gt;Writing Strategy Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;The third article will no longer repeat the discussion on architecture, but instead focus solely on the practical issue of &amp;ldquo;model specialization/division of labor.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;Start directly by stating the current reality—whether to use &lt;code&gt;published.runtime.json&lt;/code&gt; from the current repository or if it&amp;rsquo;s switched locally to &lt;code&gt;gemma4&lt;/code&gt; via &lt;code&gt;minimax-m2&lt;/code&gt; or &lt;code&gt;config.json&lt;/code&gt;—to reduce filler content.&lt;/li&gt;
+&lt;li&gt;The focus should not be on proving which model is stronger, but rather on explaining &lt;em&gt;why&lt;/em&gt; different tasks should be assigned to different cost layers.&lt;/li&gt;
+&lt;li&gt;Placing &lt;code&gt;Minimax&lt;/code&gt; in the &amp;ldquo;replaceable provider&amp;rdquo; section aims to pull its significance back into the engineering boundary, rather than treating it as just another entry on a model leaderboard.&lt;/li&gt;
+&lt;li&gt;Conclude by returning to the overarching judgment: &amp;ldquo;Clear boundaries are more important than single points of strength,&amp;rdquo; serving as the closing statement for the entire series of articles.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Making the &#34;AI writes blog&#34; thing into an engineering project later (Part II)</title>
+        <link>https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/</link>
+        <pubDate>Fri, 03 Apr 2026 21:02:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/</guid>
+        <description>&lt;p&gt;If there are enough tokens, the least effort method is actually quite crude: just feed the model historical articles and let it learn on its own.
+The problem with this method is that it only suits occasional writing, not continuous work. If you treat blogging as a long-term workflow, relying solely on raw historical articles will quickly go from &amp;ldquo;simple and direct&amp;rdquo; to &amp;ldquo;expensive and messy.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;With these articles, the main thread has shifted. The previous article, &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/why-blog-writer-had-to-exist/&#34; &gt;AI Writing Blogs: It Eventually Needs to Become an Engineering Process (Part 1): Why a blog-writer is inevitable&lt;/a&gt;, discussed automation on the consumption side. This article starts discussing the production side—how to generate style data, how to compress it, and how not to waste tokens; the next article will continue this in &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AI Writing Blogs: It Eventually Needs to Become an Engineering Process (Part 3): Local Models, Online Models, and Minimax—How They Finally Divide Labor&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;the-most-natural-initial-thought-is-to-just-feed-it-historical-articles&#34;&gt;The most natural initial thought is to just feed it historical articles.
+&lt;/h2&gt;&lt;p&gt;This path feels too natural.
+If you want the model to learn your writing style, the most intuitive way is certainly to feed it old articles. It&amp;rsquo;s best to include all the posts from your history that are most like your own, and let it summarize them itself.
+For a single task, this approach has no flaws.
+In fact, many times the results are quite good. If the context is long enough, the model is powerful enough, and there are enough historical articles, the style can indeed be captured.
+But the problem isn&amp;rsquo;t &amp;ldquo;can it write this one article,&amp;rdquo; the problem is &amp;ldquo;for the next one, the one after that, do we have to repeat this process?&amp;rdquo;
+Feeding a new batch of old articles every time brings several very practical side effects:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The same batch of material repeatedly occupies the context window.&lt;/li&gt;
+&lt;li&gt;Token overhead grows almost linearly with the number of drafts written.&lt;/li&gt;
+&lt;li&gt;The model sees more and more noise, causing genuinely useful signals to become diluted.&lt;/li&gt;
+&lt;li&gt;The drafting action and style maintenance action become completely bound together; neither can be easily reduced.
+In other words, when tokens are abundant, eating it raw certainly works. But from an engineering perspective, we cannot keep doing that forever.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;this-is-also-why-the-data-module-and-the-data-generation-module-must-be-separated&#34;&gt;This is also why the data module and the data generation module must be separated
+&lt;/h2&gt;&lt;p&gt;I later realized that the core idea can be summarized in one sentence: separating the consumption side from the production side.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; is responsible for the consumption side. It only reads an already published runtime and then writes out the article according to a fixed contract.&lt;/p&gt;
+&lt;p&gt;Meanwhile, scanning, filtering, scoring, compressing style data, and provider comparison—all of this should be placed in another production pipeline. This is what later became &lt;code&gt;blog-style-suite&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Looking at the git history, this turning point is very clear.&lt;/p&gt;
+&lt;p&gt;The commit &lt;code&gt;84a06b5&lt;/code&gt; on April 1, 2026, at 21:47 clearly replaced the original &lt;code&gt;blog-style-maintainer&lt;/code&gt; skill with a repository-level CLI tool. This action speaks volumes because once you have &lt;code&gt;scan/build/rebuild&lt;/code&gt;, an output directory, and a recovery mechanism, it&amp;rsquo;s no longer like a simple skill; it&amp;rsquo;s more like a normal Python project.&lt;/p&gt;
+&lt;p&gt;By the commit &lt;code&gt;9e92b8e&lt;/code&gt; on April 1, 2026, at 23:05, &lt;code&gt;blog-style-suite&lt;/code&gt; was further broken down into modules like &lt;code&gt;scanner.py&lt;/code&gt;, &lt;code&gt;builder.py&lt;/code&gt;, and &lt;code&gt;compressor.py&lt;/code&gt;. By this stage, the thinking process was already highly engineered:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;scanner.py&lt;/code&gt; is responsible for scanning articles from disk and extracting structured features.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;builder.py&lt;/code&gt; is responsible for scoring, selecting, caching, and runtime assembly.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;compressor.py&lt;/code&gt; is responsible for the compression steps that involve the model.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This represents a completely different approach compared to simply writing a super prompt.&lt;/p&gt;
+&lt;h2 id=&#34;saving-tokens-not-by-magic-but-by-preprocessing-and-batching&#34;&gt;Saving Tokens: Not by Magic, But by Preprocessing and Batching
+&lt;/h2&gt;&lt;p&gt;The most valuable part of this entire engineering setup, I think, is the commit &lt;code&gt;bc4b950&lt;/code&gt; from April 2, 2026, at 19:41.
+That commit was very direct: it reduced AI calls from about &lt;code&gt;2000&lt;/code&gt; times down to a maximum of &lt;code&gt;5&lt;/code&gt; times per provider.
+How was this achieved?
+It wasn&amp;rsquo;t by &amp;ldquo;making the prompt smarter,&amp;rdquo; but by doing the necessary preprocessing beforehand.
+The current flow in &lt;code&gt;blog-style-suite&lt;/code&gt; is very clear:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;The &lt;code&gt;scan&lt;/code&gt; stage is purely heuristic, requiring 0 AI calls.&lt;/li&gt;
+&lt;li&gt;The &lt;code&gt;build&lt;/code&gt; stage first performs heuristic scoring, also requiring 0 AI calls.&lt;/li&gt;
+&lt;li&gt;Then, it performs one batch selection and labeling for each of the four lanes: &lt;code&gt;technical / finance / essay / tooling&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Finally, there is one author style compression step.
+Counting this up, the cold start requires at most 5 calls.
+More critically, these 5 calls are not spread across every single article; they are concentrated on high-value summary materials that have already been preprocessed.
+This is where preprocessing truly saves tokens. It&amp;rsquo;s not about saving a few words; it&amp;rsquo;s about changing the process from &amp;ldquo;calling per article&amp;rdquo; to &amp;ldquo;batch calling by stage.&amp;rdquo;
+Furthermore, caching has been implemented.
+In &lt;code&gt;builder.py&lt;/code&gt;, there are lane batch fingerprints, provider checkpoint recovery, and contractions like &lt;code&gt;review_pool_per_lane = 12&lt;/code&gt; for local model context. If you change a small amount of data, the entire pipeline doesn&amp;rsquo;t need to rerun.
+These kinds of designs might not look flashy, but every single one is highly practical because they solve the problem of &amp;ldquo;don&amp;rsquo;t let the same batch of tokens burn twice.&amp;rdquo;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;essentially-this-data-structure-is-compressing-the-truly-useful-signal&#34;&gt;Essentially, this data structure is compressing the truly useful signal.
+&lt;/h2&gt;&lt;p&gt;Once this is broken down, the data structure will be smooth.
+I am now more willing to understand it as three layers.&lt;/p&gt;
+&lt;h3 id=&#34;layer-one-scanjson&#34;&gt;Layer One: &lt;code&gt;scan.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is the shared raw material.
+It contains structured signals such as article path, title, date, category, tags, opening paragraph, closing stub, headings, screening results, and lane classification.
+It is not directly consumed by &lt;code&gt;blog-writer&lt;/code&gt;; rather, it is passed to the production side for further processing.&lt;/p&gt;
+&lt;h3 id=&#34;second-layer-providersourcejson&#34;&gt;Second Layer: &lt;code&gt;{provider}.source.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is the provider-level checkpoint.
+Building upon the shared raw materials, it includes intermediate states such as scoring results, lane selection, fingerprint, and cache status. In other words, it is more like a &amp;ldquo;semi-finished product during processing,&amp;rdquo; with an emphasis on being recoverable, reusable, and resumable.&lt;/p&gt;
+&lt;h3 id=&#34;layer-three-providerruntimejson-and-publishedruntimejson&#34;&gt;Layer Three: &lt;code&gt;{provider}.runtime.json&lt;/code&gt; and &lt;code&gt;published.runtime.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is what the consumption side truly cares about—the finished product.
+It retains:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lanes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;writer_guide&lt;/code&gt;
+In essence, it compresses a large collection of historical articles into one ready-to-consume runtime style asset.
+The &lt;code&gt;published.runtime.json&lt;/code&gt; in particular is crucial for the publishing stage. The &lt;code&gt;blog-writer&lt;/code&gt; only reads this file and does not need to scan &lt;code&gt;content/post&lt;/code&gt;, nor does it need to care about the complete images of all providers in the suite directory.
+Once this boundary is established, the consumption side becomes much lighter. The writing model no longer sees a pile of raw old articles, but rather a pre-processed, high-density signal.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;not-everything-should-be-left-to-the-model&#34;&gt;Not Everything Should Be Left to the Model
+&lt;/h2&gt;&lt;p&gt;I&amp;rsquo;m increasingly feeling that the most correct judgment in this entire engineering process isn&amp;rsquo;t &amp;ldquo;add more models,&amp;rdquo; but rather &amp;ldquo;don&amp;rsquo;t throw tasks that shouldn&amp;rsquo;t be done by a model onto it.&amp;rdquo;
+Things like these are much better handled by local rules first:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Frontmatter parsing&lt;/li&gt;
+&lt;li&gt;Extracting introductory paragraphs&lt;/li&gt;
+&lt;li&gt;Headings extraction&lt;/li&gt;
+&lt;li&gt;Determining author/repost/model attribution&lt;/li&gt;
+&lt;li&gt;Detecting blockquote ratios&lt;/li&gt;
+&lt;li&gt;Hard rule filtering for things like &lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt;, embedded prompts, and body length.
+Having the model do these tasks isn&amp;rsquo;t impossible, but it&amp;rsquo;s wasteful.
+What models are better suited for are parts that involve ambiguity or trade-offs. For example, which few articles in a lane best represent the current sentiment, or extracting author style tags from high-scoring articles.
+Therefore, what makes &lt;code&gt;blog-style-suite&lt;/code&gt; truly valuable isn&amp;rsquo;t just &amp;ldquo;saving tokens,&amp;rdquo; but rather its re-division of labor among humans, rules, and models—assigning each party the tasks they are best suited for.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;preprocessing-isnt-about-saving-a-few-tokens-its-about-making-the-act-of-writing-sustainable&#34;&gt;Preprocessing isn&amp;rsquo;t about saving a few tokens; it&amp;rsquo;s about making the act of writing sustainable.
+&lt;/h2&gt;&lt;p&gt;For the conclusion in the second article, I want to make it more direct.&lt;/p&gt;
+&lt;p&gt;When you have plenty of tokens, reading historical articles raw is fine. In fact, if you only write one or two pieces, it might even be less mentally taxing.&lt;/p&gt;
+&lt;p&gt;But as soon as you want to turn this into a long-term workflow, preprocessing becomes non-negotiable. Because without preprocessing, the writing model has to re-read old materials every time, and style maintenance and article generation are always mixed together.&lt;/p&gt;
+&lt;p&gt;The significance of &lt;code&gt;blog-style-suite&lt;/code&gt; is to untangle this mess.&lt;/p&gt;
+&lt;p&gt;It&amp;rsquo;s not about making the system look complex, nor is it just for another project name; it&amp;rsquo;s so that &lt;code&gt;blog-writer&lt;/code&gt; can remain lightweight, stable, and focused on &amp;ldquo;only the action of writing.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;Having reached this point, the next question naturally follows.&lt;/p&gt;
+&lt;p&gt;Since the production side has been separated, what model should bear this cost? Local models, online models, or &lt;code&gt;Minimax&lt;/code&gt;—where should each one stand in the workflow? I&amp;rsquo;ll save this for the next article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AI Writing Blogs: How It Eventually Has to Become Engineering (Part 3): The Division of Labor Between Local Models, Online Models, and Minimax&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/84a06b5dc743f2e9bc6e788d53496a1261bc63ae&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;84a06b5dc743f2e9bc6e788d53496a1261bc63ae&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/README.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/scanner.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/builder.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/compressor.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Effective Runtime: &lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer This content is quite extensive, so I&#39;ve split it into a series of articles: Last year, many drafts were written using large models. Back then, the process was to create an outline or a list of questions myself, and then have the AI generate the draft, copy the content into a local md document, fill in header information, tag information, and publish the article; recently, I used Codex a lot and found that its web search capability is very strong. So, could I write a skill to automate these tasks? This led to the first draft of the skill blog-writer. I also thought about having the AI learn my previous writing style, which caused blog-writer to consume a lot of tokens when running. Subsequently, I optimized blog-writer in several versions, splitting out the data module and the data generation module. The original data generation module was still an independent skill. As I continued writing, I realized that it would be better as a Python project, which led to blog-style-suite. Then, I found that training on style data also consumes a lot of tokens, so I wanted to use a local large model and connected to a local LLM. I then thought about comparing the differences between the local LLM and the online version, so I integrated minimax; the evolution history of blog-style-suite and blog-writer can be analyzed from the git commit history. Additionally, based on the code for local blog-writer and blog-style-suite, I can discuss the design ideas, how token saving was achieved, and how the data structure was designed—the core design concepts. If tokens are abundant, it can consume entire historical articles; preprocessing can save a lot of tokens.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-outline-summary&#34;&gt;Writing Outline Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;This article shifts the focus from the act of writing drafts to data engineering, with the core answer being &amp;ldquo;why modularization is necessary.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;The introduction directly acknowledges that &amp;ldquo;using raw historical articles works,&amp;rdquo; which makes the subsequent arguments for splitting more convincing.&lt;/li&gt;
+&lt;li&gt;It elaborates on the three structural layers: &lt;code&gt;scan.json&lt;/code&gt;, &lt;code&gt;source.json&lt;/code&gt;, and &lt;code&gt;runtime.json&lt;/code&gt;, avoiding vague architectural discussions.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;bc4b950&lt;/code&gt; is placed in the middle as a turning point because &amp;ldquo;reducing from about 2000 times to 5 times&amp;rdquo; best illustrates the value of preprocessing.&lt;/li&gt;
+&lt;li&gt;The conclusion re-separates the consumption side and the production side, setting the stage for model division in the third article.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

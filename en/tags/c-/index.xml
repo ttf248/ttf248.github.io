@@ -6,7 +6,136 @@
         <description>Recent content in C&#43;&#43; on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Mon, 16 Mar 2026 20:41:53 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/c-/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/c-/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>What is this process of layering folders and then wrapping them in a namespace called?</title>
+        <link>https://ttf248.life/en/p/cpp-folder-namespace-what-is-it-called/</link>
+        <pubDate>Thu, 09 Apr 2026 02:31:07 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/cpp-folder-namespace-what-is-it-called/</guid>
+        <description>&lt;p&gt;When I recently wrote the algorithm service, as soon as I implemented modules like &lt;code&gt;twap&lt;/code&gt; and &lt;code&gt;vwap&lt;/code&gt;, this old problem popped up again.&lt;/p&gt;
+&lt;p&gt;If we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like &lt;code&gt;TwapOrderManager&lt;/code&gt;, &lt;code&gt;VwapOrderManager&lt;/code&gt;, and &lt;code&gt;AlgoOrderManager&lt;/code&gt; sound like, &amp;ldquo;I know my structure isn&amp;rsquo;t contained, but I&amp;rsquo;ll at least add a prefix.&amp;rdquo; Frankly speaking, organizing by folders and then adding a layer of &lt;code&gt;namespace&lt;/code&gt; isn&amp;rsquo;t about code snobbery; it&amp;rsquo;s filling the gap that C++ has because it lacks Java&amp;rsquo;s native &lt;code&gt;package&lt;/code&gt; system.&lt;/p&gt;
+&lt;h2 id=&#34;to-state-the-conclusion-first&#34;&gt;To state the conclusion first
+&lt;/h2&gt;&lt;p&gt;If I have to find a software engineering term that is the closest, I think the two words that should be mentioned are:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Modularization&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Namespace management&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;If I want to be more precise, this type of directory organization is often doing:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Packaging by feature / Packaging by domain&lt;/strong&gt;, which is commonly referred to as &lt;code&gt;package by feature&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;If the business boundaries are already very strong, it will also carry a bit of &lt;strong&gt;bounded context&lt;/strong&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;In other words, it is not a small concept with a single standard translation name; rather, it is more like several design principles stacked together.&lt;/p&gt;
+&lt;h2 id=&#34;what-is-actually-solved-here-is-not-just-about-looking-good&#34;&gt;What is actually solved here is not just about &amp;ldquo;looking good&amp;rdquo;
+&lt;/h2&gt;&lt;p&gt;When many people first see a &lt;code&gt;namespace&lt;/code&gt;, their immediate thought is to avoid name collisions. This is certainly true; the &lt;code&gt;namespace&lt;/code&gt; in C++ standards was originally designed to prevent naming conflicts in large projects &lt;a class=&#34;link&#34; href=&#34;https://en.cppreference.com/w/cpp/language/namespace&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;cppreference&lt;/a&gt;. However, when it comes to actual business code, its value goes far beyond that.&lt;/p&gt;
+&lt;p&gt;Once the directory structure and &lt;code&gt;namespace&lt;/code&gt; are aligned, class names no longer need to repeat the higher-level semantics.&lt;/p&gt;
+&lt;p&gt;For example, previously one might write something like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;class TwapOrderManager;
+class TwapScheduleEngine;
+class VwapOrderManager;
+class VwapScheduleEngine;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;After adopting directories and namespaces, a more natural way to write it is usually:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;namespace algo::twap {
+class OrderManager;
+class ScheduleEngine;
+}
+
+namespace algo::vwap {
+class OrderManager;
+class ScheduleEngine;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This removes the redundant prefix, making the semantics clearer. Because &amp;ldquo;which context it belongs to&amp;rdquo; is no longer stuffed into the class name, but rather expressed by the directory and &lt;code&gt;namespace&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Therefore, this approach essentially involves &lt;strong&gt;extracting contextual information from the names and letting the structure carry it&lt;/strong&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;this-is-more-like-packaging-by-feature&#34;&gt;This is more like &amp;ldquo;packaging by feature&amp;rdquo;
+&lt;/h2&gt;&lt;p&gt;If your directory looks like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;strategy/
+  twap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+  vwap/
+    order_manager.h
+    schedule_engine.h
+    slicer.h
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then you are no longer doing traditional &amp;ldquo;packaging by technical layer.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;The traditional way is more like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;models/
+services/
+utils/
+controllers/
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This structure looks neat at the beginning, but as the business logic grows, the &lt;code&gt;service&lt;/code&gt; directory will look like a junk heap. Classes related to one feature get scattered across different directories, making it hard to read the code because your mind keeps jumping around.&lt;/p&gt;
+&lt;p&gt;Whereas the &lt;code&gt;twap&lt;/code&gt; or &lt;code&gt;vwap&lt;/code&gt; approach is closer to &lt;code&gt;package by feature&lt;/code&gt;. This means a directory first answers the question, &amp;ldquo;What is this business module about?&amp;rdquo;, and then places all the objects and processes needed for that specific business module inside it. This concept is more common in the Java world, but it works just as well in C++; the difference is that what carries it isn&amp;rsquo;t a native &lt;code&gt;package&lt;/code&gt;, but rather a combination of &amp;ldquo;directory + &lt;code&gt;namespace&lt;/code&gt; + header file boundaries.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;Simply put, you are &lt;strong&gt;organizing code by the reason for change, not by the appearance of the code.&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;taking-it-one-step-further-its-about-high-cohesion-and-low-coupling&#34;&gt;Taking it one step further, it&amp;rsquo;s about high cohesion and low coupling
+&lt;/h2&gt;&lt;p&gt;The frequently mentioned phrase in software engineering, &amp;ldquo;high cohesion, low coupling,&amp;rdquo; actually falls into this area.&lt;/p&gt;
+&lt;p&gt;Since the objects under &lt;code&gt;twap&lt;/code&gt; collaborate frequently with each other, they should be placed closer together, and their namespaces should also be close; &lt;code&gt;vwap&lt;/code&gt; is similar to it but not quite the same, so it deserves its own boundary. Doing this has several direct benefits:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Class names within the same module can be shorter&lt;/li&gt;
+&lt;li&gt;Dependencies between modules are easier to see&lt;/li&gt;
+&lt;li&gt;It&amp;rsquo;s easier to judge during refactoring whether changes might propagate to other areas&lt;/li&gt;
+&lt;li&gt;If you eventually need to split a certain capability into an independent library, the cost will be smaller.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This is also why many mature projects end up looking like they have consistent &amp;ldquo;directory boundaries + namespace boundaries + compilation boundaries.&amp;rdquo; In projects like QuickFIX, you can see a similar idea: types and extension points are kept under clear namespaces rather than being artificially separated by very long class prefixes &lt;a class=&#34;link&#34; href=&#34;https://quickfixengine.org/c/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;QuickFIX&lt;/a&gt; &lt;a class=&#34;link&#34; href=&#34;https://github.com/quickfix/quickfix&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GitHub&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;when-its-not-enough-anymore&#34;&gt;When It&amp;rsquo;s Not Enough Anymore
+&lt;/h2&gt;&lt;p&gt;However, don&amp;rsquo;t mythologize this either.&lt;/p&gt;
+&lt;p&gt;Simply layering folders and wrapping them in a &lt;code&gt;namespace&lt;/code&gt; can only indicate that you are moving towards modularization; it doesn&amp;rsquo;t mean the architecture is automatically sound. Several common pitfalls are also obvious:&lt;/p&gt;
+&lt;h3 id=&#34;directory-and-namespace-mismatch&#34;&gt;Directory and Namespace Mismatch
+&lt;/h3&gt;&lt;p&gt;The directory is &lt;code&gt;twap/&lt;/code&gt;, but the code contains scattered global classes, or &lt;code&gt;namespace common&lt;/code&gt; floating everywhere. This is basically useless.&lt;/p&gt;
+&lt;h3 id=&#34;module-boundaries-are-false-boundaries&#34;&gt;Module Boundaries are False Boundaries
+&lt;/h3&gt;&lt;p&gt;There are &lt;code&gt;twap&lt;/code&gt; and &lt;code&gt;vwap&lt;/code&gt; on the surface, but they actually &lt;code&gt;#include&lt;/code&gt; each other. The common logic can leak through freely, and in the end, it just moves the files around without reducing any coupling.&lt;/p&gt;
+&lt;h3 id=&#34;the-longer-the-common-directory-the-fatter-it-gets&#34;&gt;The longer the &lt;code&gt;common&lt;/code&gt; directory, the fatter it gets
+&lt;/h3&gt;&lt;p&gt;This is the most common issue. Many projects are structured quite well at first, but later find it troublesome and start dumping things into &lt;code&gt;common&lt;/code&gt;, &lt;code&gt;base&lt;/code&gt;, or &lt;code&gt;util&lt;/code&gt;. By the end, instead of having truly stable abstractions that have been properly developed, they end up with a massive pitfall that everyone can touch and everyone depends on.&lt;/p&gt;
+&lt;h3 id=&#34;structure-by-layer-only-not-by-business-domain&#34;&gt;Structure by Layer Only, Not by Business Domain
+&lt;/h3&gt;&lt;p&gt;If your directory structure is always &lt;code&gt;api&lt;/code&gt;, &lt;code&gt;service&lt;/code&gt;, &lt;code&gt;dao&lt;/code&gt;, &lt;code&gt;model&lt;/code&gt;, then many business concepts actually have no home. Class names are forced to get longer and longer, cramming everything that should be expressed by the structure back into the name itself.&lt;/p&gt;
+&lt;h2 id=&#34;so-what-should-it-be-called&#34;&gt;So, what should it be called?
+&lt;/h2&gt;&lt;p&gt;If I were communicating this within a team, I think there are three levels of description:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;If you just want to speak plain language: &lt;strong&gt;Modularization based on directories and namespaces&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;If you want to sound more engineering-focused: &lt;strong&gt;Package organization by feature, combined with hierarchical namespaces&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;If these boundaries are already strongly bound to business semantics: &lt;strong&gt;Module division with a bounded context feel&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;I personally lean towards the second option. Because it is closest to the scenario you described.&lt;/p&gt;
+&lt;p&gt;What you&amp;rsquo;re doing isn&amp;rsquo;t about C++ syntax tricks, nor is it just about naming conventions; you are doing something more substantial: &lt;strong&gt;Using structure to carry semantics, allowing names to return to their true meaning&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;When class names get shorter and file names get shorter, what you first see when reading the code is an object with clear context like &lt;code&gt;twap::OrderManager&lt;/code&gt;, rather than something that mixes directory responsibility, naming responsibility, and implementation responsibility all together like &lt;code&gt;TwapOrderManagerImpl&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Only then does the code start to feel somewhat like Java after its package structure has matured.&lt;/p&gt;
+&lt;h2 id=&#34;the-last-sentence&#34;&gt;The Last Sentence
+&lt;/h2&gt;&lt;p&gt;So, in software engineering, there are corresponding concepts, but there isn&amp;rsquo;t one single standard answer.&lt;/p&gt;
+&lt;p&gt;Broadly speaking, it&amp;rsquo;s called modularization. In terms of code organization, it&amp;rsquo;s called feature-based packaging, plus namespace management. In terms of domain boundaries, it has something to do with bounded context.&lt;/p&gt;
+&lt;p&gt;How should I put it? The most valuable aspect of this practice is never that &amp;ldquo;the names look neat,&amp;rdquo; but rather that you finally don&amp;rsquo;t have to rely on super long prefixes to compensate for structural deficiencies.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://en.cppreference.com/w/cpp/language/namespace&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;cppreference: Namespaces&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://quickfixengine.org/c/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;QuickFIX/C++ Official Site&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/quickfix/quickfix&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;QuickFIX GitHub Repository&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.javapractices.com/home/HomeAction.do&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Java Practices: Package by feature, not layer&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://martinfowler.com/bliki/BoundedContext.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Martin Fowler: Bounded Context&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;Prompt: When developing code in C++, a good practice is to organize it by folders and then wrap each class with a namespace, similar to Java&amp;rsquo;s package. This can effectively reduce redundant content in file names and class names. A classic project is QuickFIX, and we have recently used a similar design for algorithm services. Many functional modules like TWAP and VWAP are similar. Is there a specific concept in software engineering for this?&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;writing-approach-summary&#34;&gt;Writing Approach Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Start by focusing on the actual trigger points of &lt;code&gt;twap&lt;/code&gt; and &lt;code&gt;vwap&lt;/code&gt; in algorithm services, making the judgment clear first.&lt;/li&gt;
+&lt;li&gt;Instead of forcing the problem into a single noun, it is broken down into more accurate levels such as modularization, namespace management, and packaging by feature.&lt;/li&gt;
+&lt;li&gt;The correspondence between QuickFIX and Java packages has been retained to illustrate that C++ often needs directories and namespaces to supplement structural semantics.&lt;/li&gt;
+&lt;li&gt;The focus is on &amp;ldquo;using structure to carry semantics,&amp;rdquo; rather than remaining at a superficial explanation like &amp;ldquo;avoiding name collisions.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;Added reference links for &lt;code&gt;namespace&lt;/code&gt;, &lt;code&gt;package by feature&lt;/code&gt;, and &lt;code&gt;bounded context&lt;/code&gt; to facilitate further development.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>Deep Dive: Memory Corruption and Cache Pollution in C&#43;&#43; with Static Lambdas</title>
         <link>https://ttf248.life/en/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/</link>
         <pubDate>Mon, 16 Mar 2026 20:18:18 +0800</pubDate>

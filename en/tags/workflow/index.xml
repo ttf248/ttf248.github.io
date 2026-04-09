@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Workflow on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/workflow/</link>
+        <description>Recent content in Workflow on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/workflow/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Making the &#34;AI writes blog&#34; thing into an engineering project later (Part II)</title>
+        <link>https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/</link>
+        <pubDate>Fri, 03 Apr 2026 21:02:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/</guid>
+        <description>&lt;p&gt;If there are enough tokens, the least effort method is actually quite crude: just feed the model historical articles and let it learn on its own.
+The problem with this method is that it only suits occasional writing, not continuous work. If you treat blogging as a long-term workflow, relying solely on raw historical articles will quickly go from &amp;ldquo;simple and direct&amp;rdquo; to &amp;ldquo;expensive and messy.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;With these articles, the main thread has shifted. The previous article, &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/why-blog-writer-had-to-exist/&#34; &gt;AI Writing Blogs: It Eventually Needs to Become an Engineering Process (Part 1): Why a blog-writer is inevitable&lt;/a&gt;, discussed automation on the consumption side. This article starts discussing the production side—how to generate style data, how to compress it, and how not to waste tokens; the next article will continue this in &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AI Writing Blogs: It Eventually Needs to Become an Engineering Process (Part 3): Local Models, Online Models, and Minimax—How They Finally Divide Labor&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;the-most-natural-initial-thought-is-to-just-feed-it-historical-articles&#34;&gt;The most natural initial thought is to just feed it historical articles.
+&lt;/h2&gt;&lt;p&gt;This path feels too natural.
+If you want the model to learn your writing style, the most intuitive way is certainly to feed it old articles. It&amp;rsquo;s best to include all the posts from your history that are most like your own, and let it summarize them itself.
+For a single task, this approach has no flaws.
+In fact, many times the results are quite good. If the context is long enough, the model is powerful enough, and there are enough historical articles, the style can indeed be captured.
+But the problem isn&amp;rsquo;t &amp;ldquo;can it write this one article,&amp;rdquo; the problem is &amp;ldquo;for the next one, the one after that, do we have to repeat this process?&amp;rdquo;
+Feeding a new batch of old articles every time brings several very practical side effects:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The same batch of material repeatedly occupies the context window.&lt;/li&gt;
+&lt;li&gt;Token overhead grows almost linearly with the number of drafts written.&lt;/li&gt;
+&lt;li&gt;The model sees more and more noise, causing genuinely useful signals to become diluted.&lt;/li&gt;
+&lt;li&gt;The drafting action and style maintenance action become completely bound together; neither can be easily reduced.
+In other words, when tokens are abundant, eating it raw certainly works. But from an engineering perspective, we cannot keep doing that forever.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;this-is-also-why-the-data-module-and-the-data-generation-module-must-be-separated&#34;&gt;This is also why the data module and the data generation module must be separated
+&lt;/h2&gt;&lt;p&gt;I later realized that the core idea can be summarized in one sentence: separating the consumption side from the production side.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; is responsible for the consumption side. It only reads an already published runtime and then writes out the article according to a fixed contract.&lt;/p&gt;
+&lt;p&gt;Meanwhile, scanning, filtering, scoring, compressing style data, and provider comparison—all of this should be placed in another production pipeline. This is what later became &lt;code&gt;blog-style-suite&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Looking at the git history, this turning point is very clear.&lt;/p&gt;
+&lt;p&gt;The commit &lt;code&gt;84a06b5&lt;/code&gt; on April 1, 2026, at 21:47 clearly replaced the original &lt;code&gt;blog-style-maintainer&lt;/code&gt; skill with a repository-level CLI tool. This action speaks volumes because once you have &lt;code&gt;scan/build/rebuild&lt;/code&gt;, an output directory, and a recovery mechanism, it&amp;rsquo;s no longer like a simple skill; it&amp;rsquo;s more like a normal Python project.&lt;/p&gt;
+&lt;p&gt;By the commit &lt;code&gt;9e92b8e&lt;/code&gt; on April 1, 2026, at 23:05, &lt;code&gt;blog-style-suite&lt;/code&gt; was further broken down into modules like &lt;code&gt;scanner.py&lt;/code&gt;, &lt;code&gt;builder.py&lt;/code&gt;, and &lt;code&gt;compressor.py&lt;/code&gt;. By this stage, the thinking process was already highly engineered:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;scanner.py&lt;/code&gt; is responsible for scanning articles from disk and extracting structured features.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;builder.py&lt;/code&gt; is responsible for scoring, selecting, caching, and runtime assembly.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;compressor.py&lt;/code&gt; is responsible for the compression steps that involve the model.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This represents a completely different approach compared to simply writing a super prompt.&lt;/p&gt;
+&lt;h2 id=&#34;saving-tokens-not-by-magic-but-by-preprocessing-and-batching&#34;&gt;Saving Tokens: Not by Magic, But by Preprocessing and Batching
+&lt;/h2&gt;&lt;p&gt;The most valuable part of this entire engineering setup, I think, is the commit &lt;code&gt;bc4b950&lt;/code&gt; from April 2, 2026, at 19:41.
+That commit was very direct: it reduced AI calls from about &lt;code&gt;2000&lt;/code&gt; times down to a maximum of &lt;code&gt;5&lt;/code&gt; times per provider.
+How was this achieved?
+It wasn&amp;rsquo;t by &amp;ldquo;making the prompt smarter,&amp;rdquo; but by doing the necessary preprocessing beforehand.
+The current flow in &lt;code&gt;blog-style-suite&lt;/code&gt; is very clear:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;The &lt;code&gt;scan&lt;/code&gt; stage is purely heuristic, requiring 0 AI calls.&lt;/li&gt;
+&lt;li&gt;The &lt;code&gt;build&lt;/code&gt; stage first performs heuristic scoring, also requiring 0 AI calls.&lt;/li&gt;
+&lt;li&gt;Then, it performs one batch selection and labeling for each of the four lanes: &lt;code&gt;technical / finance / essay / tooling&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Finally, there is one author style compression step.
+Counting this up, the cold start requires at most 5 calls.
+More critically, these 5 calls are not spread across every single article; they are concentrated on high-value summary materials that have already been preprocessed.
+This is where preprocessing truly saves tokens. It&amp;rsquo;s not about saving a few words; it&amp;rsquo;s about changing the process from &amp;ldquo;calling per article&amp;rdquo; to &amp;ldquo;batch calling by stage.&amp;rdquo;
+Furthermore, caching has been implemented.
+In &lt;code&gt;builder.py&lt;/code&gt;, there are lane batch fingerprints, provider checkpoint recovery, and contractions like &lt;code&gt;review_pool_per_lane = 12&lt;/code&gt; for local model context. If you change a small amount of data, the entire pipeline doesn&amp;rsquo;t need to rerun.
+These kinds of designs might not look flashy, but every single one is highly practical because they solve the problem of &amp;ldquo;don&amp;rsquo;t let the same batch of tokens burn twice.&amp;rdquo;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;essentially-this-data-structure-is-compressing-the-truly-useful-signal&#34;&gt;Essentially, this data structure is compressing the truly useful signal.
+&lt;/h2&gt;&lt;p&gt;Once this is broken down, the data structure will be smooth.
+I am now more willing to understand it as three layers.&lt;/p&gt;
+&lt;h3 id=&#34;layer-one-scanjson&#34;&gt;Layer One: &lt;code&gt;scan.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is the shared raw material.
+It contains structured signals such as article path, title, date, category, tags, opening paragraph, closing stub, headings, screening results, and lane classification.
+It is not directly consumed by &lt;code&gt;blog-writer&lt;/code&gt;; rather, it is passed to the production side for further processing.&lt;/p&gt;
+&lt;h3 id=&#34;second-layer-providersourcejson&#34;&gt;Second Layer: &lt;code&gt;{provider}.source.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is the provider-level checkpoint.
+Building upon the shared raw materials, it includes intermediate states such as scoring results, lane selection, fingerprint, and cache status. In other words, it is more like a &amp;ldquo;semi-finished product during processing,&amp;rdquo; with an emphasis on being recoverable, reusable, and resumable.&lt;/p&gt;
+&lt;h3 id=&#34;layer-three-providerruntimejson-and-publishedruntimejson&#34;&gt;Layer Three: &lt;code&gt;{provider}.runtime.json&lt;/code&gt; and &lt;code&gt;published.runtime.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;This is what the consumption side truly cares about—the finished product.
+It retains:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lanes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;writer_guide&lt;/code&gt;
+In essence, it compresses a large collection of historical articles into one ready-to-consume runtime style asset.
+The &lt;code&gt;published.runtime.json&lt;/code&gt; in particular is crucial for the publishing stage. The &lt;code&gt;blog-writer&lt;/code&gt; only reads this file and does not need to scan &lt;code&gt;content/post&lt;/code&gt;, nor does it need to care about the complete images of all providers in the suite directory.
+Once this boundary is established, the consumption side becomes much lighter. The writing model no longer sees a pile of raw old articles, but rather a pre-processed, high-density signal.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;not-everything-should-be-left-to-the-model&#34;&gt;Not Everything Should Be Left to the Model
+&lt;/h2&gt;&lt;p&gt;I&amp;rsquo;m increasingly feeling that the most correct judgment in this entire engineering process isn&amp;rsquo;t &amp;ldquo;add more models,&amp;rdquo; but rather &amp;ldquo;don&amp;rsquo;t throw tasks that shouldn&amp;rsquo;t be done by a model onto it.&amp;rdquo;
+Things like these are much better handled by local rules first:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Frontmatter parsing&lt;/li&gt;
+&lt;li&gt;Extracting introductory paragraphs&lt;/li&gt;
+&lt;li&gt;Headings extraction&lt;/li&gt;
+&lt;li&gt;Determining author/repost/model attribution&lt;/li&gt;
+&lt;li&gt;Detecting blockquote ratios&lt;/li&gt;
+&lt;li&gt;Hard rule filtering for things like &lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt;, embedded prompts, and body length.
+Having the model do these tasks isn&amp;rsquo;t impossible, but it&amp;rsquo;s wasteful.
+What models are better suited for are parts that involve ambiguity or trade-offs. For example, which few articles in a lane best represent the current sentiment, or extracting author style tags from high-scoring articles.
+Therefore, what makes &lt;code&gt;blog-style-suite&lt;/code&gt; truly valuable isn&amp;rsquo;t just &amp;ldquo;saving tokens,&amp;rdquo; but rather its re-division of labor among humans, rules, and models—assigning each party the tasks they are best suited for.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;preprocessing-isnt-about-saving-a-few-tokens-its-about-making-the-act-of-writing-sustainable&#34;&gt;Preprocessing isn&amp;rsquo;t about saving a few tokens; it&amp;rsquo;s about making the act of writing sustainable.
+&lt;/h2&gt;&lt;p&gt;For the conclusion in the second article, I want to make it more direct.&lt;/p&gt;
+&lt;p&gt;When you have plenty of tokens, reading historical articles raw is fine. In fact, if you only write one or two pieces, it might even be less mentally taxing.&lt;/p&gt;
+&lt;p&gt;But as soon as you want to turn this into a long-term workflow, preprocessing becomes non-negotiable. Because without preprocessing, the writing model has to re-read old materials every time, and style maintenance and article generation are always mixed together.&lt;/p&gt;
+&lt;p&gt;The significance of &lt;code&gt;blog-style-suite&lt;/code&gt; is to untangle this mess.&lt;/p&gt;
+&lt;p&gt;It&amp;rsquo;s not about making the system look complex, nor is it just for another project name; it&amp;rsquo;s so that &lt;code&gt;blog-writer&lt;/code&gt; can remain lightweight, stable, and focused on &amp;ldquo;only the action of writing.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;Having reached this point, the next question naturally follows.&lt;/p&gt;
+&lt;p&gt;Since the production side has been separated, what model should bear this cost? Local models, online models, or &lt;code&gt;Minimax&lt;/code&gt;—where should each one stand in the workflow? I&amp;rsquo;ll save this for the next article: &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AI Writing Blogs: How It Eventually Has to Become Engineering (Part 3): The Division of Labor Between Local Models, Online Models, and Minimax&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/84a06b5dc743f2e9bc6e788d53496a1261bc63ae&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;84a06b5dc743f2e9bc6e788d53496a1261bc63ae&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/README.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/scanner.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/builder.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;scripts/blog-style-suite/style_pipeline/compressor.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Effective Runtime: &lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer This content is quite extensive, so I&#39;ve split it into a series of articles: Last year, many drafts were written using large models. Back then, the process was to create an outline or a list of questions myself, and then have the AI generate the draft, copy the content into a local md document, fill in header information, tag information, and publish the article; recently, I used Codex a lot and found that its web search capability is very strong. So, could I write a skill to automate these tasks? This led to the first draft of the skill blog-writer. I also thought about having the AI learn my previous writing style, which caused blog-writer to consume a lot of tokens when running. Subsequently, I optimized blog-writer in several versions, splitting out the data module and the data generation module. The original data generation module was still an independent skill. As I continued writing, I realized that it would be better as a Python project, which led to blog-style-suite. Then, I found that training on style data also consumes a lot of tokens, so I wanted to use a local large model and connected to a local LLM. I then thought about comparing the differences between the local LLM and the online version, so I integrated minimax; the evolution history of blog-style-suite and blog-writer can be analyzed from the git commit history. Additionally, based on the code for local blog-writer and blog-style-suite, I can discuss the design ideas, how token saving was achieved, and how the data structure was designed—the core design concepts. If tokens are abundant, it can consume entire historical articles; preprocessing can save a lot of tokens.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-outline-summary&#34;&gt;Writing Outline Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;This article shifts the focus from the act of writing drafts to data engineering, with the core answer being &amp;ldquo;why modularization is necessary.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;The introduction directly acknowledges that &amp;ldquo;using raw historical articles works,&amp;rdquo; which makes the subsequent arguments for splitting more convincing.&lt;/li&gt;
+&lt;li&gt;It elaborates on the three structural layers: &lt;code&gt;scan.json&lt;/code&gt;, &lt;code&gt;source.json&lt;/code&gt;, and &lt;code&gt;runtime.json&lt;/code&gt;, avoiding vague architectural discussions.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;bc4b950&lt;/code&gt; is placed in the middle as a turning point because &amp;ldquo;reducing from about 2000 times to 5 times&amp;rdquo; best illustrates the value of preprocessing.&lt;/li&gt;
+&lt;li&gt;The conclusion re-separates the consumption side and the production side, setting the stage for model division in the third article.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AI Writing a Blog: The Next Steps Towards Engineering (Part 1)</title>
+        <link>https://ttf248.life/en/p/why-blog-writer-had-to-exist/</link>
+        <pubDate>Fri, 03 Apr 2026 20:58:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/why-blog-writer-had-to-exist/</guid>
+        <description>&lt;p&gt;I wrote quite a few AI articles last year. The most basic workflow back then was: first, organize an outline or a list of questions myself; let the large model spit out the main body text; then copy the content into a local &lt;code&gt;md&lt;/code&gt; document, add frontmatter, tags, categories, and titles, and finally publish it.
+This process isn&amp;rsquo;t unusable, but it&amp;rsquo;s tedious. The part that really wastes time isn&amp;rsquo;t the main body text, but the repetitive labor surrounding it. Especially after using &lt;code&gt;Codex&lt;/code&gt; a lot recently, this awkwardness has become even stronger. It can read repositories, modify files, supplement materials, and even write articles directly into the directory. If I still have to copy and paste things manually, it feels like I&amp;rsquo;m tying down the tool&amp;rsquo;s legs.&lt;/p&gt;
+&lt;p&gt;This series of articles is actually trying to convey one thing: AI writing blogs cannot rely solely on a single prompt in the long run. This current article first discusses why &lt;code&gt;blog-writer&lt;/code&gt; came into existence; the next article will continue with &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;AI Writing Blogs: Later, It Still Needs to Be Engineered (Part II): How blog-style-suite Separates Style Learning and Token Costs&lt;/a&gt;; and the last article concludes with &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AI Writing Blogs: Later, It Still Needs to Be Engineered (Part III): How Local Models, Online Models, and Minimax Will Finally Divide Labor&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;whats-truly-annoying-isnt-writing-the-draft-but-that-sequence-of-mechanical-actions&#34;&gt;What&amp;rsquo;s truly annoying isn&amp;rsquo;t writing the draft, but that sequence of mechanical actions.
+&lt;/h2&gt;&lt;p&gt;The early workflow was essentially like an outsourced assembly line.
+I would first list out the problems clearly, or build a rough outline. The model is responsible for laying out the main body text. Then, a human comes back to complete the remaining publishing steps.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Copy to local &lt;code&gt;md&lt;/code&gt; file&lt;/li&gt;
+&lt;li&gt;Fill in &lt;code&gt;title&lt;/code&gt;, &lt;code&gt;date&lt;/code&gt;, and &lt;code&gt;slug&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Add tags and categories&lt;/li&gt;
+&lt;li&gt;Insert &lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Organize reference materials&lt;/li&gt;
+&lt;li&gt;Finally, decide which directory it should go into
+Looking at each step individually, this sequence isn&amp;rsquo;t difficult. But when strung together, it becomes tedious. What&amp;rsquo;s annoying isn&amp;rsquo;t the technical difficulty; it&amp;rsquo;s that these steps are all mechanical, yet they cannot be skipped.
+This is why I increasingly feel that changes like &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/command-line-ai-coding-interaction/&#34; &gt;AI coding interaction based on command line&lt;/a&gt; are not just about &amp;ldquo;changing the entry point.&amp;rdquo; When AI can directly read and write files within a repository, if blog writing still stops at the level of &amp;ldquo;copying the body text to a local document,&amp;rdquo; the entire workflow is actually outdated.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;blog-writer-the-first-layer-of-value-its-not-the-style-its-locking-down-the-contract&#34;&gt;blog-writer The First Layer of Value: It&amp;rsquo;s Not the Style, It&amp;rsquo;s Locking Down the Contract
+&lt;/h2&gt;&lt;p&gt;The very first node for &lt;code&gt;blog-writer&lt;/code&gt; was at 17:00 on April 1, 2026, with the commit hash &lt;code&gt;991536a&lt;/code&gt;. Looking at the git commit history, this version included &lt;code&gt;SKILL.md&lt;/code&gt;, &lt;code&gt;write_post.py&lt;/code&gt;, and an initial set of style guidelines all together.&lt;/p&gt;
+&lt;p&gt;However, when I looked back later, the most valuable part of this draft wasn&amp;rsquo;t that &amp;ldquo;the AI learned my writing style,&amp;rdquo; but rather that it established a rigid contract for content creation.&lt;/p&gt;
+&lt;p&gt;What does &amp;ldquo;locking down the contract&amp;rdquo; mean?&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The input must include at least an outline and factual anchors.&lt;/li&gt;
+&lt;li&gt;The output must be complete Markdown, not a work in progress.&lt;/li&gt;
+&lt;li&gt;Frontmatter cannot rely on manual additions anymore.&lt;/li&gt;
+&lt;li&gt;The article cannot just stay in the chat window; it must land directly into &lt;code&gt;content/post&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This point is crucial because prompts themselves are inherently unstable. If you say, &amp;ldquo;Write it like before,&amp;rdquo; today, it might understand that only the tone should be similar; if you repeat it tomorrow, it might only learn superficial sentence structures. But once it&amp;rsquo;s written as a &lt;code&gt;Skill&lt;/code&gt;, the rule shifts from &amp;ldquo;improvisation&amp;rdquo; to a &amp;ldquo;fixed workflow.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;The subsequent nodes were actually all about reinforcing this contract.&lt;/p&gt;
+&lt;p&gt;The commit at 22:54 on April 2, 2026, with hash &lt;code&gt;8eb735a&lt;/code&gt;, standardized elements like author fields, writing notes, and original prompts. By this stage, the blog draft was no longer considered &amp;ldquo;finished once the body text is done&amp;rdquo;; instead, metadata, traceability, and public notes were all standardized together.&lt;/p&gt;
+&lt;p&gt;Therefore, the first layer of value for &lt;code&gt;blog-writer&lt;/code&gt; has never been about making the model &lt;em&gt;seem&lt;/em&gt; better at writing; it&amp;rsquo;s about finally giving the act of drafting repeatable boundaries.&lt;/p&gt;
+&lt;h2 id=&#34;series-mode-which-is-actually-one-step-forward-in-writing-workflow&#34;&gt;Series Mode, Which is Actually One Step Forward in Writing Workflow
+&lt;/h2&gt;&lt;p&gt;After stabilizing writing a single article, the next problem quickly emerged.
+Some topics are simply not suitable to be crammed into one piece. If you force it, the result often becomes a long article that is information-heavy, has a scattered main thread, and fails to fully explain every point.
+This is why the commit &lt;code&gt;1a5604e&lt;/code&gt; on April 2, 2026, at 23:55 was so crucial. That time, they directly added the series mode along with &lt;code&gt;write_post_series.py&lt;/code&gt;. The articles are linked using &lt;code&gt;relref&lt;/code&gt;, and the replacement is done uniformly during batch writing.
+This might look like a minor upgrade to a file-writing script, but it&amp;rsquo;s not.
+It illustrates one thing: content engineering is no longer just about &amp;ldquo;how to generate this single article,&amp;rdquo; but rather starts considering &amp;ldquo;how to stably save this set of content, how to guarantee the order, and how to link between them on the site.&amp;rdquo;
+The next day&amp;rsquo;s commit, &lt;code&gt;04dccb9&lt;/code&gt; on April 3, 2026, at 09:29, pushed this process one step further. The timestamps for series articles now increment by minutes instead of sharing a single timestamp. This change is small but very &amp;ldquo;engineering-y&amp;rdquo; because it solves real problems like Hugo list pages, previous/next article navigation, and series ordering.
+Simply put, the series mode isn&amp;rsquo;t about looking advanced; it&amp;rsquo;s about eliminating the need for manual fixes when publishing multiple articles together.&lt;/p&gt;
+&lt;h2 id=&#34;but-relying-on-just-one-skill-will-eventually-hit-a-token-wall&#34;&gt;But relying on just one skill will eventually hit a token wall.
+&lt;/h2&gt;&lt;p&gt;The problem lies here.
+Once you start seriously tinkering with style learning, the context of &lt;code&gt;blog-writer&lt;/code&gt; will quickly become bloated. You not only want it to write, but you also want it to write like you used to. The most natural way to do this is to dump all your historical articles into it.
+This works for a single run, of course.
+But as soon as you&amp;rsquo;re not writing an occasional piece, but trying to make it a long-term workflow, the problems immediately arise:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;High token consumption&lt;/li&gt;
+&lt;li&gt;Repeatedly feeding the same batch of old articles every time&lt;/li&gt;
+&lt;li&gt;Model attention is diluted by old material&lt;/li&gt;
+&lt;li&gt;Drafting and style maintenance are intertwined; neither is easy.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;It was from here that I slowly realized that &lt;code&gt;blog-writer&lt;/code&gt; is better suited for the consumption side, rather than trying to feed it everything.
+The act of drafting should be as light, direct, and limited to reading only the effective versions as possible. As for how to generate, filter, or compress style data, that&amp;rsquo;s a matter for a separate production pipeline. This realization finally pushed me to the next step, which was &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/en/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;AI Blog Writing: It Still Needs to Be Engineered (Part II): How blog-style-suite Separates Style Learning from Token Costs&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;first-stabilize-the-process-only-then-can-we-talk-about-style-and-models&#34;&gt;First, stabilize the process; only then can we talk about style and models.
+&lt;/h2&gt;&lt;p&gt;Looking back now, &lt;code&gt;blog-writer&lt;/code&gt; didn&amp;rsquo;t emerge because I suddenly wanted to build a blog writing assistant.
+It was more because the original workflow started failing to keep up with new ways of working.
+Once a tool like &lt;code&gt;Codex&lt;/code&gt; can connect to the internet for supplementary material, read and write within repositories, and directly call scripts, the act of writing a blog shouldn&amp;rsquo;t stop at &amp;ldquo;copying the body text to a local document.&amp;rdquo; If you don&amp;rsquo;t automate this part, it will actually become the clumsiest link in the entire chain.
+So, I&amp;rsquo;ll leave the conclusion for the first post here.
+What &lt;code&gt;blog-writer&lt;/code&gt; solved initially wasn&amp;rsquo;t writing style, but the repetitive labor of the publishing action. Without this layer of contract, any subsequent discussion about tokens, data structures, or local models is actually baseless.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/991536a237d04aba7c44dec501b3d98c644040c8&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;991536a237d04aba7c44dec501b3d98c644040c8&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/8eb735aa8448c97deb2af1ea46b86772008fa9e3&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;8eb735aa8448c97deb2af1ea46b86772008fa9e3&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/1a5604e7e6ce0a13f260fcbb8c2c1d964cdd0892&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;1a5604e7e6ce0a13f260fcbb8c2c1d964cdd0892&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository Commit: &lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/04dccb98c55a6ea3b81408012b33a6219cf8ab77&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;04dccb98c55a6ea3b81408012b33a6219cf8ab77&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;.agents/skills/blog-writer/SKILL.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;.agents/skills/blog-writer/scripts/write_post.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Repository File: &lt;code&gt;.agents/skills/blog-writer/scripts/write_post_series.py&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer This content is quite extensive, so I&#39;ve split it into a series of articles: Last year, many drafts were written using large models. Back then, the process was to create an outline or a list of questions myself, and then have the AI generate the draft, copy the content into a local md document, fill in header information, tag information, and publish the article; recently, I used Codex a lot and found that its web search capability is very strong. So, could I write a skill to automate these tasks? This led to the first draft of the skill blog-writer. I also thought about having the AI learn my previous writing style, which caused blog-writer to consume a lot of tokens when running. Subsequently, I optimized blog-writer in several versions, splitting out the data module and the data generation module. The original data generation module was still an independent skill. As I continued writing, I realized that it would be better as a Python project, which led to blog-style-suite. Then, I found that training on style data also consumes a lot of tokens, so I wanted to use a local large model and connected to one locally. I then thought about comparing the differences between the local large model and the online version, so I integrated minimax. The evolution history of blog-style-suite and blog-writer can be analyzed from the git commit history. Additionally, based on the code for local blog-writer and blog-style-suite, I can discuss the design ideas, how token saving was achieved, and how the data structure was designed—the core design concepts. If tokens are abundant, it can consume entire historical articles; preprocessing can save a lot of tokens.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-strategy-summary&#34;&gt;Writing Strategy Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;The first article should focus on the workflow trigger point, without rushing to detail the division of labor between tokens and models, to avoid having all three articles compete for the main narrative.&lt;/li&gt;
+&lt;li&gt;It retains the key insight: &amp;ldquo;The body content is not difficult; what&amp;rsquo;s troublesome are the mechanical actions before and after publishing.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;By using nodes like &lt;code&gt;991536a&lt;/code&gt;, &lt;code&gt;8eb735a&lt;/code&gt;, &lt;code&gt;1a5604e&lt;/code&gt;, and &lt;code&gt;04dccb9&lt;/code&gt;, we ground the concept of &amp;ldquo;process contracturization&amp;rdquo; in actual Git evolution.&lt;/li&gt;
+&lt;li&gt;The series pattern is reserved for this article to illustrate that blog writing has moved from generating single pieces to managing entire sets of deliverables.&lt;/li&gt;
+&lt;li&gt;The ending deliberately points toward the token wall, setting up the groundwork for data engineering and preprocessing in the second article.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>After reviewing AI articles from the past two years, I think these are the 8 topics I should write about next.</title>
+        <link>https://ttf248.life/en/p/next-8-ai-topics-after-reviewing-two-years-of-posts/</link>
+        <pubDate>Mon, 30 Mar 2026 22:20:00 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/next-8-ai-topics-after-reviewing-two-years-of-posts/</guid>
+        <description>&lt;p&gt;I recently went back and reviewed the articles in my blog related to AI from the past two years, and I found that the content is no longer just simple experiences like &amp;ldquo;whether a certain model is good or not.&amp;rdquo; Instead, it has gradually formed a relatively clear main thread: &lt;strong&gt;How AI truly entered my development workflow, and what efficiency gains, costs, and new constraints it brought.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;When I say &amp;ldquo;the past two years&amp;rdquo; here, looking forward from the current time, it roughly spans from &lt;code&gt;2024-03-30&lt;/code&gt; to &lt;code&gt;2026-03-30&lt;/code&gt;. Upon actually reviewing them, a very noticeable phenomenon is that there were almost no articles with a truly significant AI theme in &lt;code&gt;2024&lt;/code&gt;; the intensive output only began around &lt;code&gt;2025-01&lt;/code&gt;.
+This fact itself is quite interesting. It shows that for me, AI didn&amp;rsquo;t enter a stable period of use right away; rather, it slowly permeated my work and writing, and only after I encountered suitable tools and task formats did continuous documentation begin to form.&lt;/p&gt;
+&lt;h2 id=&#34;the-ai-articles-of-the-past-two-years-can-generally-be-divided-into-three-stages&#34;&gt;The AI articles of the past two years can generally be divided into three stages
+&lt;/h2&gt;&lt;h3 id=&#34;phase-one-tool-exploration-testing-usability-first&#34;&gt;Phase One: Tool Exploration, Testing Usability First
+&lt;/h3&gt;&lt;p&gt;Representative articles from this phase include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&amp;ldquo;Trying out the Cursor AI Coding IDE&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;Locally Deploying deepseek-R1 with ollama&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;Designing and Developing a Stock Selection Module Without Writing Code&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;Two Years of AI Development: A State Similar to Before Docker&amp;rsquo;s Release&amp;rdquo;
+The core question in this phase is very simple: &lt;strong&gt;Can AI actually help me get things done?&lt;/strong&gt;
+The focus at that time was more on the tool level:&lt;/li&gt;
+&lt;li&gt;Whether the IDE format is convenient to use.&lt;/li&gt;
+&lt;li&gt;Whether local deployment can actually run.&lt;/li&gt;
+&lt;li&gt;Whether code generated by the model saves time.&lt;/li&gt;
+&lt;li&gt;Whether AI gets stuck when encountering complex requirements.
+Looking back, the articles from this phase feel like paving the way for heavy usage later on. Many conclusions remain valid today, such as: AI can significantly boost basic development efficiency, but complex tasks still require manual decomposition; local models are good for experimentation, but stability and speed are key when integrating into high-frequency workflows.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;phase-two-starting-to-integrate-into-the-workflow-but-side-effects-appear-too&#34;&gt;Phase Two: Starting to Integrate into the Workflow, But Side Effects Appear Too
+&lt;/h3&gt;&lt;p&gt;Representative articles from this phase include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&amp;ldquo;Overusing AI, and Some Aftermath&amp;rdquo; (or &amp;ldquo;The Side Effects of Overusing AI&amp;rdquo;)&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;Claude 4 Release: Attempting Development with Hugo Tags and Hyperlink Translation Assistants&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;Some Usage Experiences with Large Models Recently&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;ByteDance AI Coding New Paradigm SOLO&amp;rdquo;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;By this point, AI is no longer just a &amp;ldquo;tool to occasionally try out,&amp;rdquo; but it has started to directly participate in:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Developing blog toolchains&lt;/li&gt;
+&lt;li&gt;Translation caching and batch processing pipelines&lt;/li&gt;
+&lt;li&gt;UI design and code iteration&lt;/li&gt;
+&lt;li&gt;Model specialization and scenario selection&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;At the same time, the problems becoming more specific.
+The previous question was, &amp;ldquo;Can AI write code?&amp;rdquo;, while the later questions became:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;The code is written, but how do I validate it?&lt;/li&gt;
+&lt;li&gt;The article is generated, but does it lack a human touch/real-world flavor?&lt;/li&gt;
+&lt;li&gt;The documentation has been updated synchronously, but do &lt;em&gt;I&lt;/em&gt; truly understand it myself?&lt;/li&gt;
+&lt;li&gt;The tools are getting stronger, but is the intensity of human thought decreasing?&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This is what I find to be the most valuable part of this set of articles. Compared to empty talk about &amp;ldquo;AI being powerful,&amp;rdquo; these records that carry a slight sense of discomfort feel more authentic.&lt;/p&gt;
+&lt;h3 id=&#34;phase-three-moving-from-single-tool-experience-to-protocols-workflows-stability-and-cost&#34;&gt;Phase Three: Moving from Single Tool Experience to Protocols, Workflows, Stability, and Cost
+&lt;/h3&gt;&lt;p&gt;Representative articles for this phase include:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&amp;ldquo;AI Coding Interaction Based on Command Line&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;From Protocol Constraints to Intelligent Release: A Deep Comparison of MCP vs. Skill&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;A Period of Heavy AI Programming&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;&amp;ldquo;The End Game of Low-Cost API Gateways: Large Model Experiences and the Impossible Triangle in March&amp;rdquo;
+By this stage, the focus has clearly upgraded.
+It is no longer about &amp;ldquo;which model answers more intelligently,&amp;rdquo; but rather:&lt;/li&gt;
+&lt;li&gt;Which is better for continuous development: terminal interaction or IDE integration?&lt;/li&gt;
+&lt;li&gt;What are the boundary differences between capability extension methods like MCP and Skill?&lt;/li&gt;
+&lt;li&gt;Where should human intervention occur during heavy AI programming?&lt;/li&gt;
+&lt;li&gt;How to make realistic choices among cost, stability, and quality.
+These topics are no longer simple product reviews; they are closer to &lt;strong&gt;workflow design&lt;/strong&gt;. This is also the most stable and recognizable thread in AI topics on blogs right now.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;the-biggest-advantage-of-this-batch-of-articles-is-not-chasing-hot-topics&#34;&gt;The biggest advantage of this batch of articles is not chasing hot topics.
+&lt;/h2&gt;&lt;p&gt;Looking back, what makes the existing AI articles on the blog truly distinctive is not writing about a certain model earlier than others, nor is it covering parameters, leaderboards, and benchmark scores more completely, but rather these points below:&lt;/p&gt;
+&lt;h3 id=&#34;1-all-originate-from-real-world-scenarios&#34;&gt;1. All Originate from Real-World Scenarios
+&lt;/h3&gt;&lt;p&gt;Whether it&amp;rsquo;s the stock selection module, the blog translation tool, command-line coding, or records of API relay station tinkering, almost none of these topics were conceived out of thin air; they were written after encountering problems during actual use.
+The advantage of this type of content is that it is not easily superficial.&lt;/p&gt;
+&lt;h3 id=&#34;2-focuses-on-how-to-integrate-ai-into-the-workflow&#34;&gt;2. Focuses on &amp;ldquo;How to integrate AI into the workflow&amp;rdquo;
+&lt;/h3&gt;&lt;p&gt;Many AI articles only write about model capabilities, but this set of existing articles is more concerned with:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;How to decompose tasks&lt;/li&gt;
+&lt;li&gt;How to integrate into projects&lt;/li&gt;
+&lt;li&gt;How to maintain documentation&lt;/li&gt;
+&lt;li&gt;How to control context&lt;/li&gt;
+&lt;li&gt;How to divide labor between different models
+The lifecycle for these types of content is usually longer than simple model evaluation.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-beginning-to-realize-the-side-effects-and-costs&#34;&gt;3. Beginning to realize the side effects and costs
+&lt;/h3&gt;&lt;p&gt;From &amp;ldquo;Too Much AI, Some Side Effects&amp;rdquo; to &amp;ldquo;The End of Low-Cost API Relays,&amp;rdquo; a very complete line of thought has actually formed:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;AI can boost efficiency&lt;/li&gt;
+&lt;li&gt;But it changes people&amp;rsquo;s search and thinking habits&lt;/li&gt;
+&lt;li&gt;Cheap does not equal truly saving money&lt;/li&gt;
+&lt;li&gt;Quality, stability, and cost-effectiveness are hard to achieve simultaneously
+These judgments come from personal usage accumulation, not just repeating online opinions.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;but-there-are-also-several-obvious-gaps-in-the-content&#34;&gt;But there are also several obvious gaps in the content
+&lt;/h2&gt;&lt;p&gt;Although the existing article has a main thread, if we continue writing, I feel there are still some noticeable gaps.&lt;/p&gt;
+&lt;h3 id=&#34;1-lack-of-a-systematic-acceptance-methodology&#34;&gt;1. Lack of a Systematic &amp;ldquo;Acceptance Methodology&amp;rdquo;
+&lt;/h3&gt;&lt;p&gt;Many articles have covered the AI programming experience, and they have mentioned unit testing, performance testing, and documentation synchronization, but there hasn&amp;rsquo;t been an article that thoroughly explains the entire process of &amp;ldquo;how to accept/validate what AI writes.&amp;rdquo;&lt;/p&gt;
+&lt;h3 id=&#34;2-lack-of-team-perspective&#34;&gt;2. Lack of Team Perspective
+&lt;/h3&gt;&lt;p&gt;Currently, most focus on individual development and personal workflows. This perspective is good, but if we continue writing, it can be expanded to:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;How to limit the scope of AI modifications during team collaboration&lt;/li&gt;
+&lt;li&gt;How to approach AI-generated code in code reviews&lt;/li&gt;
+&lt;li&gt;How documentation, commit logs, and test records should work together&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-lack-of-discussion-on-security-and-permission-boundaries&#34;&gt;3. Lack of Discussion on Security and Permission Boundaries
+&lt;/h3&gt;&lt;p&gt;This trend has become increasingly obvious recently; AI is no longer just a chat box, but is taking over:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Terminal commands&lt;/li&gt;
+&lt;li&gt;Repository read/write access&lt;/li&gt;
+&lt;li&gt;Browser operations&lt;/li&gt;
+&lt;li&gt;Third-party tool calling
+The stronger the capability, the more valuable it is to define the permission boundaries.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-lack-of-long-term-knowledge-base-direction&#34;&gt;4. Lack of &amp;ldquo;Long-term Knowledge Base&amp;rdquo; Direction
+&lt;/h3&gt;&lt;p&gt;The article currently has basic capabilities like translation cache, slugs, and tags, but it hasn&amp;rsquo;t systematically addressed: If the blog itself is a personal knowledge base, how can it be organized into content assets that are more suitable for AI consumption, retrieval, and processing.&lt;/p&gt;
+&lt;h2 id=&#34;the-8-topics-i-think-are-best-to-write-about-next&#34;&gt;The 8 Topics I Think Are Best to Write About Next
+&lt;/h2&gt;&lt;p&gt;I have ranked these 8 areas based on &amp;ldquo;best fit with current writing style&amp;rdquo; and &amp;ldquo;easiest to generate original content.&amp;rdquo;&lt;/p&gt;
+&lt;h3 id=&#34;1-how-to-build-an-acceptance-system-for-ai-programming&#34;&gt;1. How to Build an Acceptance System for AI Programming
+&lt;/h3&gt;&lt;p&gt;This is the article I most recommend writing first.
+You can focus on the following points:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Which modifications must have unit tests added&lt;/li&gt;
+&lt;li&gt;Which modules must run regression tests&lt;/li&gt;
+&lt;li&gt;Which refactorings require performance comparison&lt;/li&gt;
+&lt;li&gt;Which documents should be maintained synchronously&lt;/li&gt;
+&lt;li&gt;What to focus on during manual review
+Once this article is written, it can be linked back to for many subsequent AI programming articles.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;2-where-mcp-is-truly-useful-its-not-about-connecting-more-things&#34;&gt;2. Where MCP is Truly Useful, It&amp;rsquo;s Not About Connecting More Things
+&lt;/h3&gt;&lt;p&gt;MCP is getting increasingly popular, but most discussions are still at the conceptual level.
+What is more worth writing about is:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Which tool integrations genuinely boost efficiency&lt;/li&gt;
+&lt;li&gt;Which ones just look cool but aren&amp;rsquo;t actually necessary&lt;/li&gt;
+&lt;li&gt;Among local files, documents, issues, monitoring dashboards, and design mockups, which should be prioritized for integration?&lt;/li&gt;
+&lt;li&gt;What is the actual difference between protocolized integration and &amp;ldquo;stuffing in a large prompt&amp;rdquo;?&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;3-cross-comparison-of-claude-code-codex-gemini-cli-and-domestic-cli-models-in-practice&#34;&gt;3. Cross-Comparison of Claude Code, Codex, Gemini CLI, and Domestic CLI Models in Practice
+&lt;/h3&gt;&lt;p&gt;Instead of simply stating &amp;ldquo;which one is better,&amp;rdquo; the goal is to conduct a comparative evaluation using a unified set of tasks.
+For example, fixed comparisons on:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Requirement decomposition ability&lt;/li&gt;
+&lt;li&gt;Instruction following accuracy&lt;/li&gt;
+&lt;li&gt;Scope control for code modification&lt;/li&gt;
+&lt;li&gt;Ability to supplement tests&lt;/li&gt;
+&lt;li&gt;Documentation synchronization capability&lt;/li&gt;
+&lt;li&gt;Cost and waiting time
+This type of article is easiest for readers to reference directly.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;4-context-management-in-ai-programming&#34;&gt;4. Context Management in AI Programming
+&lt;/h3&gt;&lt;p&gt;Often, the issue isn&amp;rsquo;t that the model is weak, but rather that the context has become dirty, too long, or drifted.
+This article could specifically cover:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;When to clear the context&lt;/li&gt;
+&lt;li&gt;When a new thread should be started&lt;/li&gt;
+&lt;li&gt;When tasks should be broken down into smaller pieces&lt;/li&gt;
+&lt;li&gt;When multi-agent parallelization is appropriate&lt;/li&gt;
+&lt;li&gt;In what situations manual re-summarization of the current state is necessary
+This topic is very specific and easy to combine with one&amp;rsquo;s own real-life case studies.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;5-from-ide-to-terminal-and-then-to-multi-agent-collaboration&#34;&gt;5. From IDE to Terminal, and then to Multi-Agent Collaboration
+&lt;/h3&gt;&lt;p&gt;Over the past year, the focus of AI programming interaction has clearly shifted.
+Previously, it was more about in-IDE completion, chat, and local code modification; now, more and more tools are emphasizing:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Terminal interaction&lt;/li&gt;
+&lt;li&gt;Repository-level understanding&lt;/li&gt;
+&lt;li&gt;Multi-threaded context&lt;/li&gt;
+&lt;li&gt;Parallel agents&lt;/li&gt;
+&lt;li&gt;Worktree isolation for development
+This topic is suitable for connecting past articles such as Cursor, Trae, Claude Code, and Codex.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;6-the-security-surface-of-ai-programming-is-expanding&#34;&gt;6. The Security Surface of AI Programming is Expanding
+&lt;/h3&gt;&lt;p&gt;This direction is very worth writing about, and it hasn&amp;rsquo;t been covered much yet.
+You can approach this from these angles:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Risks associated with automatically executing commands&lt;/li&gt;
+&lt;li&gt;Trust boundaries for third-party MCP services&lt;/li&gt;
+&lt;li&gt;Issues of private repository and sensitive information leakage&lt;/li&gt;
+&lt;li&gt;Prompt injection and malicious context contamination&lt;/li&gt;
+&lt;li&gt;The boundary between automated scripts and human confirmation
+If you only write that &amp;ldquo;AI is very capable,&amp;rdquo; the article will become repetitive; incorporating the security boundaries will make the content significantly higher in quality.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;7-the-true-place-of-local-models&#34;&gt;7. The True Place of Local Models
+&lt;/h3&gt;&lt;p&gt;Previously, the focus was more on &amp;ldquo;Can the local model run?&amp;rdquo;, but now it is more valuable to ask:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;What tasks is it suitable for?&lt;/li&gt;
+&lt;li&gt;What tasks is it &lt;em&gt;not&lt;/em&gt; suitable for?&lt;/li&gt;
+&lt;li&gt;When do advantages like privacy, offline capability, and low cost truly materialize?&lt;/li&gt;
+&lt;li&gt;At what point does continuing to insist on a local solution actually become a waste of time?
+This has more follow-up value than just deployment tutorials.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;8-how-to-organize-blog-content-into-ai-friendly-knowledge-assets&#34;&gt;8. How to Organize Blog Content into AI-Friendly Knowledge Assets
+&lt;/h3&gt;&lt;p&gt;This direction integrates most closely with the existing blog system.
+You could write about:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;How to uniformly design slugs, tags, abstracts, and categories&lt;/li&gt;
+&lt;li&gt;How to minimize link drift in multilingual content&lt;/li&gt;
+&lt;li&gt;How article metadata can aid subsequent retrieval&lt;/li&gt;
+&lt;li&gt;How to make historical articles more suitable for AI retrieval, summarization, and citation
+If this piece is written, it will be both an AI topic and one that can serve the entire blog system in return.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;trends-to-watch-in-the-near-future&#34;&gt;Trends to Watch in the Near Future
+&lt;/h2&gt;&lt;p&gt;There have been several changes in the industry recently that will also influence future topic selection.&lt;/p&gt;
+&lt;p&gt;First, AI programming is increasingly moving from being a &amp;ldquo;completion tool&amp;rdquo; to an &amp;ldquo;agent workflow.&amp;rdquo; Products like &lt;code&gt;Codex&lt;/code&gt; and &lt;code&gt;Claude Code&lt;/code&gt; no longer emphasize single-turn answers; instead, they focus on task decomposition, tool calling, parallel processing, and continuous context maintenance.&lt;/p&gt;
+&lt;p&gt;Second, protocolized access methods, such as MCP, are transitioning from being &amp;ldquo;new concepts&amp;rdquo; to becoming infrastructure. In the future, truly valuable articles will not be those that re-explain protocol definitions, but rather those that clearly articulate: &lt;strong&gt;which integration scenarios are genuinely effective, and which ones just &lt;em&gt;look&lt;/em&gt; advanced.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Third, the back-and-forth between design mockups, documents, code, and command lines is increasing. Previously, tools were siloed; now, AI is attempting to connect these links. This also means that &amp;ldquo;workflow design&amp;rdquo; will be more valuable for long-term writing than simply listing &amp;ldquo;model benchmarks.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;Fourth, stability, cost, and permission risks are not going away. On the contrary, the stronger the model&amp;rsquo;s capabilities become, the more critical these issues will be.&lt;/p&gt;
+&lt;h2 id=&#34;the-final-judgment&#34;&gt;The Final Judgment
+&lt;/h2&gt;&lt;p&gt;If I were to continue writing about AI, the one thing I feel we should stick to is not chasing every new model release for reviews, but rather focusing on a more specific question:
+&lt;strong&gt;How exactly does AI integrate into real development and writing workflows step-by-step? Where does it genuinely improve efficiency, and where does it push the problem back to humans?&lt;/strong&gt;
+You have actually outlined this line; it just hasn&amp;rsquo;t fully materialized yet.
+The most appropriate next step is not to spread out the topics further, but rather to continue digging along these four sub-themes: &amp;ldquo;Practical Tools,&amp;rdquo; &amp;ldquo;Process Design,&amp;rdquo; &amp;ldquo;Boundary Control,&amp;rdquo; and &amp;ldquo;Long-term Knowledge Assets.&amp;rdquo; Content written this way will, over time, be easier to solidify into one&amp;rsquo;s own material, rather than just a collection of quickly outdated hot topics.&lt;/p&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="After going through all the configurations in the repository, I am even more certain about one thing: what matters in the end is not how strong any single model is, but rather who should bear the cost at each layer.\nThe most obvious signal is that the currently active published.runtime.json is still the one generated on April 2, 2026, for minimax-m2, yet the entry from April 3, 2026, at 16:38, labeled 5f17088, has switched the default provider for blog-style-suite to the local gemma-4-26b-a4b in LM Studio. This might look inconsistent, but it actually isn&rsquo;t; it precisely illustrates that this pipeline has begun to specialize.\n">
+<title>Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/'>
+
+<link rel="stylesheet" href="/scss/style.min.989aa97a25e023e9a3a706c4fe4a8ba5d8e0fdaa68698a5434411a1cb9be0136.css"><meta property='og:title' content="Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)">
+<meta property='og:description' content="After going through all the configurations in the repository, I am even more certain about one thing: what matters in the end is not how strong any single model is, but rather who should bear the cost at each layer.\nThe most obvious signal is that the currently active published.runtime.json is still the one generated on April 2, 2026, for minimax-m2, yet the entry from April 3, 2026, at 16:38, labeled 5f17088, has switched the default provider for blog-style-suite to the local gemma-4-26b-a4b in LM Studio. This might look inconsistent, but it actually isn&rsquo;t; it precisely illustrates that this pipeline has begun to specialize.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/how-i-split-local-online-and-minimax-models/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI Inspiration Hub' /><meta property='article:tag' content='ai' /><meta property='article:tag' content='programming' /><meta property='article:tag' content='minimax' /><meta property='article:tag' content='Local Model' /><meta property='article:tag' content='blog-style-suite' /><meta property='article:published_time' content='2026-04-03T21:06:02&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T15:45:31&#43;08:00'/>
+<meta name="twitter:title" content="Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)">
+<meta name="twitter:description" content="After going through all the configurations in the repository, I am even more certain about one thing: what matters in the end is not how strong any single model is, but rather who should bear the cost at each layer.\nThe most obvious signal is that the currently active published.runtime.json is still the one generated on April 2, 2026, for minimax-m2, yet the entry from April 3, 2026, at 16:38, labeled 5f17088, has switched the default provider for blog-style-suite to the local gemma-4-26b-a4b in LM Studio. This might look inconsistent, but it actually isn&rsquo;t; it precisely illustrates that this pipeline has begun to specialize.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#training-style-data-not-worth-burning-online-models-at-every-step">Training Style Data, Not Worth Burning Online Models at Every Step</a></li>
+    <li><a href="#local-models-are-better-suited-for-dirty-heavy-and-iterative-tasks">Local Models are Better Suited for Dirty, Heavy, and Iterative Tasks</a></li>
+    <li><a href="#online-models-are-better-suited-for-the-final-polish-not-for-doing-everything-from-scratch">Online models are better suited for the final polish, not for doing everything from scratch</a></li>
+    <li><a href="#the-significance-of-minimax-its-not-just-another-provider-connection">The Significance of Minimax: It&rsquo;s Not Just Another Provider Connection</a></li>
+    <li><a href="#true-specialization-is-not-based-on-model-strength-but-on-task-type">True specialization is not based on model strength, but on task type</a>
+      <ol>
+        <li><a href="#rules-and-hard-constraints">Rules and Hard Constraints</a></li>
+        <li><a href="#style-data-generation">Style Data Generation</a></li>
+        <li><a href="#final-drafting-and-fact-consolidation">Final Drafting and Fact Consolidation</a></li>
+      </ol>
+    </li>
+    <li><a href="#ultimately-what-is-most-valuable-is-not-the-model-but-the-clear-boundaries">Ultimately, what is most valuable is not the model, but the clear boundaries.</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#writing-notes">Writing Notes</a>
+      <ol>
+        <li><a href="#original-prompt">Original Prompt</a></li>
+        <li><a href="#writing-strategy-summary">Writing Strategy Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/computer/" >
+                Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/how-i-split-local-online-and-minimax-models/">Writing an AI blog post, in the end, still needs to be turned into engineering (Part 3)</a>
+        </h2>
+    
+        
+        
+        <h3 class="article-subtitle">
+            本地模型、在线模型和 Minimax 最后怎么分工
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Apr 03, 2026</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            6 minute read
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/how-i-split-local-online-and-minimax-models/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>After going through all the configurations in the repository, I am even more certain about one thing: what matters in the end is not how strong any single model is, but rather who should bear the cost at each layer.</p>
+<p>The most obvious signal is that the currently active <code>published.runtime.json</code> is still the one generated on April 2, 2026, for <code>minimax-m2</code>, yet the entry from April 3, 2026, at 16:38, labeled <code>5f17088</code>, has switched the default provider for <code>blog-style-suite</code> to the local <code>gemma-4-26b-a4b</code> in <code>LM Studio</code>. This might look inconsistent, but it actually isn&rsquo;t; it precisely illustrates that this pipeline has begun to specialize.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <p>With these articles, the first two have laid out the boundaries. <a class="link" href="/en/p/why-blog-writer-had-to-exist/" >The first article</a> discusses why <code>blog-writer</code> emerged, and <a class="link" href="/en/p/how-blog-style-suite-split-style-and-token-cost/" >the second article</a> discusses how <code>blog-style-suite</code> separates style learning from token costs. This final article settles on the most practical question: where should local models, online models, and <code>Minimax</code> ultimately be placed?</p>
+<h2 id="training-style-data-not-worth-burning-online-models-at-every-step">Training Style Data, Not Worth Burning Online Models at Every Step
+</h2><p>The issue of style data, once you start taking it seriously, quickly becomes a practical problem with tokens.
+It&rsquo;s not about whether you <em>want</em> to save costs; if you don&rsquo;t divide the labor, this whole setup won&rsquo;t run for long.
+The most common mistake in the past was letting one online model handle everything.</p>
+<ul>
+<li>Scraping historical articles</li>
+<li>Performing filtering</li>
+<li>Doing categorization</li>
+<li>Scoring</li>
+<li>Sampling</li>
+<li>Enforcing style</li>
+<li>Finally writing the draft
+The biggest problem with doing it this way isn&rsquo;t that &ldquo;the model isn&rsquo;t strong enough,&rdquo; but rather that every step burns the same level of cost.
+Looking back now, the truly reasonable approach should be to think in reverse: which steps <em>must</em> be online, which steps should ideally be localized, and which steps shouldn&rsquo;t even be given to a model at all.
+As long as this boundary isn&rsquo;t clear, no matter how powerful the model is, it will just end up helping you repeat a bunch of tasks that could have been pre-processed away.</li>
+</ul>
+<h2 id="local-models-are-better-suited-for-dirty-heavy-and-iterative-tasks">Local Models are Better Suited for Dirty, Heavy, and Iterative Tasks
+</h2><p>I am increasingly inclined to define local models as the &ldquo;physical layer&rdquo; for production use.
+They might not be the strongest, nor perfect every time, but they are particularly suited for tasks such as:</p>
+<ul>
+<li>Building through repeated runs/iterations</li>
+<li>Multi-round compression experiments on style data</li>
+<li>Re-scanning after configuration changes</li>
+<li>Low-risk recalculation on existing structures</li>
+</ul>
+<p>These types of tasks share a clear commonality.
+The value isn&rsquo;t in a single, extremely high-value output, but rather in the ability to run repeatedly, tolerate errors, and ideally avoid paying high costs every single round.
+Currently, <code>scripts/blog-style-suite/config.json</code> has switched to <code>lm-studio-gemma4</code>, which itself indicates a shift in judgment. It&rsquo;s not that local <code>gemma</code> is necessarily stronger than online models, but for the production pipeline, we are finally starting to prioritize &ldquo;runnability, frequency of use, and ability to iterate/modify repeatedly.&rdquo;
+This point actually aligns with the logic I wrote previously in <a class="link" href="/en/p/weaker-models-shouldnt-do-frontier-work/" >Don&rsquo;t force strong tasks onto weak models</a>.
+Local models might not be suitable for writing complex, comprehensive articles from scratch, but they are excellent for handling dirty, heavy, and batch processing tasks. Preprocessing style data is inherently more like this category of task.</p>
+<h2 id="online-models-are-better-suited-for-the-final-polish-not-for-doing-everything-from-scratch">Online models are better suited for the final polish, not for doing everything from scratch
+</h2><p>Just because local models are suitable for the production side doesn&rsquo;t mean online models have no value.
+The real value of an online model lies precisely in that final polishing touch.
+For example:</p>
+<ul>
+<li>Supplementing facts based on the latest information</li>
+<li>Structuring arguments within a larger context</li>
+<li>Handling time-sensitive information that requires internet verification</li>
+<li>Transforming already prepared structured style assets into a publishable article
+These tasks require higher demands on expression quality, factual integration, and contextual understanding, making online models more valuable here.
+In other words, the powerful model is more like the final few assembly line steps. It&rsquo;s not that it <em>can&rsquo;t</em> do more upfront work, but if you make it scan from beginning to end, the entire cost structure will quickly become distorted.
+This is also why <code>blog-writer</code> is designed to only read from the published location <code>published.runtime.json</code>, rather than having to switch providers or re-scan the suite directory while drafting. The lighter the consumption side, the better it is for a more powerful model to focus on finalizing the article.</li>
+</ul>
+<h2 id="the-significance-of-minimax-its-not-just-another-provider-connection">The Significance of Minimax: It&rsquo;s Not Just Another Provider Connection
+</h2><p>Many people who see <code>Minimax</code> might first think: &ldquo;It&rsquo;s just another model being connected.&rdquo;</p>
+<p>I don&rsquo;t think so.</p>
+<p>The truly valuable aspect of <code>Minimax</code> is that it has successfully paved the way for <strong>&ldquo;multiple provider outputs consumed by a single publishing contract.&rdquo;</strong></p>
+<p>The change on April 2, 2026, at 10:18 (<code>9f15199</code>) modified <code>blog-style-suite</code> to support multi-model configurations, with outputs isolated per provider. Subsequently, the README and runtime structure have consistently emphasized one thing: while the suite can generate many sets of results, only the manually selected <code>published.runtime.json</code> is actually effective.</p>
+<p>This boundary is extremely important.</p>
+<p>Because once this boundary is clear, the role of <code>Minimax</code> changes from being &ldquo;something that must be bound within the drafting process&rdquo; to becoming:</p>
+<ul>
+<li>Something that can participate in production-side comparisons.</li>
+<li>Something that can be used to generate a runtime version.</li>
+<li>Something that can be compared horizontally with local model artifacts.</li>
+<li>Finally, something whose publication is decided by human judgment.</li>
+</ul>
+<p>This transforms the provider from a &ldquo;system dependency&rdquo; into a &ldquo;replaceable component.&rdquo;</p>
+<p>I believe this is the most interesting significance of <code>Minimax</code> within this engineering setup. It isn&rsquo;t here to dominate the entire pipeline; it&rsquo;s here to validate whether this pipeline has successfully cleaned up its interfaces.</p>
+<h2 id="true-specialization-is-not-based-on-model-strength-but-on-task-type">True specialization is not based on model strength, but on task type
+</h2><p>I now favor a classification method that is quite rudimentary, but very effective.</p>
+<h3 id="rules-and-hard-constraints">Rules and Hard Constraints
+</h3><p>Leave to local scripts.
+If it can be solved with deterministic tools like <code>scanner.py</code>, <code>write_post.py</code>, or <code>write_post_series.py</code>, don&rsquo;t let the model get involved.</p>
+<h3 id="style-data-generation">Style Data Generation
+</h3><p>Prioritize local models or lower-cost providers.
+Because what is most important here is reproducibility, room for iteration/error, and cacheability, not necessarily the most dazzling single output.</p>
+<h3 id="final-drafting-and-fact-consolidation">Final Drafting and Fact Consolidation
+</h3><p>Hand this off to a model better suited for long-context integration, expression consolidation, and fact-checking/web retrieval.
+This layer is where spending money on online models is most worthwhile.
+When broken down like this, many previously confusing issues are actually not that complex. You don&rsquo;t need to argue every day about &ldquo;which model is the strongest&rdquo;; you just need to ask: which layer does this task belong to?</p>
+<h2 id="ultimately-what-is-most-valuable-is-not-the-model-but-the-clear-boundaries">Ultimately, what is most valuable is not the model, but the clear boundaries.
+</h2><p>This concludes my third article.
+As <code>blog-writer</code> and <code>blog-style-suite</code> have evolved, I feel that what is most valuable is not which provider we connected next, or who we replaced, or which one we tested.
+What is most valuable is that the boundaries are finally becoming clearer.</p>
+<ul>
+<li><code>blog-writer</code> handles the consumption side.</li>
+<li><code>blog-style-suite</code> handles the production side.</li>
+<li><code>published.runtime.json</code> is the publishing point.</li>
+<li>Local models are better suited for dirty and heavy lifting that needs to be run repeatedly.</li>
+<li>Online models are better suited for the final polish/wrap-up.</li>
+<li>Online providers like <code>Minimax</code> feel more like replaceable components rather than the central hub of the system.
+Once the boundaries are clear, the entire workflow flows smoothly.
+You won&rsquo;t expect one model package to conquer everything, nor will you stack every step onto the most expensive layer. In the end, while it looks like selecting a model, what we are actually doing is assigning workstations for different types of tasks.
+Simply put, having a single strong point is certainly good.
+But in the long run, clear boundaries are often more important and stronger than any single point solution.</li>
+</ul>
+<h2 id="references">References
+</h2><ul>
+<li>Repository Commit: <a class="link" href="https://github.com/ttf248/notebook/commit/9f1519967981c5eef7bd1eb407b0406ac542ebd0"  target="_blank" rel="noopener"
+    ><code>9f1519967981c5eef7bd1eb407b0406ac542ebd0</code></a></li>
+<li>Repository Commit: <a class="link" href="https://github.com/ttf248/notebook/commit/5f17088391ee858b88fc50df884bc0103ff0b3c1"  target="_blank" rel="noopener"
+    ><code>5f17088391ee858b88fc50df884bc0103ff0b3c1</code></a></li>
+<li>Repository File: <code>scripts/blog-style-suite/config.json</code></li>
+<li>Effective Runtime: <code>.agents/data/blog-writing/published.runtime.json</code></li>
+<li>Related Old Article: <a class="link" href="/en/p/a-long-period-of-deep-ai-programming/" >A Period of Heavy AI Programming</a></li>
+<li>Related Old Article: <a class="link" href="/en/p/ultimately-its-returning-to-domestic-models/" >Ultimately Returning to Domestic Models</a></li>
+<li>Related Old Article: <a class="link" href="/en/p/weaker-models-shouldnt-do-frontier-work/" >Don&rsquo;t Force Strong Tasks with Weak Models</a></li>
+</ul>
+<h2 id="writing-notes">Writing Notes
+</h2><h3 id="original-prompt">Original Prompt
+</h3><pre><code class="language-text">$blog-writer This content is quite extensive, so I've split it into a series of articles: Last year, many drafts were written using large models. Back then, the process was to create an outline or a list of questions myself, and then have the AI generate the draft, copy the content into a local md document, fill in header information, tag information, and publish the article; recently, I used Codex a lot and found that its web search capability is very strong. So, could I write a skill to automate these tasks? This led to the first draft of the skill blog-writer. I also thought about having the AI learn my previous writing style, which caused blog-writer to consume a lot of tokens when running. Subsequently, I optimized blog-writer in several versions, splitting out the data module and the data generation module. The original data generation module was still an independent skill. As I continued writing, I realized that it would be better as a Python project, which led to blog-style-suite. Then, I found that training on style data also consumes a lot of tokens, so I wanted to use a local large model and connected to a local LLM. I then thought about comparing the differences between the local LLM and the online version, so I integrated minimax; the evolution history of blog-style-suite and blog-writer can be analyzed from the git commit history. Additionally, based on the code for local blog-writer and blog-style-suite, I can discuss the design ideas, how token saving was achieved, and how the data structure was designed—the core design concepts. If tokens are abundant, it can consume entire historical articles; preprocessing can save a lot of tokens.
+</code></pre>
+<h3 id="writing-strategy-summary">Writing Strategy Summary
+</h3><ul>
+<li>The third article will no longer repeat the discussion on architecture, but instead focus solely on the practical issue of &ldquo;model specialization/division of labor.&rdquo;</li>
+<li>Start directly by stating the current reality—whether to use <code>published.runtime.json</code> from the current repository or if it&rsquo;s switched locally to <code>gemma4</code> via <code>minimax-m2</code> or <code>config.json</code>—to reduce filler content.</li>
+<li>The focus should not be on proving which model is stronger, but rather on explaining <em>why</em> different tasks should be assigned to different cost layers.</li>
+<li>Placing <code>Minimax</code> in the &ldquo;replaceable provider&rdquo; section aims to pull its significance back into the engineering boundary, rather than treating it as just another entry on a model leaderboard.</li>
+<li>Conclude by returning to the overarching judgment: &ldquo;Clear boundaries are more important than single points of strength,&rdquo; serving as the closing statement for the entire series of articles.</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/ai-inspiration-hub/">AI Inspiration Hub</a>
+        
+            <a href="/en/tags/ai/">Ai</a>
+        
+            <a href="/en/tags/programming/">Programming</a>
+        
+            <a href="/en/tags/minimax/">Minimax</a>
+        
+            <a href="/en/tags/local-model/">Local Model</a>
+        
+            <a href="/en/tags/blog-style-suite/">Blog-Style-Suite</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Apr 09, 2026 15:45
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">Related content</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/en/p/how-blog-style-suite-split-style-and-token-cost/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Making the &#34;AI writes blog&#34; thing into an engineering project later (Part II)</h3>
+                            <time class="related-content__date" datetime='2026-04-03T21:02:02&#43;08:00'>Apr 03, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/why-blog-writer-had-to-exist/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI Writing a Blog: The Next Steps Towards Engineering (Part 1)</h3>
+                            <time class="related-content__date" datetime='2026-04-03T20:58:02&#43;08:00'>Apr 03, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/weaker-models-shouldnt-do-frontier-work/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Don&#39;t force weak models onto hard tasks.</h3>
+                            <time class="related-content__date" datetime='2026-04-02T22:05:00&#43;08:00'>Apr 02, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/next-8-ai-topics-after-reviewing-two-years-of-posts/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">After reviewing AI articles from the past two years, I think these are the 8 topics I should write about next.</h3>
+                            <time class="related-content__date" datetime='2026-03-30T22:20:00&#43;08:00'>Mar 30, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google has released Gemma 4 this time (III)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

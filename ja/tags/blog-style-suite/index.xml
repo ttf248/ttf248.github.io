@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>Blog-Style-Suite on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/blog-style-suite/</link>
+        <description>Recent content in Blog-Style-Suite on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/blog-style-suite/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>AIがブログを書くという件は、結局エンジニアリングにする必要がある（三）</title>
+        <link>https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/</link>
+        <pubDate>Fri, 03 Apr 2026 21:06:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/</guid>
+        <description>&lt;p&gt;倉庫の構成を一周確認した結果、逆に確信したことがあります。このシステムは、単体のモデルがどれだけ強力かではなく、どのレイヤーにコストを負わせるべきか、という点にかかっているということです。&lt;/p&gt;
+&lt;p&gt;最も明白なシグナルは、現在有効な &lt;code&gt;published.runtime.json&lt;/code&gt; が依然として 2026年4月2日に生成された &lt;code&gt;minimax-m2&lt;/code&gt; であることです。しかし、2026年4月3日16:38の &lt;code&gt;5f17088&lt;/code&gt; は、&lt;code&gt;blog-style-suite&lt;/code&gt; のデフォルトプロバイダーをローカルの &lt;code&gt;LM Studio&lt;/code&gt; 内の &lt;code&gt;gemma-4-26b-a4b&lt;/code&gt; に切り替えています。これは一見すると前後で矛盾しているように見えますが、実はそうではありません。むしろ、このパイプラインに分業が始まったことを示しています。&lt;/p&gt;
+&lt;p&gt;この記事群はここまでで、最初の2本で境界線を描きました。&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/why-blog-writer-had-to-exist/&#34; &gt;第1回&lt;/a&gt; では、&lt;code&gt;blog-writer&lt;/code&gt; がなぜ生まれたのかを語り、&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/&#34; &gt;第2回&lt;/a&gt; では、&lt;code&gt;blog-style-suite&lt;/code&gt; がどのようにスタイル学習とトークンコストを分離したのかを語りました。そして最後のこの記事では、最も現実的な問題に焦点を当てます。ローカルモデル、オンラインモデル、&lt;code&gt;Minimax&lt;/code&gt; は、結局どのワークステーションに置くべきなのか、という点です。&lt;/p&gt;
+&lt;h2 id=&#34;スタイルデータでのトレーニングはすべてのステップでオンラインモデルを焼く価値はない&#34;&gt;スタイルデータでのトレーニングは、すべてのステップでオンラインモデルを焼く価値はない
+&lt;/h2&gt;&lt;p&gt;スタイルデータというものは、真剣に取り組むと、トークンがすぐに現実的な問題になります。
+やりたいかどうかではなく、役割分担をしないと、このシステム全体が長く動きません。
+以前最も陥りがちだった誤解は、一つのオンラインモデルにすべての作業を任せてしまうことでした。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;過去記事のクロール&lt;/li&gt;
+&lt;li&gt;スクリーニングの実施&lt;/li&gt;
+&lt;li&gt;分類を行う&lt;/li&gt;
+&lt;li&gt;スコアリング&lt;/li&gt;
+&lt;li&gt;サンプルの抽出&lt;/li&gt;
+&lt;li&gt;スタイルの調整（トーン合わせ）&lt;/li&gt;
+&lt;li&gt;そして最後に原稿を書く
+このように行う最大の問題は、「モデルが十分強力でない」ことではなく、すべてのステップで同じコストを消費してしまうことです。
+今振り返ると、真に合理的なアプローチは逆から考えるべきです。どのステップはオンラインで行う必要があるのか、どのステップは可能な限りローカル化すべきなのか、さらにはモデルに任せるべきではないステップがあるのか、という点です。
+この境界線が不明確なままだと、どれだけ強力なモデルを導入しても、結局は本来前処理で対応できたはずの作業を繰り返すだけになってしまいます。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;ローカルモデルは汚い作業重労働そして試行錯誤の繰り返しに適している&#34;&gt;ローカルモデルは「汚い作業」「重労働」、そして「試行錯誤の繰り返し」に適している
+&lt;/h2&gt;&lt;p&gt;私は今や、ローカルモデルを本番環境における「体力層（ワークホース）」として定義するようになりつつあります。
+必ずしも最強である必要はなく、毎回最も洗練されているわけでもありませんが、以下のタスクを担うのに特に適しています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;何度も実行する構築プロセス&lt;/li&gt;
+&lt;li&gt;スタイルデータの複数ラウンドにわたる圧縮実験&lt;/li&gt;
+&lt;li&gt;設定変更後の再スキャン&lt;/li&gt;
+&lt;li&gt;既存の構造に対する低リスクな再計算
+これらの作業には共通点があります。
+それは単発で価値が極めて高いことではなく、&lt;strong&gt;繰り返し実行する必要がある&lt;/strong&gt;、&lt;strong&gt;試行錯誤を許容できる&lt;/strong&gt;、そしてできれば&lt;strong&gt;毎回高額なコストを払う必要がない&lt;/strong&gt;という点です。
+現在、&lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt; は &lt;code&gt;lm-studio-gemma4&lt;/code&gt; に切り替わっており、これ自体が判断が変わっていることを示しています。ローカルの &lt;code&gt;gemma&lt;/code&gt; がオンラインモデルより必ずしも強いわけではなく、むしろ本番環境のこのパイプラインは、「実行可能か」「頻繁に実行できるか」「繰り返し変更できるか」を優先し始めたのです。
+これは、私が以前書いた &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;弱モデルに無理に高度なタスクを割り当てない&lt;/a&gt; と同じ論理に基づいています。
+ローカルモデルが複雑な記事全体をゼロから書き上げるのに適しているとは限りませんが、**「汚い作業」「重労働」「バッチ処理」**を受け持つには非常に適しています。スタイルデータの前処理は、元々このようなタスクに近いです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;オンラインモデルは仕上げに向いており全てをこなすのには向かない&#34;&gt;オンラインモデルは「仕上げ」に向いており、「全てをこなす」のには向かない
+&lt;/h2&gt;&lt;p&gt;ローカルモデルがプロダクション側に向いているからといって、オンラインモデルに価値がないわけではありません。
+オンラインモデルが真価を発揮するのは、まさに最後の「仕上げ（クロージング）」の部分です。
+例えば：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;最新の情報に基づいて事実を補完する&lt;/li&gt;
+&lt;li&gt;より大きなコンテキストの中で論証を整理する&lt;/li&gt;
+&lt;li&gt;ネットワーク接続による検証が必要な時間的制約のある情報を処理する&lt;/li&gt;
+&lt;li&gt;すでに準備された構造化されたスタイルアセットを、公開できる記事に仕上げる
+これらの動作は、表現の質、事実の統合、コンテキスト理解といった要求が高いため、オンラインモデルがここに配置される方が価値が高いのです。
+つまり、強力なモデルはまるで総組立ラインの最後の工程のようなものです。前工程まで手を広げられるわけではありませんが、最初から最後まで全てを処理させると、コスト構造がすぐに崩れてしまいます。
+これが、&lt;code&gt;blog-writer&lt;/code&gt; が設計上、投稿済みデータである &lt;code&gt;published.runtime.json&lt;/code&gt; のみを読み取り、原稿作成時にプロバイダーを切り替えたり、スイートディレクトリ全体を再走査したりしない理由です。消費側（クライアント側）が軽いほど、より強力なモデルに記事の「仕上げ」に集中してもらうのが最適なのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;minimax-の意味は単にプロバイダーを増やしただけではない&#34;&gt;Minimax の意味は、単にプロバイダーを増やしただけではない
+&lt;/h2&gt;&lt;p&gt;多くの人は「Minimax」を見ると、「またモデルを一つ追加しただけか」と最初に思いがちです。&lt;/p&gt;
+&lt;p&gt;しかし、そうは思いません。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;Minimax&lt;/code&gt; が真に価値があるのは、「複数のプロバイダーからの出力を、単一の公開契約（スキーマ）で消費できる道筋を作った」点にあります。&lt;/p&gt;
+&lt;p&gt;2026年4月2日 10:18 の &lt;code&gt;9f15199&lt;/code&gt; で &lt;code&gt;blog-style-suite&lt;/code&gt; がマルチモデル構成に変更され、出力がプロバイダーごとに分離されました。その後も README やランタイムの構造では、常に一つのことを強調しています。それは、スイートは多くの結果を生成できるが、実際に有効なのは人間が選んだ &lt;code&gt;published.runtime.json&lt;/code&gt; だけだということです。&lt;/p&gt;
+&lt;p&gt;この境界線（バウンダリー）が非常に重要です。&lt;/p&gt;
+&lt;p&gt;なぜなら、一度この境界が明確になると、&lt;code&gt;Minimax&lt;/code&gt; の役割は「執筆プロセスに組み込まれなければならないもの」から、以下のようなものへと変わるからです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;本番環境での比較に参加できる&lt;/li&gt;
+&lt;li&gt;ランタイム版を生成するために使える&lt;/li&gt;
+&lt;li&gt;ローカルモデルの成果物と横断的に比較できる&lt;/li&gt;
+&lt;li&gt;最終的に人間がどのバージョンを公開するかを決定する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これにより、プロバイダーは「システムへの依存」から「交換可能な部品」へと変わりました。&lt;/p&gt;
+&lt;p&gt;これが、このエンジニアリングスタックにおける &lt;code&gt;Minimax&lt;/code&gt; の最も興味深い意義だと私は感じています。それは、エンドツーエンドの全工程を支配するために存在するのではなく、「このリンク（プロセス）がインターフェースをきれいに受け止めているかどうかを検証する」ために存在しているのです。&lt;/p&gt;
+&lt;h2 id=&#34;真の役割分担はモデルの強さによるのではなくタスクの種類によるべき&#34;&gt;真の役割分担は、モデルの強さによるのではなく、タスクの種類によるべき
+&lt;/h2&gt;&lt;p&gt;私は今、非常に古風だが実用的な分類法をより支持しています。&lt;/p&gt;
+&lt;h3 id=&#34;ルールとハード制約&#34;&gt;ルールとハード制約
+&lt;/h3&gt;&lt;p&gt;ローカルスクリプトに任せる。
+&lt;code&gt;scanner.py&lt;/code&gt;、&lt;code&gt;write_post.py&lt;/code&gt;、&lt;code&gt;write_post_series.py&lt;/code&gt; のような決定論的なツールで解決できることは、モデルに混ぜ込ませないこと。&lt;/p&gt;
+&lt;h3 id=&#34;スタイルデータ生成&#34;&gt;スタイルデータ生成
+&lt;/h3&gt;&lt;p&gt;ローカルモデルまたはコストの低いプロバイダーを優先します。
+ここでの最も重要なのは、単発の出力が最も華やかであることではなく、再現性、試行錯誤可能性、キャッシュ可能性です。&lt;/p&gt;
+&lt;h3 id=&#34;最終原稿作成と事実の締めくくり&#34;&gt;最終原稿作成と事実の締めくくり
+&lt;/h3&gt;&lt;p&gt;より長いコンテキストの統合、表現の収束、およびインターネットからの事実補完に適したモデルに任せる。
+このレイヤーこそが、オンラインモデルにお金をかける価値がある場所だ。
+このように分解すると、以前は悩んでいた問題も実はそれほど複雑ではないことがわかる。毎日「どのモデルが最強なのか」を議論する必要はなく、「このタスクはどのレイヤーに属するか」と尋ねるだけでよいのだ。&lt;/p&gt;
+&lt;h2 id=&#34;結局最も価値があるのはモデルではなく境界が明確なことである&#34;&gt;結局、最も価値があるのはモデルではなく境界が明確なことである
+&lt;/h2&gt;&lt;p&gt;第3編はここまでとさせていただきます。
+&lt;code&gt;blog-writer&lt;/code&gt; と &lt;code&gt;blog-style-suite&lt;/code&gt; という一連のものは、進化する過程で、誰を接続したか、誰に入れ替えたか、どのプロバイダーを試したかといった点よりも、最も価値があるのは境界が徐々に明確になってきたことです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;blog-writer&lt;/code&gt; は消費側を担当&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;blog-style-suite&lt;/code&gt; は生成側を担当&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;published.runtime.json&lt;/code&gt; が公開の場所である&lt;/li&gt;
+&lt;li&gt;ローカルモデルは繰り返し実行する面倒な作業や重い作業に適している&lt;/li&gt;
+&lt;li&gt;オンラインモデルは最後の仕上げに適している&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Minimax&lt;/code&gt; のようなオンラインプロバイダーは、システムの中枢というよりも交換可能な部品のようなものだ。
+境界が明確になると、ワークフロー全体がスムーズになる。
+一つのモデルパッケージだけで全てを解決できると期待したり、全てのステップを最も高価なレイヤーに積み重ねたりすることはなくなる。結局のところ、これはモデルを選ぶように見えて、実際には異なる種類のタスクに作業場所を割り当てているだけなのだ。
+端的に言えば、単一の点が強いのはもちろん良いことだ。
+しかし、長期的に見ると、境界が明確であることは、単一の点よりも強く、より重要であることが多い。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9f1519967981c5eef7bd1eb407b0406ac542ebd0&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9f1519967981c5eef7bd1eb407b0406ac542ebd0&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/5f17088391ee858b88fc50df884bc0103ff0b3c1&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;5f17088391ee858b88fc50df884bc0103ff0b3c1&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/config.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;有効なランタイム：&lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/a-long-period-of-deep-ai-programming/&#34; &gt;重度AIプログラミングの日々&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/ultimately-its-returning-to-domestic-models/&#34; &gt;結局は国産モデルに戻る&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;関連旧記事：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/weaker-models-shouldnt-do-frontier-work/&#34; &gt;弱モデルに無理な強活を適用しない&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その時は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づきました。そこで、これらの作業を自動化するスキルを作成できないかと考えたのが、skill blog-writerの初稿です。さらに、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したスキルとして存在していました。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それがblog-style-suiteの誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考えたため、minimaxとも連携させました。blog-style-suiteとblog-writerの進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルのblog-writerやblog-style-suiteのコードを基にして、設計思想（どのようにトークン節約を実現したか、データ構造をどう設計したか、核となる設計思想）について説明することも可能です。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;第3編では、アーキテクチャの説明を繰り返すのではなく、「モデルの役割分担」という現実的な問題に焦点を当てて締めくくる。&lt;/li&gt;
+&lt;li&gt;冒頭で、現在のリポジトリにある &lt;code&gt;published.runtime.json&lt;/code&gt; が &lt;code&gt;minimax-m2&lt;/code&gt; や &lt;code&gt;config.json&lt;/code&gt; からローカルの &lt;code&gt;gemma4&lt;/code&gt; に切り替わっているという事実を直接提示し、前置きを減らす。&lt;/li&gt;
+&lt;li&gt;重要なのは、誰がより優れているかを証明することではなく、なぜ異なるタスクを異なるコストレイヤーに割り当てるべきなのかを説明することである。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Minimax&lt;/code&gt; を「交換可能なプロバイダー」の位置で語るのは、その意義をモデルのベンチマークリストではなく、エンジニアリングの境界線に引き戻すためである。&lt;/li&gt;
+&lt;li&gt;最後に、「単一の最高性能よりも明確な境界線の方が重要である」という全体的な判断に戻り、一連の記事を締めくくる。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AIがブログを書くという件は、結局エンジニアリングにする必要がある（2）</title>
+        <link>https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/</link>
+        <pubDate>Fri, 03 Apr 2026 21:02:02 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/how-blog-style-suite-split-style-and-token-cost/</guid>
+        <description>&lt;p&gt;トークンが十分にある場合、最も手っ取り早い方法は非常に粗暴ですが、過去の記事をそのままモデルに投入し、自分で学ばせることです。&lt;/p&gt;
+&lt;p&gt;問題は、この方法はたまに1記事書くのには適していますが、繰り返し書くのには適さないということです。もしブログ執筆を長期的なワークフローとして真剣に取り組むのであれば、「生データ（歴史的な文章）」というアプローチは、すぐに「高コストで散漫」になってしまいます。&lt;/p&gt;
+&lt;p&gt;この一連の記事では、主軸が移りました。前回の記事 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/why-blog-writer-had-to-exist/&#34; &gt;AIによるブログ執筆は、結局エンジニアリングにする必要がある（1）：blog-writerがなぜ生まれてきたか&lt;/a&gt; では、消費側（コンテンツの利用側）の自動化について取り上げました。この記事からは生産側、つまりスタイルデータがどのように生成され、どのように圧縮され、どうすればトークンを無駄に燃焼させないかという点について語ります。次の記事では &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIによるブログ執筆は、結局エンジニアリングにする必要がある（3）：ローカルモデル、オンラインモデル、そしてMinimaxの役割分担&lt;/a&gt; を続けます。&lt;/p&gt;
+&lt;h2 id=&#34;最初の一番自然な発想は過去の記事をそのまま与えることだ&#34;&gt;最初の一番自然な発想は、過去の記事をそのまま与えることだ
+&lt;/h2&gt;&lt;p&gt;この道筋は本当に自然すぎる。
+モデルにあなたの書き方を学ばせたいのなら、最も直感的な方法はもちろん、古い記事を餌として与えることだ。できれば、過去のブログの中で自分自身に一番近いと感じるものを詰め込んで、自分で要約させるのがベストだ。
+一度きりのタスクを見る限りでは、これを行っても問題はない。
+むしろ多くのケースで効果は良い。コンテキストが十分長く、モデルが十分に強力で、過去の記事が十分にあれば、スタイルを習得することは確かに可能だ。
+しかし、問題は「この記事を書き上げられるか」ではなく、「次の記事、その次の記事も、これを繰り返さなければならないのか」ということなのだ。
+毎回古い記事のバッチを再投入することは、いくつかの非常に現実的な副作用をもたらす：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;同じ材料が繰り返しコンテキストを占有する&lt;/li&gt;
+&lt;li&gt;トークン消費量が執筆回数にほぼ線形に増加する&lt;/li&gt;
+&lt;li&gt;モデルが見るノイズが増えすぎ、真に有用なシグナルが逆に希釈されてしまう&lt;/li&gt;
+&lt;li&gt;執筆という動作とスタイル維持という動作が完全に結びつき、どちらも軽々しくできなくなる
+つまり、トークンが潤沢な時は、生で与えるのはもちろん可能だ。しかし、工学的な観点から常にこのようにすることはできないのだ。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;これがデータモジュールとデータ生成モジュールを分離しなければならない理由です&#34;&gt;これがデータモジュールとデータ生成モジュールを分離しなければならない理由です
+&lt;/h2&gt;&lt;p&gt;後になって考えたところ、核心は一言に尽きます。「消費側」と「生産側」を分けることです。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;blog-writer&lt;/code&gt; が担当しているのは消費側です。これは、すでに公開されたランタイムを読み取り、固定の契約に従って記事を書き出すだけです。&lt;/p&gt;
+&lt;p&gt;一方、スタイルデータのスキャン、フィルタリング、スコアリング、圧縮、プロバイダー比較などは、別の生産側のパイプラインに置かれるべきでした。つまり、後から作られた &lt;code&gt;blog-style-suite&lt;/code&gt; のようなものです。&lt;/p&gt;
+&lt;p&gt;gitの履歴を見れば、この転換は非常に明確です。&lt;/p&gt;
+&lt;p&gt;2026年4月1日 21:47 のコミット &lt;code&gt;84a06b5&lt;/code&gt; で、元の &lt;code&gt;blog-style-maintainer&lt;/code&gt; スキルがリポジトリレベルのCLIツールに置き換えられたことが明記されています。この動きは物事を物語っています。なぜなら、&lt;code&gt;scan/build/rebuild&lt;/code&gt; があり、出力ディレクトリがあり、リカバリ機構がある時点で、それはもはや単なる「スキル」ではなく、通常のPythonプロジェクトのように見えてくるからです。&lt;/p&gt;
+&lt;p&gt;さらに2026年4月1日 23:05 のコミット &lt;code&gt;9e92b8e&lt;/code&gt; では、&lt;code&gt;blog-style-suite&lt;/code&gt; が &lt;code&gt;scanner.py&lt;/code&gt;、&lt;code&gt;builder.py&lt;/code&gt;、&lt;code&gt;compressor.py&lt;/code&gt; といったモジュールに分割され続けました。この段階に至ると、考え方はすでに非常に工学的なものになっています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;scanner.py&lt;/code&gt;: ディスクから記事をスキャンし、構造化された特徴を抽出する役割&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;builder.py&lt;/code&gt;: スコアリング、選別、キャッシュ、ランタイムアセンブリの役割&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;compressor.py&lt;/code&gt;: モデルが関与するいくつかの圧縮ステップを担当する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これは、単にスーパープロンプトを一段書くというアプローチとは、全く異なる考え方なのです。&lt;/p&gt;
+&lt;h2 id=&#34;トークンを節約するのは玄学ではなく前処理とバッチ化によるもの&#34;&gt;トークンを節約するのは、玄学ではなく前処理とバッチ化によるもの
+&lt;/h2&gt;&lt;p&gt;このエンジニアリングセットで真に価値があるのは、2026年4月2日19:41の&lt;code&gt;bc4b950&lt;/code&gt;だと思います。&lt;/p&gt;
+&lt;p&gt;あのコミットは非常に率直なことを述べていました。AIの呼び出し回数が約「2000回」から、各プロバイダーで最大「5回」に直接削減されたのです。&lt;/p&gt;
+&lt;p&gt;どうやって達成したのか？
+それは「プロンプトをより賢くする」のではなく、&lt;strong&gt;事前に処理すべきものを前もって実行する&lt;/strong&gt;ことによるものです。&lt;/p&gt;
+&lt;p&gt;現在の&lt;code&gt;blog-style-suite&lt;/code&gt;のフローは非常に明確になりました：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;scan&lt;/code&gt;フェーズは純粋にヒューリスティックであり、AI呼び出しは0回。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;build&lt;/code&gt;フェーズではまずヒューリスティックなスコアリングを行い、これもAI呼び出しは0回です。&lt;/li&gt;
+&lt;li&gt;その後、&lt;code&gt;technical / finance / essay / tooling&lt;/code&gt;の4つのレーンそれぞれで1回のバッチ選別とラベリングを行います。&lt;/li&gt;
+&lt;li&gt;最後に作者スタイルの圧縮を1回行います。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;これを計算すると、コールドスタートでも最大5回の呼び出しに抑えられます。&lt;/p&gt;
+&lt;p&gt;さらに重要なのは、この5回が各記事に分散しているのではなく、&lt;strong&gt;すでに前処理された高価値な要約材料に集中している&lt;/strong&gt;点です。&lt;/p&gt;
+&lt;p&gt;これが前処理が真にトークンを節約する部分です。単に数文字を減らすのではなく、「記事ごとに呼び出す」から「フェーズごとに集中的に呼び出す」というパラダイムシフトなのです。&lt;/p&gt;
+&lt;p&gt;その後は、キャッシュも整備されました。
+&lt;code&gt;builder.py&lt;/code&gt;にはレーンのバッチフィンガープリントがあり、プロバイダーのチェックポイント復元機能があり、さらにローカルモデルのコンテキストのために&lt;code&gt;review_pool_per_lane = 12&lt;/code&gt;のような縮小化が行われています。少しデータを変更しただけで、パイプライン全体を再実行する必要がありません。&lt;/p&gt;
+&lt;p&gt;こうした設計は一見派手ではありませんが、一つ一つが非常に実用的です。なぜなら、それらはすべて「同じトークン群を二度と無駄に燃焼させない」という問題を解決しているからです。&lt;/p&gt;
+&lt;h2 id=&#34;現在のデータ構造は本質的に真に有用なシグナルを圧縮しているものだ&#34;&gt;現在のデータ構造は、本質的に真に有用なシグナルを圧縮しているものだ
+&lt;/h2&gt;&lt;p&gt;この構造を分解すれば、データ構造も整理されるだろう。
+私は今、これを3層として理解する方がより良いと感じている。&lt;/p&gt;
+&lt;h3 id=&#34;第1層scanjson&#34;&gt;第1層：&lt;code&gt;scan.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これは共有の原料です。
+ここには、記事のパス、タイトル、日付、カテゴリ、タグ、冒頭段落、クロージングスタブ、見出し、スクリーニング結果、レーン分類といった構造化されたシグナルが格納されています。
+これは &lt;code&gt;blog-writer&lt;/code&gt; に直接渡されるものではなく、生産側でさらに加工するためのものです。&lt;/p&gt;
+&lt;h3 id=&#34;第2層providersourcejson&#34;&gt;第2層：&lt;code&gt;{provider}.source.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これはプロバイダーレベルのチェックポイントです。
+共有された原料に加え、スコアリング結果、レーン選択、フィンガープリント、キャッシュステータスといった中間状態が追加されています。つまり、「加工過程の中間製品」のようなものであり、復元可能、再利用可能、中断して再開できる点が重要です。&lt;/p&gt;
+&lt;h3 id=&#34;第3層providerruntimejson-と-publishedruntimejson&#34;&gt;第3層：&lt;code&gt;{provider}.runtime.json&lt;/code&gt; と &lt;code&gt;published.runtime.json&lt;/code&gt;
+&lt;/h3&gt;&lt;p&gt;これが消費側が真に気にする完成品です。
+ここには以下のものが保持されています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;author_style&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;lanes&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;samples&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;writer_guide&lt;/code&gt;
+つまり、元々大量にあった過去の記事群を、そのまま利用できるランタイムスタイルアセットとして圧縮したものになります。
+特に &lt;code&gt;published.runtime.json&lt;/code&gt; という公開用のファイルが重要です。&lt;code&gt;blog-writer&lt;/code&gt; はこのファイルのみを読み取り、&lt;code&gt;content/post&lt;/code&gt; を再スキャンしたり、suite ディレクトリ内の全プロバイダーの完全なイメージを気にする必要がなくなります。
+この境界線が引かれることで、消費側は軽量化します。執筆モデルが見るのは、もはや原始的な古い記事の山ではなく、すでに前処理された高密度のシグナルとなるのです。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;すべてのことをモデルにさせるべきではない&#34;&gt;すべてのことをモデルにさせるべきではない
+&lt;/h2&gt;&lt;p&gt;最近、このエンジニアリングにおいて最も正しい判断は、「モデルを多く追加すること」ではなく、「モデルに任せるべきでないこともモデルに投げ渡さないこと」だと感じています。&lt;/p&gt;
+&lt;p&gt;以下のようなことは、ローカルルールで処理する方が適しています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;frontmatter の解析&lt;/li&gt;
+&lt;li&gt;冒頭段落の抽出&lt;/li&gt;
+&lt;li&gt;見出し（headings）の抽出&lt;/li&gt;
+&lt;li&gt;本人/転載/モデルによる署名の判断&lt;/li&gt;
+&lt;li&gt;blockquote の比率チェック&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;!--more--&amp;gt;&lt;/code&gt; や埋め込みプロンプト、本文の長さといったハードルルールでのフィルタリング&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;これらの作業をモデルにやらせることは不可能というわけではなく、単に無駄です。&lt;/p&gt;
+&lt;p&gt;モデルがより適しているのは、曖昧さやトレードオフを含む部分です。例えば、「あるレーンの中でどの記事が現在の論調をよりよく代表しているか」、あるいは「高評価の記事から著者のスタイルタグを抽出する」といった作業です。&lt;/p&gt;
+&lt;p&gt;そのため、&lt;code&gt;blog-style-suite&lt;/code&gt; が真に価値があるのは、「トークンを節約できる」という点だけではなく、人間、ルール、モデルのそれぞれが担当すべき役割を再定義した点にあるのです。&lt;/p&gt;
+&lt;h2 id=&#34;前処理はトークンを節約するためではなく執筆作業を持続可能にするためである&#34;&gt;前処理はトークンを節約するためではなく、執筆作業を持続可能にするためである
+&lt;/h2&gt;&lt;p&gt;第2回の結論について、もっと直接的に伝えたい。
+トークンが潤沢な時は、過去の記事をそのまま使うのはもちろん問題ない。むしろ、本当に1〜2本だけ書くなら、頭を使う量が少ないかもしれない。
+しかし、このことを長期的なワークフローにしたいと思うなら、前処理は選択肢ではなくなる。なぜなら、前処理をしないと、執筆モデルは毎回古い素材を見直さなければならず、スタイルの維持と記事生成が常に混ざり合ってしまうからだ。
+&lt;code&gt;blog-style-suite&lt;/code&gt; の意味するところは、このごちゃ混ぜになっているものを分解することにある。
+システムに見せるためでも、プロジェクト名を増やすためでもなく、&lt;code&gt;blog-writer&lt;/code&gt; が軽快に、安定して、「執筆」という一つの動作だけに集中できるようにするためなのだ。
+ここまで来ると、次のステップの問題は自然とついてくる。
+すでに生成側が独立した以上、このコストをどのモデルに負わせるべきなのか？ローカルモデル、オンラインモデル、&lt;code&gt;Minimax&lt;/code&gt; はそれぞれどの工程に立つべきなのか？この件については、次回の記事 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/how-i-split-local-online-and-minimax-models/&#34; &gt;AIでブログを書くという行為は、結局エンジニアリングにする必要がある（三）：ローカルモデル、オンラインモデル、そして Minimax の役割分担&lt;/a&gt; で触れることにする。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/84a06b5dc743f2e9bc6e788d53496a1261bc63ae&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;84a06b5dc743f2e9bc6e788d53496a1261bc63ae&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;9e92b8e6a15d03e6392aff7f3b2dcb0992fe5043&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリコミット：&lt;a class=&#34;link&#34; href=&#34;https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;&lt;code&gt;bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e&lt;/code&gt;&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/README.md&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/scanner.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/builder.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;リポジトリファイル：&lt;code&gt;scripts/blog-style-suite/style_pipeline/compressor.py&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;有効なランタイム：&lt;code&gt;.agents/data/blog-writing/published.runtime.json&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 今回の内容は多いため、シリーズ記事に分割しました。昨年も多くの原稿が大規模言語モデルによって書かれました。その際は、自分でアウトラインや質問リストを作成し、AIに原稿を生成させ、内容をローカルのmdドキュメントにコピーし、ヘッダー情報、タグ情報などを記入して投稿するという流れでした。最近はCodexを多く使用し、Codexのインターネット検索能力が非常に強力だと気づいたため、これらの作業を自動化するskillを作成できないかと考えました。これがskill blog-writerの初稿の誕生につながりました。また、AIに以前の記事のスタイルを学習させたいと考えたため、blog-writerの実行時にトークンを大量に消費するという問題が発生しました。その後、私はblog-writerに対して複数のバージョンの最適化を行いました。データモジュールとデータ生成モジュールに分割したのですが、元々のデータ生成モジュールは独立したskillでした。書き進めるうちに、Pythonプロジェクトとしてまとめた方がより適していることに気づき、それがblog-style-suiteの誕生につながりました。さらに、スタイルデータの学習もトークンを消費することが多いと感じたため、ローカルの大規模言語モデルを使用することにしました。ローカルの大規模言語モデルとオンライン版の違いを比較したいと考え、minimaxを組み込みました。blog-style-suiteとblog-writerの進化の歴史は、gitのコミット履歴から分析できます。ついでに、ローカルのblog-writerやblog-style-suiteのコードを基にして、設計思想（どのようにトークン節約を実現したか、データ構造をどう設計したか、核となる設計思想）について説明することができます。トークンが潤沢であれば過去の記事を丸ごと処理できますし、前処理を行うことで多くのトークンを節約できます。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;ライティングの骨子要約&#34;&gt;ライティングの骨子（要約）
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;本稿では、執筆という行為からデータエンジニアリングへと焦点を移し、「なぜモジュール化する必要があるのか」という核心的な問いに答えることを目指した。&lt;/li&gt;
+&lt;li&gt;冒頭で「生きた歴史の記事をそのまま使える」と認めることで、後続の分割理由に説得力を持たせている。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;scan.json&lt;/code&gt;、&lt;code&gt;source.json&lt;/code&gt;、&lt;code&gt;runtime.json&lt;/code&gt; の三層構造を重点的に展開し、単なるアーキテクチャの説明に留まらないようにした。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;bc4b950&lt;/code&gt; を中間地点の転換点として配置した。なぜなら、「約2000回から5回へ」という変化が前処理の価値を最も明確に示すためである。&lt;/li&gt;
+&lt;li&gt;最後に、消費側と生産側を再分離し、次回の記事で扱うモデルの役割分担への布石を打った。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
