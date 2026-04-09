@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
+<title>VS Code 调 C&#43;&#43;，别漏了 CMake 和 GDB Printer</title>
+
+<link rel='canonical' href='https://ttf248.life/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/'>
+
+<link rel="stylesheet" href="/scss/style.min.989aa97a25e023e9a3a706c4fe4a8ba5d8e0fdaa68698a5434411a1cb9be0136.css"><meta property='og:title' content="VS Code 调 C++，别漏了 CMake 和 GDB Printer">
+<meta property='og:description' content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
+<meta property='og:url' content='https://ttf248.life/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='vscode' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='cmake' /><meta property='article:tag' content='gdb' /><meta property='article:tag' content='ai' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:published_time' content='2026-04-09T19:21:36&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T20:28:13&#43;08:00'/>
+<meta name="twitter:title" content="VS Code 调 C++，别漏了 CMake 和 GDB Printer">
+<meta name="twitter:description" content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="切换菜单">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/">向叔记事簿</a></h1>
+            <h2 class="site-description">拾光记事，岁月有痕</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        
+        <li >
+            <a href='/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-home" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <polyline points="5 12 3 12 12 3 21 12 19 12" />
+  <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" />
+  <path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" />
+</svg>
+
+
+
+                
+                <span>首页</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/archives/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-archive" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <rect x="3" y="4" width="18" height="4" rx="2" />
+  <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-10" />
+  <line x1="10" y1="12" x2="14" y2="12" />
+</svg>
+
+
+
+                
+                <span>归档</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/search/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-search" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="10" cy="10" r="7" />
+  <line x1="21" y1="21" x2="15" y2="15" />
+</svg>
+
+
+
+                
+                <span>搜索</span>
+            </a>
+        </li>
+        
+        
+        <li >
+            <a href='/notes/' >
+                
+                
+                
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
+                
+                <span>随记</span>
+            </a>
+        </li>
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" selected>中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>暗色模式</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目录</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#以前只配了一半">以前只配了一半</a></li>
+    <li><a href="#prelaunchtask-才是那个钩子">preLaunchTask 才是那个钩子</a></li>
+    <li><a href="#f5-之前先编译">F5 之前，先编译</a></li>
+    <li><a href="#还有一个痛点自定义类型看不懂">还有一个痛点：自定义类型看不懂</a></li>
+    <li><a href="#给业务类型写一个-python-展示层">给业务类型写一个 Python 展示层</a></li>
+    <li><a href="#别把-launchjson-当成全部">别把 launch.json 当成全部</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/categories/computer/" >
+                计算机
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">VS Code 调 C&#43;&#43;，别漏了 CMake 和 GDB Printer</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月09日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            阅读约 10 分钟
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/en/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/" class="link">English</a>
+                    
+                        <a href="https://ttf248.life/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>以前我在 VS Code 里调 C++，配置基本就停在 <code>launch.json</code>，最多再加一句 GDB。</p>
+<p>把 <code>program</code> 填好，把 <code>gdb</code> 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 <code>cmake --build</code> 一下。</p>
+<p>更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。</p>
+<p>这事离谱的地方在于，我以前看过的一些教程也差不多就写到 <code>launch.json</code> 为止。直到最近让 AI 配一个新项目，它顺手加了 <code>preLaunchTask</code> 和 <code>gdb_printers.py</code>，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。</p>
+<p>说实话，这不是什么黑科技。</p>
+<p>但是它刚好补上了 C++ 日常调试里两块很烦的空白：<strong>启动前构建</strong>，以及<strong>断点后的变量展示</strong>。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="以前只配了一半">以前只配了一半
+</h2><p>很多教程里的 <code>.vscode/launch.json</code>，大概是这个意思：</p>
+<pre><code class="language-json">{
+  &quot;version&quot;: &quot;0.2.0&quot;,
+  &quot;configurations&quot;: [
+    {
+      &quot;name&quot;: &quot;Debug with GDB&quot;,
+      &quot;type&quot;: &quot;cppdbg&quot;,
+      &quot;request&quot;: &quot;launch&quot;,
+      &quot;program&quot;: &quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&quot;,
+      &quot;args&quot;: [],
+      &quot;stopAtEntry&quot;: false,
+      &quot;cwd&quot;: &quot;${workspaceFolder}&quot;,
+      &quot;MIMode&quot;: &quot;gdb&quot;,
+      &quot;miDebuggerPath&quot;: &quot;/usr/bin/gdb&quot;,
+      &quot;setupCommands&quot;: [
+        {
+          &quot;description&quot;: &quot;Enable pretty-printing for gdb&quot;,
+          &quot;text&quot;: &quot;-enable-pretty-printing&quot;,
+          &quot;ignoreFailures&quot;: true
+        }
+      ]
+    }
+  ]
+}
+</code></pre>
+<p>这段不能说错。</p>
+<p>VS Code 官方的 C++ 示例里，也是类似这一套结构：<code>type</code> 用 <code>cppdbg</code>，<code>MIMode</code> 用 <code>gdb</code>，<code>setupCommands</code> 里打开 pretty-printing。</p>
+<p>但是少了一个关键动作。</p>
+<p>你点 F5 的时候，它会去启动 <code>program</code> 指向的那个可执行文件。问题是，这个文件是不是刚刚编出来的？</p>
+<p>如果不是，那你调的就是上一次的旧程序。</p>
+<p>我以前就经常干这种蠢事。代码改了，断点也打了，调半天发现行为不对，最后才想起来：哦，刚刚没重新编译。</p>
+<h2 id="prelaunchtask-才是那个钩子">preLaunchTask 才是那个钩子
+</h2><p>VS Code 的 Tasks，本质上就是把外部命令挂进编辑器。</p>
+<p>编译、测试、打包，原来要在终端敲，现在可以写到 <code>.vscode/tasks.json</code>。然后 <code>launch.json</code> 里的 <code>preLaunchTask</code>，再按 label 去找那一个 task。</p>
+<p>一个最小的 CMake 项目，可以这么放：</p>
+<pre><code class="language-text">.
+├── .vscode/
+│   ├── launch.json
+│   └── tasks.json
+├── CMakeLists.txt
+├── src/
+│   └── main.cpp
+└── tools/
+    └── gdb_printers.py
+</code></pre>
+<p><code>CMakeLists.txt</code> 先写到够用：</p>
+<pre><code class="language-cmake">cmake_minimum_required(VERSION 3.16)
+
+project(vscode_cpp_debug_demo LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_executable(vscode_cpp_debug_demo
+    src/main.cpp
+)
+</code></pre>
+<p>然后是 <code>.vscode/tasks.json</code>：</p>
+<pre><code class="language-json">{
+  &quot;version&quot;: &quot;2.0.0&quot;,
+  &quot;tasks&quot;: [
+    {
+      &quot;label&quot;: &quot;cmake: configure debug&quot;,
+      &quot;type&quot;: &quot;process&quot;,
+      &quot;command&quot;: &quot;cmake&quot;,
+      &quot;args&quot;: [
+        &quot;-S&quot;, &quot;${workspaceFolder}&quot;,
+        &quot;-B&quot;, &quot;${workspaceFolder}/build/debug&quot;,
+        &quot;-DCMAKE_BUILD_TYPE=Debug&quot;
+      ],
+      &quot;problemMatcher&quot;: []
+    },
+    {
+      &quot;label&quot;: &quot;cmake: build debug&quot;,
+      &quot;type&quot;: &quot;process&quot;,
+      &quot;command&quot;: &quot;cmake&quot;,
+      &quot;args&quot;: [
+        &quot;--build&quot;, &quot;${workspaceFolder}/build/debug&quot;,
+        &quot;--parallel&quot;
+      ],
+      &quot;dependsOn&quot;: [&quot;cmake: configure debug&quot;],
+      &quot;group&quot;: {
+        &quot;kind&quot;: &quot;build&quot;,
+        &quot;isDefault&quot;: true
+      },
+      &quot;problemMatcher&quot;: [&quot;$gcc&quot;]
+    }
+  ]
+}
+</code></pre>
+<p>注意这里的 <code>cmake --build</code>。</p>
+<p>CMake 官方给的构建入口就是这个形式：<code>cmake --build &lt;dir&gt;</code>。它会去调用背后的原生构建工具，比如 Make、Ninja、MSBuild 这一类。</p>
+<p>也就是说，VS Code 不需要知道你的项目到底该敲 <code>make</code> 还是 <code>ninja</code>。</p>
+<p>这件事交给 CMake。</p>
+<h2 id="f5-之前先编译">F5 之前，先编译
+</h2><p>然后回到 <code>.vscode/launch.json</code>，把 <code>preLaunchTask</code> 补进去：</p>
+<pre><code class="language-json">{
+  &quot;version&quot;: &quot;0.2.0&quot;,
+  &quot;configurations&quot;: [
+    {
+      &quot;name&quot;: &quot;CMake Debug with GDB&quot;,
+      &quot;type&quot;: &quot;cppdbg&quot;,
+      &quot;request&quot;: &quot;launch&quot;,
+      &quot;program&quot;: &quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&quot;,
+      &quot;args&quot;: [],
+      &quot;stopAtEntry&quot;: false,
+      &quot;cwd&quot;: &quot;${workspaceFolder}&quot;,
+      &quot;environment&quot;: [],
+      &quot;externalConsole&quot;: false,
+      &quot;MIMode&quot;: &quot;gdb&quot;,
+      &quot;miDebuggerPath&quot;: &quot;/usr/bin/gdb&quot;,
+      &quot;setupCommands&quot;: [
+        {
+          &quot;description&quot;: &quot;Enable pretty-printing for gdb&quot;,
+          &quot;text&quot;: &quot;-enable-pretty-printing&quot;,
+          &quot;ignoreFailures&quot;: true
+        }
+      ],
+      &quot;preLaunchTask&quot;: &quot;cmake: build debug&quot;
+    }
+  ]
+}
+</code></pre>
+<p>这一行才是重点：</p>
+<pre><code class="language-json">&quot;preLaunchTask&quot;: &quot;cmake: build debug&quot;
+</code></pre>
+<p>按 F5 的链路就变成了：</p>
+<pre><code class="language-text">launch.json
+  -&gt; preLaunchTask
+    -&gt; tasks.json: cmake: build debug
+      -&gt; dependsOn: cmake: configure debug
+        -&gt; cmake -S ... -B ...
+      -&gt; cmake --build ...
+  -&gt; gdb 启动最新的 program
+</code></pre>
+<p>如果是 Windows + MinGW，<code>program</code> 大概率要改成带 <code>.exe</code> 的路径，<code>miDebuggerPath</code> 也要指到自己的 <code>gdb.exe</code>。</p>
+<p>如果是 Visual Studio Generator 那种多配置生成器，构建参数通常还要加 <code>--config Debug</code>。</p>
+<p>但是主线不变。</p>
+<p>调试前让 VS Code 先跑一次构建任务，别靠自己脑子记。</p>
+<h2 id="还有一个痛点自定义类型看不懂">还有一个痛点：自定义类型看不懂
+</h2><p>只把编译链路打通，还不够。</p>
+<p>C++ 代码里稍微封装一点业务类型，VS Code 左边那个变量窗口就开始变得难看。</p>
+<p>比如下面这个例子。</p>
+<p><code>src/main.cpp</code>：</p>
+<pre><code class="language-cpp">#include &lt;cstdint&gt;
+#include &lt;cstdio&gt;
+#include &lt;string_view&gt;
+#include &lt;vector&gt;
+
+namespace market {
+
+struct Price {
+    std::int64_t raw{};
+
+    static Price from_double(double value) {
+        return Price{static_cast&lt;std::int64_t&gt;(value * 10000)};
+    }
+
+    double to_double() const {
+        return static_cast&lt;double&gt;(raw) / 10000.0;
+    }
+};
+
+struct Instrument {
+    char symbol[16]{};
+    Price last;
+};
+
+Instrument make_instrument(std::string_view symbol, double price) {
+    Instrument instrument;
+    std::snprintf(instrument.symbol, sizeof(instrument.symbol), &quot;%s&quot;, symbol.data());
+    instrument.last = Price::from_double(price);
+    return instrument;
+}
+
+} // namespace market
+
+int main() {
+    std::vector&lt;market::Instrument&gt; watchlist{
+        market::make_instrument(&quot;IF2406&quot;, 3578.6),
+        market::make_instrument(&quot;IH2406&quot;, 2468.2),
+    };
+
+    market::Price limit = market::Price::from_double(3600.5);
+
+    // 在这里打断点，观察 watchlist 和 limit。
+    return watchlist.empty() || limit.raw == 0;
+}
+</code></pre>
+<p><code>market::Price</code> 在业务里是价格。</p>
+<p>但是调试器默认看到的可能只有：</p>
+<pre><code class="language-text">limit = {raw = 36005000}
+</code></pre>
+<p>没错，数据是对的。</p>
+<p>但是我脑子里还要自己把 <code>36005000</code> 换算成 <code>3600.5000</code>。如果项目里有一堆 <code>Price</code>、<code>Quantity</code>、<code>OrderId</code>、<code>Instrument</code>、<code>AlgoState</code>，调试窗口很快就变成结构体坟场。</p>
+<p>这个时候就该上 GDB pretty-printer 了。</p>
+<p>GDB 官方手册说得很直接：它提供了一套机制，可以用 Python 代码 pretty-print 值，而且这个机制同时适用于 MI 和命令行。</p>
+<p>VS Code 的 C++ 调试刚好走的就是 GDB/MI 这条路。</p>
+<h2 id="给业务类型写一个-python-展示层">给业务类型写一个 Python 展示层
+</h2><p>新建 <code>tools/gdb_printers.py</code>：</p>
+<pre><code class="language-python">import gdb
+import gdb.printing
+
+
+class PricePrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        raw = int(self.val[&quot;raw&quot;])
+        return f&quot;{raw / 10000.0:.4f}&quot;
+
+
+class InstrumentPrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        symbol = self.val[&quot;symbol&quot;].string()
+        price_raw = int(self.val[&quot;last&quot;][&quot;raw&quot;])
+        price = price_raw / 10000.0
+        return f&quot;{symbol} last={price:.4f}&quot;
+
+
+def build_pretty_printer():
+    printer = gdb.printing.RegexpCollectionPrettyPrinter(&quot;market&quot;)
+    printer.add_printer(&quot;Price&quot;, &quot;^market::Price$&quot;, PricePrinter)
+    printer.add_printer(&quot;Instrument&quot;, &quot;^market::Instrument$&quot;, InstrumentPrinter)
+    return printer
+
+
+gdb.printing.register_pretty_printer(
+    gdb.current_objfile(),
+    build_pretty_printer(),
+    replace=True,
+)
+</code></pre>
+<p>然后在 <code>launch.json</code> 的 <code>setupCommands</code> 里把它 source 进去：</p>
+<pre><code class="language-json">&quot;setupCommands&quot;: [
+  {
+    &quot;description&quot;: &quot;Enable pretty-printing for gdb&quot;,
+    &quot;text&quot;: &quot;-enable-pretty-printing&quot;,
+    &quot;ignoreFailures&quot;: true
+  },
+  {
+    &quot;description&quot;: &quot;Load project pretty-printers&quot;,
+    &quot;text&quot;: &quot;-interpreter-exec console \&quot;source ${workspaceFolder}/tools/gdb_printers.py\&quot;&quot;,
+    &quot;ignoreFailures&quot;: false
+  }
+]
+</code></pre>
+<p>重新 F5。</p>
+<p>这时候再看调试窗口，<code>Price</code> 的展示就应该接近：</p>
+<pre><code class="language-text">limit = 3600.5000
+</code></pre>
+<p><code>Instrument</code> 也会从一坨数组、结构体，变成更接近业务的：</p>
+<pre><code class="language-text">IF2406 last=3578.6000
+</code></pre>
+<p>这里我故意说“接近”，因为 pretty-printer 要和编译器、类型名字、真实字段布局匹配。</p>
+<p>如果你的业务类型里面又套了 <code>std::vector</code>、<code>std::array</code>、智能指针，Python 脚本里访问的字段可能还要继续调。不要指望一个脚本通吃所有项目。</p>
+<p>但是思路是稳的。</p>
+<p>把“调试时人想看的样子”，单独写成一层 Python 展示逻辑。</p>
+<h2 id="别把-launchjson-当成全部">别把 launch.json 当成全部
+</h2><p>现在再看这套配置，我觉得至少有三层。</p>
+<p><code>.vscode/launch.json</code> 负责“怎么启动调试器”。</p>
+<p><code>.vscode/tasks.json</code> 负责“启动调试器之前，先把项目编出来”。</p>
+<p><code>tools/gdb_printers.py</code> 负责“断住以后，变量用人能看懂的方式展示”。</p>
+<p>以前我只配第一层。</p>
+<p>能用，但是很毛坯。</p>
+<p>真正顺手的 C++ 调试，不应该是“我先去终端编译一下，再回来按 F5，再在变量窗口里心算字段含义”。</p>
+<p>更舒服的链路应该是：按 F5，VS Code 自动跑 CMake，GDB 自动加载项目的 Python printer，断点停下来以后，调试窗口直接说业务语言。</p>
+<p>AI 这次帮我配项目，最有价值的地方倒不是生成了多少 C++ 代码。</p>
+<p>而是它把这些老工具之间的胶水也补上了。</p>
+<p>我以前不是不知道 CMake，也不是不知道 GDB。</p>
+<p>只是少配了中间那几个钩子。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://code.visualstudio.com/docs/cpp/config-linux"  target="_blank" rel="noopener"
+    >Using C++ on Linux in VS Code</a></li>
+<li><a class="link" href="https://code.visualstudio.com/docs/debugtest/tasks"  target="_blank" rel="noopener"
+    >VS Code: Integrate with External Tools via Tasks</a></li>
+<li><a class="link" href="https://cmake.org/cmake/help/latest/manual/cmake.1.html"  target="_blank" rel="noopener"
+    >CMake cmake(1) manual</a></li>
+<li><a class="link" href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Pretty-Printing.html"  target="_blank" rel="noopener"
+    >GDB Manual: Pretty Printing</a></li>
+<li><a class="link" href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Writing-a-Pretty_002dPrinter.html"  target="_blank" rel="noopener"
+    >GDB Manual: Writing a Pretty-Printer</a></li>
+</ul>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><blockquote>
+<p>提示词：$blog-writer vscode 进行 C++ 开发，以前查看的教程，都只是简单的配置了 launch.json 里面的 gdb 调试信息，都没提到配置 preLaunchTask，能做到自动触发 cmake 编译，这还是 AI 配置新项目发现的好东西；如果代码有很多自定义的数据类型，vscode 调试窗口无法直接展示，可以引入 python 脚本进行预处理，这样都能展示了。针对上面的内容，都需要提供实际的代码案例。</p></blockquote>
+<h3 id="写作思路摘要">写作思路摘要
+</h3><ul>
+<li>主线放在“以前只配 launch.json，其实少了调试前构建和调试时展示两层胶水”。</li>
+<li>保留用户给出的触发点：AI 配新项目时发现 <code>preLaunchTask</code> 可以自动触发 CMake 编译。</li>
+<li>代码案例按一个最小 CMake 项目组织，包含 <code>CMakeLists.txt</code>、<code>tasks.json</code>、<code>launch.json</code>、C++ 自定义类型和 GDB Python pretty-printer。</li>
+<li>事实核验优先看 VS Code、CMake、GDB 官方文档；正文不翻译文档，只保留和这条调试链路有关的事实。</li>
+<li>对 pretty-printer 的边界做了提醒：类型名、标准库实现、字段布局会影响 Python 脚本，项目里要按自己的类型改。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/tags/vs-code/">vscode</a>
+        
+            <a href="/tags/cpp/">c&#43;&#43;</a>
+        
+            <a href="/tags/cmake/">cmake</a>
+        
+            <a href="/tags/gdb-gnu-debugger/">gdb</a>
+        
+            <a href="/tags/ai/">ai</a>
+        
+            <a href="/tags/ai-inspiration-hub/">AI 灵感碰撞坊</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最后更新于 2026年04月09日 20:28
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">相关文章</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/p/cpp-folder-namespace-what-is-it-called/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">文件夹分层再套 namespace，这事到底叫什么</h3>
+                            <time class="related-content__date" datetime='2026-04-09T02:31:07&#43;08:00'>2026年04月09日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（三）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（二）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/gemma-4-series-models-and-license/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">谷歌这次把 Gemma 4 放开了（一）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:48:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/p/codex-default-medium-vs-high/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex 默认 medium，我后来还是切到 high</h3>
+                            <time class="related-content__date" datetime='2026-04-08T22:57:47&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

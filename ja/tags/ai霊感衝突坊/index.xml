@@ -6,7 +6,323 @@
         <description>Recent content in AI霊感衝突坊 on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 09 Apr 2026 20:28:13 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。</title>
+        <link>https://ttf248.life/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</link>
+        <pubDate>Thu, 09 Apr 2026 19:21:36 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</guid>
+        <description>&lt;p&gt;以前VS CodeでC++をデバッグするとき、設定は基本的に&lt;code&gt;launch.json&lt;/code&gt;に留まっていて、せいぜいGDBの行を追加する程度でした。
+&lt;code&gt;program&lt;/code&gt;を埋めて、&lt;code&gt;gdb&lt;/code&gt;を埋めて、ブレークポイントを設定する。それで終わり？毎回デバッグ前にターミナルで手動で&lt;code&gt;cmake --build&lt;/code&gt;しないといけませんでした。
+さらに面倒なのは、カスタム価格、契約、注文タイプなどでブレークポイントを打った後、VS Codeのデバッグウィンドウには内部フィールドが大量に表示されるだけで、データ自体は正しいのですが、人間が理解できる言葉になっていない点です。
+この件がおかしいと思う点は、以前見たチュートリアルも&lt;code&gt;launch.json&lt;/code&gt;までしか触れていなかったことです。最近AIに新しいプロジェクトの設定を依頼したところ、なんと自動で&lt;code&gt;preLaunchTask&lt;/code&gt;と&lt;code&gt;gdb_printers.py&lt;/code&gt;を追加してくれたので、「VS CodeでC++をデバッグするって、ただGDBを起動させるだけじゃないんだな」と気づきました。デバッグ前にCMakeのコンパイルを自動実行できるし、ブレークポイントで停止した後に、GDBにPythonスクリプトをロードさせて、ビジネスロジックの型を自分が見やすい形に整形させられるんです。
+正直なところ、これは何かの「裏ワザ」というわけではありません。
+しかし、C++の日常的なデバッグにおける非常に面倒な2つの空白部分――&lt;strong&gt;起動前のビルド&lt;/strong&gt;と&lt;strong&gt;ブレークポイント後の変数表示&lt;/strong&gt;――を完璧に埋めてくれたのです。&lt;/p&gt;
+&lt;h2 id=&#34;以前只配了一半&#34;&gt;以前只配了一半
+&lt;/h2&gt;&lt;p&gt;多くのチュートリアルにある &lt;code&gt;.vscode/launch.json&lt;/code&gt; は、大体このような内容です：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;0.2.0&amp;quot;,
+  &amp;quot;configurations&amp;quot;: [
+    {
+      &amp;quot;name&amp;quot;: &amp;quot;Debug with GDB&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;cppdbg&amp;quot;,
+      &amp;quot;request&amp;quot;: &amp;quot;launch&amp;quot;,
+      &amp;quot;program&amp;quot;: &amp;quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&amp;quot;,
+      &amp;quot;args&amp;quot;: [],
+      &amp;quot;stopAtEntry&amp;quot;: false,
+      &amp;quot;cwd&amp;quot;: &amp;quot;${workspaceFolder}&amp;quot;,
+      &amp;quot;MIMode&amp;quot;: &amp;quot;gdb&amp;quot;,
+      &amp;quot;miDebuggerPath&amp;quot;: &amp;quot;/usr/bin/gdb&amp;quot;,
+      &amp;quot;setupCommands&amp;quot;: [
+        {
+          &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+          &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+          &amp;quot;ignoreFailures&amp;quot;: true
+        }
+      ]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;この部分は間違っているとは言えません。
+VS Code の公式の C++ サンプルでも、同様の構造が使われています：&lt;code&gt;type&lt;/code&gt; に &lt;code&gt;cppdbg&lt;/code&gt; を使い、&lt;code&gt;MIMode&lt;/code&gt; に &lt;code&gt;gdb&lt;/code&gt; を使い、&lt;code&gt;setupCommands&lt;/code&gt; で pretty-printing を有効にしています。
+しかし、決定的に欠けている動作があります。
+F5 を押すと、それは &lt;code&gt;program&lt;/code&gt; が指す実行ファイルを起動します。問題は、そのファイルが今まさにコンパイルされたものかどうかです？
+もしそうでなければ、前回ビルドした古いプログラムをデバッグしてしまいます。
+私も以前、よくこんな馬鹿なことをしていました。コードを変更し、ブレークポイントも設定したのに、しばらく動かしてみたら動作がおかしいことに気づき、最後に「ああ、さっき再コンパイルするのを忘れていた」と思い出す、ということがありました。&lt;/p&gt;
+&lt;h2 id=&#34;prelaunchtask-こそがそのフックである&#34;&gt;preLaunchTask こそがそのフックである
+&lt;/h2&gt;&lt;p&gt;VS Code の Tasks は、本質的に外部コマンドをエディタに組み込む仕組みです。
+コンパイル、テスト、パッケージングといった作業は、以前はターミナルで手動で行う必要がありましたが、今では &lt;code&gt;.vscode/tasks.json&lt;/code&gt; に記述できます。そして &lt;code&gt;launch.json&lt;/code&gt; の中の &lt;code&gt;preLaunchTask&lt;/code&gt; が、そのラベルを使って該当するタスクを探し出します。
+最小限の CMake プロジェクトを例に挙げると、このように配置できます：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;.
+├── .vscode/
+│   ├── launch.json
+│   └── tasks.json
+├── CMakeLists.txt
+├── src/
+│   └── main.cpp
+└── tools/
+    └── gdb_printers.py
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;CMakeLists.txt&lt;/code&gt; はまず、これだけ記述します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cmake&#34;&gt;cmake_minimum_required(VERSION 3.16)
+
+project(vscode_cpp_debug_demo LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_executable(vscode_cpp_debug_demo
+    src/main.cpp
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;次に、&lt;code&gt;.vscode/tasks.json&lt;/code&gt; です：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;2.0.0&amp;quot;,
+  &amp;quot;tasks&amp;quot;: [
+    {
+      &amp;quot;label&amp;quot;: &amp;quot;cmake: configure debug&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;process&amp;quot;,
+      &amp;quot;command&amp;quot;: &amp;quot;cmake&amp;quot;,
+      &amp;quot;args&amp;quot;: [
+        &amp;quot;-S&amp;quot;, &amp;quot;${workspaceFolder}&amp;quot;,
+        &amp;quot;-B&amp;quot;, &amp;quot;${workspaceFolder}/build/debug&amp;quot;,
+        &amp;quot;-DCMAKE_BUILD_TYPE=Debug&amp;quot;
+      ],
+      &amp;quot;problemMatcher&amp;quot;: []
+    },
+    {
+      &amp;quot;label&amp;quot;: &amp;quot;cmake: build debug&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;process&amp;quot;,
+      &amp;quot;command&amp;quot;: &amp;quot;cmake&amp;quot;,
+      &amp;quot;args&amp;quot;: [
+        &amp;quot;--build&amp;quot;, &amp;quot;${workspaceFolder}/build/debug&amp;quot;,
+        &amp;quot;--parallel&amp;quot;
+      ],
+      &amp;quot;dependsOn&amp;quot;: [&amp;quot;cmake: configure debug&amp;quot;],
+      &amp;quot;group&amp;quot;: {
+        &amp;quot;kind&amp;quot;: &amp;quot;build&amp;quot;,
+        &amp;quot;isDefault&amp;quot;: true
+      },
+      &amp;quot;problemMatcher&amp;quot;: [&amp;quot;$gcc&amp;quot;]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;ここの &lt;code&gt;cmake --build&lt;/code&gt; に注目してください。
+CMake の公式なビルドのエントリーポイントは、この形式です：&lt;code&gt;cmake --build &amp;lt;dir&amp;gt;&lt;/code&gt;。これは、Make や Ninja、MSBuild といった背後のネイティブビルドツールを呼び出します。
+つまり、VS Code はあなたのプロジェクトが &lt;code&gt;make&lt;/code&gt; を実行すべきなのか &lt;code&gt;ninja&lt;/code&gt; を実行すべきなのかを知る必要がないのです。
+そのことは CMake に任せているわけです。&lt;/p&gt;
+&lt;h2 id=&#34;f5-の前にまずコンパイルする&#34;&gt;F5 の前に、まずコンパイルする
+&lt;/h2&gt;&lt;p&gt;その後、&lt;code&gt;.vscode/launch.json&lt;/code&gt; に戻り、&lt;code&gt;preLaunchTask&lt;/code&gt; を追記してください：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;0.2.0&amp;quot;,
+  &amp;quot;configurations&amp;quot;: [
+    {
+      &amp;quot;name&amp;quot;: &amp;quot;CMake Debug with GDB&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;cppdbg&amp;quot;,
+      &amp;quot;request&amp;quot;: &amp;quot;launch&amp;quot;,
+      &amp;quot;program&amp;quot;: &amp;quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&amp;quot;,
+      &amp;quot;args&amp;quot;: [],
+      &amp;quot;stopAtEntry&amp;quot;: false,
+      &amp;quot;cwd&amp;quot;: &amp;quot;${workspaceFolder}&amp;quot;,
+      &amp;quot;environment&amp;quot;: [],
+      &amp;quot;externalConsole&amp;quot;: false,
+      &amp;quot;MIMode&amp;quot;: &amp;quot;gdb&amp;quot;,
+      &amp;quot;miDebuggerPath&amp;quot;: &amp;quot;/usr/bin/gdb&amp;quot;,
+      &amp;quot;setupCommands&amp;quot;: [
+        {
+          &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+          &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+          &amp;quot;ignoreFailures&amp;quot;: true
+        }
+      ],
+      &amp;quot;preLaunchTask&amp;quot;: &amp;quot;cmake: build debug&amp;quot;
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;ここが重要です：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;&amp;quot;preLaunchTask&amp;quot;: &amp;quot;cmake: build debug&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;F5 を押す流れは以下のようになります：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;launch.json
+  -&amp;gt; preLaunchTask
+    -&amp;gt; tasks.json: cmake: build debug
+      -&amp;gt; dependsOn: cmake: configure debug
+        -&amp;gt; cmake -S ... -B ...
+      -&amp;gt; cmake --build ...
+  -&amp;gt; gdb が最新の program を起動する
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Windows + MinGW の場合、&lt;code&gt;program&lt;/code&gt; は &lt;code&gt;.exe&lt;/code&gt; 付きのパスに変更する必要がある可能性が高く、&lt;code&gt;miDebuggerPath&lt;/code&gt; も自身の &lt;code&gt;gdb.exe&lt;/code&gt; を指すようにする必要があります。
+Visual Studio Generator のような複数の設定を生成するジェネレータの場合は、ビルド引数に通常 &lt;code&gt;--config Debug&lt;/code&gt; を追加する必要があります。
+しかし、基本的な流れは変わりません。
+デバッグする前に VS Code に一度ビルドタスクを実行させてください。自分で記憶に頼るのはやめましょう。&lt;/p&gt;
+&lt;h2 id=&#34;もう一つの課題点カスタム型の可読性&#34;&gt;もう一つの課題点：カスタム型の可読性
+&lt;/h2&gt;&lt;p&gt;コンパイルリンクを繋げるだけでは不十分です。
+C++コードで少し業務的な型をラップするだけで、VS Codeの左側の変数ウィンドウがすぐに見づらくなります。
+例えば、以下の例を見てください。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;src/main.cpp&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;cstdint&amp;gt;
+#include &amp;lt;cstdio&amp;gt;
+#include &amp;lt;string_view&amp;gt;
+#include &amp;lt;vector&amp;gt;
+
+namespace market {
+
+struct Price {
+    std::int64_t raw{};
+
+    static Price from_double(double value) {
+        return Price{static_cast&amp;lt;std::int64_t&amp;gt;(value * 10000)};
+    }
+
+    double to_double() const {
+        return static_cast&amp;lt;double&amp;gt;(raw) / 10000.0;
+    }
+};
+
+struct Instrument {
+    char symbol[16]{};
+    Price last;
+};
+
+Instrument make_instrument(std::string_view symbol, double price) {
+    Instrument instrument;
+    std::snprintf(instrument.symbol, sizeof(instrument.symbol), &amp;quot;%s&amp;quot;, symbol.data());
+    instrument.last = Price::from_double(price);
+    return instrument;
+}
+
+} // namespace market
+
+int main() {
+    std::vector&amp;lt;market::Instrument&amp;gt; watchlist{
+        market::make_instrument(&amp;quot;IF2406&amp;quot;, 3578.6),
+        market::make_instrument(&amp;quot;IH2406&amp;quot;, 2468.2),
+    };
+
+    market::Price limit = market::Price::from_double(3600.5);
+
+    // ここでブレークポイントを置き、watchlistとlimitを観察する。
+    return watchlist.empty() || limit.raw == 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;market::Price&lt;/code&gt; は業務上「価格」です。
+しかし、デバッガがデフォルトで見せるのは以下のようになるかもしれません：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;limit = {raw = 36005000}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;その通り、データは正しいです。
+しかし、私の頭の中では、この &lt;code&gt;36005000&lt;/code&gt; を手動で &lt;code&gt;3600.5000&lt;/code&gt; に変換しなければなりません。もしプロジェクト内に &lt;code&gt;Price&lt;/code&gt;、&lt;code&gt;Quantity&lt;/code&gt;、&lt;code&gt;OrderId&lt;/code&gt;、&lt;code&gt;Instrument&lt;/code&gt;、&lt;code&gt;AlgoState&lt;/code&gt; などが山ほどある場合、デバッグウィンドウはすぐに構造体の墓場になってしまいます。
+このときこそ GDB の pretty-printer が必要になります。
+GDB の公式マニュアルには非常に明確に書かれています。それは、Pythonコードを使って値をpretty-printするための仕組みを提供しており、この仕組みはMI（Machine Interface）とコマンドラインの両方に適用できるということです。
+VS CodeのC++デバッグがまさに GDB/MI という経路を通っています。&lt;/p&gt;
+&lt;h2 id=&#34;ビジネスタイプ用のpython表示層の作成&#34;&gt;ビジネスタイプ用のPython表示層の作成
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;tools/gdb_printers.py&lt;/code&gt; を新規作成します：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-python&#34;&gt;import gdb
+import gdb.printing
+
+
+class PricePrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        raw = int(self.val[&amp;quot;raw&amp;quot;])
+        return f&amp;quot;{raw / 10000.0:.4f}&amp;quot;
+
+
+class InstrumentPrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        symbol = self.val[&amp;quot;symbol&amp;quot;].string()
+        price_raw = int(self.val[&amp;quot;last&amp;quot;][&amp;quot;raw&amp;quot;])
+        price = price_raw / 10000.0
+        return f&amp;quot;{symbol} last={price:.4f}&amp;quot;
+
+
+def build_pretty_printer():
+    printer = gdb.printing.RegexpCollectionPrettyPrinter(&amp;quot;market&amp;quot;)
+    printer.add_printer(&amp;quot;Price&amp;quot;, &amp;quot;^market::Price$&amp;quot;, PricePrinter)
+    printer.add_printer(&amp;quot;Instrument&amp;quot;, &amp;quot;^market::Instrument$&amp;quot;, InstrumentPrinter)
+    return printer
+
+
+gdb.printing.register_pretty_printer(
+    gdb.current_objfile(),
+    build_pretty_printer(),
+    replace=True,
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;次に、&lt;code&gt;launch.json&lt;/code&gt; の &lt;code&gt;setupCommands&lt;/code&gt; にこれをソースとして読み込ませます：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;&amp;quot;setupCommands&amp;quot;: [
+  {
+    &amp;quot;description&amp;quot;: &amp;quot;gdbのプリティプリンティングを有効化&amp;quot;,
+    &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+    &amp;quot;ignoreFailures&amp;quot;: true
+  },
+  {
+    &amp;quot;description&amp;quot;: &amp;quot;プロジェクトのプリティプリンターをロード&amp;quot;,
+    &amp;quot;text&amp;quot;: &amp;quot;-interpreter-exec console \&amp;quot;source ${workspaceFolder}/tools/gdb_printers.py\&amp;quot;&amp;quot;,
+    &amp;quot;ignoreFailures&amp;quot;: false
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;F5 を再実行します。
+この後、デバッグウィンドウを見ると、&lt;code&gt;Price&lt;/code&gt; の表示は以下に近くなるはずです：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;limit = 3600.5000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;Instrument&lt;/code&gt; もまた、単なる配列や構造体から、よりビジネスに近いものになります：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;IF2406 last=3578.6000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;ここで「近い」と言っているのは意図的です。なぜなら、プリティプリンターはコンパイラ、型名、実際のフィールドレイアウトと一致させる必要があるからです。
+もしあなたのビジネスタイプの中に &lt;code&gt;std::vector&lt;/code&gt; や &lt;code&gt;std::array&lt;/code&gt;、スマートポインタなどがネストされている場合、Pythonスクリプトからアクセスするフィールドはさらに深い呼び出しが必要になるかもしれません。一つのスクリプトですべてをカバーできると期待しないでください。
+しかし、考え方はしっかりしています。
+「デバッグ時に人間が見たい姿」を、独立したPythonの表示ロジックとして記述するのです。&lt;/p&gt;
+&lt;h2 id=&#34;launchjson-を全てだと思ってはいけない&#34;&gt;launch.json を全てだと思ってはいけない
+&lt;/h2&gt;&lt;p&gt;この設定群を見ると、少なくとも3層あると感じます。
+&lt;code&gt;.vscode/launch.json&lt;/code&gt; は「デバッガをどう起動するか」を担当します。
+&lt;code&gt;.vscode/tasks.json&lt;/code&gt; は「デバッガを起動する前に、まずプロジェクトをビルドする」を担当します。
+&lt;code&gt;tools/gdb_printers.py&lt;/code&gt; は「ブレークポイントで止まった後、変数を人間が理解できる形で表示する」を担当します。
+以前は最初の層だけを設定していました。
+動くものの、非常に素っ気ないものでした。
+本当に快適な C++ デバッグというのは、「まずターミナルでコンパイルしてから、戻ってきて F5 を押して、変数ウィンドウでフィールドの意味を頭の中で計算する」というものであってはいけないはずです。
+より快適なフローは、F5 を押すと VS Code が自動的に CMake を実行し、GDB がプロジェクトの Python printer を自動ロードし、ブレークポイントで停止した際に、デバッグウィンドウが直接ビジネス言語で表示してくれることです。
+今回 AI にプロジェクトの設定をしてもらったことで、最も価値があったのは、どれだけ C++ コードを生成したかということではありませんでした。
+むしろ、これらの古いツール間の「接着剤」の部分を補ってくれた点です。
+以前から CMake や GDB が分からないわけではありませんでした。
+ただ、その中間にあるいくつかのフック（接続部分）を設定していなかっただけなのです。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.visualstudio.com/docs/cpp/config-linux&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;VS Code で Linux 上の C++ を使用する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.visualstudio.com/docs/debugtest/tasks&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;VS Code: タスク経由で外部ツールと統合する&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://cmake.org/cmake/help/latest/manual/cmake.1.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;CMake cmake(1) マニュアル&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://sourceware.org/gdb/current/onlinedocs/gdb.html/Pretty-Printing.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB マニュアル: プリティプリンティング&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://sourceware.org/gdb/current/onlinedocs/gdb.html/Writing-a-Pretty_002dPrinter.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB マニュアル: プリティプリンタの記述&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;プロンプト：$blog-writer vscode で C++ を開発する際、以前見たチュートリアルは、&lt;code&gt;launch.json&lt;/code&gt; 内の gdb デバッグ情報の設定のみで、&lt;code&gt;preLaunchTask&lt;/code&gt; の設定に触れていませんでした。CMake のコンパイルを自動的にトリガーできる機能があれば、これは AI が新しいプロジェクトを設定する上で非常に役立つものです。もしコードにカスタムデータ型が多く含まれていて、VS Code のデバッグウィンドウで直接表示できない場合でも、Python スクリプトを導入して前処理を行うことで、それらも表示できるようになります。上記の内容について、すべて実際のコード例を提供してください。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングの骨子まとめ&#34;&gt;ライティングの骨子まとめ
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;メインテーマを「これまで &lt;code&gt;launch.json&lt;/code&gt; の設定だけだったが、実際にはデバッグ前のビルドとデバッグ時の表示という2層の接着剤（仕組み）が欠けていた」ことに置く。&lt;/li&gt;
+&lt;li&gt;ユーザーから提供されたトリガーポイントは維持する：AI が新しいプロジェクトを設定する際に、&lt;code&gt;preLaunchTask&lt;/code&gt; で CMake のコンパイルが自動的にトリガーされることを発見した点。&lt;/li&gt;
+&lt;li&gt;コード例は最小限の CMake プロジェクトで構成し、&lt;code&gt;CMakeLists.txt&lt;/code&gt;、&lt;code&gt;tasks.json&lt;/code&gt;、&lt;code&gt;launch.json&lt;/code&gt;、C++ のカスタム型、および GDB Python pretty-printer を含める。&lt;/li&gt;
+&lt;li&gt;事実確認は VS Code、CMake、GDB の公式ドキュメントを最優先とし、本文ではドキュメント全体を翻訳せず、このデバッグフローに関連する事実のみを残す。&lt;/li&gt;
+&lt;li&gt;pretty-printer に関しては、型名、標準ライブラリの実装、フィールドレイアウトなどが Python スクリプトに影響を与える点について注意喚起を行う。プロジェクト内では自身の型に合わせて修正が必要である旨を明記する。&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+        </item>
+        <item>
         <title>フォルダの階層構造に名前空間を重ねる、これは一体何と呼ばれますか？</title>
         <link>https://ttf248.life/ja/p/cpp-folder-namespace-what-is-it-called/</link>
         <pubDate>Thu, 09 Apr 2026 02:31:07 +0800</pubDate>

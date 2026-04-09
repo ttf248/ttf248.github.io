@@ -6,7 +6,322 @@
         <description>Recent content in Posts on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language>
-        <lastBuildDate>Thu, 09 Apr 2026 03:45:21 +0800</lastBuildDate><atom:link href="https://ttf248.life/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 09 Apr 2026 20:28:13 +0800</lastBuildDate><atom:link href="https://ttf248.life/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>VS Code 调 C&#43;&#43;，别漏了 CMake 和 GDB Printer</title>
+        <link>https://ttf248.life/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</link>
+        <pubDate>Thu, 09 Apr 2026 19:21:36 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</guid>
+        <description>&lt;p&gt;以前我在 VS Code 里调 C++，配置基本就停在 &lt;code&gt;launch.json&lt;/code&gt;，最多再加一句 GDB。&lt;/p&gt;
+&lt;p&gt;把 &lt;code&gt;program&lt;/code&gt; 填好，把 &lt;code&gt;gdb&lt;/code&gt; 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 &lt;code&gt;cmake --build&lt;/code&gt; 一下。&lt;/p&gt;
+&lt;p&gt;更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。&lt;/p&gt;
+&lt;p&gt;这事离谱的地方在于，我以前看过的一些教程也差不多就写到 &lt;code&gt;launch.json&lt;/code&gt; 为止。直到最近让 AI 配一个新项目，它顺手加了 &lt;code&gt;preLaunchTask&lt;/code&gt; 和 &lt;code&gt;gdb_printers.py&lt;/code&gt;，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。&lt;/p&gt;
+&lt;p&gt;说实话，这不是什么黑科技。&lt;/p&gt;
+&lt;p&gt;但是它刚好补上了 C++ 日常调试里两块很烦的空白：&lt;strong&gt;启动前构建&lt;/strong&gt;，以及&lt;strong&gt;断点后的变量展示&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;以前只配了一半&#34;&gt;以前只配了一半
+&lt;/h2&gt;&lt;p&gt;很多教程里的 &lt;code&gt;.vscode/launch.json&lt;/code&gt;，大概是这个意思：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;0.2.0&amp;quot;,
+  &amp;quot;configurations&amp;quot;: [
+    {
+      &amp;quot;name&amp;quot;: &amp;quot;Debug with GDB&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;cppdbg&amp;quot;,
+      &amp;quot;request&amp;quot;: &amp;quot;launch&amp;quot;,
+      &amp;quot;program&amp;quot;: &amp;quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&amp;quot;,
+      &amp;quot;args&amp;quot;: [],
+      &amp;quot;stopAtEntry&amp;quot;: false,
+      &amp;quot;cwd&amp;quot;: &amp;quot;${workspaceFolder}&amp;quot;,
+      &amp;quot;MIMode&amp;quot;: &amp;quot;gdb&amp;quot;,
+      &amp;quot;miDebuggerPath&amp;quot;: &amp;quot;/usr/bin/gdb&amp;quot;,
+      &amp;quot;setupCommands&amp;quot;: [
+        {
+          &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+          &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+          &amp;quot;ignoreFailures&amp;quot;: true
+        }
+      ]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这段不能说错。&lt;/p&gt;
+&lt;p&gt;VS Code 官方的 C++ 示例里，也是类似这一套结构：&lt;code&gt;type&lt;/code&gt; 用 &lt;code&gt;cppdbg&lt;/code&gt;，&lt;code&gt;MIMode&lt;/code&gt; 用 &lt;code&gt;gdb&lt;/code&gt;，&lt;code&gt;setupCommands&lt;/code&gt; 里打开 pretty-printing。&lt;/p&gt;
+&lt;p&gt;但是少了一个关键动作。&lt;/p&gt;
+&lt;p&gt;你点 F5 的时候，它会去启动 &lt;code&gt;program&lt;/code&gt; 指向的那个可执行文件。问题是，这个文件是不是刚刚编出来的？&lt;/p&gt;
+&lt;p&gt;如果不是，那你调的就是上一次的旧程序。&lt;/p&gt;
+&lt;p&gt;我以前就经常干这种蠢事。代码改了，断点也打了，调半天发现行为不对，最后才想起来：哦，刚刚没重新编译。&lt;/p&gt;
+&lt;h2 id=&#34;prelaunchtask-才是那个钩子&#34;&gt;preLaunchTask 才是那个钩子
+&lt;/h2&gt;&lt;p&gt;VS Code 的 Tasks，本质上就是把外部命令挂进编辑器。&lt;/p&gt;
+&lt;p&gt;编译、测试、打包，原来要在终端敲，现在可以写到 &lt;code&gt;.vscode/tasks.json&lt;/code&gt;。然后 &lt;code&gt;launch.json&lt;/code&gt; 里的 &lt;code&gt;preLaunchTask&lt;/code&gt;，再按 label 去找那一个 task。&lt;/p&gt;
+&lt;p&gt;一个最小的 CMake 项目，可以这么放：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;.
+├── .vscode/
+│   ├── launch.json
+│   └── tasks.json
+├── CMakeLists.txt
+├── src/
+│   └── main.cpp
+└── tools/
+    └── gdb_printers.py
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;CMakeLists.txt&lt;/code&gt; 先写到够用：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cmake&#34;&gt;cmake_minimum_required(VERSION 3.16)
+
+project(vscode_cpp_debug_demo LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_executable(vscode_cpp_debug_demo
+    src/main.cpp
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;然后是 &lt;code&gt;.vscode/tasks.json&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;2.0.0&amp;quot;,
+  &amp;quot;tasks&amp;quot;: [
+    {
+      &amp;quot;label&amp;quot;: &amp;quot;cmake: configure debug&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;process&amp;quot;,
+      &amp;quot;command&amp;quot;: &amp;quot;cmake&amp;quot;,
+      &amp;quot;args&amp;quot;: [
+        &amp;quot;-S&amp;quot;, &amp;quot;${workspaceFolder}&amp;quot;,
+        &amp;quot;-B&amp;quot;, &amp;quot;${workspaceFolder}/build/debug&amp;quot;,
+        &amp;quot;-DCMAKE_BUILD_TYPE=Debug&amp;quot;
+      ],
+      &amp;quot;problemMatcher&amp;quot;: []
+    },
+    {
+      &amp;quot;label&amp;quot;: &amp;quot;cmake: build debug&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;process&amp;quot;,
+      &amp;quot;command&amp;quot;: &amp;quot;cmake&amp;quot;,
+      &amp;quot;args&amp;quot;: [
+        &amp;quot;--build&amp;quot;, &amp;quot;${workspaceFolder}/build/debug&amp;quot;,
+        &amp;quot;--parallel&amp;quot;
+      ],
+      &amp;quot;dependsOn&amp;quot;: [&amp;quot;cmake: configure debug&amp;quot;],
+      &amp;quot;group&amp;quot;: {
+        &amp;quot;kind&amp;quot;: &amp;quot;build&amp;quot;,
+        &amp;quot;isDefault&amp;quot;: true
+      },
+      &amp;quot;problemMatcher&amp;quot;: [&amp;quot;$gcc&amp;quot;]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;注意这里的 &lt;code&gt;cmake --build&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;CMake 官方给的构建入口就是这个形式：&lt;code&gt;cmake --build &amp;lt;dir&amp;gt;&lt;/code&gt;。它会去调用背后的原生构建工具，比如 Make、Ninja、MSBuild 这一类。&lt;/p&gt;
+&lt;p&gt;也就是说，VS Code 不需要知道你的项目到底该敲 &lt;code&gt;make&lt;/code&gt; 还是 &lt;code&gt;ninja&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;这件事交给 CMake。&lt;/p&gt;
+&lt;h2 id=&#34;f5-之前先编译&#34;&gt;F5 之前，先编译
+&lt;/h2&gt;&lt;p&gt;然后回到 &lt;code&gt;.vscode/launch.json&lt;/code&gt;，把 &lt;code&gt;preLaunchTask&lt;/code&gt; 补进去：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;0.2.0&amp;quot;,
+  &amp;quot;configurations&amp;quot;: [
+    {
+      &amp;quot;name&amp;quot;: &amp;quot;CMake Debug with GDB&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;cppdbg&amp;quot;,
+      &amp;quot;request&amp;quot;: &amp;quot;launch&amp;quot;,
+      &amp;quot;program&amp;quot;: &amp;quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&amp;quot;,
+      &amp;quot;args&amp;quot;: [],
+      &amp;quot;stopAtEntry&amp;quot;: false,
+      &amp;quot;cwd&amp;quot;: &amp;quot;${workspaceFolder}&amp;quot;,
+      &amp;quot;environment&amp;quot;: [],
+      &amp;quot;externalConsole&amp;quot;: false,
+      &amp;quot;MIMode&amp;quot;: &amp;quot;gdb&amp;quot;,
+      &amp;quot;miDebuggerPath&amp;quot;: &amp;quot;/usr/bin/gdb&amp;quot;,
+      &amp;quot;setupCommands&amp;quot;: [
+        {
+          &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+          &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+          &amp;quot;ignoreFailures&amp;quot;: true
+        }
+      ],
+      &amp;quot;preLaunchTask&amp;quot;: &amp;quot;cmake: build debug&amp;quot;
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这一行才是重点：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;&amp;quot;preLaunchTask&amp;quot;: &amp;quot;cmake: build debug&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;按 F5 的链路就变成了：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;launch.json
+  -&amp;gt; preLaunchTask
+    -&amp;gt; tasks.json: cmake: build debug
+      -&amp;gt; dependsOn: cmake: configure debug
+        -&amp;gt; cmake -S ... -B ...
+      -&amp;gt; cmake --build ...
+  -&amp;gt; gdb 启动最新的 program
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果是 Windows + MinGW，&lt;code&gt;program&lt;/code&gt; 大概率要改成带 &lt;code&gt;.exe&lt;/code&gt; 的路径，&lt;code&gt;miDebuggerPath&lt;/code&gt; 也要指到自己的 &lt;code&gt;gdb.exe&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;如果是 Visual Studio Generator 那种多配置生成器，构建参数通常还要加 &lt;code&gt;--config Debug&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;但是主线不变。&lt;/p&gt;
+&lt;p&gt;调试前让 VS Code 先跑一次构建任务，别靠自己脑子记。&lt;/p&gt;
+&lt;h2 id=&#34;还有一个痛点自定义类型看不懂&#34;&gt;还有一个痛点：自定义类型看不懂
+&lt;/h2&gt;&lt;p&gt;只把编译链路打通，还不够。&lt;/p&gt;
+&lt;p&gt;C++ 代码里稍微封装一点业务类型，VS Code 左边那个变量窗口就开始变得难看。&lt;/p&gt;
+&lt;p&gt;比如下面这个例子。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;src/main.cpp&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;cstdint&amp;gt;
+#include &amp;lt;cstdio&amp;gt;
+#include &amp;lt;string_view&amp;gt;
+#include &amp;lt;vector&amp;gt;
+
+namespace market {
+
+struct Price {
+    std::int64_t raw{};
+
+    static Price from_double(double value) {
+        return Price{static_cast&amp;lt;std::int64_t&amp;gt;(value * 10000)};
+    }
+
+    double to_double() const {
+        return static_cast&amp;lt;double&amp;gt;(raw) / 10000.0;
+    }
+};
+
+struct Instrument {
+    char symbol[16]{};
+    Price last;
+};
+
+Instrument make_instrument(std::string_view symbol, double price) {
+    Instrument instrument;
+    std::snprintf(instrument.symbol, sizeof(instrument.symbol), &amp;quot;%s&amp;quot;, symbol.data());
+    instrument.last = Price::from_double(price);
+    return instrument;
+}
+
+} // namespace market
+
+int main() {
+    std::vector&amp;lt;market::Instrument&amp;gt; watchlist{
+        market::make_instrument(&amp;quot;IF2406&amp;quot;, 3578.6),
+        market::make_instrument(&amp;quot;IH2406&amp;quot;, 2468.2),
+    };
+
+    market::Price limit = market::Price::from_double(3600.5);
+
+    // 在这里打断点，观察 watchlist 和 limit。
+    return watchlist.empty() || limit.raw == 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;market::Price&lt;/code&gt; 在业务里是价格。&lt;/p&gt;
+&lt;p&gt;但是调试器默认看到的可能只有：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;limit = {raw = 36005000}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;没错，数据是对的。&lt;/p&gt;
+&lt;p&gt;但是我脑子里还要自己把 &lt;code&gt;36005000&lt;/code&gt; 换算成 &lt;code&gt;3600.5000&lt;/code&gt;。如果项目里有一堆 &lt;code&gt;Price&lt;/code&gt;、&lt;code&gt;Quantity&lt;/code&gt;、&lt;code&gt;OrderId&lt;/code&gt;、&lt;code&gt;Instrument&lt;/code&gt;、&lt;code&gt;AlgoState&lt;/code&gt;，调试窗口很快就变成结构体坟场。&lt;/p&gt;
+&lt;p&gt;这个时候就该上 GDB pretty-printer 了。&lt;/p&gt;
+&lt;p&gt;GDB 官方手册说得很直接：它提供了一套机制，可以用 Python 代码 pretty-print 值，而且这个机制同时适用于 MI 和命令行。&lt;/p&gt;
+&lt;p&gt;VS Code 的 C++ 调试刚好走的就是 GDB/MI 这条路。&lt;/p&gt;
+&lt;h2 id=&#34;给业务类型写一个-python-展示层&#34;&gt;给业务类型写一个 Python 展示层
+&lt;/h2&gt;&lt;p&gt;新建 &lt;code&gt;tools/gdb_printers.py&lt;/code&gt;：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-python&#34;&gt;import gdb
+import gdb.printing
+
+
+class PricePrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        raw = int(self.val[&amp;quot;raw&amp;quot;])
+        return f&amp;quot;{raw / 10000.0:.4f}&amp;quot;
+
+
+class InstrumentPrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        symbol = self.val[&amp;quot;symbol&amp;quot;].string()
+        price_raw = int(self.val[&amp;quot;last&amp;quot;][&amp;quot;raw&amp;quot;])
+        price = price_raw / 10000.0
+        return f&amp;quot;{symbol} last={price:.4f}&amp;quot;
+
+
+def build_pretty_printer():
+    printer = gdb.printing.RegexpCollectionPrettyPrinter(&amp;quot;market&amp;quot;)
+    printer.add_printer(&amp;quot;Price&amp;quot;, &amp;quot;^market::Price$&amp;quot;, PricePrinter)
+    printer.add_printer(&amp;quot;Instrument&amp;quot;, &amp;quot;^market::Instrument$&amp;quot;, InstrumentPrinter)
+    return printer
+
+
+gdb.printing.register_pretty_printer(
+    gdb.current_objfile(),
+    build_pretty_printer(),
+    replace=True,
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;然后在 &lt;code&gt;launch.json&lt;/code&gt; 的 &lt;code&gt;setupCommands&lt;/code&gt; 里把它 source 进去：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;&amp;quot;setupCommands&amp;quot;: [
+  {
+    &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+    &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+    &amp;quot;ignoreFailures&amp;quot;: true
+  },
+  {
+    &amp;quot;description&amp;quot;: &amp;quot;Load project pretty-printers&amp;quot;,
+    &amp;quot;text&amp;quot;: &amp;quot;-interpreter-exec console \&amp;quot;source ${workspaceFolder}/tools/gdb_printers.py\&amp;quot;&amp;quot;,
+    &amp;quot;ignoreFailures&amp;quot;: false
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;重新 F5。&lt;/p&gt;
+&lt;p&gt;这时候再看调试窗口，&lt;code&gt;Price&lt;/code&gt; 的展示就应该接近：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;limit = 3600.5000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;Instrument&lt;/code&gt; 也会从一坨数组、结构体，变成更接近业务的：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;IF2406 last=3578.6000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里我故意说“接近”，因为 pretty-printer 要和编译器、类型名字、真实字段布局匹配。&lt;/p&gt;
+&lt;p&gt;如果你的业务类型里面又套了 &lt;code&gt;std::vector&lt;/code&gt;、&lt;code&gt;std::array&lt;/code&gt;、智能指针，Python 脚本里访问的字段可能还要继续调。不要指望一个脚本通吃所有项目。&lt;/p&gt;
+&lt;p&gt;但是思路是稳的。&lt;/p&gt;
+&lt;p&gt;把“调试时人想看的样子”，单独写成一层 Python 展示逻辑。&lt;/p&gt;
+&lt;h2 id=&#34;别把-launchjson-当成全部&#34;&gt;别把 launch.json 当成全部
+&lt;/h2&gt;&lt;p&gt;现在再看这套配置，我觉得至少有三层。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;.vscode/launch.json&lt;/code&gt; 负责“怎么启动调试器”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;.vscode/tasks.json&lt;/code&gt; 负责“启动调试器之前，先把项目编出来”。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;tools/gdb_printers.py&lt;/code&gt; 负责“断住以后，变量用人能看懂的方式展示”。&lt;/p&gt;
+&lt;p&gt;以前我只配第一层。&lt;/p&gt;
+&lt;p&gt;能用，但是很毛坯。&lt;/p&gt;
+&lt;p&gt;真正顺手的 C++ 调试，不应该是“我先去终端编译一下，再回来按 F5，再在变量窗口里心算字段含义”。&lt;/p&gt;
+&lt;p&gt;更舒服的链路应该是：按 F5，VS Code 自动跑 CMake，GDB 自动加载项目的 Python printer，断点停下来以后，调试窗口直接说业务语言。&lt;/p&gt;
+&lt;p&gt;AI 这次帮我配项目，最有价值的地方倒不是生成了多少 C++ 代码。&lt;/p&gt;
+&lt;p&gt;而是它把这些老工具之间的胶水也补上了。&lt;/p&gt;
+&lt;p&gt;我以前不是不知道 CMake，也不是不知道 GDB。&lt;/p&gt;
+&lt;p&gt;只是少配了中间那几个钩子。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.visualstudio.com/docs/cpp/config-linux&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Using C++ on Linux in VS Code&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.visualstudio.com/docs/debugtest/tasks&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;VS Code: Integrate with External Tools via Tasks&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://cmake.org/cmake/help/latest/manual/cmake.1.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;CMake cmake(1) manual&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://sourceware.org/gdb/current/onlinedocs/gdb.html/Pretty-Printing.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB Manual: Pretty Printing&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://sourceware.org/gdb/current/onlinedocs/gdb.html/Writing-a-Pretty_002dPrinter.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB Manual: Writing a Pretty-Printer&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;提示词：$blog-writer vscode 进行 C++ 开发，以前查看的教程，都只是简单的配置了 launch.json 里面的 gdb 调试信息，都没提到配置 preLaunchTask，能做到自动触发 cmake 编译，这还是 AI 配置新项目发现的好东西；如果代码有很多自定义的数据类型，vscode 调试窗口无法直接展示，可以引入 python 脚本进行预处理，这样都能展示了。针对上面的内容，都需要提供实际的代码案例。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;主线放在“以前只配 launch.json，其实少了调试前构建和调试时展示两层胶水”。&lt;/li&gt;
+&lt;li&gt;保留用户给出的触发点：AI 配新项目时发现 &lt;code&gt;preLaunchTask&lt;/code&gt; 可以自动触发 CMake 编译。&lt;/li&gt;
+&lt;li&gt;代码案例按一个最小 CMake 项目组织，包含 &lt;code&gt;CMakeLists.txt&lt;/code&gt;、&lt;code&gt;tasks.json&lt;/code&gt;、&lt;code&gt;launch.json&lt;/code&gt;、C++ 自定义类型和 GDB Python pretty-printer。&lt;/li&gt;
+&lt;li&gt;事实核验优先看 VS Code、CMake、GDB 官方文档；正文不翻译文档，只保留和这条调试链路有关的事实。&lt;/li&gt;
+&lt;li&gt;对 pretty-printer 的边界做了提醒：类型名、标准库实现、字段布局会影响 Python 脚本，项目里要按自己的类型改。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>文件夹分层再套 namespace，这事到底叫什么</title>
         <link>https://ttf248.life/p/cpp-folder-namespace-what-is-it-called/</link>
         <pubDate>Thu, 09 Apr 2026 02:31:07 +0800</pubDate>

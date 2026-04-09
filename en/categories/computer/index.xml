@@ -6,7 +6,322 @@
         <description>Recent content in Computer on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Thu, 09 Apr 2026 15:45:31 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/categories/computer/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 09 Apr 2026 20:28:13 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/categories/computer/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>VS Code for C&#43;&#43;, don&#39;t forget CMake and GDB Printer</title>
+        <link>https://ttf248.life/en/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</link>
+        <pubDate>Thu, 09 Apr 2026 19:21:36 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</guid>
+        <description>&lt;p&gt;Previously, when I debugged C++ in VS Code, the configuration basically stopped at &lt;code&gt;launch.json&lt;/code&gt;, maybe with an extra line for GDB.
+Fill in the &lt;code&gt;program&lt;/code&gt;, fill in the &lt;code&gt;gdb&lt;/code&gt;, set the breakpoints. And then what? Then every time before debugging, I had to manually run &lt;code&gt;cmake --build&lt;/code&gt; in the terminal.
+What was even more annoying was that after setting breakpoints on custom prices, contracts, or order types, the VS Code debug window often only showed a bunch of internal fields. The data was correct, but it wasn&amp;rsquo;t human-readable.
+The ridiculous part is that some tutorials I saw before stopped around &lt;code&gt;launch.json&lt;/code&gt;. It wasn&amp;rsquo;t until recently, when I had an AI set up a new project for me, that it conveniently added &lt;code&gt;preLaunchTask&lt;/code&gt; and &lt;code&gt;gdb_printers.py&lt;/code&gt;, that I realized: debugging C++ in VS Code isn&amp;rsquo;t just about starting GDB. You can automatically trigger CMake compilation before debugging, and after hitting a breakpoint, you can even let GDB load a Python script to format business types into something readable for us.
+Honestly, this isn&amp;rsquo;t some black magic.
+But it perfectly filled two annoying gaps in daily C++ debugging: &lt;strong&gt;pre-launch build&lt;/strong&gt; and &lt;strong&gt;variable display after a breakpoint&lt;/strong&gt;.&lt;/p&gt;
+&lt;h2 id=&#34;only-half-was-configured-before&#34;&gt;Only Half Was Configured Before
+&lt;/h2&gt;&lt;p&gt;The &lt;code&gt;.vscode/launch.json&lt;/code&gt; in many tutorials is probably something like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;0.2.0&amp;quot;,
+  &amp;quot;configurations&amp;quot;: [
+    {
+      &amp;quot;name&amp;quot;: &amp;quot;Debug with GDB&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;cppdbg&amp;quot;,
+      &amp;quot;request&amp;quot;: &amp;quot;launch&amp;quot;,
+      &amp;quot;program&amp;quot;: &amp;quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&amp;quot;,
+      &amp;quot;args&amp;quot;: [],
+      &amp;quot;stopAtEntry&amp;quot;: false,
+      &amp;quot;cwd&amp;quot;: &amp;quot;${workspaceFolder}&amp;quot;,
+      &amp;quot;MIMode&amp;quot;: &amp;quot;gdb&amp;quot;,
+      &amp;quot;miDebuggerPath&amp;quot;: &amp;quot;/usr/bin/gdb&amp;quot;,
+      &amp;quot;setupCommands&amp;quot;: [
+        {
+          &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+          &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+          &amp;quot;ignoreFailures&amp;quot;: true
+        }
+      ]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This part cannot be wrong.
+The official C++ example in VS Code also uses a similar structure: &lt;code&gt;type&lt;/code&gt; uses &lt;code&gt;cppdbg&lt;/code&gt;, &lt;code&gt;MIMode&lt;/code&gt; uses &lt;code&gt;gdb&lt;/code&gt;, and pretty-printing is enabled in &lt;code&gt;setupCommands&lt;/code&gt;.
+But one crucial step is missing.
+When you press F5, it launches the executable file pointed to by &lt;code&gt;program&lt;/code&gt;. The problem is, was this file just compiled?
+If not, then you are debugging the old program from last time.
+I used to do this stupid thing often. I changed the code and set breakpoints, debugged for a while, only to realize later: Oh, I forgot to recompile.&lt;/p&gt;
+&lt;h2 id=&#34;prelaunchtask-is-the-hook&#34;&gt;preLaunchTask is the hook
+&lt;/h2&gt;&lt;p&gt;VS Code Tasks are essentially about hooking external commands into the editor.
+Compiling, testing, and packaging—what used to be typed in the terminal can now be written into &lt;code&gt;.vscode/tasks.json&lt;/code&gt;. Then, &lt;code&gt;preLaunchTask&lt;/code&gt; in &lt;code&gt;launch.json&lt;/code&gt; finds that task by its label.
+For a minimal CMake project, it could look like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;.
+├── .vscode/
+│   ├── launch.json
+│   └── tasks.json
+├── CMakeLists.txt
+├── src/
+│   └── main.cpp
+└── tools/
+    └── gdb_printers.py
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here is the &lt;code&gt;CMakeLists.txt&lt;/code&gt; first:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cmake&#34;&gt;cmake_minimum_required(VERSION 3.16)
+
+project(vscode_cpp_debug_demo LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_executable(vscode_cpp_debug_demo
+    src/main.cpp
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And here is &lt;code&gt;.vscode/tasks.json&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;2.0.0&amp;quot;,
+  &amp;quot;tasks&amp;quot;: [
+    {
+      &amp;quot;label&amp;quot;: &amp;quot;cmake: configure debug&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;process&amp;quot;,
+      &amp;quot;command&amp;quot;: &amp;quot;cmake&amp;quot;,
+      &amp;quot;args&amp;quot;: [
+        &amp;quot;-S&amp;quot;, &amp;quot;${workspaceFolder}&amp;quot;,
+        &amp;quot;-B&amp;quot;, &amp;quot;${workspaceFolder}/build/debug&amp;quot;,
+        &amp;quot;-DCMAKE_BUILD_TYPE=Debug&amp;quot;
+      ],
+      &amp;quot;problemMatcher&amp;quot;: []
+    },
+    {
+      &amp;quot;label&amp;quot;: &amp;quot;cmake: build debug&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;process&amp;quot;,
+      &amp;quot;command&amp;quot;: &amp;quot;cmake&amp;quot;,
+      &amp;quot;args&amp;quot;: [
+        &amp;quot;--build&amp;quot;, &amp;quot;${workspaceFolder}/build/debug&amp;quot;,
+        &amp;quot;--parallel&amp;quot;
+      ],
+      &amp;quot;dependsOn&amp;quot;: [&amp;quot;cmake: configure debug&amp;quot;],
+      &amp;quot;group&amp;quot;: {
+        &amp;quot;kind&amp;quot;: &amp;quot;build&amp;quot;,
+        &amp;quot;isDefault&amp;quot;: true
+      },
+      &amp;quot;problemMatcher&amp;quot;: [&amp;quot;$gcc&amp;quot;]
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Notice the &lt;code&gt;cmake --build&lt;/code&gt; here.
+The official CMake build entry point is this format: &lt;code&gt;cmake --build &amp;lt;dir&amp;gt;&lt;/code&gt;. It calls the underlying native build tool, such as Make, Ninja, or MSBuild.
+This means VS Code doesn&amp;rsquo;t need to know whether your project should use &lt;code&gt;make&lt;/code&gt; or &lt;code&gt;ninja&lt;/code&gt;.
+CMake handles that part.&lt;/p&gt;
+&lt;h2 id=&#34;before-f5-first-compile&#34;&gt;Before F5, first compile
+&lt;/h2&gt;&lt;p&gt;Then go back to &lt;code&gt;.vscode/launch.json&lt;/code&gt; and add &lt;code&gt;preLaunchTask&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;{
+  &amp;quot;version&amp;quot;: &amp;quot;0.2.0&amp;quot;,
+  &amp;quot;configurations&amp;quot;: [
+    {
+      &amp;quot;name&amp;quot;: &amp;quot;CMake Debug with GDB&amp;quot;,
+      &amp;quot;type&amp;quot;: &amp;quot;cppdbg&amp;quot;,
+      &amp;quot;request&amp;quot;: &amp;quot;launch&amp;quot;,
+      &amp;quot;program&amp;quot;: &amp;quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&amp;quot;,
+      &amp;quot;args&amp;quot;: [],
+      &amp;quot;stopAtEntry&amp;quot;: false,
+      &amp;quot;cwd&amp;quot;: &amp;quot;${workspaceFolder}&amp;quot;,
+      &amp;quot;environment&amp;quot;: [],
+      &amp;quot;externalConsole&amp;quot;: false,
+      &amp;quot;MIMode&amp;quot;: &amp;quot;gdb&amp;quot;,
+      &amp;quot;miDebuggerPath&amp;quot;: &amp;quot;/usr/bin/gdb&amp;quot;,
+      &amp;quot;setupCommands&amp;quot;: [
+        {
+          &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+          &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+          &amp;quot;ignoreFailures&amp;quot;: true
+        }
+      ],
+      &amp;quot;preLaunchTask&amp;quot;: &amp;quot;cmake: build debug&amp;quot;
+    }
+  ]
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This line is the key:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;&amp;quot;preLaunchTask&amp;quot;: &amp;quot;cmake: build debug&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The flow when pressing F5 becomes:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;launch.json
+  -&amp;gt; preLaunchTask
+    -&amp;gt; tasks.json: cmake: build debug
+      -&amp;gt; dependsOn: cmake: configure debug
+        -&amp;gt; cmake -S ... -B ...
+      -&amp;gt; cmake --build ...
+  -&amp;gt; gdb starts the latest program
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If you are on Windows + MinGW, the &lt;code&gt;program&lt;/code&gt; probably needs to be changed to a path with &lt;code&gt;.exe&lt;/code&gt;, and &lt;code&gt;miDebuggerPath&lt;/code&gt; should also point to your own &lt;code&gt;gdb.exe&lt;/code&gt;.
+If it&amp;rsquo;s a multi-configuration generator like Visual Studio Generator, you usually need to add &lt;code&gt;--config Debug&lt;/code&gt; to the build arguments.
+But the main flow remains the same.
+Before debugging, let VS Code run the build task first; don&amp;rsquo;t rely on memory alone.&lt;/p&gt;
+&lt;h2 id=&#34;another-pain-point-incomprehensible-custom-types&#34;&gt;Another Pain Point: Incomprehensible Custom Types
+&lt;/h2&gt;&lt;p&gt;Just connecting the compilation link is not enough.
+If you wrap a business type slightly in your C++ code, the variable window on the left side of VS Code starts looking ugly.
+Take this example.
+&lt;code&gt;src/main.cpp&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;#include &amp;lt;cstdint&amp;gt;
+#include &amp;lt;cstdio&amp;gt;
+#include &amp;lt;string_view&amp;gt;
+#include &amp;lt;vector&amp;gt;
+
+namespace market {
+
+struct Price {
+    std::int64_t raw{};
+
+    static Price from_double(double value) {
+        return Price{static_cast&amp;lt;std::int64_t&amp;gt;(value * 10000)};
+    }
+
+    double to_double() const {
+        return static_cast&amp;lt;double&amp;gt;(raw) / 10000.0;
+    }
+};
+
+struct Instrument {
+    char symbol[16]{};
+    Price last;
+};
+
+Instrument make_instrument(std::string_view symbol, double price) {
+    Instrument instrument;
+    std::snprintf(instrument.symbol, sizeof(instrument.symbol), &amp;quot;%s&amp;quot;, symbol.data());
+    instrument.last = Price::from_double(price);
+    return instrument;
+}
+
+} // namespace market
+
+int main() {
+    std::vector&amp;lt;market::Instrument&amp;gt; watchlist{
+        market::make_instrument(&amp;quot;IF2406&amp;quot;, 3578.6),
+        market::make_instrument(&amp;quot;IH2406&amp;quot;, 2468.2),
+    };
+
+    market::Price limit = market::Price::from_double(3600.5);
+
+    // Set a breakpoint here to observe watchlist and limit.
+    return watchlist.empty() || limit.raw == 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In the business logic, &lt;code&gt;market::Price&lt;/code&gt; represents a price.
+But what the debugger might default to showing is only:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;limit = {raw = 36005000}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Yes, the data is correct.
+But in my head, I still have to manually convert &lt;code&gt;36005000&lt;/code&gt; back to &lt;code&gt;3600.5000&lt;/code&gt;. If a project has a bunch of &lt;code&gt;Price&lt;/code&gt;, &lt;code&gt;Quantity&lt;/code&gt;, &lt;code&gt;OrderId&lt;/code&gt;, &lt;code&gt;Instrument&lt;/code&gt;, &lt;code&gt;AlgoState&lt;/code&gt;, the debug window quickly turns into a structure graveyard.
+This is when you need GDB pretty-printers.
+The official GDB manual states it very clearly: It provides a mechanism that can use Python code to pretty-print values, and this mechanism works for both MI and command line.
+VS Code&amp;rsquo;s C++ debugging uses exactly this GDB/MI path.&lt;/p&gt;
+&lt;h2 id=&#34;writing-a-python-presentation-layer-for-business-types&#34;&gt;Writing a Python Presentation Layer for Business Types
+&lt;/h2&gt;&lt;p&gt;Create &lt;code&gt;tools/gdb_printers.py&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-python&#34;&gt;import gdb
+import gdb.printing
+
+
+class PricePrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        raw = int(self.val[&amp;quot;raw&amp;quot;])
+        return f&amp;quot;{raw / 10000.0:.4f}&amp;quot;
+
+
+class InstrumentPrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        symbol = self.val[&amp;quot;symbol&amp;quot;].string()
+        price_raw = int(self.val[&amp;quot;last&amp;quot;][&amp;quot;raw&amp;quot;])
+        price = price_raw / 10000.0
+        return f&amp;quot;{symbol} last={price:.4f}&amp;quot;
+
+
+def build_pretty_printer():
+    printer = gdb.printing.RegexpCollectionPrettyPrinter(&amp;quot;market&amp;quot;)
+    printer.add_printer(&amp;quot;Price&amp;quot;, &amp;quot;^market::Price$&amp;quot;, PricePrinter)
+    printer.add_printer(&amp;quot;Instrument&amp;quot;, &amp;quot;^market::Instrument$&amp;quot;, InstrumentPrinter)
+    return printer
+
+
+gdb.printing.register_pretty_printer(
+    gdb.current_objfile(),
+    build_pretty_printer(),
+    replace=True,
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then source it in &lt;code&gt;launch.json&lt;/code&gt;&amp;rsquo;s &lt;code&gt;setupCommands&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-json&#34;&gt;&amp;quot;setupCommands&amp;quot;: [
+  {
+    &amp;quot;description&amp;quot;: &amp;quot;Enable pretty-printing for gdb&amp;quot;,
+    &amp;quot;text&amp;quot;: &amp;quot;-enable-pretty-printing&amp;quot;,
+    &amp;quot;ignoreFailures&amp;quot;: true
+  },
+  {
+    &amp;quot;description&amp;quot;: &amp;quot;Load project pretty-printers&amp;quot;,
+    &amp;quot;text&amp;quot;: &amp;quot;-interpreter-exec console \&amp;quot;source ${workspaceFolder}/tools/gdb_printers.py\&amp;quot;&amp;quot;,
+    &amp;quot;ignoreFailures&amp;quot;: false
+  }
+]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Press F5 again.
+When you look at the debug window this time, the display for &lt;code&gt;Price&lt;/code&gt; should be close to:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;limit = 3600.5000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And &lt;code&gt;Instrument&lt;/code&gt; will change from a blob of arrays and structs to something closer to the business logic:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;IF2406 last=3578.6000
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;I deliberately say &amp;ldquo;close to&amp;rdquo; here because the pretty-printer needs to match the compiler, type names, and actual field layout.
+If your business types contain nested &lt;code&gt;std::vector&lt;/code&gt;, &lt;code&gt;std::array&lt;/code&gt;, or smart pointers, you might need to write more code in Python to access those fields. Don&amp;rsquo;t expect one script to cover everything.
+But the idea is solid.
+Separate what &amp;ldquo;you want to see when debugging&amp;rdquo; into its own layer of Python presentation logic.&lt;/p&gt;
+&lt;h2 id=&#34;dont-treat-launchjson-as-everything&#34;&gt;Don&amp;rsquo;t treat launch.json as everything
+&lt;/h2&gt;&lt;p&gt;Looking at this set of configurations now, I think there are at least three layers.
+&lt;code&gt;.vscode/launch.json&lt;/code&gt; is responsible for &amp;ldquo;how to start the debugger.&amp;rdquo;
+&lt;code&gt;.vscode/tasks.json&lt;/code&gt; is responsible for &amp;ldquo;building the project first before starting the debugger.&amp;rdquo;
+&lt;code&gt;tools/gdb_printers.py&lt;/code&gt; is responsible for &amp;ldquo;displaying variables in a human-readable way after a breakpoint.&amp;rdquo;
+Before, I only configured the first layer.
+It worked, but it was very rudimentary.
+Smooth C++ debugging shouldn&amp;rsquo;t be like: &amp;ldquo;I have to compile it in the terminal first, then come back and press F5, and then manually calculate the meaning of fields in the variables window.&amp;rdquo;
+The more comfortable workflow should be: Press F5, VS Code automatically runs CMake, GDB automatically loads the project&amp;rsquo;s Python printer, and when a breakpoint is hit, the debug window directly speaks business language.
+What was most valuable about AI helping me set up this project wasn&amp;rsquo;t how much C++ code it generated.
+It was that it bridged these old tools together.
+It&amp;rsquo;s not that I didn&amp;rsquo;t know CMake before, or that I didn&amp;rsquo;t know GDB.
+I just missed configuring those intermediate hooks.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.visualstudio.com/docs/cpp/config-linux&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Using C++ on Linux in VS Code&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.visualstudio.com/docs/debugtest/tasks&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;VS Code: Integrate with External Tools via Tasks&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://cmake.org/cmake/help/latest/manual/cmake.1.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;CMake cmake(1) manual&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://sourceware.org/gdb/current/onlinedocs/gdb.html/Pretty-Printing.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB Manual: Pretty Printing&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://sourceware.org/gdb/current/onlinedocs/gdb.html/Writing-a-Pretty_002dPrinter.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GDB Manual: Writing a Pretty-Printer&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;writing-notes&#34;&gt;Writing Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;Prompt: $blog-writer vscode for C++ development, previous tutorials only showed simple configuration of gdb debugging information in launch.json, and didn&amp;rsquo;t mention configuring preLaunchTask. Being able to automatically trigger cmake compilation is a great feature when setting up new projects with AI; if the code has many custom data types that cannot be directly displayed in the VS Code debug window, one can introduce a Python script for preprocessing so that they can all be displayed. Regarding the above content, actual code examples are needed for everything.&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;writing-idea-summary&#34;&gt;Writing Idea Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;The main thread should focus on the idea that &amp;ldquo;previously, only &lt;code&gt;launch.json&lt;/code&gt; was configured, but it missed the two layers of glue: pre-build and runtime display during debugging.&amp;rdquo;&lt;/li&gt;
+&lt;li&gt;Keep the trigger point provided by the user: Discovering that when setting up a new AI project, &lt;code&gt;preLaunchTask&lt;/code&gt; can automatically trigger CMake compilation.&lt;/li&gt;
+&lt;li&gt;Organize code examples around a minimal CMake project, including &lt;code&gt;CMakeLists.txt&lt;/code&gt;, &lt;code&gt;tasks.json&lt;/code&gt;, &lt;code&gt;launch.json&lt;/code&gt;, custom C++ types, and GDB Python pretty-printer.&lt;/li&gt;
+&lt;li&gt;For factual verification, prioritize official documentation from VS Code, CMake, and GDB; the main text should not translate entire documents but only retain facts relevant to this debugging pipeline.&lt;/li&gt;
+&lt;li&gt;Provide a warning regarding the boundaries of the pretty-printer: Type names, standard library implementations, and field layouts can affect the Python script, so users must adapt it for their specific types in the project.&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>What is this process of layering folders and then wrapping them in a namespace called?</title>
         <link>https://ttf248.life/en/p/cpp-folder-namespace-what-is-it-called/</link>
         <pubDate>Thu, 09 Apr 2026 02:31:07 +0800</pubDate>
