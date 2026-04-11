@@ -6,6 +6,177 @@
         <description>Recent content on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>AI 写 Demo 很快，返工也是真的快</title>
+        <link>https://ttf248.life/p/ai-demo-fast-rework-faster/</link>
+        <pubDate>Fri, 10 Apr 2026 15:39:51 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/ai-demo-fast-rework-faster/</guid>
+        <description>&lt;p&gt;最近拿 AI 起一个 C++ 小项目，最容易傻眼的时刻，不是它写不出来，而是它三分钟给你拼出一套像模像样的目录树，顺手再塞几个三方库，Demo 还真能跑。问题也在这。你连新引进来的库到底支持什么、编译链路怎么走、边界在哪，都还没摸清，后面返工基本跑不掉。&lt;/p&gt;
+&lt;p&gt;我现在越来越觉得，AI 编程最怕的不是模型笨，而是起手太贪。尤其是 C++ 这种没什么脚手架兜底的语言，你前面少想一步，后面就得在编译、链接、库版本、目录结构上多还几步。&lt;/p&gt;
+&lt;p&gt;这事我自己的结论很直接，AI 更适合当一个推进很快的结对程序员，不适合一上来就替你把前期设计和依赖决策全包了。GitHub 的文档建议一开始先给简单一点的任务，先让 agent 把 bug、文档、测试、技术债这种边界更清楚的活干明白；Anthropic 的 Plan Mode 文档则更像是给复杂改动上的保险，先读代码、先出计划，再决定改不改。两边说法不完全一样，但指向差不多，别一上来就把最难、最乱、依赖最多的那一坨全扔给 AI。&lt;/p&gt;
+&lt;p&gt;所以这篇不聊一大堆规范，就给一个能直接练手的小案例。你拿任意一个空 C++ 仓库都能照着来。&lt;/p&gt;
+&lt;h2 id=&#34;不是-ai-不行是起手太贪&#34;&gt;不是 AI 不行，是起手太贪
+&lt;/h2&gt;&lt;p&gt;人工写项目，尤其是 C++，很多时候就是很土的办法。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;先从 &lt;code&gt;main.cpp&lt;/code&gt; 起一个最小可运行版本&lt;/li&gt;
+&lt;li&gt;先把编译链路跑通&lt;/li&gt;
+&lt;li&gt;再决定引什么库&lt;/li&gt;
+&lt;li&gt;每加一步都保证还能编&lt;/li&gt;
+&lt;li&gt;等业务轮廓出来了，再开始重构&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这套办法看起来慢，其实很稳。因为每一步你都知道自己到底换来了什么，也知道问题是从哪一步长出来的。&lt;/p&gt;
+&lt;p&gt;AI 容易把这套节奏打乱。它很喜欢一步到位地“帮你完整一下”：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;配置文件顺手给你上了&lt;/li&gt;
+&lt;li&gt;日志模块顺手给你抽了&lt;/li&gt;
+&lt;li&gt;错误码、工具类、目录结构顺手一起整理了&lt;/li&gt;
+&lt;li&gt;三方库的接入方式，它也替你选了&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;结果就是，Demo 看起来完整了，你的心智模型却是空的。后面只要有一个库的能力边界和你想的不一样，返工就不是一处，而是一串。&lt;/p&gt;
+&lt;h2 id=&#34;先拿一个小项目练手&#34;&gt;先拿一个小项目练手
+&lt;/h2&gt;&lt;p&gt;我觉得很适合练手的，是做一个很小的日志扫描工具，名字随便起，比如 &lt;code&gt;logscan&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;它只做一件事：扫一个目录下的日志文件，统计 &lt;code&gt;error&lt;/code&gt; 和 &lt;code&gt;warn&lt;/code&gt; 的数量，然后把结果打印出来。这个题目不大，但正好够你把 C++ 小项目里最常见的几块都走一遍：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;main&lt;/code&gt; 和参数入口&lt;/li&gt;
+&lt;li&gt;输出格式化&lt;/li&gt;
+&lt;li&gt;日志&lt;/li&gt;
+&lt;li&gt;配置文件&lt;/li&gt;
+&lt;li&gt;业务模块拆分&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;关键不是题目多高级，关键是拆法。&lt;/p&gt;
+&lt;p&gt;我会把它拆成四步，而且每一步只允许 AI 做当前这一小步。&lt;/p&gt;
+&lt;h2 id=&#34;第一步先把输出做好&#34;&gt;第一步，先把输出做好
+&lt;/h2&gt;&lt;p&gt;第一步别碰日志，别碰配置，别想着抽象。&lt;/p&gt;
+&lt;p&gt;就做两件事：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;建一个最小 &lt;code&gt;main.cpp&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;引入 &lt;code&gt;fmt&lt;/code&gt;，把扫描目录和统计结果打印出来&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;fmt&lt;/code&gt; 官方文档给了很清楚的 CMake 用法，它有 &lt;code&gt;fmt::fmt&lt;/code&gt; 和 &lt;code&gt;fmt::fmt-header-only&lt;/code&gt; 两个 target，文档还明确更推荐编译版，理由也很朴素，编译时间更友好。CMake 的 &lt;code&gt;FetchContent&lt;/code&gt; 文档也很适合新项目起步，因为它是在 configure 阶段把依赖拉进来，不是 build 阶段才临时下载。&lt;/p&gt;
+&lt;p&gt;这一步我会直接把依赖策略定死，不让 AI 自由发挥。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;要么统一 &lt;code&gt;FetchContent&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;要么统一 &lt;code&gt;find_package&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;不要一会 vcpkg，一会 &lt;code&gt;add_subdirectory&lt;/code&gt;，一会再手拷头文件&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果是练手项目，我一般会这么约束 AI：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;不要一次性优化架构。
+当前目标只有这一步，而且项目必须始终可编译。
+
+这一步只做 3 件事：
+1. 在根 CMakeLists.txt 里引入 fmt
+2. main.cpp 用 fmt 打印传入目录和扫描结果
+3. 保持现有目标名和目录结构，不新增日志、配置、测试框架
+
+先给我修改清单，再给代码。
+完成后给出编译命令和预期输出。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里有个细节挺重要。AI 一旦没被约束，它很容易把“顺手把后面也做了”当成加分项。你得明确告诉它，这一轮不准越界。&lt;/p&gt;
+&lt;h2 id=&#34;第二步再上日志&#34;&gt;第二步，再上日志
+&lt;/h2&gt;&lt;p&gt;等第一步能编、能跑、输出也顺眼了，再加 &lt;code&gt;spdlog&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;spdlog&lt;/code&gt; 官方 README 其实已经把它能干什么写得很直白了。它既能做控制台日志，也能做普通文件、滚动文件、按天切分，甚至还有 backtrace ring buffer。问题就在这。能力一多，AI 就容易兴奋，恨不得第一版把彩色控制台、滚动日志、按天归档、全局 logger factory 一把梭。&lt;/p&gt;
+&lt;p&gt;没必要。&lt;/p&gt;
+&lt;p&gt;这一步我只会让它做控制台日志，或者最多加一个最简单的文件日志。因为你这时候真正要学的，不是“怎么把日志系统设计完整”，而是三件事：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;日志初始化放哪&lt;/li&gt;
+&lt;li&gt;业务里怎么拿到 logger&lt;/li&gt;
+&lt;li&gt;出错时日志和正常输出怎么分工&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果你一上来就上 &lt;code&gt;rotating_file_sink&lt;/code&gt;、&lt;code&gt;daily_file_sink&lt;/code&gt;，你虽然很快拥有了一套“功能很全”的日志模块，但你其实还不知道自己到底需不需要轮转、按天切分，还是只要调试阶段打印到终端就够了。&lt;/p&gt;
+&lt;p&gt;说白了，先把 &lt;code&gt;spdlog::info()&lt;/code&gt; 用明白，比先把日志工厂画漂亮更重要。&lt;/p&gt;
+&lt;h2 id=&#34;第三步才碰配置文件&#34;&gt;第三步，才碰配置文件
+&lt;/h2&gt;&lt;p&gt;配置文件这块更容易被 AI 搞成大工程。&lt;/p&gt;
+&lt;p&gt;我更偏向拿 &lt;code&gt;toml++&lt;/code&gt; 这种简单一点的库来练手，不是因为它“最强”，而是因为它很适合新项目前几步。它本身就是 C++17 的 header-only TOML parser，README 里给的例子也很短，&lt;code&gt;toml::parse_file(&amp;quot;configuration.toml&amp;quot;)&lt;/code&gt; 就能直接读。更关键的是，它单头文件模式真的很省事，官方原话都挺有意思，single-header 方案就是“把 &lt;code&gt;toml.hpp&lt;/code&gt; 扔进源码树里”，然后“没有第二步了”。&lt;/p&gt;
+&lt;p&gt;这一步别做“配置中心”，就读三个字段：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;扫描目录&lt;/li&gt;
+&lt;li&gt;关键字列表&lt;/li&gt;
+&lt;li&gt;输出是否写文件&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;然后把它们塞进一个很薄的 &lt;code&gt;AppConfig&lt;/code&gt; 结构体里。&lt;/p&gt;
+&lt;p&gt;就够了。&lt;/p&gt;
+&lt;p&gt;很多返工，其实就出在这里。你自己还没想清楚配置到底是启动时读一次，还是运行时热更新；是只给本地 CLI 用，还是以后还要给服务进程复用。AI 已经提前替你抽了五六层。后面你一改方向，之前那点“完整设计”就都成了包袱。&lt;/p&gt;
+&lt;h2 id=&#34;第四步再拆业务模块&#34;&gt;第四步，再拆业务模块
+&lt;/h2&gt;&lt;p&gt;等 &lt;code&gt;fmt&lt;/code&gt;、&lt;code&gt;spdlog&lt;/code&gt;、&lt;code&gt;toml++&lt;/code&gt; 都是你自己看过一遍官方说明，也都实际跑通过了，再让 AI 帮你拆模块。&lt;/p&gt;
+&lt;p&gt;这时候拆，心里才有数。&lt;/p&gt;
+&lt;p&gt;我一般会收成这么几个文件：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;main.cpp&lt;/code&gt; 只负责组装&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;app_config.{h,cpp}&lt;/code&gt; 只负责配置读取&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;logger.{h,cpp}&lt;/code&gt; 只负责日志初始化&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;log_scanner.{h,cpp}&lt;/code&gt; 放业务逻辑&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;注意，是到这一步才拆，不是第一步就拆。第一步就把目录排得整整齐齐，很多时候只是视觉上舒服，认知上并没有更清楚。&lt;/p&gt;
+&lt;h2 id=&#34;真正有用的不是什么复杂规范&#34;&gt;真正有用的，不是什么复杂规范
+&lt;/h2&gt;&lt;p&gt;网上很多 AI 编程规范写得很复杂，十几条、几十条，看着就累。我自己现在留下来的，其实就三条，够用了。&lt;/p&gt;
+&lt;p&gt;第一条，先做一张“引库卡”。&lt;/p&gt;
+&lt;p&gt;每次准备引三方库，我先让 AI 只回答这四个问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;这个库解决什么问题&lt;/li&gt;
+&lt;li&gt;官方已经支持到哪&lt;/li&gt;
+&lt;li&gt;我这次只准备先用哪 1 到 2 个能力&lt;/li&gt;
+&lt;li&gt;它会给构建、部署、运行带来什么新约束&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果这张卡说不明白，就先别接。&lt;/p&gt;
+&lt;p&gt;第二条，一次只让 AI 过一个检查点。&lt;/p&gt;
+&lt;p&gt;比如这一轮只允许它完成：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;能编过&lt;/li&gt;
+&lt;li&gt;能运行&lt;/li&gt;
+&lt;li&gt;能看到预期输出&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;别在同一轮里再加“顺手重构一下目录”“顺手补个配置类”“顺手把异常体系也统一了”。C++ 项目里，越是“顺手”，越容易把问题来源弄脏。&lt;/p&gt;
+&lt;p&gt;第三条，每轮都要留一个回滚点。&lt;/p&gt;
+&lt;p&gt;哪怕你不 commit，也得能回答：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;这一步到底改了什么&lt;/li&gt;
+&lt;li&gt;如果错了，要删哪几处&lt;/li&gt;
+&lt;li&gt;退回上一步以后，项目是不是还能编&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;你会发现，这套思路其实跟人工开发很像。区别只是以前你自己敲代码，现在是你盯着 AI 不让它乱跑。&lt;/p&gt;
+&lt;h2 id=&#34;一个更像实战的-ai-用法&#34;&gt;一个更像实战的 AI 用法
+&lt;/h2&gt;&lt;p&gt;如果你真想把这套东西练熟，我建议你连续做三轮。&lt;/p&gt;
+&lt;p&gt;第一轮，只让 AI 帮你接 &lt;code&gt;fmt&lt;/code&gt;，你自己读一遍 CMake 配置和输出代码。&lt;/p&gt;
+&lt;p&gt;第二轮，只让 AI 接 &lt;code&gt;spdlog&lt;/code&gt;，你自己决定到底是控制台日志还是文件日志，不准两种一起上。&lt;/p&gt;
+&lt;p&gt;第三轮，只让 AI 接 &lt;code&gt;toml++&lt;/code&gt;，你自己定配置项，不准 AI 帮你脑补未来需求。&lt;/p&gt;
+&lt;p&gt;这三轮走完，你对 AI 编程的感觉会变很多。以前是“它怎么一下子给我生成这么多”，后来会慢慢变成“我该把下一步压到多小，才最划算”。&lt;/p&gt;
+&lt;p&gt;我觉得这才是现在 AI 编程里最值钱的能力。&lt;/p&gt;
+&lt;p&gt;不是把一个 Demo 变出来。&lt;/p&gt;
+&lt;p&gt;而是把一个项目稳稳地往前推。&lt;/p&gt;
+&lt;p&gt;说实话，这套办法没什么新鲜的，甚至有点土。但是土办法往往抗返工。尤其 C++ 这种语言，你前面让 AI 少做一点，自己多确认一点，后面真的会轻松很多。不然三分钟起飞，三小时回炉，傻眼的还是自己。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.anthropic.com/en/docs/claude-code/common-workflows&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Anthropic, Claude Code Common Workflows&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.anthropic.com/en/docs/claude-code/overview&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Anthropic, Claude Code Overview&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.github.com/en/copilot/tutorials/cloud-agent/get-the-best-results&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GitHub Docs, Best practices for using GitHub Copilot to work on tasks&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://cmake.org/cmake/help/latest/module/FetchContent.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;CMake Docs, FetchContent&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://fmt.dev/latest/get-started/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;{fmt} Get Started&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/gabime/spdlog&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gabime/spdlog README&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/gabime/spdlog/wiki/Sinks&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gabime/spdlog Wiki: Sinks&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/marzer/tomlplusplus&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;marzer/tomlplusplus README&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;提示词：人工写项目，针对 C++ 这种不用手脚架的语言，第一个弄个 框架，从 main 开始拓展逻辑，逐步增加模块，比如配置文件、日志模块、迭代业务模块。我的习惯是每次都能确保编译，逐步重构，可能一开始不是最优解。AI 编程，现在很多时候，跳过了步骤，前期思考的太少，特别是引入新的三方库，AI 是能快速出个 Demo，但是由于我不清楚新引入三方库的细节，支持哪些功能，相关逻辑的返工率明显高于人工开发。有没有好的实战案例，让我学下，我知道网上有很多复杂的 AI 编程规范，我想要简单一些的，能快速落地的。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;把题目收窄到 &lt;code&gt;tooling&lt;/code&gt; lane，重点写 AI 改变工作流以后，哪里省事了，哪里反而更别扭。&lt;/li&gt;
+&lt;li&gt;不写成泛泛的规范清单，改成一个 C++ 小项目的递进式练手案例。&lt;/li&gt;
+&lt;li&gt;保留用户“从 &lt;code&gt;main&lt;/code&gt; 开始、每一步都能编译、逐步重构”的核心判断，把它写成全文主线。&lt;/li&gt;
+&lt;li&gt;补了 Anthropic、GitHub、CMake、fmt、spdlog、toml++ 的一手资料，避免对工具能力和依赖方式瞎猜。&lt;/li&gt;
+&lt;li&gt;文章结构按 &lt;code&gt;fmt -&amp;gt; spdlog -&amp;gt; toml++ -&amp;gt; 模块拆分&lt;/code&gt; 推进，故意不让 AI 一步到位。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>VS Code 调 C&#43;&#43;，别漏了 CMake 和 GDB Printer</title>
         <link>https://ttf248.life/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</link>
         <pubDate>Thu, 09 Apr 2026 19:21:36 +0800</pubDate>
