@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="この二日間、HermesとOpenClawのドキュメントを何度も読み返しましたが、読むほどに、多くの人がこれら2つのプロジェクトを一緒にして比較していますが、実は最初から比較の軸がずれていると感じました。\nもちろん、これらはすべて「パーソナルAIアシスタント」を構築しています。メッセージの受信、モデルの呼び出し、ツールの実行、そしてある程度のコンテキスト保持が可能です。Hermesはさらにはhermes claw migrateという専用コマンドまで用意しており、OpenClawユーザーの一団を受け入れることを明白に知っているようです。\nしかし、端的に言えば、Hermes は OpenClaw のスキン変更版ではなく、OpenClaw もメッセージ入力口がいくつか増えたエージェントフレームワークではありません。一方は Gateway から外側へ伸びていき、もう一方は AIAgent から外側へ伸びています。この違いを先に理解しないと、後でアーキテクチャや設計思想、エコシステムについて話しても、どんどん話が混乱していきます。\n">
+<title>Hermes を OpenClaw の代替品として見ると、最初は偏りがあるかもしれません。</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/hermes-openclaw-not-the-same-game/'>
+
+<link rel="stylesheet" href="/scss/style.min.3feddf7433e05d0be4d114733bf2e2c6246546597e82c89c1c5943d545443503.css"><meta property='og:title' content="Hermes を OpenClaw の代替品として見ると、最初は偏りがあるかもしれません。">
+<meta property='og:description' content="この二日間、HermesとOpenClawのドキュメントを何度も読み返しましたが、読むほどに、多くの人がこれら2つのプロジェクトを一緒にして比較していますが、実は最初から比較の軸がずれていると感じました。\nもちろん、これらはすべて「パーソナルAIアシスタント」を構築しています。メッセージの受信、モデルの呼び出し、ツールの実行、そしてある程度のコンテキスト保持が可能です。Hermesはさらにはhermes claw migrateという専用コマンドまで用意しており、OpenClawユーザーの一団を受け入れることを明白に知っているようです。\nしかし、端的に言えば、Hermes は OpenClaw のスキン変更版ではなく、OpenClaw もメッセージ入力口がいくつか増えたエージェントフレームワークではありません。一方は Gateway から外側へ伸びていき、もう一方は AIAgent から外側へ伸びています。この違いを先に理解しないと、後でアーキテクチャや設計思想、エコシステムについて話しても、どんどん話が混乱していきます。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/hermes-openclaw-not-the-same-game/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI霊感衝突坊' /><meta property='article:tag' content='ai' /><meta property='article:published_time' content='2026-04-15T23:52:20&#43;08:00'/><meta property='article:modified_time' content='2026-04-16T01:50:44&#43;08:00'/>
+<meta name="twitter:title" content="Hermes を OpenClaw の代替品として見ると、最初は偏りがあるかもしれません。">
+<meta name="twitter:description" content="この二日間、HermesとOpenClawのドキュメントを何度も読み返しましたが、読むほどに、多くの人がこれら2つのプロジェクトを一緒にして比較していますが、実は最初から比較の軸がずれていると感じました。\nもちろん、これらはすべて「パーソナルAIアシスタント」を構築しています。メッセージの受信、モデルの呼び出し、ツールの実行、そしてある程度のコンテキスト保持が可能です。Hermesはさらにはhermes claw migrateという専用コマンドまで用意しており、OpenClawユーザーの一団を受け入れることを明白に知っているようです。\nしかし、端的に言えば、Hermes は OpenClaw のスキン変更版ではなく、OpenClaw もメッセージ入力口がいくつか増えたエージェントフレームワークではありません。一方は Gateway から外側へ伸びていき、もう一方は AIAgent から外側へ伸びています。この違いを先に理解しないと、後でアーキテクチャや設計思想、エコシステムについて話しても、どんどん話が混乱していきます。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>ダークモード</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#それらは最初から一つのものになるつもりではなかった">それらは最初から一つのものになるつもりではなかった</a></li>
+    <li><a href="#gatewayを主役にしたものとagentを主役にしたもの">Gatewayを主役にしたものと、Agentを主役にしたもの</a></li>
+    <li><a href="#記憶スキルそして拡張の方法も一つの味ではない">記憶、スキル、そして拡張の方法も、一つの味ではない</a></li>
+    <li><a href="#エコシステムはなぜ離れていくのか">エコシステムはなぜ離れていくのか</a></li>
+    <li><a href="#私の最終的な判断">私の最終的な判断</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+    <li><a href="#作成上の注記">作成上の注記</a>
+      <ol>
+        <li><a href="#元のプロンプト">元のプロンプト</a></li>
+        <li><a href="#ライティングのアイデア概要">ライティングのアイデア概要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/hermes-openclaw-not-the-same-game/">Hermes を OpenClaw の代替品として見ると、最初は偏りがあるかもしれません。</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月15日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            読了時間: 18分
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/hermes-openclaw-not-the-same-game/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/en/p/hermes-openclaw-not-the-same-game/" class="link">English</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>この二日間、HermesとOpenClawのドキュメントを何度も読み返しましたが、読むほどに、多くの人がこれら2つのプロジェクトを一緒にして比較していますが、実は最初から比較の軸がずれていると感じました。</p>
+<p>もちろん、これらはすべて「パーソナルAIアシスタント」を構築しています。メッセージの受信、モデルの呼び出し、ツールの実行、そしてある程度のコンテキスト保持が可能です。Hermesはさらには<code>hermes claw migrate</code>という専用コマンドまで用意しており、OpenClawユーザーの一団を受け入れることを明白に知っているようです。</p>
+<p>しかし、端的に言えば、Hermes は OpenClaw のスキン変更版ではなく、OpenClaw もメッセージ入力口がいくつか増えたエージェントフレームワークではありません。一方は <code>Gateway</code> から外側へ伸びていき、もう一方は <code>AIAgent</code> から外側へ伸びています。この違いを先に理解しないと、後でアーキテクチャや設計思想、エコシステムについて話しても、どんどん話が混乱していきます。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="それらは最初から一つのものになるつもりではなかった">それらは最初から一つのものになるつもりではなかった
+</h2><p>OpenClaw の公式ドキュメントでは <code>Gateway</code> を非常に早い位置に置いています。その定義は非常に直接的です。長期実行される Gateway がすべてのメッセージ面を保持し、コントロール面クライアント、Web UI、Node デバイスがすべてこの Gateway に WebSocket 経由で接続します。さらに、ホスト上にはコアなメッセージ接続を管理する Gateway は一つしかなく、WhatsApp のようなセッションも明確にそれが独占します。</p>
+<p>これはどういう意味ですか？それは、OpenClaw の世界観が「まずエージェントがあり、それにいくつかのインターフェースを接続する」というものではなく、「まず常駐の通信および制御プレーンがあり、その中にエージェントランタイム、セッション、スキル、デリゲート、サブエージェントなどをすべて編成する」ということです。</p>
+<p>Hermes はこの味ではない。そのアーキテクチャ図は最初から非常に明確で、CLI、Gateway、ACP、Batch Runner、API Server、Python Library といったエントリポイントがすべて同じ <code>AIAgent</code> コアに集約されている。セッションストレージは SQLite + FTS5 であり、ツールバックエンド、プロバイダー解決、プロンプトビルダーはすべてこのコアを中心に構成されている。</p>
+<p>そのため、骨格から見ると、OpenClaw は「常駐型のパーソナルアシスタントシステム」に近く、Hermes は「エージェントランタイムプラットフォーム」に近く、メッセージ入力は単なるその延長面の一つに過ぎません。</p>
+<h2 id="gatewayを主役にしたものとagentを主役にしたもの">Gatewayを主役にしたものと、Agentを主役にしたもの
+</h2><p>このアーキテクチャの違いは、最終的に利用体験の違いに直結します。</p>
+<p>OpenClaw の強みは、「多くのチャネルで長期的にオンラインで存在し、アイデンティティと境界を持ち、ルーティング可能なアシスタントをどう持つか」という点に非常に力を入れていることです。デフォルトの DM ペアリング、セキュリティポリシー、チャネル/アカウント/ピアごとのルーティング、マルチエージェントバインディング、デリゲートモードがあり、さらには「誰になりすまして発言するか、どの口座で受信するか、どのグループに出現するか」といった組織レベルの問題までドキュメント化されています。</p>
+<p>言い換えれば、OpenClaw がまず解決したいのは存在性の問題です。このエージェントは、まず本物の人間か、あるいは真の組織アシスタントのように振る舞い、Telegram、Discord、Slack、WhatsApp、Signal、WebChatといったプラットフォーム上で生きている必要があります。その後に、コードを書けるかどうか、タスクをディスパッチできるかどうかを議論するのです。</p>
+<p>Hermes の重点は「能力の蓄積」にあります。もちろん Gateway もあり、Telegram、Discord、Slack、WhatsApp などのプラットフォームにも接続できますが、公式な説明の中で最も前面に出ている単語は、ルーティングやアカウントではなく、persistent memory、skills、MCP、sub-agents、toolsets、さらには batch processing、trajectory export、RL training です。</p>
+<p>ここが重要です。Hermes が解決すべき中心的な問題は、「いかに多くのメッセージングプラットフォームに AI を接続するか」ということではなく、「このエージェント自身が段階的にスキルや記憶、再利用可能な能力を育み、さらには訓練データや実験として使えるようにすること」なのです。</p>
+<p>そのため、私はこのように要約するのがより良いと思います：</p>
+<p>OpenClaw はコミュニケーションファーストのパーソナルアシスタントシステムです。</p>
+<p>Hermes は agent-core-first のセルフホスト型エージェントプラットフォームです。</p>
+<h2 id="記憶スキルそして拡張の方法も一つの味ではない">記憶、スキル、そして拡張の方法も、一つの味ではない
+</h2><p>多くの人が「これら2つともskill、memory、pluginをサポートしているのでは？」と言うでしょう。その通り、どちらもサポートしています。しかし、焦点が違います。</p>
+<p>OpenClaw のエージェントランタイムにおいて、ワークスペースは非常に重い概念です。<code>AGENTS.md</code>、<code>SOUL.md</code>、<code>TOOLS.md</code>、<code>BOOTSTRAP.md</code>、<code>IDENTITY.md</code>、<code>USER.md</code> といったファイル群は、新しいセッションの最初のラウンドで直接コンテキストに注入されます。スキル（技能）のロードにも一連の優先順位があり、ワークスペース内のもの、プロジェクト内のもの、個人ディレクトリ内のもの、<code>~/.openclaw/skills</code> 内のもの、バンドルされたもののすべてが積み重なります。本質的には、「ペルソナ + ルール + ワークスペース + チャネル」を統合した長期的なアシスタント環境を構築しているのです。</p>
+<p>Hermes のスキルシステムは明らかに「手続き的記憶」に偏っています。公式ドキュメントには、skills はオンデマンドの知識ドキュメントであり、プログレッシブディスクロージャーを採用し、<code>agentskills.io</code> のオープン標準に対応しており、すべて <code>~/.hermes/skills/</code> 以下に統一して配置され、さらにエージェント自身がスキルを修正・削除できると明記されています。これは単に「アシスタントに説明書を数冊渡す」という感じではなく、「実行したことを再利用可能な能力ブロックとして蓄積する」という感覚です。</p>
+<p>記憶も同じです。Hermes には控えめな <code>MEMORY.md</code> と <code>USER.md</code> が組み込まれており、これに SQLite + FTS5 のセッション検索と、さらに 8 種類のメモリプロバイダーを外付けしています。この設計は非常に興味深く、最初から「長期的な人格環境」を厚く記述するのではなく、短期記憶、検索式回想、外付けの長期記憶を分離している点です。</p>
+<p>OpenClaw は記憶がないわけでもなく、サブエージェント、マルチエージェント、デリゲートといった高度な能力を持たないわけでもありません。むしろ、それらは十分に備わっています。しかし、ドキュメントの構造とデフォルトの思考モデルから見ると、それは継続的にオンラインのアシスタントワークスペースを運営しているように見えます。一方、Hermes は絶えず進化するエージェント能力グラフを運営しているように見えます。</p>
+<h2 id="エコシステムはなぜ離れていくのか">エコシステムはなぜ離れていくのか
+</h2><p>エコシステムに関しては、表面的にはすべて「オープンソース＋拡張可能」に見えますが、実際には分岐が非常に明確です。</p>
+<p>OpenClaw のエコシステムはより広く、外部接続レイヤーに重点を置いています。公式プラグインでは、channels、model providers、tools、skills、speech、web fetch、web search、memory を拡張でき、コミュニティプラグインや ClawHub も「より多くのプラットフォーム」「より多くのアカウント」「より多くのワークフロー」への接続を目指しています。さらには、<code>.codex-plugin</code>、<code>.claude-plugin</code>、<code>.cursor-plugin</code> のようなバンドル形式との互換性も明言しています。この動きは非常に賢く、要するに他社のエコシステムの「殻」を先に取り込み、入口（エントランス）を大きくしようとしているのです。</p>
+<p>OpenClaw のドキュメントを再確認すると、sub-agent、delegate、組織エージェント、thread binding、DM pairing、group mention などについて非常に詳細に記述されていることがわかります。これは単なるシングルマシンプレイヤーの遊び場ではなく、真に長期的に動作するエージェントオペレーティングシステムになることを目指していることを示しています。</p>
+<p>Hermes のエコシステムは、「コア機能の外部接続」という側面が強いです。Python プラグインシステムがあり、メモリプロバイダープラグインがあり、コンテキストエンジンプラグインがあり、MCP サーバーへの接続もあり、さらに Skills Hub や <code>agentskills.io</code> のようなオープンなスキル標準があります。これに加えて、バッチランナー、トラジェクトリエクスポート、Atropos といったトレーニング関連のインターフェースがあるため、Hermes のエコシステムは自然と二種類のユーザー層を引きつけます。</p>
+<p>一方は、それを個人のエージェントとして使う人です。</p>
+<p>もう一つの分類は、それを研究、トレーニング、実験、ワークフローの基盤として利用する人々です。</p>
+<p>この2種類のユーザーのニーズは大きく異なりますが、Hermesのアーキテクチャはどちらもカバーできます。そのため、HermesのエコシステムはOpenClawのように「チャネル数」や「メッセージの存在感」で先行して広がるわけではないと感じるかもしれませんが、私はむしろ、エージェント基盤（agent substrate）におけるその潜在力の方が大きいと感じています。</p>
+<p>さらに興味深い詳細があります。Hermesの公式READMEには<code>hermes claw migrate</code>だけでなく、コミュニティプロジェクトである<code>HermesClaw</code>も掲載されており、これを使うことで同じWeChatアカウント上でHermes AgentとOpenClawを同時に実行できます。このシグナルは非常に明白です。Hermesは自分とOpenClawが関係ないふりをしているのではなく、ユーザーの移行パスが存在することを認め、さらにそのパスを製品化して提供しているのです。</p>
+<h2 id="私の最終的な判断">私の最終的な判断
+</h2><p>もしあなたが「本当にメッセージングレイヤー上で動作する個人アシスタントシステム」を求めているのであれば、アカウント、チャネル、ルーティング、デリゲート、組織境界、常時オンライン、強力なコントロールプレーンが必要なのであれば、OpenClawの道筋の方がより完全であり、成熟した通信基盤に近いです。</p>
+<p>もしあなたが「使うほど自分専用のワークステーションのように馴染むエージェントコア」を求めていて、スキル蓄積、メモリの組み合わせ、MCP、プラグイン、サブエージェント、学習データ、そしてその後の可塑性を重視するなら、Hermesの方が使いやすいでしょう。</p>
+<p>ですから、「Hermes は OpenClaw に取って代われるか？」といった単純な質問はもうしないでください。その質問の仕方が少々粗雑です。</p>
+<p>より正確な聞き方は以下の通りです。</p>
+<p>メッセージングネットワーク内に存在するAIアシスタントを求めているのか、それともローカルのワークフローやエージェントランタイムに組み込まれるAIプラットフォームを求めているのでしょうか？</p>
+<p>これをしっかり理解すれば、選択はそれほど迷いませんよ。</p>
+<h2 id="参考資料">参考資料
+</h2><ul>
+<li><a class="link" href="https://github.com/NousResearch/hermes-agent"  target="_blank" rel="noopener"
+    >Hermes Agent GitHub README</a></li>
+<li><a class="link" href="https://hermes-agent.org/"  target="_blank" rel="noopener"
+    >Hermes Agent 公式サイト Features</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/developer-guide/architecture"  target="_blank" rel="noopener"
+    >Hermes Agent Architecture</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/skills"  target="_blank" rel="noopener"
+    >Hermes Agent Skills System</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/memory"  target="_blank" rel="noopener"
+    >Hermes Agent Persistent Memory</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp"  target="_blank" rel="noopener"
+    >Hermes Agent MCP</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins"  target="_blank" rel="noopener"
+    >Hermes Agent Plugins</a></li>
+<li><a class="link" href="https://github.com/openclaw/openclaw"  target="_blank" rel="noopener"
+    >OpenClaw GitHub README</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/architecture"  target="_blank" rel="noopener"
+    >OpenClaw Gateway Architecture</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/agent"  target="_blank" rel="noopener"
+    >OpenClaw Agent Runtime</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/multi-agent"  target="_blank" rel="noopener"
+    >OpenClaw Multi-Agent Routing</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/delegate-architecture"  target="_blank" rel="noopener"
+    >OpenClaw Delegate Architecture</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/tools/subagents"  target="_blank" rel="noopener"
+    >OpenClaw Sub-Agents</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/tools/plugin"  target="_blank" rel="noopener"
+    >OpenClaw Plugins</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/tools/skills-config"  target="_blank" rel="noopener"
+    >OpenClaw Skills Config</a></li>
+</ul>
+<h2 id="作成上の注記">作成上の注記
+</h2><h3 id="元のプロンプト">元のプロンプト
+</h3><blockquote>
+<p>プロンプト：HermesとOpenClawの違い、アーキテクチャ上の違い、設計思想上の違い、エコシステムの違い</p></blockquote>
+<h3 id="ライティングのアイデア概要">ライティングのアイデア概要
+</h3><ul>
+<li>「代替品比較」というよくある質問形式は外し、「二つのプロジェクトの中心がどこにあるのか」というメインラインに直接絞る。</li>
+<li>アーキテクチャ部分は、コミュニティによる二次的なまとめではなく、公式ドキュメントのメインエントリとコアコンポーネントを優先して参照する。</li>
+<li>設計理念の部分では、抽象的な価値判断は行わず、Gateway、Agent Core、memory、skill、delegateといった具体的な設計に落とし込む。</li>
+<li>エコシステム部分は、星マークや人気度、コミュニティでの憶測合戦はせず、拡張の方向性に重点を置く。</li>
+<li>事実確認は、2026年4月15日時点で公開されている公式リポジトリと公式ドキュメントを基準とする。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/">AI霊感衝突坊</a>
+        
+            <a href="/ja/tags/ai/">Ai</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2026年04月16日 01:50
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">関連するコンテンツ</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/hermes-openclaw-token-usage-diff/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。</h3>
+                            <time class="related-content__date" datetime='2026-04-16T01:13:53&#43;08:00'>2026年04月16日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/ai-demo-fast-rework-faster/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI はデモの作成が速く、修正作業も本当に速いです。</h3>
+                            <time class="related-content__date" datetime='2026-04-10T15:39:51&#43;08:00'>2026年04月10日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。</h3>
+                            <time class="related-content__date" datetime='2026-04-09T19:21:36&#43;08:00'>2026年04月09日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Googleが今回Gemma 4を公開した（3）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Googleが今回Gemma 4を公開した（2）</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>2026年04月08日</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

@@ -6,7 +6,371 @@
         <description>Recent content in Posts on 向叔の手帳</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>ja</language>
-        <lastBuildDate>Thu, 09 Apr 2026 20:28:13 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Thu, 16 Apr 2026 01:50:44 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。</title>
+        <link>https://ttf248.life/ja/p/hermes-openclaw-token-usage-diff/</link>
+        <pubDate>Thu, 16 Apr 2026 01:13:53 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/hermes-openclaw-token-usage-diff/</guid>
+        <description>&lt;p&gt;昨日書いた&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/hermes-openclaw-not-the-same-game/&#34; &gt;《HermesをOpenClawの代替品と見なすのは危険かもしれない》&lt;/a&gt;を書き終えた後、私は周りのドキュメントを巡回しました。巡るほど、この二つのものの違いを見るには、機能だけを見ているだけでは不十分で、トークンがどのように消費されるかを見る方が、より直接的だと感じました。&lt;/p&gt;
+&lt;p&gt;私の判断は、まずここに置きます。&lt;/p&gt;
+&lt;p&gt;OpenClaw はデフォルトで長期的にオンラインのワークベンチのようなものであり、多くのアイデンティティ、ルール、ワークスペースファイル、メッセージ面制約などが自然に各対話フローに引き継がれるため、ベースラインは通常重くなります。一方、Hermes は明らかに抑制的で、多くのコンテキストはオンデマンドで発見され、オンデマンドで注入されます。システムプロンプトも意図的に安定したプレフィックスを維持しており、デフォルトではトークンを抑えやすいです。&lt;/p&gt;
+&lt;p&gt;もちろん、これはHermesが必ずしもより節約できるという意味ではありません。memory provider、skills、sub-agent、長いツール出力をすべて有効にすると、同じように大量のトークンを消費します。しかし、率直に言って、これら2つのアーキテクチャは、初日から異なる方法でトークンを消費しています。&lt;/p&gt;
+&lt;h2 id=&#34;openclaw-はなぜデフォルトでより重いのか&#34;&gt;OpenClaw はなぜデフォルトでより重いのか
+&lt;/h2&gt;&lt;p&gt;OpenClaw の設計ロジックは、元々「軽いエージェントを一つ出して、ちょっとおしゃべりする」というものではなく、「まず長期的に存在するエージェントのワークステーションを構築する」というものです。この点は公式の workspace ドキュメントに非常に明確に書かれています。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;AGENTS.md&lt;/code&gt;、&lt;code&gt;SOUL.md&lt;/code&gt;、&lt;code&gt;USER.md&lt;/code&gt; はセッションごとにロードされます。&lt;code&gt;IDENTITY.md&lt;/code&gt;、&lt;code&gt;TOOLS.md&lt;/code&gt;、&lt;code&gt;HEARTBEAT.md&lt;/code&gt;、&lt;code&gt;BOOT.md&lt;/code&gt;、&lt;code&gt;MEMORY.md&lt;/code&gt; といったファイルも、同じワークスペース内で巡回します。ドキュメントはさらには、&lt;code&gt;HEARTBEAT.md&lt;/code&gt; は非常に短く保つよう注意喚起し、トークン消費を避けるように促しています。このような注意喚起自体が、OpenClaw が自身のデフォルトのコンテキストが比較的厚いことを明確に示しています。&lt;/p&gt;
+&lt;p&gt;しかし、一つ明確にしておくべき点があります。OpenClaw はすべてを無条件で全文常駐させるわけではありません。公式のトークンドキュメントには、skills をシステムプロンプトに組み込む場合、デフォルトでは単なるメタデータであり、具体的な説明は必要に応じて &lt;code&gt;read&lt;/code&gt; する必要があると明記されています。したがって、問題は「節約ができない」ことではなく、「デフォルトで持っていく土台自体が元々大きい」ということです。&lt;/p&gt;
+&lt;p&gt;この件は実は理解しにくいものではありません。OpenClaw が解決しようとしているのは、「長期的なオンライン状態」と「複数のメッセージ面での存在感」です。&lt;/p&gt;
+&lt;p&gt;Telegram、Discord、Slack、WhatsAppといった複数の場所に同時に存在し、アイデンティティ、ルーティング、境界線、委任（delegate）を伴いながら活動させる場合、多くのルールは後から付け足すものであってはなりません。それはまず自分自身が何者であるか、どのように話すべきか、誰に向き合っているのか、現在のワークスペースの制約は何か、スキルをどこから取得するのか、どの記憶を持ち運ぶべきで、どの記憶を持ち運んではいけないのかを知る必要があります。&lt;/p&gt;
+&lt;p&gt;そのため、OpenClaw のトークン消費は、より固定のオーバーヘッドが大きい傾向があります。&lt;/p&gt;
+&lt;p&gt;メッセージを送信するたびに、単にモデルに一文を話しかけているのではなく、すでに完成された「アシスタント環境」全体を呼び出しています。この環境は使いやすいのですが、その代償としてベースとなるプロンプトがより厚くなり、たとえ今回のターンで直接使われなくても、多くのコンテキストがそこに保持されることになります。&lt;/p&gt;
+&lt;h2 id=&#34;hermes-はなぜより抑制的に見えるのか&#34;&gt;Hermes はなぜより抑制的に見えるのか
+&lt;/h2&gt;&lt;p&gt;Hermes の件ですが、ドキュメントの中で最も興味深い点は、常に2つのことを強調している点です。それは「オンデマンドローディング」と「プロンプトキャッシュの保持」です。&lt;/p&gt;
+&lt;p&gt;まずコンテキストファイルをチェックしてください。Hermesはセッション開始時に、現在の作業ディレクトリでヒットした種類のプロジェクトコンテキストのみをロードします。&lt;code&gt;AGENTS.md&lt;/code&gt;や&lt;code&gt;CLAUDE.md&lt;/code&gt;、&lt;code&gt;.cursorrules&lt;/code&gt;などは「最初に見つかったものが採用される（first match wins）」ため、すべてが一度に読み込まれるわけではありません。さらに重要なのは、サブディレクトリ内の&lt;code&gt;AGENTS.md&lt;/code&gt;は起動時にすべて読み込まれるのではなく、実際にそのディレクトリに移動し、そのファイルを読み込み、そのパスに到達したときに、段階的に発見され、段階的に注入されるということです。&lt;/p&gt;
+&lt;p&gt;公式ドキュメントでは、この設計の利点が明確に書かれています：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;システムプロンプトの肥大化なし&lt;/li&gt;
+&lt;li&gt;プロンプトキャッシュの保持&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;この味はOpenClawとは全然違いますね。Hermesが言っているように、システムプロンプトは長すぎない方がいいし、後回しにできるコンテキストは後回しにして、関連するタイミングでのみ出現するものなら、最初のラウンドで詰め込みすぎない方がいいですよ。&lt;/p&gt;
+&lt;p&gt;skills も同じ考え方です。Hermes の skills ドキュメントには、プログレッシブ・ディスクロージャー（段階的開示）が明確に書かれており、目的はトークン使用量の最小化です。言い換えれば、skill はデフォルトで全文常駐するのではなく、モデルにまず軽量なインデックスを見せ、本当に必要なときだけ具体的な内容を展開させるということです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;データマイニング&lt;/li&gt;
+&lt;li&gt;ディープラーニング&lt;/li&gt;
+&lt;li&gt;ニューラルネットワーク&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;そして、その記憶システムも組み合わせ型に偏っています。公式ドキュメントでは組み込みメモリが厳しく制限されており、&lt;code&gt;MEMORY.md&lt;/code&gt; は約 800 トークン、&lt;code&gt;USER.md&lt;/code&gt; は約 500 トークンで、合計すると固定のコンテキストウィンドウは約 1300 トークンになります。&lt;code&gt;SOUL.md&lt;/code&gt; は固定のアイデンティティであり、&lt;code&gt;USER.md&lt;/code&gt; とメモリはシステムプロンプトに含まれますが、セッション検索やメモリプロバイダー、Honchoなどはより外部レイヤーのようなものです。この構造自体がプロンプトを自然に短くするわけではありませんが、コスト管理がしやすいデフォルトの姿勢を提供しています。&lt;/p&gt;
+&lt;p&gt;そのため、アーキテクチャの観点から見ると、私はHermesを「デフォルトでは控えめだが、徐々に重みを増していく」と分類する方が気が進みます。&lt;/p&gt;
+&lt;h2 id=&#34;これは誰がより進んでいるかではなくどこにコストをかけるかである&#34;&gt;これは誰がより進んでいるかではなく、どこにコストをかけるかである
+&lt;/h2&gt;&lt;p&gt;多くの比較記事は、トークン消費を単一の結論として記述する傾向がありますが、これは適切ではないと思います。&lt;/p&gt;
+&lt;p&gt;OpenClaw が重いのは、設計が悪いからではありません。むしろ、意図的に多くのものを前置しているのです。長期オンラインで、クロスプラットフォームで、パーソナリティを持ち、ワークスペースとルーティングを備えたアシスタントを求めるなら、これらのコンテキストにはいずれコストがかかります。単にデフォルトのパスでこれらを一式揃えているだけです。&lt;/p&gt;
+&lt;p&gt;Hermes はより抑制的ですが、それがないわけではありません。長い &lt;code&gt;SOUL.md&lt;/code&gt; やプロジェクトの &lt;code&gt;AGENTS.md&lt;/code&gt;、複数のスキル、MCP、メモリプロバイダー、サブエージェント、長いツール出力などを重ねると、トークンはやはり速く消費されます。特にツールの結果自体が非常に長い場合や、複雑なコードベース内を何度も検索させる場合は、アーキテクチャ名だけで節約できるわけではありません。&lt;/p&gt;
+&lt;p&gt;したがって、より正確な言い方は以下の通りです。&lt;/p&gt;
+&lt;p&gt;OpenClaw は、コストを「アシスタント環境の常駐」に前倒しします。&lt;/p&gt;
+&lt;p&gt;Hermes はコストを「必要な時に能力を展開する」ことに後置します。&lt;/p&gt;
+&lt;p&gt;これら二つのアプローチに絶対的な優劣はありませんが、請求書の構造が全く異なります。&lt;/p&gt;
+&lt;h2 id=&#34;本当に差がつくのはシステムプロンプトだけではない&#34;&gt;本当に差がつくのは、システムプロンプトだけではない
+&lt;/h2&gt;&lt;p&gt;他にも、見落とされがちな細かい点があります。&lt;/p&gt;
+&lt;p&gt;第一に、Hermes は context files の部分を安定したプレフィックスにするように設計されています。サブディレクトリの hint は、関連するツールの結果に追加されるものであり、すべてのプロジェクトコンテキストを system prompt に絶えず流し込むわけではありません。このアプローチはトークンを節約するだけでなく、本質的にはプロバイダーのプロンプトキャッシュのためのスペースを確保しているとも言えます。&lt;/p&gt;
+&lt;p&gt;第二に、Hermes の &lt;code&gt;execute_code&lt;/code&gt; のようなツールは、設計上、スクリプトが最終的に &lt;code&gt;print()&lt;/code&gt; で出力した結果のみをモデルに返すように設計されており、途中の RPC ツール呼び出しの結果がすべてコンテキストに入るわけではありません。複雑なフローの場合、この構造により、無意味なツールのノイズを大幅に削減できます。&lt;/p&gt;
+&lt;ol start=&#34;3&#34;&gt;
+&lt;li&gt;OpenClaw のワークスペースの哲学は、「家財道具を全部持っていく」というものに近いです。たとえ個々のファイルが短くても、種類が多い、人格レイヤーが多い、ルールレイヤーが多い、スキルや記憶の階層が多いだけで、基本的なコンテキストは少しずつ厚みを増していきます。この厚みはバグではなく、製品としての取捨選択によるものです。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;第四に、両側がサブエージェントの処理を行うことも、総勘定書に影響を与えます。Hermes の多くの設計はローカルなコンテキストとローカルな実行を強調していますが、OpenClaw は複数のエージェントのアイデンティティ、ルーティング、委任といった組織能力をより重視しています。一方はコンテキストを切り替えるようなものであり、もう一方は存在関係を組織するようなものです。最終的にトークン料金に落とし込むと、形状は当然異なります。&lt;/p&gt;
+&lt;h2 id=&#34;本当に計算するなら口先だけではダメだ&#34;&gt;本当に計算するなら、口先だけではダメだ
+&lt;/h2&gt;&lt;p&gt;長期的に使うつもりなら、誰かが「こっちの方が節約になる」と言っても鵜呑みにせず、ツールが出したデータを見てください。&lt;/p&gt;
+&lt;p&gt;OpenClaw の公式ドキュメントには、&lt;code&gt;/context detail&lt;/code&gt; や &lt;code&gt;/usage tokens&lt;/code&gt; のようなコマンドがあり、ドキュメントでもセッション開始時にどのファイルが注入されるか通知してくれます。これはベースディスクがどれだけ分厚いかを見るのに非常に適しています。&lt;/p&gt;
+&lt;p&gt;Hermes の件ですが、公式ドキュメントの Honcho や関連する機能において、トークンバジェット、スキルプログレッシブディスクロージャー、コンテキストファイル注入の方法といった手がかりが提供されています。これらは &lt;code&gt;hermes insights&lt;/code&gt;、セッションストレージ、および実際のプロバイダーの請求書と合わせて確認できます。&lt;/p&gt;
+&lt;p&gt;要するに、アーキテクチャは「どう使うか」しか決められず、「どれだけ使うか」までは決めてくれない。実際に請求額を決めるのは、君が書いた &lt;code&gt;SOUL.md&lt;/code&gt; の長さ、詰め込んだ記憶の量、開いたスキル数、ツールの出力をどれだけ取り込めたか、そしてモデル自体の価格だ。&lt;/p&gt;
+&lt;h2 id=&#34;結局私はこの側に立つ&#34;&gt;結局、私はこの側に立つ
+&lt;/h2&gt;&lt;p&gt;デフォルトのアーキテクチャだけを見て、極端な設定は考慮に入れなければ、私はやはり Hermes の方がトークンの消費を比較的抑制された範囲に抑えやすいと考えています。&lt;/p&gt;
+&lt;p&gt;より強力だからではなく、プロンプト設計の段階から「無意味な永続コンテキストの膨張」を回避し続けているからです。OpenClawはそれとは対照的で、多少多く持っていくことを厭わずとも、その長期オンラインアシスタントとしてのアイデンティティ、ワークスペース、メッセージングインターフェースの境界が崩れないことを保証します。&lt;/p&gt;
+&lt;p&gt;そのため、トークンコストを特に気にする場合や、ワークフローが主にローカル、CLI、コードリポジトリ、スキル蓄積といったシナリオで発生する場合は、Hermesのアプローチの方が一般的に扱いやすいでしょう。&lt;/p&gt;
+&lt;p&gt;もしあなたが、様々なメッセージの場に本当に常駐する長期アシスタントを求めているのであれば、OpenClawはトークンを多めに使う方が、むしろ正常な対価だと思います。まるで人間のように常にオンラインでありながら、毎回使い捨ての小さなツールであるかのような軽さを要求することはできませんから。&lt;/p&gt;
+&lt;p&gt;ああ、結局この件はまた元の問題に戻ってきましたね。&lt;/p&gt;
+&lt;p&gt;あなたはオンラインアシスタントを育てているのか、それともローカルエージェントコアを育てているのか。これを明確にすれば、トークン計算はそれほど難しく感じなくなるはずだ。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/ja/p/hermes-openclaw-not-the-same-game/&#34; &gt;前の記事：Hermes を OpenClaw の代替品と見なすのは、最初から偏っているかもしれない&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/overview&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Features Overview&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Context Files&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/personality/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Personality &amp;amp; SOUL.md&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Skills&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/reference/tools-reference/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Built-in Tools Reference&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/honcho/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Honcho Memory&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/agent-workspace&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Agent Workspace&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/reference/token-use&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Token Use and Costs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/memory&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Memory&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/multi-agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Multi-Agent Routing&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/reference/context&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Context Reference&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;プロンプト：Hermes と OpenClaw について、両者のトークン消費状況に関する記事をもう一つ書いてください。アーキテクチャが異なるため、消費量も当然異なります。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングのアイデア概要&#34;&gt;ライティングのアイデア概要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;前回の記事の判断を引き継ぎつつ、論点をトークン消費に絞り込み、全体的なアーキテクチャ比較は繰り返さない。&lt;/li&gt;
+&lt;li&gt;「どちらが省」といった空論ではなく、両者のデフォルトのコンテキストアセンブリ方法を重点的に比較する。&lt;/li&gt;
+&lt;li&gt;Hermes はプログレッシブディスカバリー（段階的開示）、オンデマンドでの発見、およびプロンプトキャッシュの保持に焦点を当てる。&lt;/li&gt;
+&lt;li&gt;OpenClaw はワークスペース常駐ファイル、長期オンラインアシスタント環境、固定オーバーヘッドに焦点を当てる。&lt;/li&gt;
+&lt;li&gt;結びではユーザーが提示した核心的な判断は維持しつつも、「実際の請求書を見るなら、公式の usage/context ツールと実際のプロバイダーの課金体系を考慮する必要がある」という現実的な注意喚起を補足する。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>Hermes を OpenClaw の代替品として見ると、最初は偏りがあるかもしれません。</title>
+        <link>https://ttf248.life/ja/p/hermes-openclaw-not-the-same-game/</link>
+        <pubDate>Wed, 15 Apr 2026 23:52:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/hermes-openclaw-not-the-same-game/</guid>
+        <description>&lt;p&gt;この二日間、HermesとOpenClawのドキュメントを何度も読み返しましたが、読むほどに、多くの人がこれら2つのプロジェクトを一緒にして比較していますが、実は最初から比較の軸がずれていると感じました。&lt;/p&gt;
+&lt;p&gt;もちろん、これらはすべて「パーソナルAIアシスタント」を構築しています。メッセージの受信、モデルの呼び出し、ツールの実行、そしてある程度のコンテキスト保持が可能です。Hermesはさらには&lt;code&gt;hermes claw migrate&lt;/code&gt;という専用コマンドまで用意しており、OpenClawユーザーの一団を受け入れることを明白に知っているようです。&lt;/p&gt;
+&lt;p&gt;しかし、端的に言えば、Hermes は OpenClaw のスキン変更版ではなく、OpenClaw もメッセージ入力口がいくつか増えたエージェントフレームワークではありません。一方は &lt;code&gt;Gateway&lt;/code&gt; から外側へ伸びていき、もう一方は &lt;code&gt;AIAgent&lt;/code&gt; から外側へ伸びています。この違いを先に理解しないと、後でアーキテクチャや設計思想、エコシステムについて話しても、どんどん話が混乱していきます。&lt;/p&gt;
+&lt;h2 id=&#34;それらは最初から一つのものになるつもりではなかった&#34;&gt;それらは最初から一つのものになるつもりではなかった
+&lt;/h2&gt;&lt;p&gt;OpenClaw の公式ドキュメントでは &lt;code&gt;Gateway&lt;/code&gt; を非常に早い位置に置いています。その定義は非常に直接的です。長期実行される Gateway がすべてのメッセージ面を保持し、コントロール面クライアント、Web UI、Node デバイスがすべてこの Gateway に WebSocket 経由で接続します。さらに、ホスト上にはコアなメッセージ接続を管理する Gateway は一つしかなく、WhatsApp のようなセッションも明確にそれが独占します。&lt;/p&gt;
+&lt;p&gt;これはどういう意味ですか？それは、OpenClaw の世界観が「まずエージェントがあり、それにいくつかのインターフェースを接続する」というものではなく、「まず常駐の通信および制御プレーンがあり、その中にエージェントランタイム、セッション、スキル、デリゲート、サブエージェントなどをすべて編成する」ということです。&lt;/p&gt;
+&lt;p&gt;Hermes はこの味ではない。そのアーキテクチャ図は最初から非常に明確で、CLI、Gateway、ACP、Batch Runner、API Server、Python Library といったエントリポイントがすべて同じ &lt;code&gt;AIAgent&lt;/code&gt; コアに集約されている。セッションストレージは SQLite + FTS5 であり、ツールバックエンド、プロバイダー解決、プロンプトビルダーはすべてこのコアを中心に構成されている。&lt;/p&gt;
+&lt;p&gt;そのため、骨格から見ると、OpenClaw は「常駐型のパーソナルアシスタントシステム」に近く、Hermes は「エージェントランタイムプラットフォーム」に近く、メッセージ入力は単なるその延長面の一つに過ぎません。&lt;/p&gt;
+&lt;h2 id=&#34;gatewayを主役にしたものとagentを主役にしたもの&#34;&gt;Gatewayを主役にしたものと、Agentを主役にしたもの
+&lt;/h2&gt;&lt;p&gt;このアーキテクチャの違いは、最終的に利用体験の違いに直結します。&lt;/p&gt;
+&lt;p&gt;OpenClaw の強みは、「多くのチャネルで長期的にオンラインで存在し、アイデンティティと境界を持ち、ルーティング可能なアシスタントをどう持つか」という点に非常に力を入れていることです。デフォルトの DM ペアリング、セキュリティポリシー、チャネル/アカウント/ピアごとのルーティング、マルチエージェントバインディング、デリゲートモードがあり、さらには「誰になりすまして発言するか、どの口座で受信するか、どのグループに出現するか」といった組織レベルの問題までドキュメント化されています。&lt;/p&gt;
+&lt;p&gt;言い換えれば、OpenClaw がまず解決したいのは存在性の問題です。このエージェントは、まず本物の人間か、あるいは真の組織アシスタントのように振る舞い、Telegram、Discord、Slack、WhatsApp、Signal、WebChatといったプラットフォーム上で生きている必要があります。その後に、コードを書けるかどうか、タスクをディスパッチできるかどうかを議論するのです。&lt;/p&gt;
+&lt;p&gt;Hermes の重点は「能力の蓄積」にあります。もちろん Gateway もあり、Telegram、Discord、Slack、WhatsApp などのプラットフォームにも接続できますが、公式な説明の中で最も前面に出ている単語は、ルーティングやアカウントではなく、persistent memory、skills、MCP、sub-agents、toolsets、さらには batch processing、trajectory export、RL training です。&lt;/p&gt;
+&lt;p&gt;ここが重要です。Hermes が解決すべき中心的な問題は、「いかに多くのメッセージングプラットフォームに AI を接続するか」ということではなく、「このエージェント自身が段階的にスキルや記憶、再利用可能な能力を育み、さらには訓練データや実験として使えるようにすること」なのです。&lt;/p&gt;
+&lt;p&gt;そのため、私はこのように要約するのがより良いと思います：&lt;/p&gt;
+&lt;p&gt;OpenClaw はコミュニケーションファーストのパーソナルアシスタントシステムです。&lt;/p&gt;
+&lt;p&gt;Hermes は agent-core-first のセルフホスト型エージェントプラットフォームです。&lt;/p&gt;
+&lt;h2 id=&#34;記憶スキルそして拡張の方法も一つの味ではない&#34;&gt;記憶、スキル、そして拡張の方法も、一つの味ではない
+&lt;/h2&gt;&lt;p&gt;多くの人が「これら2つともskill、memory、pluginをサポートしているのでは？」と言うでしょう。その通り、どちらもサポートしています。しかし、焦点が違います。&lt;/p&gt;
+&lt;p&gt;OpenClaw のエージェントランタイムにおいて、ワークスペースは非常に重い概念です。&lt;code&gt;AGENTS.md&lt;/code&gt;、&lt;code&gt;SOUL.md&lt;/code&gt;、&lt;code&gt;TOOLS.md&lt;/code&gt;、&lt;code&gt;BOOTSTRAP.md&lt;/code&gt;、&lt;code&gt;IDENTITY.md&lt;/code&gt;、&lt;code&gt;USER.md&lt;/code&gt; といったファイル群は、新しいセッションの最初のラウンドで直接コンテキストに注入されます。スキル（技能）のロードにも一連の優先順位があり、ワークスペース内のもの、プロジェクト内のもの、個人ディレクトリ内のもの、&lt;code&gt;~/.openclaw/skills&lt;/code&gt; 内のもの、バンドルされたもののすべてが積み重なります。本質的には、「ペルソナ + ルール + ワークスペース + チャネル」を統合した長期的なアシスタント環境を構築しているのです。&lt;/p&gt;
+&lt;p&gt;Hermes のスキルシステムは明らかに「手続き的記憶」に偏っています。公式ドキュメントには、skills はオンデマンドの知識ドキュメントであり、プログレッシブディスクロージャーを採用し、&lt;code&gt;agentskills.io&lt;/code&gt; のオープン標準に対応しており、すべて &lt;code&gt;~/.hermes/skills/&lt;/code&gt; 以下に統一して配置され、さらにエージェント自身がスキルを修正・削除できると明記されています。これは単に「アシスタントに説明書を数冊渡す」という感じではなく、「実行したことを再利用可能な能力ブロックとして蓄積する」という感覚です。&lt;/p&gt;
+&lt;p&gt;記憶も同じです。Hermes には控えめな &lt;code&gt;MEMORY.md&lt;/code&gt; と &lt;code&gt;USER.md&lt;/code&gt; が組み込まれており、これに SQLite + FTS5 のセッション検索と、さらに 8 種類のメモリプロバイダーを外付けしています。この設計は非常に興味深く、最初から「長期的な人格環境」を厚く記述するのではなく、短期記憶、検索式回想、外付けの長期記憶を分離している点です。&lt;/p&gt;
+&lt;p&gt;OpenClaw は記憶がないわけでもなく、サブエージェント、マルチエージェント、デリゲートといった高度な能力を持たないわけでもありません。むしろ、それらは十分に備わっています。しかし、ドキュメントの構造とデフォルトの思考モデルから見ると、それは継続的にオンラインのアシスタントワークスペースを運営しているように見えます。一方、Hermes は絶えず進化するエージェント能力グラフを運営しているように見えます。&lt;/p&gt;
+&lt;h2 id=&#34;エコシステムはなぜ離れていくのか&#34;&gt;エコシステムはなぜ離れていくのか
+&lt;/h2&gt;&lt;p&gt;エコシステムに関しては、表面的にはすべて「オープンソース＋拡張可能」に見えますが、実際には分岐が非常に明確です。&lt;/p&gt;
+&lt;p&gt;OpenClaw のエコシステムはより広く、外部接続レイヤーに重点を置いています。公式プラグインでは、channels、model providers、tools、skills、speech、web fetch、web search、memory を拡張でき、コミュニティプラグインや ClawHub も「より多くのプラットフォーム」「より多くのアカウント」「より多くのワークフロー」への接続を目指しています。さらには、&lt;code&gt;.codex-plugin&lt;/code&gt;、&lt;code&gt;.claude-plugin&lt;/code&gt;、&lt;code&gt;.cursor-plugin&lt;/code&gt; のようなバンドル形式との互換性も明言しています。この動きは非常に賢く、要するに他社のエコシステムの「殻」を先に取り込み、入口（エントランス）を大きくしようとしているのです。&lt;/p&gt;
+&lt;p&gt;OpenClaw のドキュメントを再確認すると、sub-agent、delegate、組織エージェント、thread binding、DM pairing、group mention などについて非常に詳細に記述されていることがわかります。これは単なるシングルマシンプレイヤーの遊び場ではなく、真に長期的に動作するエージェントオペレーティングシステムになることを目指していることを示しています。&lt;/p&gt;
+&lt;p&gt;Hermes のエコシステムは、「コア機能の外部接続」という側面が強いです。Python プラグインシステムがあり、メモリプロバイダープラグインがあり、コンテキストエンジンプラグインがあり、MCP サーバーへの接続もあり、さらに Skills Hub や &lt;code&gt;agentskills.io&lt;/code&gt; のようなオープンなスキル標準があります。これに加えて、バッチランナー、トラジェクトリエクスポート、Atropos といったトレーニング関連のインターフェースがあるため、Hermes のエコシステムは自然と二種類のユーザー層を引きつけます。&lt;/p&gt;
+&lt;p&gt;一方は、それを個人のエージェントとして使う人です。&lt;/p&gt;
+&lt;p&gt;もう一つの分類は、それを研究、トレーニング、実験、ワークフローの基盤として利用する人々です。&lt;/p&gt;
+&lt;p&gt;この2種類のユーザーのニーズは大きく異なりますが、Hermesのアーキテクチャはどちらもカバーできます。そのため、HermesのエコシステムはOpenClawのように「チャネル数」や「メッセージの存在感」で先行して広がるわけではないと感じるかもしれませんが、私はむしろ、エージェント基盤（agent substrate）におけるその潜在力の方が大きいと感じています。&lt;/p&gt;
+&lt;p&gt;さらに興味深い詳細があります。Hermesの公式READMEには&lt;code&gt;hermes claw migrate&lt;/code&gt;だけでなく、コミュニティプロジェクトである&lt;code&gt;HermesClaw&lt;/code&gt;も掲載されており、これを使うことで同じWeChatアカウント上でHermes AgentとOpenClawを同時に実行できます。このシグナルは非常に明白です。Hermesは自分とOpenClawが関係ないふりをしているのではなく、ユーザーの移行パスが存在することを認め、さらにそのパスを製品化して提供しているのです。&lt;/p&gt;
+&lt;h2 id=&#34;私の最終的な判断&#34;&gt;私の最終的な判断
+&lt;/h2&gt;&lt;p&gt;もしあなたが「本当にメッセージングレイヤー上で動作する個人アシスタントシステム」を求めているのであれば、アカウント、チャネル、ルーティング、デリゲート、組織境界、常時オンライン、強力なコントロールプレーンが必要なのであれば、OpenClawの道筋の方がより完全であり、成熟した通信基盤に近いです。&lt;/p&gt;
+&lt;p&gt;もしあなたが「使うほど自分専用のワークステーションのように馴染むエージェントコア」を求めていて、スキル蓄積、メモリの組み合わせ、MCP、プラグイン、サブエージェント、学習データ、そしてその後の可塑性を重視するなら、Hermesの方が使いやすいでしょう。&lt;/p&gt;
+&lt;p&gt;ですから、「Hermes は OpenClaw に取って代われるか？」といった単純な質問はもうしないでください。その質問の仕方が少々粗雑です。&lt;/p&gt;
+&lt;p&gt;より正確な聞き方は以下の通りです。&lt;/p&gt;
+&lt;p&gt;メッセージングネットワーク内に存在するAIアシスタントを求めているのか、それともローカルのワークフローやエージェントランタイムに組み込まれるAIプラットフォームを求めているのでしょうか？&lt;/p&gt;
+&lt;p&gt;これをしっかり理解すれば、選択はそれほど迷いませんよ。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/NousResearch/hermes-agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent GitHub README&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent 公式サイト Features&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/developer-guide/architecture&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Architecture&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Skills System&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/memory&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Persistent Memory&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent MCP&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Plugins&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openclaw/openclaw&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw GitHub README&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/architecture&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Gateway Architecture&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Agent Runtime&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/multi-agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Multi-Agent Routing&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/delegate-architecture&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Delegate Architecture&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/tools/subagents&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Sub-Agents&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/tools/plugin&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Plugins&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/tools/skills-config&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Skills Config&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;プロンプト：HermesとOpenClawの違い、アーキテクチャ上の違い、設計思想上の違い、エコシステムの違い&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングのアイデア概要&#34;&gt;ライティングのアイデア概要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;「代替品比較」というよくある質問形式は外し、「二つのプロジェクトの中心がどこにあるのか」というメインラインに直接絞る。&lt;/li&gt;
+&lt;li&gt;アーキテクチャ部分は、コミュニティによる二次的なまとめではなく、公式ドキュメントのメインエントリとコアコンポーネントを優先して参照する。&lt;/li&gt;
+&lt;li&gt;設計理念の部分では、抽象的な価値判断は行わず、Gateway、Agent Core、memory、skill、delegateといった具体的な設計に落とし込む。&lt;/li&gt;
+&lt;li&gt;エコシステム部分は、星マークや人気度、コミュニティでの憶測合戦はせず、拡張の方向性に重点を置く。&lt;/li&gt;
+&lt;li&gt;事実確認は、2026年4月15日時点で公開されている公式リポジトリと公式ドキュメントを基準とする。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>AI はデモの作成が速く、修正作業も本当に速いです。</title>
+        <link>https://ttf248.life/ja/p/ai-demo-fast-rework-faster/</link>
+        <pubDate>Fri, 10 Apr 2026 15:39:51 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/ai-demo-fast-rework-faster/</guid>
+        <description>&lt;p&gt;最近AIを使ってC++の小規模なプロジェクトを立ち上げたんだけど、一番「やられる」瞬間は、それがコードを書いてくれないことじゃなくて、たった3分でそれっぽくディレクトリツリーを組み立ててくれて、ついでにサードパーティライブラリをいくつか突っ込んで、デモが本当に動く時なんだよね。問題もそこにある。新しく導入したライブラリが具体的に何に対応しているのか、コンパイルのパスはどうなるのか、どこに境界線があるのか、まだ把握できていないのに、後で手戻りが発生するのはほぼ避けられない。&lt;/p&gt;
+&lt;p&gt;最近、AIプログラミングで最も怖いのはモデルの賢さではなく、最初からやりすぎなところだと感じています。特にC++のような、しっかりしたフレームワーク（脚手架）に頼れない言語の場合、手順を一つ間違えるだけで、コンパイル、リンク、ライブラリのバージョン、ディレクトリ構造など、後でいくつもの手間が増えてしまいます。&lt;/p&gt;
+&lt;p&gt;この件について、私自身の結論は非常に明確です。AI は、初期設計や依存関係の決定をすべて肩代わりするのではなく、急速に推進力のあるペアプログラマーとして適しています。GitHub のドキュメントでは、最初はより簡単なタスクから始めるよう推奨しており、エージェントにバグ修正、ドキュメント作成、テスト、技術的負債といった境界がより明確な作業を先にこなしてもらうべきだと述べています。一方、Anthropic の Plan Mode のドキュメントは、むしろ複雑な変更に対する保険のようなものであり、「まずコードを読み、計画を立ててから、修正するかどうかを決める」という流れです。両者の主張は完全に一致しているわけではありませんが、指し示す方向性は似ています。最初から最も難しく、最も混沌としていて、依存関係が最も多い塊をすべてAIに丸投げするのは避けるべきです。&lt;/p&gt;
+&lt;p&gt;そのため、この記事では大量の仕様を語るのではなく、すぐに手を動かせる小さなケーススタディを提供します。任意の空のC++リポジトリがあれば、これに従って作業できます。&lt;/p&gt;
+&lt;h2 id=&#34;aiじゃないからダメなのではなく最初の一手が貪欲すぎるからだ&#34;&gt;AIじゃないからダメなのではなく、最初の一手が貪欲すぎるからだ
+&lt;/h2&gt;&lt;p&gt;人工知能のプロジェクト、特にC++の場合、多くの時は非常に原始的な方法になりがちです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;まずは &lt;code&gt;main.cpp&lt;/code&gt; から最小実行可能なバージョンを始める&lt;/li&gt;
+&lt;li&gt;まずコンパイルのリンクを通す&lt;/li&gt;
+&lt;li&gt;その後、どのライブラリを導入するか決める&lt;/li&gt;
+&lt;li&gt;一歩進むごとにビルドできることを保証する&lt;/li&gt;
+&lt;li&gt;ビジネスの輪郭が見えてから、リファクタリングを開始する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;この方法は遅く見えるかもしれませんが、実際は非常に安定しています。なぜなら、どのステップで何を得たのか、そして問題がどのステップから生じているのかをすべて知っているからです。&lt;/p&gt;
+&lt;p&gt;AI はこのリズムを崩しやすいです。一気に「完璧に手伝ってくれる」のが好きなんです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;設定ファイルもついでに用意したよ&lt;/li&gt;
+&lt;li&gt;ログモジュールもついでに取り出したよ&lt;/li&gt;
+&lt;li&gt;エラーコード、ユーティリティクラス、ディレクトリ構造もまとめて整理したよ&lt;/li&gt;
+&lt;li&gt;サードパーティライブラリの組み込み方法も、代わりに選んでおいたよ&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;結果として、デモは完成しているように見えても、あなたのメンタルモデルは空っぽである。その後、ライブラリの能力境界とあなたが考えていることに少しでも食い違いがあると、手直しが必要なのは一点ではなく、連続したものになってしまう。&lt;/p&gt;
+&lt;h2 id=&#34;まずは小さなプロジェクトで練習する&#34;&gt;まずは小さなプロジェクトで練習する
+&lt;/h2&gt;&lt;p&gt;個人的には、練習に最適だと思うのは、非常に小さなログスキャンツールを作ることです。名前は適当でいいですが、例えば &lt;code&gt;logscan&lt;/code&gt; のようなものです。&lt;/p&gt;
+&lt;p&gt;それはただ一つのことをします。あるディレクトリ内のログファイルをスキャンし、&lt;code&gt;error&lt;/code&gt; と &lt;code&gt;warn&lt;/code&gt; の数を数え、その結果を出力するだけです。この問題はそれほど大きくありませんが、C++の小規模プロジェクトで最も一般的ないくつかの部分をすべて通るのにちょうど良いものです：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;main&lt;/code&gt; と引数エントリポイント&lt;/li&gt;
+&lt;li&gt;出力フォーマット化&lt;/li&gt;
+&lt;li&gt;ログ&lt;/li&gt;
+&lt;li&gt;設定ファイル&lt;/li&gt;
+&lt;li&gt;ビジネスモジュールの分割&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;重要なのは問題がどれだけ高度かではなく、分解の方法です。&lt;/p&gt;
+&lt;p&gt;これを4つのステップに分割し、各ステップではAIが現在の小さな一歩のみを行うようにします。&lt;/p&gt;
+&lt;h2 id=&#34;ステップ1まず出力を準備する&#34;&gt;ステップ1：まず出力を準備する
+&lt;/h2&gt;&lt;p&gt;最初のステップは、ログや設定には触れず、抽象化を考えないことです。&lt;/p&gt;
+&lt;p&gt;2つのことをする：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;最低限の &lt;code&gt;main.cpp&lt;/code&gt; を作成する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;fmt&lt;/code&gt; をインポートし、スキャンしたディレクトリと統計結果を出力する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;code&gt;fmt&lt;/code&gt; の公式ドキュメントには、非常に明確な CMake の使い方が記載されています。そこには &lt;code&gt;fmt::fmt&lt;/code&gt; と &lt;code&gt;fmt::fmt-header-only&lt;/code&gt; という2つのターゲットがあり、ドキュメントではコンパイル版をより推奨していると明記されており、その理由は単純で、ビルド時間がより親切だからです。CMake の &lt;code&gt;FetchContent&lt;/code&gt; のドキュメントも新しいプロジェクトの開始に非常に適しています。なぜなら、これはビルド段階になってから一時的にダウンロードするのではなく、configure 段階で依存関係を読み込むからです。&lt;/p&gt;
+&lt;p&gt;このステップでは、依存戦略を固定し、AIに自由に発揮させません。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;FetchContent&lt;/code&gt; を統一する&lt;/li&gt;
+&lt;li&gt;または &lt;code&gt;find_package&lt;/code&gt; を統一する&lt;/li&gt;
+&lt;li&gt;いざという時に vcpkg、いざという時に &lt;code&gt;add_subdirectory&lt;/code&gt;、そしてまた手動でヘッダーファイルをコピーするのはやめてほしい&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;もし練習用のプロジェクトであれば、私はAIにこのように制約をかけます：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;アーキテクチャを一度に最適化しないでください。
+現在の目標はこのステップのみであり、プロジェクトは常にコンパイル可能でなければなりません。
+
+このステップでは以下の3点のみを行います：
+1. ルートの CMakeLists.txt に fmt を導入する
+2. main.cpp で渡されたディレクトリとスキャン結果を fmt で出力する
+3. 既存のターゲット名とディレクトリ構造を維持し、ログ、設定、テストフレームワークは追加しない
+
+まず修正リストを提示し、その後コードを提示してください。
+完了したら、ビルドコマンドと期待される出力を提示してください。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;ここに重要な詳細があります。AIは、制約がない場合、「ついでにこれもやった」ということを加点要素として扱いがちです。今回のラウンドでは範囲を超えてはいけないと明確に伝える必要があります。&lt;/p&gt;
+&lt;h2 id=&#34;ステップ2ログのアップロード&#34;&gt;ステップ2、ログのアップロード
+&lt;/h2&gt;&lt;p&gt;まずステップとして、コードが書けて、動いて、出力も綺麗になったら、&lt;code&gt;spdlog&lt;/code&gt;を追加する。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;spdlog&lt;/code&gt; の公式 README は、実際何ができるかを非常に分かりやすく記述しています。コンソールログだけでなく、通常のファイル、ローテーションファイル、日付ごとの分割、さらにはバックトレースリングバッファまで対応できます。問題はここです。機能が多すぎると、AI は興奮しすぎてしまい、まるで初版でカラーコンソール、ローテーションログ、日付アーカイブ、グローバルロガーファクトリを全部盛り込みたがるのです。&lt;/p&gt;
+&lt;p&gt;不要です。&lt;/p&gt;
+&lt;p&gt;このステップでは、コンソールログを出すか、せいぜい最もシンプルなファイルログを追加するだけです。なぜなら、ここで本当に学ぶべきことは、「どうやってロギングシステムを完全に設計するか」ではなく、以下の3点だからです。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;ロガーの初期化はどこで行うべきか&lt;/li&gt;
+&lt;li&gt;ビジネスロジック内でどのようにロガーを取得するか&lt;/li&gt;
+&lt;li&gt;エラー発生時と通常出力時のログの役割分担はどうすべきか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;もし最初から &lt;code&gt;rotating_file_sink&lt;/code&gt; や &lt;code&gt;daily_file_sink&lt;/code&gt; を使うと、「機能がとても充実した」ロギングモジュールを手に入れたように感じますが、実際にはローテーションや日付ごとの分割が必要なのか、それともデバッグ段階でターミナルに出力するだけで十分なのか、自分自身がまだ分かっていないかもしれません。&lt;/p&gt;
+&lt;p&gt;要するに、ログファクトリをいかに美しく描くかよりも、まず&lt;code&gt;spdlog::info()&lt;/code&gt;の使い方を理解することがより重要です。&lt;/p&gt;
+&lt;h2 id=&#34;ステップ3設定ファイルに触れる&#34;&gt;ステップ3、設定ファイルに触れる
+&lt;/h2&gt;&lt;p&gt;設定ファイルの部分は、AIによって大規模なプロジェクトになりやすいです。&lt;/p&gt;
+&lt;p&gt;私は、それが「最強」だからというよりは、新しいプロジェクトの初期段階に適しているから、&lt;code&gt;toml++&lt;/code&gt; のようなシンプルなライブラリで練習したいと思っています。それ自体が C++17 のヘッダーオンリーな TOML パーサーであり、README に記載されている例も非常に短く、&lt;code&gt;toml::parse_file(&amp;quot;configuration.toml&amp;quot;)&lt;/code&gt; で直接読み込めます。さらに重要なのは、単一ヘッダーファイル形式が本当に手間いらずなことです。公式の説明文もとても面白いのですが、シングルヘッダーのソリューションは「&lt;code&gt;toml.hpp&lt;/code&gt; をソースツリーに放り込むだけ」で、「第二の手順はありません」。&lt;/p&gt;
+&lt;p&gt;このステップでは「設定センター」は行わず、以下の3つのフィールドを読み込んでください：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;スキャンディレクトリ&lt;/li&gt;
+&lt;li&gt;キーワードリスト&lt;/li&gt;
+&lt;li&gt;出力はファイルに書き込むか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;そしてそれらを非常に薄い &lt;code&gt;AppConfig&lt;/code&gt; 構造体に詰め込みます。&lt;/p&gt;
+&lt;p&gt;それで十分です。&lt;/p&gt;
+&lt;p&gt;多くの手戻りは、実はここから生じているんです。設定を起動時に一度読み込むのか、実行時にホットアップデートするのか。ローカルのCLI専用なのか、それとも将来的にサービスプロセスで再利用するのか、ご自身でまだ明確に考えていない。AIはすでにあなたのために5、6層も処理してくれました。後から方向性を変更すると、これまで積み上げてきた「完璧な設計」がすべて重荷になってしまいますよ。&lt;/p&gt;
+&lt;h2 id=&#34;ステップ4ビジネスモジュールの分解&#34;&gt;ステップ4：ビジネスモジュールの分解
+&lt;/h2&gt;&lt;p&gt;例えば、&lt;code&gt;fmt&lt;/code&gt;、&lt;code&gt;spdlog&lt;/code&gt;、&lt;code&gt;toml++&lt;/code&gt; などはすべて自分で公式ドキュメントを一度確認し、実際に動作テストを行った上で、AIにモジュール分割を手伝ってもらう、といった具合です。&lt;/p&gt;
+&lt;p&gt;この時分解すると、心に余裕ができます。&lt;/p&gt;
+&lt;p&gt;通常、私は以下のようなファイルを収集します：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;main.cpp&lt;/code&gt; はアセンブリのみを担当する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;app_config.{h,cpp}&lt;/code&gt; は設定の読み取りのみを担当する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;logger.{h,cpp}&lt;/code&gt; はログの初期化のみを担当する&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;log_scanner.{h,cpp}&lt;/code&gt; に業務ロジックを配置する&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;注意点として、この段階になってから分割するものであり、最初から分割するわけではありません。最初のステップで目次をきれいに並べることは、多くの場合、視覚的に心地よいだけであり、認知的な明確さが増すわけではありません。&lt;/p&gt;
+&lt;h2 id=&#34;本当に役立つのは複雑な規範ではない&#34;&gt;本当に役立つのは、複雑な規範ではない
+&lt;/h2&gt;&lt;p&gt;インターネット上には、AIのコーディング規約が非常に複雑なものが多くて、十数項目、数十項目とあって、見るだけで疲れますね。私が今残したものは、実はたった3つだけなので、これで十分だと思います。&lt;/p&gt;
+&lt;p&gt;第1条、まず「ライブラリカード」を作成します。&lt;/p&gt;
+&lt;p&gt;サードパーティライブラリを準備するたびに、私はまずAIに以下の4つの質問だけを回答するようにしてもらいます。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;このライブラリは何の問題を解決しますか&lt;/li&gt;
+&lt;li&gt;公式版はどこまでサポートしていますか&lt;/li&gt;
+&lt;li&gt;今回はどの機能の 1 つか 2 つに絞って使いたいと思っています&lt;/li&gt;
+&lt;li&gt;ビルド、デプロイ、実行にどのような制約をもたらしますか&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;このカードが分からない場合は、とりあえず受けないでください。&lt;/p&gt;
+&lt;p&gt;第2条、一度にAIを一つのチェックポイントだけに通す。&lt;/p&gt;
+&lt;p&gt;例えば、このラウンドではこれだけを完了させることを許可する：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;コーディングできる&lt;/li&gt;
+&lt;li&gt;実行できる&lt;/li&gt;
+&lt;li&gt;期待される出力を確認できる&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;同じラウンドで「ついでにディレクトリをリファクタリングする」「ついでに設定クラスを追加する」「ついでに例外処理の仕組みも統一する」といったことをするのはやめてください。C++プロジェクトでは、「ついで」というものが、問題の原因箇所を汚染しやすくなります。&lt;/p&gt;
+&lt;p&gt;第3条、各ラウンドでロールバックポイントを残すこと。&lt;/p&gt;
+&lt;p&gt;コミットしなくても、以下の質問に答えられる必要があります。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;このステップで具体的に何が変わったのか&lt;/li&gt;
+&lt;li&gt;間違っていた場合、どこを削除する必要があるか&lt;/li&gt;
+&lt;li&gt;一つ前のステップに戻した場合、プロジェクトはまだ編集可能か&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;気づくと、この考え方は実は手動での開発と非常によく似ています。違いは、以前は自分でコードを書いていたのに対し、今はAIが暴走しないように見張っているという点だけです。&lt;/p&gt;
+&lt;h2 id=&#34;より実戦的なaiの活用方法&#34;&gt;より実戦的なAIの活用方法
+&lt;/h2&gt;&lt;p&gt;この一連のものを本当に習得したいなら、3周連続でやることをお勧めします。&lt;/p&gt;
+&lt;p&gt;第1ラウンドは、AIに&lt;code&gt;fmt&lt;/code&gt;の補完だけを任せて、残りは自分でCMakeの設定と出力コードを読み直してください。&lt;/p&gt;
+&lt;p&gt;第2ラウンドは、AIに&lt;code&gt;spdlog&lt;/code&gt;のみを扱わせてください。コンソールログにするかファイルログにするかは自分で決めてください。両方同時に使うのは禁止です。&lt;/p&gt;
+&lt;p&gt;第3ラウンドは、AIに&lt;code&gt;toml++&lt;/code&gt;の受け渡しのみをさせ、設定項目は自分で決め、AIに将来のニーズを推測させることは禁止とする。&lt;/p&gt;
+&lt;p&gt;この3周を終えると、AIプログラミングに対する感覚が大きく変わるでしょう。前は「どうしてこんなにたくさん生成してくれるんだ」という感じだったのが、徐々に「次のステップをどれくらい小さくすれば最も効率的か」という視点になるようになります。&lt;/p&gt;
+&lt;p&gt;これが今のAIプログラミングで最も価値のある能力だと思います。&lt;/p&gt;
+&lt;p&gt;デモを出すわけではない。&lt;/p&gt;
+&lt;p&gt;むしろ、一つのプロジェクトを確実に前進させる。&lt;/p&gt;
+&lt;p&gt;正直なところ、このやり方は目新しくなく、むしろ古臭いかもしれません。しかし、古い方法は再作業に強い傾向があります。特にC++のような言語では、AIに少し任せる部分を減らして、自分で確認する部分を増やすと、後が本当に楽になります。そうしないと、3分で飛び立っても、3時間かけてやり直すのは自分自身ですからね。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.anthropic.com/en/docs/claude-code/common-workflows&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Anthropic, Claude Code Common Workflows&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.anthropic.com/en/docs/claude-code/overview&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Anthropic, Claude Code Overview&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.github.com/en/copilot/tutorials/cloud-agent/get-the-best-results&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;GitHub Docs, Best practices for using GitHub Copilot to work on tasks&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://cmake.org/cmake/help/latest/module/FetchContent.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;CMake Docs, FetchContent&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://fmt.dev/latest/get-started/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;{fmt} Get Started&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/gabime/spdlog&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gabime/spdlog README&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/gabime/spdlog/wiki/Sinks&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;gabime/spdlog Wiki: Sinks&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/marzer/tomlplusplus&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;marzer/tomlplusplus README&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;作成上の注記&#34;&gt;作成上の注記
+&lt;/h2&gt;&lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;プロンプト：人間がプロジェクトを構築する際、C++のようにフレームワークを使わない言語の場合、まず&lt;code&gt;main&lt;/code&gt;からロジックを展開していく「骨格」を作り、徐々に設定ファイル、ログモジュール、反復的なビジネスモジュールなどを追加していくのが良いと思います。私の習慣としては、毎回コンパイルが通ることを確認し、段階的にリファクタリングを進めることです。最初から最適解である必要はありません。AIによるプログラミングは、今や多くのケースで工程を飛ばしたり、初期の思考が不足したりしがちです。特に新しいサードパーティライブラリを導入する場合、AIはすぐにデモを出せますが、私が新しく導入したサードパーティライブラリの詳細な仕様やサポートする機能が不明確なため、関連ロジックの作り直し（手戻り）率は人間による開発よりも明らかに高くなります。学べるような良い実例はありませんか？インターネット上には複雑なAIプログラミング規約はたくさんあると知っていますが、私はもっとシンプルで、すぐに適用できるものが欲しいです。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;ライティングのアイデア概要&#34;&gt;ライティングのアイデア概要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;トピックを &lt;code&gt;tooling&lt;/code&gt; レーンに絞り、AI がワークフローを変えた後、どこが楽になり、逆にどこが不自然になったかを重点的に書く。&lt;/li&gt;
+&lt;li&gt;一般的な規範リストではなく、C++ の小規模プロジェクトの段階的な練習事例に変更する。&lt;/li&gt;
+&lt;li&gt;ユーザーが「&lt;code&gt;main&lt;/code&gt; から始め、各ステップでコンパイルでき、徐々にリファクタリングできる」という核となる判断を維持し、これを記事全体のメインラインとする。&lt;/li&gt;
+&lt;li&gt;Anthropic、GitHub、CMake、fmt、spdlog、toml++ の一次資料を補完し、ツールの機能や依存方法について憶測するのを避ける。&lt;/li&gt;
+&lt;li&gt;記事の構成は &lt;code&gt;fmt -&amp;gt; spdlog -&amp;gt; toml++ -&amp;gt; モジュール分割&lt;/code&gt; の順に進め、意図的に AI に一度で全てを解決させないようにする。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。</title>
         <link>https://ttf248.life/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/</link>
         <pubDate>Thu, 09 Apr 2026 19:21:36 +0800</pubDate>

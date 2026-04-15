@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="After finishing the article &ldquo;[Mistaking Hermes for an OpenClaw Alternative, Maybe I Was Biased From the Start]&quot;(/en/p/hermes-openclaw-not-the-same-game/), I went through a round of documentation on both sides. The more I read, the more I felt that to truly see the difference between these two things, just looking at the features isn&rsquo;t enough; looking at how tokens are consumed is actually more direct.\nI&rsquo;ll state my judgment first.\nOpenClaw is by default more like a long-term online workbench; many identities, rules, workspace files, and message constraints naturally persist across conversation rounds, so the base model is usually heavier. Hermes, on the other hand, is noticeably more restrained; much of the context is discovered and injected on demand, and the system prompt deliberately maintains a stable prefix, making it easier to control token usage by default.\nOf course, this doesn&rsquo;t mean that Hermes is necessarily more cost-effective. If you enable the memory provider, skills, sub-agent, and long tool output all at once, it can burn through tokens just as fast. But frankly speaking, these two architectures have not been consuming tokens in the same way since day one.\n">
+<title>Changing the architecture, Hermes and OpenClaw tokens are not consumed in the same way.</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/hermes-openclaw-token-usage-diff/'>
+
+<link rel="stylesheet" href="/scss/style.min.3feddf7433e05d0be4d114733bf2e2c6246546597e82c89c1c5943d545443503.css"><meta property='og:title' content="Changing the architecture, Hermes and OpenClaw tokens are not consumed in the same way.">
+<meta property='og:description' content="After finishing the article &ldquo;[Mistaking Hermes for an OpenClaw Alternative, Maybe I Was Biased From the Start]&quot;(/en/p/hermes-openclaw-not-the-same-game/), I went through a round of documentation on both sides. The more I read, the more I felt that to truly see the difference between these two things, just looking at the features isn&rsquo;t enough; looking at how tokens are consumed is actually more direct.\nI&rsquo;ll state my judgment first.\nOpenClaw is by default more like a long-term online workbench; many identities, rules, workspace files, and message constraints naturally persist across conversation rounds, so the base model is usually heavier. Hermes, on the other hand, is noticeably more restrained; much of the context is discovered and injected on demand, and the system prompt deliberately maintains a stable prefix, making it easier to control token usage by default.\nOf course, this doesn&rsquo;t mean that Hermes is necessarily more cost-effective. If you enable the memory provider, skills, sub-agent, and long tool output all at once, it can burn through tokens just as fast. But frankly speaking, these two architectures have not been consuming tokens in the same way since day one.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/hermes-openclaw-token-usage-diff/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI Inspiration Hub' /><meta property='article:tag' content='ai' /><meta property='article:published_time' content='2026-04-16T01:13:53&#43;08:00'/><meta property='article:modified_time' content='2026-04-16T01:50:44&#43;08:00'/>
+<meta name="twitter:title" content="Changing the architecture, Hermes and OpenClaw tokens are not consumed in the same way.">
+<meta name="twitter:description" content="After finishing the article &ldquo;[Mistaking Hermes for an OpenClaw Alternative, Maybe I Was Biased From the Start]&quot;(/en/p/hermes-openclaw-not-the-same-game/), I went through a round of documentation on both sides. The more I read, the more I felt that to truly see the difference between these two things, just looking at the features isn&rsquo;t enough; looking at how tokens are consumed is actually more direct.\nI&rsquo;ll state my judgment first.\nOpenClaw is by default more like a long-term online workbench; many identities, rules, workspace files, and message constraints naturally persist across conversation rounds, so the base model is usually heavier. Hermes, on the other hand, is noticeably more restrained; much of the context is discovered and injected on demand, and the system prompt deliberately maintains a stable prefix, making it easier to control token usage by default.\nOf course, this doesn&rsquo;t mean that Hermes is necessarily more cost-effective. If you enable the memory provider, skills, sub-agent, and long tool output all at once, it can burn through tokens just as fast. But frankly speaking, these two architectures have not been consuming tokens in the same way since day one.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#why-is-openclaw-by-default-heavier">Why is OpenClaw by default heavier?</a></li>
+    <li><a href="#why-hermes-looks-more-restrained">Why Hermes Looks More Restrained</a></li>
+    <li><a href="#its-not-about-who-is-more-advanced-but-where-the-cost-is-placed">It&rsquo;s not about who is more advanced, but where the cost is placed</a></li>
+    <li><a href="#what-truly-makes-the-difference-is-not-just-the-system-prompt">What truly makes the difference is not just the system prompt</a></li>
+    <li><a href="#if-you-want-to-calculate-it-dont-rely-on-your-mouth">If you want to calculate it, don&rsquo;t rely on your mouth</a></li>
+    <li><a href="#im-still-on-this-side">I&rsquo;m still on this side</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#writing-notes">Writing Notes</a>
+      <ol>
+        <li><a href="#original-prompt">Original Prompt</a></li>
+        <li><a href="#writing-idea-summary">Writing Idea Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/hermes-openclaw-token-usage-diff/">Changing the architecture, Hermes and OpenClaw tokens are not consumed in the same way.</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Apr 16, 2026</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            7 minute read
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/hermes-openclaw-token-usage-diff/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/ja/p/hermes-openclaw-token-usage-diff/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>After finishing the article &ldquo;[Mistaking Hermes for an OpenClaw Alternative, Maybe I Was Biased From the Start]&quot;(/en/p/hermes-openclaw-not-the-same-game/), I went through a round of documentation on both sides. The more I read, the more I felt that to truly see the difference between these two things, just looking at the features isn&rsquo;t enough; looking at how tokens are consumed is actually more direct.</p>
+<p>I&rsquo;ll state my judgment first.</p>
+<p>OpenClaw is by default more like a long-term online workbench; many identities, rules, workspace files, and message constraints naturally persist across conversation rounds, so the base model is usually heavier. Hermes, on the other hand, is noticeably more restrained; much of the context is discovered and injected on demand, and the system prompt deliberately maintains a stable prefix, making it easier to control token usage by default.</p>
+<p>Of course, this doesn&rsquo;t mean that Hermes is necessarily more cost-effective. If you enable the memory provider, skills, sub-agent, and long tool output all at once, it can burn through tokens just as fast. But frankly speaking, these two architectures have not been consuming tokens in the same way since day one.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="why-is-openclaw-by-default-heavier">Why is OpenClaw by default heavier?
+</h2><p>OpenClaw&rsquo;s design logic was never &ldquo;to create a lightweight agent for a quick chat,&rdquo; but rather &ldquo;to build up a long-term, persistent agent workbench.&rdquo; This is stated very clearly in the official workspace documentation.</p>
+<p><code>AGENTS.md</code>, <code>SOUL.md</code>, and <code>USER.md</code> are loaded for every session. These files, such as <code>IDENTITY.md</code>, <code>TOOLS.md</code>, <code>HEARTBEAT.md</code>, <code>BOOT.md</code>, and <code>MEMORY.md</code>, also revolve around the same workspace. The documentation even specifically reminds that <code>HEARTBEAT.md</code> should be kept very short to avoid token burn. This reminder itself indicates that OpenClaw is well aware that its default context is quite thick.</p>
+<p>However, one thing that needs to be made clear is that OpenClaw doesn&rsquo;t have everything permanently resident in the context. Its official token documentation clearly states that when skills are added to the system prompt, they are by default just metadata, and specific instructions must be explicitly <code>read</code> as needed. Therefore, its issue isn&rsquo;t &ldquo;not knowing how to save,&rdquo; but rather that &ldquo;the base it defaults to carrying is inherently larger.&rdquo;</p>
+<p>This is actually not difficult to understand. OpenClaw aims to solve the issues of &ldquo;long-term online presence&rdquo; and &ldquo;multi-message surface visibility.&rdquo;</p>
+<p>You have to make an agent live simultaneously in places like Telegram, Discord, Slack, and WhatsApp. It also needs identity, routing, boundaries, and delegation. Many rules cannot just be tacked on temporarily. It first needs to know who it is, how to speak, whom it&rsquo;s facing, what the constraints of the current workspace are, where to find skills, which memories to carry, and which memories not to carry.</p>
+<p>So, the token consumption for OpenClaw is more like a large fixed overhead.</p>
+<p>Every time you send a message, you are not just saying one sentence to a model; you are activating an entire set of pre-configured &ldquo;assistant environment.&rdquo; This environment is very useful, but the cost is that the base prompt is thicker, and much context, even if not directly used in this round, will be placed there first.</p>
+<h2 id="why-hermes-looks-more-restrained">Why Hermes Looks More Restrained
+</h2><p>Regarding Hermes, the most interesting part of the documentation is that it keeps emphasizing two things: on-demand loading and prompt cache preservation.</p>
+<p>First, look at the context files. Hermes only loads the project contexts that match the current working directory when a session starts; things like <code>AGENTS.md</code>, <code>CLAUDE.md</code>, and <code>.cursorrules</code> are first-match wins, so they won&rsquo;t all be loaded at once. More importantly, the <code>AGENTS.md</code> in a subdirectory isn&rsquo;t read entirely at startup; it is discovered and injected incrementally only when you actually navigate to that directory, read that file, or reach that path.</p>
+<p>The official documentation clearly writes out the benefits of this design:</p>
+<ul>
+<li>no system prompt bloat</li>
+<li>prompt cache preservation</li>
+</ul>
+<p>This taste is very different from OpenClaw. Hermes seems to be saying that it&rsquo;s best not to make the system prompt too long; place context that can be deferred, and don&rsquo;t fill up the first round with things that only appear at relevant times.</p>
+<p>The <code>skills</code> also follow the same logic. The Hermes <code>skills</code> documentation explicitly mentions progressive disclosure, with the goal of minimizing token usage. In other words, the skill is not permanently present in the full text by default; instead, the model first sees a lightweight index and only expands to show the detailed content when it&rsquo;s truly necessary.</p>
+<p>Furthermore, its memory system is also combinatorial. The official documentation severely limits the built-in memory: <code>MEMORY.md</code> is about 800 tokens, and <code>USER.md</code> is about 500 tokens, totaling a fixed capacity of around 1300 tokens. <code>SOUL.md</code> is for fixed identity, while <code>USER.md</code> and memory are included in the system prompt, but items like session search, memory provider, and Honcho feel more like external layers. This structure doesn&rsquo;t naturally shorten the prompt, but it provides a default posture that is easier to control cost-wise.</p>
+<p>So, from an architectural perspective, I would be more inclined to categorize Hermes as &ldquo;default restraint, gradually increasing weight.&rdquo;</p>
+<h2 id="its-not-about-who-is-more-advanced-but-where-the-cost-is-placed">It&rsquo;s not about who is more advanced, but where the cost is placed
+</h2><p>Many comparison articles like to write token consumption as a single conclusion, which I think is incorrect.</p>
+<p>OpenClaw is heavier, but that doesn&rsquo;t mean it&rsquo;s poorly designed. On the contrary, it intentionally front-loads a lot of features. If you want an assistant that is long-term online, cross-platform, has personality, has a workspace, and has routing, then these contexts will eventually cost something. It just chooses to bring all these things together on the default path first.</p>
+<p>Hermes is more restrained, but that doesn&rsquo;t mean it has no overhead. Once you stack a long <code>SOUL.md</code>, the project <code>AGENTS.md</code>, multiple skills, MCP, memory provider, sub-agent, and long tool outputs together, tokens can still roll very quickly. Especially if the tool output itself is very long, or if you make it search back and forth in a complex codebase, that&rsquo;s not something you can save just by naming the architecture.</p>
+<p>So, a more accurate way to say it is:</p>
+<p>OpenClaw moves the cost to &ldquo;assistant environment residency.&rdquo;</p>
+<p>Hermes shifts the cost to &ldquo;capability on demand.&rdquo;</p>
+<p>Neither approach is absolutely superior, but their billing structures are completely different.</p>
+<h2 id="what-truly-makes-the-difference-is-not-just-the-system-prompt">What truly makes the difference is not just the system prompt
+</h2><p>There are a few details that are quite easy to overlook.</p>
+<p>First, Hermes was designed to stabilize the prefix in the context files. The subdirectory hints are appended to the results of relevant tools, rather than continuously feeding all project contexts into the system prompt. This approach not only saves tokens but also essentially leaves space for the provider&rsquo;s prompt cache.</p>
+<p>Second, tools like Hermes&rsquo;s <code>execute_code</code> are designed to only return the final result printed by the script back to the model; all the intermediate results from RPC tool calls will not be included in the context. In complex workflows, this structure can eliminate a large amount of meaningless tool noise.</p>
+<p>Third, OpenClaw&rsquo;s workspace philosophy means it&rsquo;s more like &ldquo;bringing everything with you.&rdquo; Even if many individual files are short, as long as there are many types of files, many layers of persona, many layers of rules, and many levels of skills and memories, the foundational context will gradually become thicker. This thickness is not a bug; it is part of its product design trade-offs.</p>
+<p>Fourth, how both sides handle the sub-agent will also affect the total ledger. Many of Hermes&rsquo; designs emphasize local context and local execution, while OpenClaw emphasizes the organizational capabilities of multiple agent identities, routes, and delegates. One is more like switching context, and the other is more like organizing existence relationships. Finally, when it comes to the token billing, the shape is naturally different.</p>
+<h2 id="if-you-want-to-calculate-it-dont-rely-on-your-mouth">If you want to calculate it, don&rsquo;t rely on your mouth
+</h2><p>If you are really planning to use it long-term, don&rsquo;t just listen to anyone saying &ldquo;this is more energy efficient&rdquo;; look directly at the data provided by the tool.</p>
+<p>OpenClaw has commands like <code>/context detail</code> and <code>/usage tokens</code>, and the documentation will also remind you which files are injected at the start of each session. This is very suitable for seeing how thick the base knowledge really is.</p>
+<p>Regarding Hermes, the official documentation provides clues such as token budget, skills progressive disclosure, and context file injection methods in Honcho and related features. You can look at this by combining <code>hermes insights</code>, session storage, and actual provider billing.</p>
+<p>To put it plainly, the architecture can only determine &ldquo;how to spend,&rdquo; but it cannot decide &ldquo;how much to spend.&rdquo; What truly determines the bill is how long your <code>SOUL.md</code> is, how much memory you&rsquo;ve stuffed in, how many skills you&rsquo;ve enabled, whether the tool output was contained, and how expensive the model itself is.</p>
+<h2 id="im-still-on-this-side">I&rsquo;m still on this side
+</h2><p>If I only look at the default architecture and not extreme configurations, I still tend to think that Hermes is better at keeping token consumption within a relatively restrained range.</p>
+<p>It&rsquo;s not because it&rsquo;s stronger, but because from the start of prompt design, it has been avoiding &ldquo;meaningless persistent context bloat.&rdquo; OpenClaw is the opposite; it would rather carry a bit more to ensure that the identity, workspace, and message boundary of that long-term online assistant don&rsquo;t fall apart.</p>
+<p>So if you are particularly concerned about token costs, and the workflow mainly happens in local, CLI, code repository, or skill knowledge base scenarios, Hermes&rsquo; approach will generally be more convenient.</p>
+<p>If you want a long-term assistant that is truly available across various messaging platforms, then spending more tokens with OpenClaw feels like a normal cost. You can&rsquo;t expect it to be online long-term like a person while also requiring it to be as lightweight as a one-off tool every turn.</p>
+<p>Ah, this matter ultimately comes back to the old question.</p>
+<p>Are you raising an online assistant, or are you raising a local agent core? Figure that out, and the token accounting won&rsquo;t be so hard to understand.</p>
+<h2 id="references">References
+</h2><ul>
+<li><a class="link" href="/en/p/hermes-openclaw-not-the-same-game/" >Previous Post: Mistaking Hermes for OpenClaw Replacement, Might Have Been Biased From the Start</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/overview"  target="_blank" rel="noopener"
+    >Hermes Agent Features Overview</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files/"  target="_blank" rel="noopener"
+    >Hermes Agent Context Files</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/personality/"  target="_blank" rel="noopener"
+    >Hermes Agent Personality &amp; SOUL.md</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/skills"  target="_blank" rel="noopener"
+    >Hermes Agent Skills</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/reference/tools-reference/"  target="_blank" rel="noopener"
+    >Hermes Agent Built-in Tools Reference</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/honcho/"  target="_blank" rel="noopener"
+    >Hermes Agent Honcho Memory</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/agent-workspace"  target="_blank" rel="noopener"
+    >OpenClaw Agent Workspace</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/reference/token-use"  target="_blank" rel="noopener"
+    >OpenClaw Token Use and Costs</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/memory"  target="_blank" rel="noopener"
+    >OpenClaw Memory</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/multi-agent"  target="_blank" rel="noopener"
+    >OpenClaw Multi-Agent Routing</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/reference/context"  target="_blank" rel="noopener"
+    >OpenClaw Context Reference</a></li>
+</ul>
+<h2 id="writing-notes">Writing Notes
+</h2><h3 id="original-prompt">Original Prompt
+</h3><blockquote>
+<p>Prompt: Hermes and OpenClaw write another article about their token consumption. Since the architectures are different, the consumption must be different.</p></blockquote>
+<h3 id="writing-idea-summary">Writing Idea Summary
+</h3><ul>
+<li>Continue the judgment from the previous article, but narrow the focus to token consumption, and no longer repeat the overall architecture comparison.</li>
+<li>Focus on comparing the default context assembly methods of both sides, rather than just talking about &ldquo;who is more efficient.&rdquo;</li>
+<li>Hermes focuses on progressive disclosure, on-demand discovery, and prompt cache preservation.</li>
+<li>OpenClaw focuses on workspace persistent files, long-term online assistant environments, and fixed overhead.</li>
+<li>The conclusion retains the core judgment provided by the user, but adds a layer of practical reminder: to truly see the bill, one must combine official usage/context tools with actual provider billing.</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/ai-inspiration-hub/">AI Inspiration Hub</a>
+        
+            <a href="/en/tags/ai/">Ai</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Apr 16, 2026 01:50
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">Related content</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/en/p/hermes-openclaw-not-the-same-game/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Treating Hermes as a replacement for OpenClaw might be biased from the start.</h3>
+                            <time class="related-content__date" datetime='2026-04-15T23:52:20&#43;08:00'>Apr 15, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/ai-demo-fast-rework-faster/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI writes demos quickly, and revisions are also really fast.</h3>
+                            <time class="related-content__date" datetime='2026-04-10T15:39:51&#43;08:00'>Apr 10, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">VS Code for C&#43;&#43;, don&#39;t forget CMake and GDB Printer</h3>
+                            <time class="related-content__date" datetime='2026-04-09T19:21:36&#43;08:00'>Apr 09, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google has released Gemma 4 this time (III)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/gemma-4-series-local-test-on-rtx-3060/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Google released Gemma 4 this time (Part II)</h3>
+                            <time class="related-content__date" datetime='2026-04-08T23:52:20&#43;08:00'>Apr 08, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

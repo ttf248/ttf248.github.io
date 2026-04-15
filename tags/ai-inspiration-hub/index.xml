@@ -6,6 +6,192 @@
         <description>Recent content in AI 灵感碰撞坊 on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/ai-inspiration-hub/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>架构一换，Hermes 和 OpenClaw 的 token 就不是一个吃法</title>
+        <link>https://ttf248.life/p/hermes-openclaw-token-usage-diff/</link>
+        <pubDate>Thu, 16 Apr 2026 01:13:53 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/hermes-openclaw-token-usage-diff/</guid>
+        <description>&lt;p&gt;昨天那篇&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/hermes-openclaw-not-the-same-game/&#34; &gt;《把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了》&lt;/a&gt;写完以后，我又去翻了一圈两边的文档。越翻越觉得，真要看这两个东西差在哪，光看功能还不够，看 token 怎么烧，反而更直接。&lt;/p&gt;
+&lt;p&gt;我的判断先摆这。&lt;/p&gt;
+&lt;p&gt;OpenClaw 默认更像一个长期在线的工作台，很多身份、规则、工作区文件、消息面约束，会天然跟着每轮对话走，所以基础盘通常更重。Hermes 则明显更克制一点，很多上下文是按需发现、按需注入，系统提示词也在刻意维持稳定前缀，默认情况下更容易把 token 压住。&lt;/p&gt;
+&lt;p&gt;当然，这话不是说 Hermes 一定更省。你把 memory provider、skills、sub-agent、长工具输出全开起来，一样能烧得飞起。但是说白了，这两套架构从第一天起，就不是同一种吃 token 的方式。&lt;/p&gt;
+&lt;h2 id=&#34;openclaw-为什么默认就更重&#34;&gt;OpenClaw 为什么默认就更重
+&lt;/h2&gt;&lt;p&gt;OpenClaw 的设计逻辑，本来就不是“来一个轻量 agent，先聊两句再说”，而是“先把一个长期存在的 agent 工作台搭起来”。这一点在官方 workspace 文档里写得很直白。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;AGENTS.md&lt;/code&gt;、&lt;code&gt;SOUL.md&lt;/code&gt;、&lt;code&gt;USER.md&lt;/code&gt; 都是每个 session 都会加载。&lt;code&gt;IDENTITY.md&lt;/code&gt;、&lt;code&gt;TOOLS.md&lt;/code&gt;、&lt;code&gt;HEARTBEAT.md&lt;/code&gt;、&lt;code&gt;BOOT.md&lt;/code&gt;、&lt;code&gt;MEMORY.md&lt;/code&gt; 这些文件，也都围着同一个 workspace 在转。文档甚至专门提醒，&lt;code&gt;HEARTBEAT.md&lt;/code&gt; 要保持很短，避免 token burn。这种提醒本身就说明，OpenClaw 很清楚自己的默认上下文是偏厚的。&lt;/p&gt;
+&lt;p&gt;不过有一点也得说清楚，OpenClaw 不是所有东西都傻乎乎全文常驻。它官方的 token 文档明确写了，skills 进系统提示词时默认只是 metadata，具体说明要按需 &lt;code&gt;read&lt;/code&gt;。所以它的问题不是“不会省”，而是“默认要带着走的底座本来就更大”。&lt;/p&gt;
+&lt;p&gt;这事其实不难理解。OpenClaw 要解决的是“长期在线”和“多消息面存在感”。&lt;/p&gt;
+&lt;p&gt;你让一个 agent 同时活在 Telegram、Discord、Slack、WhatsApp 这些地方，还要带身份、带路由、带边界、带 delegate，很多规则就不能是临时拼上去的。它得先知道自己是谁，怎么说话，面对谁，当前工作区的约束是什么，技能从哪里找，哪些记忆该带，哪些记忆不该带。&lt;/p&gt;
+&lt;p&gt;所以 OpenClaw 的 token 消耗，更像固定开销比较大。&lt;/p&gt;
+&lt;p&gt;你每次发消息，不只是跟一个模型说一句话，而是在调起一整套已经成型的“助理环境”。这套环境好用，代价就是基础 prompt 更厚，很多上下文即使这一轮没直接用上，也会先放在那里。&lt;/p&gt;
+&lt;h2 id=&#34;hermes-为什么看起来更克制&#34;&gt;Hermes 为什么看起来更克制
+&lt;/h2&gt;&lt;p&gt;Hermes 这边，文档里最有意思的地方，是它一直在强调两件事：按需加载，和 prompt cache preservation。&lt;/p&gt;
+&lt;p&gt;先看 context files。Hermes 在 session 启动时只加载当前工作目录命中的那一类项目上下文，像 &lt;code&gt;AGENTS.md&lt;/code&gt;、&lt;code&gt;CLAUDE.md&lt;/code&gt;、&lt;code&gt;.cursorrules&lt;/code&gt; 这些是 first match wins，不会一口气全塞进去。更关键的是，子目录里的 &lt;code&gt;AGENTS.md&lt;/code&gt; 不是开局全读，而是等你真的走到那个目录、读到那个文件、跑到那条路径时，才逐步发现、逐步注入。&lt;/p&gt;
+&lt;p&gt;官方文档把这个设计的好处写得很明确：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;no system prompt bloat&lt;/li&gt;
+&lt;li&gt;prompt cache preservation&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这个味道和 OpenClaw 很不一样。Hermes 很像在说，系统提示词最好别乱长，能后置的上下文就后置，能只在相关时刻出现的，就别在第一轮先塞满。&lt;/p&gt;
+&lt;p&gt;skills 也是同一个思路。Hermes 的 skills 文档明确写了 progressive disclosure，目标就是 minimize token usage。换句话说，skill 不是默认全文常驻，而是让模型先看到一个轻量索引，真需要的时候再展开具体内容。&lt;/p&gt;
+&lt;p&gt;再加上它的记忆体系也偏组合式。官方文档把内置记忆限制得很死，&lt;code&gt;MEMORY.md&lt;/code&gt; 大约 800 tokens，&lt;code&gt;USER.md&lt;/code&gt; 大约 500 tokens，合起来固定盘差不多 1300 tokens。&lt;code&gt;SOUL.md&lt;/code&gt; 是固定身份，&lt;code&gt;USER.md&lt;/code&gt; 和记忆会进系统提示词，但 session search、memory provider、Honcho 这些更像外挂层。这个结构不会天然让 prompt 变短，但它给了一个更容易控成本的默认姿势。&lt;/p&gt;
+&lt;p&gt;所以从架构倾向上看，我会更愿意把 Hermes 归类成“默认克制，逐步变重”。&lt;/p&gt;
+&lt;h2 id=&#34;这不是谁更先进而是谁把成本放在哪&#34;&gt;这不是谁更先进，而是谁把成本放在哪
+&lt;/h2&gt;&lt;p&gt;很多对比文章喜欢把 token 消耗写成单一结论，这个我觉得不太对。&lt;/p&gt;
+&lt;p&gt;OpenClaw 更重，不代表它设计差。相反，它是故意把很多东西前置了。你要一个长期在线、跨平台、带人格、带工作区、带路由的助理，那这些上下文迟早都要付钱。它只是选择在默认路径上先把这些东西带齐。&lt;/p&gt;
+&lt;p&gt;Hermes 更克制，也不代表它没有大开销。你一旦把长 &lt;code&gt;SOUL.md&lt;/code&gt;、项目 &lt;code&gt;AGENTS.md&lt;/code&gt;、多 skill、MCP、memory provider、sub-agent、长工具输出一起叠上去，token 一样能滚得很快。特别是如果工具结果本身就很长，或者你让它在复杂代码库里来回搜索，那也不是靠架构名字就能省下来的。&lt;/p&gt;
+&lt;p&gt;所以更准确的说法应该是：&lt;/p&gt;
+&lt;p&gt;OpenClaw 把成本前置到“助理环境常驻”上。&lt;/p&gt;
+&lt;p&gt;Hermes 把成本后置到“能力按需展开”上。&lt;/p&gt;
+&lt;p&gt;这两种路子没有绝对高下，但是账单结构完全不一样。&lt;/p&gt;
+&lt;h2 id=&#34;真正拉开差距的不只是-system-prompt&#34;&gt;真正拉开差距的，不只是 system prompt
+&lt;/h2&gt;&lt;p&gt;还有几个细节，挺容易被忽略。&lt;/p&gt;
+&lt;p&gt;第一，Hermes 在 context files 这块明确为了稳定前缀去做设计。子目录 hint 是追加到相关工具结果里，而不是把所有项目上下文不断回灌到 system prompt 里。这个做法不只是在省 token，本质上也是在给 provider 的 prompt cache 留空间。&lt;/p&gt;
+&lt;p&gt;第二，Hermes 的 &lt;code&gt;execute_code&lt;/code&gt; 这种工具，设计上就只把脚本最终 &lt;code&gt;print()&lt;/code&gt; 出来的结果回给模型，中间那堆 RPC 工具调用结果不会全部进上下文。复杂流程里，这种结构能少掉一大截无意义的工具噪音。&lt;/p&gt;
+&lt;p&gt;第三，OpenClaw 的 workspace 哲学决定了它更像“把家当都带着”。哪怕很多文件本身不长，只要种类多、人格层多、规则层多、技能和记忆层次多，基础上下文就会一点点厚起来。这个厚度不是 bug，是它的产品取舍。&lt;/p&gt;
+&lt;p&gt;第四，两边对 sub-agent 的处理，也会影响总账。Hermes 的很多设计都在强调局部上下文和局部执行，OpenClaw 则更强调多 agent 身份、route、delegate 的组织能力。一个更像在切上下文，一个更像在组织存在关系。最后打到 token 账单上，形状当然不一样。&lt;/p&gt;
+&lt;h2 id=&#34;真要算别靠嘴&#34;&gt;真要算，别靠嘴
+&lt;/h2&gt;&lt;p&gt;如果你真准备长期用，别听谁一句“这个更省”就完事，直接看工具给出来的数据。&lt;/p&gt;
+&lt;p&gt;OpenClaw 官方有 &lt;code&gt;/context detail&lt;/code&gt; 和 &lt;code&gt;/usage tokens&lt;/code&gt; 这类命令，文档也会提醒你哪些文件会在每次 session 启动时注入。这个很适合看基础盘到底有多厚。&lt;/p&gt;
+&lt;p&gt;Hermes 这边，官方在 Honcho 和相关特性里也给了 token budget、skills progressive disclosure、context files 注入方式这些线索。你可以结合 &lt;code&gt;hermes insights&lt;/code&gt;、session 存储和实际 provider 账单一起看。&lt;/p&gt;
+&lt;p&gt;说白了，架构只能决定“怎么花”，不能替你决定“花多少”。真正决定账单的，还是你写了多长的 &lt;code&gt;SOUL.md&lt;/code&gt;，塞了多少记忆，开了多少 skill，工具输出有没有收住，模型本身贵不贵。&lt;/p&gt;
+&lt;h2 id=&#34;我最后还是站这一边&#34;&gt;我最后还是站这一边
+&lt;/h2&gt;&lt;p&gt;如果只看默认架构，不看极端配置，我还是倾向于认为 Hermes 更容易把 token 消耗压在一个相对克制的范围里。&lt;/p&gt;
+&lt;p&gt;不是因为它更强，而是因为它从 prompt 设计开始，就一直在躲“无意义的常驻上下文膨胀”这件事。OpenClaw 则相反，它宁愿多带一点，也要保证那个长期在线助理的身份、工作台和消息面边界别散掉。&lt;/p&gt;
+&lt;p&gt;所以如果你特别在意 token 成本，而且工作流主要发生在本地、CLI、代码仓库、技能沉淀这些场景里，Hermes 这套思路一般会更顺手。&lt;/p&gt;
+&lt;p&gt;如果你要的是一个真的活在各种消息面上的长期助理，那 OpenClaw 多花一点 token，我觉得反而是正常代价。你总不能既要它像个人一样长期在线，又要求它每轮都像一次性小工具那么轻。&lt;/p&gt;
+&lt;p&gt;哎，这事最后还是回到老问题。&lt;/p&gt;
+&lt;p&gt;你到底是在养一个在线助理，还是在养一个本地 agent 内核。想清楚这个，token 账就没那么难理解了。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/hermes-openclaw-not-the-same-game/&#34; &gt;前一篇：把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/overview&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Features Overview&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Context Files&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/personality/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Personality &amp;amp; SOUL.md&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Skills&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/reference/tools-reference/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Built-in Tools Reference&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/honcho/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Honcho Memory&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/agent-workspace&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Agent Workspace&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/reference/token-use&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Token Use and Costs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/memory&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Memory&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/multi-agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Multi-Agent Routing&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/reference/context&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Context Reference&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;提示词：Hermes 和 OpenClaw 再写一篇文章，关于两者 token 消耗的情况，架构不同，消耗必然不一样&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;延续上一篇的判断，但把主线收窄到 token 消耗，不再重复总体架构对比。&lt;/li&gt;
+&lt;li&gt;重点比较两边的默认上下文装配方式，而不是空谈“谁更省”。&lt;/li&gt;
+&lt;li&gt;Hermes 侧重点放在 progressive disclosure、按需发现和 prompt cache preservation。&lt;/li&gt;
+&lt;li&gt;OpenClaw 侧重点放在 workspace 常驻文件、长期在线助理环境和固定开销。&lt;/li&gt;
+&lt;li&gt;结尾保留用户给出的核心判断，但补了一层现实提醒：真要看账单，还得结合官方 usage/context 工具和实际 provider 计费。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
+        <title>把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了</title>
+        <link>https://ttf248.life/p/hermes-openclaw-not-the-same-game/</link>
+        <pubDate>Wed, 15 Apr 2026 23:52:20 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/hermes-openclaw-not-the-same-game/</guid>
+        <description>&lt;p&gt;这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。&lt;/p&gt;
+&lt;p&gt;它们当然都在做“个人 AI 助手”。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 &lt;code&gt;hermes claw migrate&lt;/code&gt;，摆明了是知道自己会接到一批 OpenClaw 用户。&lt;/p&gt;
+&lt;p&gt;但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 &lt;code&gt;Gateway&lt;/code&gt; 往外长，一个是从 &lt;code&gt;AIAgent&lt;/code&gt; 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。&lt;/p&gt;
+&lt;h2 id=&#34;它们一开始就没打算长成一个东西&#34;&gt;它们一开始就没打算长成一个东西
+&lt;/h2&gt;&lt;p&gt;OpenClaw 官方文档把 &lt;code&gt;Gateway&lt;/code&gt; 放在非常前的位置。它的定义很直接：一个长期运行的 Gateway 持有所有消息面，控制面客户端、Web UI、Node 设备都通过 WebSocket 连到这个 Gateway 上，而且一个 host 上只有一个 Gateway 去管核心消息连接，像 WhatsApp 这种会话也明确由它独占。&lt;/p&gt;
+&lt;p&gt;这意味着什么？意味着 OpenClaw 的世界观不是“先有一个 agent，再给它接几个入口”，而是“先有一个常驻的通信和控制平面，再把 agent runtime、session、skills、delegate、sub-agent 都组织到这个平面里”。&lt;/p&gt;
+&lt;p&gt;Hermes 就不是这个味道。它的架构图一上来写得很明白，CLI、Gateway、ACP、Batch Runner、API Server、Python Library 这些入口，最后都汇到同一个 &lt;code&gt;AIAgent&lt;/code&gt; 核心。Session storage 是 SQLite + FTS5，工具后端、provider resolution、prompt builder 都是围着这个 core 组织的。&lt;/p&gt;
+&lt;p&gt;所以从骨架上看，OpenClaw 更像一个“常驻型个人助理系统”；Hermes 更像一个“agent runtime 平台”，消息入口只是它的一个延伸面。&lt;/p&gt;
+&lt;h2 id=&#34;一个把-gateway-当主角一个把-agent-当主角&#34;&gt;一个把 Gateway 当主角，一个把 Agent 当主角
+&lt;/h2&gt;&lt;p&gt;这个架构差异，最后会直接变成使用体验差异。&lt;/p&gt;
+&lt;p&gt;OpenClaw 的强项，是把“我怎么在很多渠道上拥有一个长期在线、带身份、带边界、可路由的助手”这件事做得非常重。它有默认的 DM pairing、安全策略、按 channel/account/peer 做 routing、多 agent 绑定、delegate 模式，甚至连“代表谁发、用哪个账号收、在哪个群里出现”这种组织级问题都专门写成文档了。&lt;/p&gt;
+&lt;p&gt;换句话说，OpenClaw 想先解决的是存在性问题。这个 agent 先得像个真的人，或者像个真的组织助理，活在 Telegram、Discord、Slack、WhatsApp、Signal、WebChat 这些面上，然后你再去谈它会不会写代码、会不会做任务分发。&lt;/p&gt;
+&lt;p&gt;Hermes 的重心更偏“能力积累”。它当然也有 Gateway，也能接 Telegram、Discord、Slack、WhatsApp 这些平台，但官方叙事里最靠前的词不是路由和账号，而是 persistent memory、skills、MCP、sub-agents、toolsets，还有 batch processing、trajectory export、RL training。&lt;/p&gt;
+&lt;p&gt;这就很关键了。Hermes 要解决的核心问题不是“怎么把一个 AI 接到尽可能多的消息面上”，而是“怎么让这个 agent 逐步长出自己的技能、记忆和可复用能力，甚至还能顺手拿去做训练数据和实验”。&lt;/p&gt;
+&lt;p&gt;所以我更愿意这么概括：&lt;/p&gt;
+&lt;p&gt;OpenClaw 是 communication-first 的 personal assistant system。&lt;/p&gt;
+&lt;p&gt;Hermes 是 agent-core-first 的 self-hosted agent platform。&lt;/p&gt;
+&lt;h2 id=&#34;记忆技能和扩展方式也不是一个味道&#34;&gt;记忆、技能和扩展方式，也不是一个味道
+&lt;/h2&gt;&lt;p&gt;很多人会说，这俩不都支持 skill、memory、plugin 吗。没错，都支持。但是落点不一样。&lt;/p&gt;
+&lt;p&gt;OpenClaw 的 agent runtime 里，workspace 是很重的概念。&lt;code&gt;AGENTS.md&lt;/code&gt;、&lt;code&gt;SOUL.md&lt;/code&gt;、&lt;code&gt;TOOLS.md&lt;/code&gt;、&lt;code&gt;BOOTSTRAP.md&lt;/code&gt;、&lt;code&gt;IDENTITY.md&lt;/code&gt;、&lt;code&gt;USER.md&lt;/code&gt; 这些文件会在新 session 的第一轮直接注入上下文。技能加载也有一整套优先级：workspace 里的、项目里的、个人目录里的、&lt;code&gt;~/.openclaw/skills&lt;/code&gt; 里的、bundled 的，都能往里叠。它本质上是在搭一个“人格 + 规则 + 工作区 + 通道”统一的长期助手环境。&lt;/p&gt;
+&lt;p&gt;Hermes 的技能系统明显更偏“程序化记忆”。官方文档直接说，skills 是 on-demand knowledge documents，走 progressive disclosure，兼容 &lt;code&gt;agentskills.io&lt;/code&gt; 的开放标准，统一放在 &lt;code&gt;~/.hermes/skills/&lt;/code&gt; 下面，而且 agent 自己就能修改和删除 skill。这个味道就不是“给助手配几份说明书”了，而是“把做过的事沉淀成可以再次加载的能力块”。&lt;/p&gt;
+&lt;p&gt;记忆也一样。Hermes 内置的是很克制的 &lt;code&gt;MEMORY.md&lt;/code&gt; 和 &lt;code&gt;USER.md&lt;/code&gt;，再配一个 SQLite + FTS5 的 session search，另外再往外挂 8 类 memory provider。这个设计挺有意思，它没有一上来把“长期人格环境”写得特别厚，而是把短记忆、检索式回忆、外挂式长期记忆拆开了。&lt;/p&gt;
+&lt;p&gt;OpenClaw 不是没有记忆，也不是没有 sub-agent、多 agent、delegate 这些进阶能力。相反，它这些都不少。但从文档结构和默认心智模型看，它更像在经营一个持续在线的 assistant workspace；Hermes 更像在经营一个会持续进化的 agent capability graph。&lt;/p&gt;
+&lt;h2 id=&#34;生态为什么会越走越开&#34;&gt;生态为什么会越走越开
+&lt;/h2&gt;&lt;p&gt;生态这块，表面看都是“开源 + 可扩展”，实际上也分叉得很明显。&lt;/p&gt;
+&lt;p&gt;OpenClaw 的生态更宽，更偏外部接入层。官方插件可以扩 channels、model providers、tools、skills、speech、web fetch、web search、memory，社区插件和 ClawHub 也在围着“接更多平台、接更多账号、接更多工作流”长。它甚至明确兼容 &lt;code&gt;.codex-plugin&lt;/code&gt;、&lt;code&gt;.claude-plugin&lt;/code&gt;、&lt;code&gt;.cursor-plugin&lt;/code&gt; 这类 bundle 形态。这个动作很聪明，说白了就是先把别家生态的壳也吃进来，先把入口做大。&lt;/p&gt;
+&lt;p&gt;再看 OpenClaw 的文档，你会发现它对 sub-agent、delegate、组织代理、thread binding、DM pairing、group mention 这些东西写得非常细。说明它的生态目标，不只是单机玩家折腾，而是希望真的变成一个长期运行的 agent operating system。&lt;/p&gt;
+&lt;p&gt;Hermes 的生态则更像“内核能力外接”。它有 Python plugin system，有 memory provider plugin，有 context engine plugin，有 MCP server 接入，也有 Skills Hub 和 &lt;code&gt;agentskills.io&lt;/code&gt; 这种开放 skill 标准。再加上 batch runner、trajectory export、Atropos 这些训练相关接口，Hermes 的生态天然会吸引两类人。&lt;/p&gt;
+&lt;p&gt;一类是把它当个人 agent 用的人。&lt;/p&gt;
+&lt;p&gt;另一类是把它当研究、训练、实验、workflow substrate 用的人。&lt;/p&gt;
+&lt;p&gt;这两类用户的需求差异很大，但 Hermes 的架构刚好都能兜住。所以你会感觉 Hermes 的生态虽然未必像 OpenClaw 那样先在“渠道数量”和“消息存在感”上铺开，但我会更倾向于觉得，它在 agent substrate 这块的后劲会更大。&lt;/p&gt;
+&lt;p&gt;还有一个挺有意思的细节。Hermes 官方 README 里不光有 &lt;code&gt;hermes claw migrate&lt;/code&gt;，还挂了一个社区项目 &lt;code&gt;HermesClaw&lt;/code&gt;，用来在同一个 WeChat 账号上同时跑 Hermes Agent 和 OpenClaw。这个信号已经很明显了：Hermes 不是假装自己和 OpenClaw 没关系，它是在承认这条用户迁移链路存在，然后顺手把这条链路产品化了。&lt;/p&gt;
+&lt;h2 id=&#34;我最后的判断&#34;&gt;我最后的判断
+&lt;/h2&gt;&lt;p&gt;如果你要的是一个“真的活在消息面上的个人助理系统”，要的是账号、渠道、路由、delegate、组织边界、长期在线、强控制面，那 OpenClaw 这条路更完整，也更像一个成熟的通信底座。&lt;/p&gt;
+&lt;p&gt;如果你要的是一个“会越用越像自己工作台的 agent core”，看重的是 skill 沉淀、memory 组合、MCP、插件、sub-agent、训练数据和后续可塑性，那 Hermes 更顺手。&lt;/p&gt;
+&lt;p&gt;所以别再简单问“Hermes 能不能替代 OpenClaw”了。这个问题问得有点糙。&lt;/p&gt;
+&lt;p&gt;更准确的问法应该是：&lt;/p&gt;
+&lt;p&gt;你到底想要一个长在消息网络里的 AI 助理，还是一个长在本地工作流和 agent runtime 里的 AI 平台？&lt;/p&gt;
+&lt;p&gt;想清楚这个，选择就没那么拧巴了。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/NousResearch/hermes-agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent GitHub README&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.org/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent 官网 Features&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/developer-guide/architecture&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Architecture&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/skills&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Skills System&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/memory&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Persistent Memory&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent MCP&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent Plugins&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/openclaw/openclaw&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw GitHub README&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/architecture&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Gateway Architecture&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Agent Runtime&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/multi-agent&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Multi-Agent Routing&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/concepts/delegate-architecture&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Delegate Architecture&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/tools/subagents&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Sub-Agents&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/tools/plugin&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Plugins&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.openclaw.ai/tools/skills-config&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenClaw Skills Config&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;提示词：Hermes 和 OpenClaw 的不同，架构上的不同，设计理念上面的不同，生态的不同&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;先把“替代品对比”这个常见问法拆掉，直接把主线定成“两个项目的中心到底放在哪”。&lt;/li&gt;
+&lt;li&gt;架构部分优先看官方文档里的主入口和核心组件，而不是社区二手总结。&lt;/li&gt;
+&lt;li&gt;设计理念部分不做空泛价值判断，直接落到 Gateway、Agent Core、memory、skill、delegate 这些具体设计上。&lt;/li&gt;
+&lt;li&gt;生态部分重点比较扩展方向，不做星标、热度和社区口水战。&lt;/li&gt;
+&lt;li&gt;事实核验以 2026-04-15 可见的官方仓库与官方文档为准。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>AI 写 Demo 很快，返工也是真的快</title>
         <link>https://ttf248.life/p/ai-demo-fast-rework-faster/</link>
         <pubDate>Fri, 10 Apr 2026 15:39:51 +0800</pubDate>
