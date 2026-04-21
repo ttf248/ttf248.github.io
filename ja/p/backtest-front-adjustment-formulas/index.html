@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="数日前に、ある人がかなり昔の貴州茅台の「調整前価格（前復权価格）」を持ってきて質問をしてきました。正直なところ、私も最初は少し戸惑いました。同じく「前復権」を見てみると、\nこの記事はただ一つのことを行います。それは、この2つの指標を切り分けることです。混乱しないよう、まず私の見解から述べます：国内で主流のチャートソフトにおける「前復権」は、取引所が決定した除権・除息参考価格に沿ってローソク足（K線）を平滑化しているように見えるのに対し、海外で一般的に使われる adjusted close は、累積乗数を使って「配当再投資」による総利回りを表現しているようです。どちらも「前復権」と呼ばれますが、回答している質問はまったく異なるのです。\n">
+<title>バックテストにおける事前調整は、国内と海外では異なるアルゴリズムです。</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/backtest-front-adjustment-formulas/'>
+
+<link rel="stylesheet" href="/scss/style.min.3feddf7433e05d0be4d114733bf2e2c6246546597e82c89c1c5943d545443503.css"><meta property='og:title' content="バックテストにおける事前調整は、国内と海外では異なるアルゴリズムです。">
+<meta property='og:description' content="数日前に、ある人がかなり昔の貴州茅台の「調整前価格（前復权価格）」を持ってきて質問をしてきました。正直なところ、私も最初は少し戸惑いました。同じく「前復権」を見てみると、\nこの記事はただ一つのことを行います。それは、この2つの指標を切り分けることです。混乱しないよう、まず私の見解から述べます：国内で主流のチャートソフトにおける「前復権」は、取引所が決定した除権・除息参考価格に沿ってローソク足（K線）を平滑化しているように見えるのに対し、海外で一般的に使われる adjusted close は、累積乗数を使って「配当再投資」による総利回りを表現しているようです。どちらも「前復権」と呼ばれますが、回答している質問はまったく異なるのです。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/backtest-front-adjustment-formulas/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='量子化 (Kyūka)' /><meta property='article:tag' content='バックテスト' /><meta property='article:tag' content='権利調整 (けんりちょうせい) / クローバック (Klobacku - 文脈による)
+
+*注：文脈によって適切な訳語が異なります。金融や株式の文脈で「権利落ち」に関連する場合は、「権利調整」が一般的です。*' /><meta property='article:tag' content='AI霊感衝突坊' /><meta property='article:published_time' content='2026-04-22T01:31:44&#43;08:00'/><meta property='article:modified_time' content='2026-04-22T02:23:57&#43;08:00'/>
+<meta name="twitter:title" content="バックテストにおける事前調整は、国内と海外では異なるアルゴリズムです。">
+<meta name="twitter:description" content="数日前に、ある人がかなり昔の貴州茅台の「調整前価格（前復权価格）」を持ってきて質問をしてきました。正直なところ、私も最初は少し戸惑いました。同じく「前復権」を見てみると、\nこの記事はただ一つのことを行います。それは、この2つの指標を切り分けることです。混乱しないよう、まず私の見解から述べます：国内で主流のチャートソフトにおける「前復権」は、取引所が決定した除権・除息参考価格に沿ってローソク足（K線）を平滑化しているように見えるのに対し、海外で一般的に使われる adjusted close は、累積乗数を使って「配当再投資」による総利回りを表現しているようです。どちらも「前復権」と呼ばれますが、回答している質問はまったく異なるのです。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="メニューを開く・閉じる">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/ja">向叔の手帳</a></h1>
+            <h2 class="site-description">時を集め、歳月に痕跡を残す</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" >English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" selected>日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>ダークモード</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">目次</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#a株の前行調整において最初に問われるのはkラインの接続方法だ">A株の前行調整において、最初に問われるのはKラインの接続方法だ</a></li>
+    <li><a href="#港美株の調整後終値についてまず総収益トータルリターンはどのように計算しますか">港美株の調整後終値について、まず総収益（トータルリターン）はどのように計算しますか</a></li>
+    <li><a href="#調整係数は萬能の翻訳器ではない">調整係数は萬能の翻訳器ではない</a></li>
+    <li><a href="#tushare-はどちらの側に立っているのか">Tushare はどちらの側に立っているのか</a></li>
+    <li><a href="#バックテストに戻るまずは評価基準を定めその後で是非を議論する">バックテストに戻る：まずは評価基準を定め、その後で是非を議論する</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+    <li><a href="#執筆上の注記">執筆上の注記</a>
+      <ol>
+        <li><a href="#元のプロンプト">元のプロンプト</a></li>
+        <li><a href="#ライティングの構成案の要約">ライティングの構成案の要約</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E9%87%91%E8%9E%8D%E7%9F%A5%E8%AD%98%E3%83%87%E3%83%BC%E3%82%BF%E3%83%99%E3%83%BC%E3%82%B9/" >
+                金融知識データベース
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/ja/p/backtest-front-adjustment-formulas/">バックテストにおける事前調整は、国内と海外では異なるアルゴリズムです。</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月22日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            読了時間: 14分
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/backtest-front-adjustment-formulas/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/en/p/backtest-front-adjustment-formulas/" class="link">English</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>数日前に、ある人がかなり昔の貴州茅台の「調整前価格（前復权価格）」を持ってきて質問をしてきました。正直なところ、私も最初は少し戸惑いました。同じく「前復権」を見てみると、</p>
+<p>この記事はただ一つのことを行います。それは、この2つの指標を切り分けることです。混乱しないよう、まず私の見解から述べます：<strong>国内で主流のチャートソフトにおける「前復権」は、取引所が決定した除権・除息参考価格に沿ってローソク足（K線）を平滑化しているように見えるのに対し、海外で一般的に使われる adjusted close は、累積乗数を使って「配当再投資」による総利回りを表現しているようです。どちらも「前復権」と呼ばれますが、回答している質問はまったく異なるのです。</strong></p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="a株の前行調整において最初に問われるのはkラインの接続方法だ">A株の前行調整において、最初に問われるのはKラインの接続方法だ
+</h2><p>国内のこの算出基準（または、考え方）を用いる場合、公開されている参照ポイントは実は見つけるのが難しくありません。深セン取引所が除権除息に関する参考価格の公式を提供しています：</p>
+<pre><code class="language-japanese">$$
+\text{除権（配当）基準価格} = \frac{(\text{前日終値}-\text{現金配当})+\text{割当価格}\times\text{株式変動比率}}{1+\text{株式変動比率}}
+$$
+</code></pre>
+<p>東方財富百科に記載されている「正確な複利調整（または『正確な再調整』）」の事前計算式は、基本的な考え方がこれと同じ系統です。</p>
+$$
+P'=\frac{(P-D)+K\times r}{1+r}
+$$<p>ここで、$P$ は調整前の価格、 $D$ は一株当たりの現金配当金、$K$ は配当や新株の価格、$r$ は流通株式の変動比率です。この式で最も重要な点、それは割り算があるかどうかではなく、<strong>現金配当が一定額を差し引かれていく</strong>という点です。</p>
+<p>したがって、企業の活動が現金配当のみとなり、送付や新株発行がない場合、この公式はそのまま〜に単純化します。</p>
+$$
+P'=P-D
+$$<p>この件の結果は非常に直接的です。上場時期が早く、累積配当が多いA株（中国本土の株式）の場合、もし歴史的な価格を遡って計算した場合、実際にマイナスになる可能性があります。東方財富などのサイトで、このような極めて初期の負の値を目にすることがありますが、必ずしも計算ミスとは限りません。むしろ、単に国内で一般的なこの「事前調整（前複権）」の定義を採用し続けているだけかもしれません。</p>
+<p>現在、私はこれを「グラフィカルな連続性を優先する」という観点として捉える方が良いと思っています。例えば、今日ソフトを開いたとき、現在の価格が動かず、過去のローソク足（Kライン）が下に押しやられると、チャートがつながりやすく、テクニカル指標もより見やすくなります。これは銘柄分析において非常に有用ですが、当然ながら総リターンの系列</p>
+<h2 id="港美株の調整後終値についてまず総収益トータルリターンはどのように計算しますか">港美株の調整後終値について、まず総収益（トータルリターン）はどのように計算しますか
+</h2><p>Yahoo! の公式な <code>Adjusted close</code> の定義は非常に明快です。これは、株の分割と配当の両方で調整を行います。さらに、配当乗数は「配当が価格に占める比率」に基づいて算出されます。公式にはまた、これを行う主な目的の一つが<strong>負の過去の株価を避けること</strong>であると明確に記されています。</p>
+<p>式で表現すると、一般的な考え方としては、まず各企業の行動に乗数（係数）をかけるというものがあります。</p>
+<ul>
+<li>株分割倍率: 例えば `2-for-1` の場合、過去価格に `0.5` を乗じます。</li>
+<li>配当乗数: `m=1-D/C_{t-1}`</li>
+</ul>
+<p>ここで、$D$ は一株当たりの現金配当であり、$C_{t-1}$ は配当落ち前の終値です。その後、以降の全ての企業行動の乗数を連続的に掛け合わせることで、累積調整係数 $F_t$ を得ます：</p>
+$$
+F_t=\prod_{j>t}(s_j\times m_j)
+$$<p>したがって、調整後価格は次の通りです：</p>
+<pre><code>$$
+P_t^{adj}=P_t\times F_t
+$$
+</code></pre>
+<p>この書き方（手法）の意味は明確です。これは、「もし配当金も引き続きこの銘柄に再投資し続けた場合、総収益がどうなるか」を近似的に示しています。したがって、リターン計算、長期バックテスト、時系列での比較を行うのに本質的により適しています。国内で一般的な、現金配当金を履歴価格から直接差し引く算出方法は、見た目はローソク足を修正しているように見えますが、その骨子は全く異なります。</p>
+<p>補足させていただきますが、6月の旧記事では、Yahoo / yfinance の adjusted データと Tushare の qfq が、「完全に同じもの」のように述べられておりましたが、これは厳密ではありません。より正確に言えば：<strong>これらは同じ系統（ファミリー）に属し、どちらも乗数型またはファクター型の調整ですが、正規化のアンカーポイントが必ずしも一致するわけではない</strong>、ということです。</p>
+<h2 id="調整係数は萬能の翻訳器ではない">調整係数は萬能の翻訳器ではない
+</h2><p>問題は実際、この点にあります。多くの人は「復権因子」という言葉を見るだけで、全ての市場が因子の列として抽象化でき、その後 <code>price * factor</code> で計算できると（と思い込んで）しまいます。この考え方は、香港や米国株で一般的に用いられている調整後終値（adjusted close）のシステムでは基本的に成り立ちますが、国内の事前復権（pre-adjustment）システムではそうとは限りません。</p>
+<p>理由は複雑ではありません。国内で用いられているこの精確な再加重公式は、実は純粋な乗法ではなく、アフィン変換なのです:</p>
+$$
+P'=\frac{1}{1+r}P+\frac{Kr-D}{1+r}
+$$<p>つまり、本質的には：</p>
+$$
+P'=aP+b
+$$<p>現金配当が発生する場合、定数項 $b$ はゼロではありません。複数の企業アクションが積み重なると、得られるのは単一の累積倍率ではなく、仿射変換（affine transformation）を連積・連加した一連のものになります。この場合、<strong>個別の「調整係数」では不十分であり</strong>、少なくとも現金配当、割り当て価格、株式変動比率などのイベント情報、あるいは等価な $(A, B)$ パラメーターが必要となります。</p>
+<p>したがって、答えは明白です：<strong>「調整係数」という概念は、この2つのスキームでは直接適用することはできません。</strong></p>
+<ul>
+<li>海外で一般的に用いられている調整後終値（adjusted close）のシステムにおいて、除却係数が中心的な対象となります。</li>
+<li>国内のこの正確な調整システムでは、係数は「株式分割／配当金」といった部分的な比率変化しかカバーできず、現金配当に遭遇すると、単一の係数では対応できません。</li>
+</ul>
+<p>これが、国内ソフトウェアの事前調整価格とYahooの調整後終値を同じ水準で無理に比較すると、結果的にますます混乱してしまう理由です。</p>
+<h2 id="tushare-はどちらの側に立っているのか">Tushare はどちらの側に立っているのか
+</h2><p>この問題については、公式サイトで非常に明確に記述されています。TushareのA株調整後価格データのドキュメントが示す式は以下の通りです：</p>
+$$
+\text{前復権} = \frac{\text{当日終値} \times \text{当日調整係数}}{\text{最新調整係数}}
+$$<p>同じページには、さらに以下の二点が明記されています：</p>
+<ul>
+<li>設定された <code>end_date</code> に基づいて動的に権利調整を行います。</li>
+<li>「配当再投資」モデルを採用しています。</li>
+</ul>
+<p>これらの2文で定義は十分です。<strong>TushareのA株における<code>qfq</code>は、概念的には海外の乗数/ファクター型の調整後終値に近く、東方財富社の正確な再評価前の再評価手法とは異なります。</strong> ただ、独自に正規化の方法を維持しています。それは常に「本日」をアンカーとするのではなく、今回のクエリウィンドウの<code>end_date</code>を基準とするものです。</p>
+<p>したがって、Tushareの位置付けは一文にまとめることができます：</p>
+<ul>
+<li>東方財富（Oriental Fortune）のものとは、同一の事前調整（前複権）定義ではありません。</li>
+<li>Yahooのものに似ていますが、数値が一点たりとも完全に一致するわけではありません。</li>
+</ul>
+<p>Tushareは、その後、香港株や米国株に対しても調整係数（复权因子）と調整済みデータインターフェースを追加しました。公式の説明もやはり <code>price * adj_factor = 調整価格</code> です。これは、その製品設計の考え方が、本質的には掛け合わせの係数を用いる派生であることをさらに示しています。</p>
+<h2 id="バックテストに戻るまずは評価基準を定めその後で是非を議論する">バックテストに戻る：まずは評価基準を定め、その後で是非を議論する
+</h2><p>このことを理解すれば、多くの議論は自然と消えていくでしょう。</p>
+<p>もしお探しのものが「〜」の場合：</p>
+<ul>
+<li>国内の相場ソフトのスクリーンショットに合わせる</li>
+<li>現在価格が一定で、過去のローソク足と滑らかにつながっている</li>
+<li>「A株」の文脈における「前調整グラフ」（ぜんふくけん）を見る</li>
+</ul>
+<p>ですから、国内（中国）で用いられているこの精度の高い調整基準を使用すべきです。</p>
+<p>もしあなたがお求めなのが：</p>
+<ul>
+<li>バックテスト収益率</li>
+<li>配当再投資による総利回り</li>
+<li>長期的な戦略評価</li>
+</ul>
+<p>それならTushareの<code>qfq</code>やYahooの<code>Adjusted close</code>のような乗数ファクター（積算）基準を使うべきです。</p>
+<p>6月の旧記事ですが、最大の問題は完全に間違っていたことそのものではなく、この2つの定義を「唯一の標準」として混ぜこぜにしてしまった点にあります。今振り返ってみて本当に記憶しておくべきなのは、「比例法が絶対正しく、加減法が絶対間違っている」ということではなく、むしろ: <strong>そもそも、あなたは画像編集をしているのか、それとも収益を計算しているのか。</strong> という二つの問題を先に分けていないと、後続のバックテスト結果やローソク足（K線）の比較、さらには「なぜマイナス値が出てくるのか」といったこともすべて絡み合ってしまいます。</p>
+<h2 id="参考資料">参考資料
+</h2><ul>
+<li><a class="link" href="https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf"  target="_blank" rel="noopener"
+    >ChatGPT 共有会話：復権計算の違いの分析</a></li>
+<li><a class="link" href="https://tushare.pro/document/2?doc_id=146"  target="_blank" rel="noopener"
+    >Tushare：A株の調整後価格チャート</a></li>
+<li><a class="link" href="https://tushare.pro/document/2?doc_id=338"  target="_blank" rel="noopener"
+    >Tushare：米国株の調整後価格チャート</a></li>
+<li><a class="link" href="https://help.yahoo.com/kb/SLN28256.html"  target="_blank" rel="noopener"
+    >Yahoo Help: What is the adjusted close?</a></li>
+<li><a class="link" href="https://investor.szse.cn/institute/video/classroom/operation/t20190131_564542.html"  target="_blank" rel="noopener"
+    >深圳証券取引所：権利落ち（配当落ち）価格の計算方法は？</a></li>
+<li><a class="link" href="https://baike.eastmoney.com/item/%E5%A4%8D%E6%9D%83"  target="_blank" rel="noopener"
+    >東方財富百科：調整</a></li>
+</ul>
+<h2 id="執筆上の注記">執筆上の注記
+</h2><h3 id="元のプロンプト">元のプロンプト
+</h3><pre><code class="language-text">$blog-writer ここの内容を分析してください：https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf。また、過去記事27について、バックテストデータはどこで入手できますか？まず、国内で一般的に使用される前修正（pre-adjusment）の計算式を整理し、次に海外で一般的に使用される前修正の計算式を整理してください。除権係数（または調整要因）の概念は、両方のスキームで共通して利用できますか？Tushare のデータはどの方式に属するものですか？
+</code></pre>
+<h3 id="ライティングの構成案の要約">ライティングの構成案の要約
+</h3>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/%E9%87%8F%E5%AD%90%E5%8C%96-ky%C5%ABka/">量子化 (Kyūka)</a>
+        
+            <a href="/ja/tags/%E3%83%90%E3%83%83%E3%82%AF%E3%83%86%E3%82%B9%E3%83%88/">バックテスト</a>
+        
+            <a href="/ja/tags/%E6%A8%A9%E5%88%A9%E8%AA%BF%E6%95%B4-%E3%81%91%E3%82%93%E3%82%8A%E3%81%A1%E3%82%87%E3%81%86%E3%81%9B%E3%81%84-/-%E3%82%AF%E3%83%AD%E3%83%BC%E3%83%90%E3%83%83%E3%82%AF-klobacku-%E6%96%87%E8%84%88%E3%81%AB%E3%82%88%E3%82%8B-%E6%B3%A8%E6%96%87%E8%84%88%E3%81%AB%E3%82%88%E3%81%A3%E3%81%A6%E9%81%A9%E5%88%87%E3%81%AA%E8%A8%B3%E8%AA%9E%E3%81%8C%E7%95%B0%E3%81%AA%E3%82%8A%E3%81%BE%E3%81%99%E9%87%91%E8%9E%8D%E3%82%84%E6%A0%AA%E5%BC%8F%E3%81%AE%E6%96%87%E8%84%88%E3%81%A7%E6%A8%A9%E5%88%A9%E8%90%BD%E3%81%A1%E3%81%AB%E9%96%A2%E9%80%A3%E3%81%99%E3%82%8B%E5%A0%B4%E5%90%88%E3%81%AF%E6%A8%A9%E5%88%A9%E8%AA%BF%E6%95%B4%E3%81%8C%E4%B8%80%E8%88%AC%E7%9A%84%E3%81%A7%E3%81%99/">権利調整 (けんりちょうせい) / クローバック (Klobacku - 文脈による)
+
+*注：文脈によって適切な訳語が異なります。金融や株式の文脈で「権利落ち」に関連する場合は、「権利調整」が一般的です。*</a>
+        
+            <a href="/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/">AI霊感衝突坊</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            最終更新 2026年04月22日 02:23
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">関連するコンテンツ</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/is-ai-getting-dumber-uncovering-the-game-between-parameter-precision-and-inference-costs/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AIは「鈍化」しているのか？パラメータ精度と推論コストの駆け引きを解明</h3>
+                            <time class="related-content__date" datetime='2025-12-04T21:58:09&#43;08:00'>2025年12月04日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/moutai-profit-decline-and-real-estate-cycle/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">マオタイ、純利益が初めて落ち込むのは、単に若者が白酒を飲まなくなったからだけではない</h3>
+                            <time class="related-content__date" datetime='2026-04-22T01:10:41&#43;08:00'>2026年04月22日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/understanding-spin-offs-and-splits-in-the-us-stock-market-can-be-challenging/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">米国株式市場におけるスプリットと合併の理解がスムーズではありません。 (Hoikibo shokusa no gasshu o rikai shimasu naku wa suimu bu nai.)</h3>
+                            <time class="related-content__date" datetime='2025-08-13T22:09:31&#43;08:00'>2025年08月13日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/hong-kong-stock-exchange-brokerage-fee-liberalization-and-market-competition/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">香港株の取引手数料ゼロ化と市場競争 (Hong Kong Stock Exchange Transaction Fee Zeroization and Market Competition)</h3>
+                            <time class="related-content__date" datetime='2025-08-13T21:47:51&#43;08:00'>2025年08月13日</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/ja/p/significant-differences-in-trading-and-settlement-between-stocks-and-digital-currencies/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">株式と暗号資産の取引および決済における大きな違い</h3>
+                            <time class="related-content__date" datetime='2025-07-28T18:28:54&#43;08:00'>2025年07月28日</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>

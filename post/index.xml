@@ -6,7 +6,119 @@
         <description>Recent content in Posts on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language>
-        <lastBuildDate>Wed, 22 Apr 2026 01:22:15 +0800</lastBuildDate><atom:link href="https://ttf248.life/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Wed, 22 Apr 2026 02:23:57 +0800</lastBuildDate><atom:link href="https://ttf248.life/post/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>回测里的前复权，国内和境外不是一套算法</title>
+        <link>https://ttf248.life/p/backtest-front-adjustment-formulas/</link>
+        <pubDate>Wed, 22 Apr 2026 01:31:44 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/backtest-front-adjustment-formulas/</guid>
+        <description>&lt;p&gt;前几天有人拿贵州茅台很早年的前复权价格来问我，说实话我第一眼也有点傻眼了: 同样看“前复权”，Yahoo 那边没有负数，东方财富那边却能看到负数。再回头看我六月那篇《回测中的“复权”详解与数据获取》，我才发现自己把几件事写混了。我当时把“比例法”写得太像唯一标准了，但 A 股国内语境里的前复权，和港美股常见的 adjusted close，本来就不是一个口径。&lt;/p&gt;
+&lt;p&gt;这篇就只做一件事: 把这两个口径拆开。我的判断先放前面，免得后面越看越乱: &lt;strong&gt;国内主流行情软件的前复权，更像是沿着交易所除权除息参考价去把 K 线接平；境外常见的 adjusted close，更像是用累计乘数去表达“分红再投”下的总收益。它们都叫前复权，但回答的不是同一个问题。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;a-股前复权先回答的是-k-线怎么接起来&#34;&gt;A 股前复权，先回答的是 K 线怎么接起来
+&lt;/h2&gt;&lt;p&gt;国内这套口径，公开锚点其实不难找。深交所给过除权除息参考价公式:&lt;/p&gt;
+$$
+\text{除权(息)参考价}=\frac{(\text{前收盘价}-\text{现金红利})+\text{配股价格}\times\text{股份变动比例}}{1+\text{股份变动比例}}
+$$&lt;p&gt;东方财富百科写的“精确复权”前复权公式，和这个思路基本是同一路:&lt;/p&gt;
+$$
+P&#39;=\frac{(P-D)+K\times r}{1+r}
+$$&lt;p&gt;这里的 $P$ 是复权前价格，$D$ 是每股现金红利，$K$ 是配股或新股价格，$r$ 是流通股份变动比例。这个式子最重要的地方，不是它有没有除法，而是&lt;strong&gt;现金红利是按固定金额往前扣&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;所以一旦公司行动只剩现金分红，没有送转，也没有配股，公式会直接退化成:&lt;/p&gt;
+$$
+P&#39;=P-D
+$$&lt;p&gt;这件事的后果很直接: 对上市时间很早、累计分红很多的 A 股，历史价格如果一路往前递推，确实可能被扣成负数。东方财富上偶尔能看到这种极早期负值，不一定是它算错了，更可能只是它坚持用了这套国内常见的前复权定义。&lt;/p&gt;
+&lt;p&gt;我现在更愿意把它理解成一种“图形连续性优先”的口径。你今天打开软件，当前价不动，往前的 K 线往下压，图接上了，技术指标也更顺眼。这对看盘很有用，但它并不天然等于总收益序列。&lt;/p&gt;
+&lt;h2 id=&#34;港美股-adjusted-close先回答的是总收益怎么算&#34;&gt;港美股 adjusted close，先回答的是总收益怎么算
+&lt;/h2&gt;&lt;p&gt;Yahoo 官方对 &lt;code&gt;Adjusted close&lt;/code&gt; 的定义就很直白: 它会对拆股和分红都做调整，而且分红乘数是按“分红占价格的比例”去算，官方还明确写了，这样做的主要目的之一就是&lt;strong&gt;避免负的历史价格&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;如果把它写成公式，常见的思路是先给每个公司行动一个乘数:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;拆股乘数: 比如 &lt;code&gt;2-for-1&lt;/code&gt;，历史价格乘 &lt;code&gt;0.5&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;分红乘数: &lt;code&gt;m=1-D/C_{t-1}&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;其中 $D$ 是每股现金分红，$C_{t-1}$ 是除息前的收盘价。然后把后续所有公司行动的乘数一路连乘，得到累计调整因子 $F_t$:&lt;/p&gt;
+$$
+F_t=\prod_{j&gt;t}(s_j\times m_j)
+$$&lt;p&gt;于是复权价就是:&lt;/p&gt;
+$$
+P_t^{adj}=P_t\times F_t
+$$&lt;p&gt;这套写法的含义很明确: 它在逼近“如果分红也继续留在这只股票里滚动投资，总收益会变成什么样”。所以它天然更适合收益率计算、长期回测、跨时段比较。它和国内那种把现金红利直接从历史价里扣掉的口径，看起来都在修 K 线，骨子里却不是一回事。&lt;/p&gt;
+&lt;p&gt;这里顺手补一句，六月旧文把 Yahoo / yfinance 的 adjusted 数据和 Tushare 的 qfq 说得太像“完全同一个东西”了，这也不严谨。更准确的说法是: &lt;strong&gt;它们属于同一家族，都是乘数或因子型调整，但归一化锚点不一定一样。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;复权因子不是万能翻译器&#34;&gt;复权因子不是万能翻译器
+&lt;/h2&gt;&lt;p&gt;问题其实就卡在这里。很多人一看到“复权因子”这四个字，就默认所有市场都能抽象成一列因子，然后 &lt;code&gt;price * factor&lt;/code&gt; 一把梭。这个想法在港美股常见的 adjusted close 体系里基本成立，在国内这套前复权里就不一定了。&lt;/p&gt;
+&lt;p&gt;原因不复杂。国内这套精确复权公式其实是一个仿射变换，不是纯乘法:&lt;/p&gt;
+$$
+P&#39;=\frac{1}{1+r}P+\frac{Kr-D}{1+r}
+$$&lt;p&gt;也就是说，它本质上是:&lt;/p&gt;
+$$
+P&#39;=aP+b
+$$&lt;p&gt;只要出现现金分红，那个常数项 $b$ 就不为零。多个公司行动叠起来以后，你得到的也不是一个单独的累计乘数，而是一串仿射变换的连乘连加。这个时候，&lt;strong&gt;单个“复权因子”就不够了&lt;/strong&gt;，你至少还需要现金分红、配股价、股份变动比例这些事件信息，或者等价的 $(A,B)$ 参数。&lt;/p&gt;
+&lt;p&gt;所以答案很明确: &lt;strong&gt;复权因子这个概念，不能在这两套方案里直接通用。&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;在境外常见的 adjusted close 体系里，复权因子就是核心对象。&lt;/li&gt;
+&lt;li&gt;在国内这套精确复权体系里，因子最多只覆盖“缩股 / 送转”那部分比例变化；一旦碰到现金红利，单因子就装不下了。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这也是为什么把国内软件前复权和 Yahoo adjusted close 当成同一口径去硬比，最后经常会越比越乱。&lt;/p&gt;
+&lt;h2 id=&#34;tushare-到底站哪边&#34;&gt;Tushare 到底站哪边
+&lt;/h2&gt;&lt;p&gt;这个问题官方其实写得很明白。Tushare 的 A 股复权行情文档给出的公式是:&lt;/p&gt;
+$$
+\text{前复权}= \text{当日收盘价}\times \text{当日复权因子}\div \text{最新复权因子}
+$$&lt;p&gt;同一页还明确写了两件事:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;它是按你设定的 &lt;code&gt;end_date&lt;/code&gt; 动态复权&lt;/li&gt;
+&lt;li&gt;它采用“分红再投”模式&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这两句话已经足够定性了。&lt;strong&gt;Tushare 的 A 股 &lt;code&gt;qfq&lt;/code&gt;，概念上更接近境外那种乘数/因子型 adjusted close，而不是东方财富那套精确复权前复权。&lt;/strong&gt; 只是它又保留了自己的归一化方式: 不是永远锚定今天，而是锚定你这次查询窗口的 &lt;code&gt;end_date&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;所以 Tushare 站的位置可以压成一句话:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;和东方财富不是同一套前复权定义&lt;/li&gt;
+&lt;li&gt;和 Yahoo 更像同一家族，但数值也未必逐点相同&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Tushare 后来给港股、美股也补了复权因子和复权行情接口，官方描述同样是 &lt;code&gt;price * adj_factor = 复权价格&lt;/code&gt;。这就更说明它的产品设计思路，本质上就是乘数因子这一派。&lt;/p&gt;
+&lt;h2 id=&#34;回到回测先定口径再谈对错&#34;&gt;回到回测，先定口径，再谈对错
+&lt;/h2&gt;&lt;p&gt;把这件事想明白以后，很多争论其实会自动消失。&lt;/p&gt;
+&lt;p&gt;如果你要的是:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;和国内行情软件截图对齐&lt;/li&gt;
+&lt;li&gt;当前价格不动，历史 K 线接平&lt;/li&gt;
+&lt;li&gt;在 A 股语境里看“前复权图形”&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;那你就该用国内这套精确复权口径。&lt;/p&gt;
+&lt;p&gt;如果你要的是:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;回测收益率&lt;/li&gt;
+&lt;li&gt;分红再投下的总收益&lt;/li&gt;
+&lt;li&gt;长周期策略评估&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;那你更该用 Tushare &lt;code&gt;qfq&lt;/code&gt;、Yahoo &lt;code&gt;Adjusted close&lt;/code&gt; 这一类乘数因子口径。&lt;/p&gt;
+&lt;p&gt;六月那篇旧文，最大的问题不是完全写反了，而是把这两套定义揉成了一种“唯一标准”。现在回头看，真正该记住的不是“比例法一定对、加减法一定错”，而是: &lt;strong&gt;你到底是在修图，还是在算收益。&lt;/strong&gt; 这两个问题不先分开，后面的回测结果、K 线比较、甚至“为什么会出现负数”，都会一起打结。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;ChatGPT 分享对话：复权计算差异分析&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://tushare.pro/document/2?doc_id=146&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Tushare：A股复权行情&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://tushare.pro/document/2?doc_id=338&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Tushare：美股复权行情&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://help.yahoo.com/kb/SLN28256.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Yahoo Help: What is the adjusted close?&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://investor.szse.cn/institute/video/classroom/operation/t20190131_564542.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;深圳证券交易所：如何计算除权（除息）价？&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://baike.eastmoney.com/item/%E5%A4%8D%E6%9D%83&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;东方财富百科：复权&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 分析这里的内容：https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf，还有历史文章 27-回测数据去哪里找，先梳理国内通用的前复权计算公式，然后梳理境外通用的前复权计算公式，复权因子的概念，能在两个方案里面通用吗？tushare 的数据属于哪种方式
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;先承认旧文把 A 股前复权和境外 adjusted close 混成了一件事，再把这篇的唯一主线压回“两个口径回答的是不同问题”。&lt;/li&gt;
+&lt;li&gt;国内部分只抓交易所除权除息参考价和东方财富精确复权公式，不把正文写成大而全的复权教材。&lt;/li&gt;
+&lt;li&gt;境外部分只抓乘数连乘和分红再投，不展开 CRSP 全部细则，避免把主线写散。&lt;/li&gt;
+&lt;li&gt;单独解释“复权因子”为何不能跨两套方案直接通用，核心落点是国内公式是 &lt;code&gt;aP+b&lt;/code&gt;，不是纯乘法。&lt;/li&gt;
+&lt;li&gt;Tushare 只做定位，不展开接口调用细节；重点说明它和 Yahoo 更像同一家族，但和东方财富不是同一定义。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>茅台净利润首降，不只是年轻人不喝白酒</title>
         <link>https://ttf248.life/p/moutai-profit-decline-and-real-estate-cycle/</link>
         <pubDate>Wed, 22 Apr 2026 01:10:41 +0800</pubDate>

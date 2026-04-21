@@ -6,7 +6,178 @@
         <description>Recent content in AI Inspiration Hub on Uncle Xiang&#39;s Notebook</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>en</language>
-        <lastBuildDate>Thu, 16 Apr 2026 21:23:19 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/ai-inspiration-hub/index.xml" rel="self" type="application/rss+xml" /><item>
+        <lastBuildDate>Wed, 22 Apr 2026 02:23:57 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/ai-inspiration-hub/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>The prior adjustment (pre-adjustment) for backtesting differs between domestic and international markets.</title>
+        <link>https://ttf248.life/en/p/backtest-front-adjustment-formulas/</link>
+        <pubDate>Wed, 22 Apr 2026 01:31:44 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/backtest-front-adjustment-formulas/</guid>
+        <description>&lt;p&gt;A few days ago, someone asked me using the pre-adjusted prices of very early Kweichow Moutai stock. Honestly, I was taken aback at first glance: Looking at the &amp;ldquo;pre-adjustment&amp;rdquo; values, Yahoo had no negative numbers, while East Money showed negative numbers. When I later reviewed my article from June, titled &lt;em&gt;Detailed Explanation of &amp;lsquo;Adjustment&amp;rsquo; and Data Acquisition in Backtesting&lt;/em&gt;, I realized that I had mixed up several things. At the time, I presented the &amp;ldquo;ratio method&amp;rdquo; as if it were the single standard, but pre-adjustment in the domestic A-share context and the commonly used adjusted close for Hong Kong/US stocks are fundamentally different metrics.&lt;/p&gt;
+&lt;p&gt;This article only does one thing: separate these two metrics/standards. I will put my judgment first so that you don&amp;rsquo;t get confused later: &lt;strong&gt;The pre-adjustment (or forward adjustment) of leading domestic apps is more like leveling the candlesticks by following the exchange&amp;rsquo;s ex-rights/ex-dividend reference price; the commonly used international adjusted close is more like using a cumulative multiplier to express the total return from &amp;ldquo;reinvesting dividends.&amp;rdquo; They are both called pre-adjustment, but they answer different questions.&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;a-shares-pre-adjustment-how-to-connect-the-candlestick-data-the-core-issue&#34;&gt;A-Shares Pre-adjustment: How to Connect the Candlestick Data (The Core Issue)
+&lt;/h2&gt;&lt;p&gt;With this domestic set of metrics, the public anchor points are actually not difficult to find. The SZSE has provided the reference price formula for ex-rights and ex-dividends:&lt;/p&gt;
+$$
+\text{Adjusted (Dividends/Rights) Reference Price}=\frac{(\text{Previous Closing Price}-\text{Cash Dividend})+\text{Rights Issue Price}\times\text{Share Change Ratio}}{1+\text{Share Change Ratio}}
+$$&lt;p&gt;The formula for &amp;ldquo;adjusted forward division&amp;rdquo; written in the East Money Encyclopedia and this approach are basically on the same track:&lt;/p&gt;
+$$
+P&#39;=\frac{(P-D)+K\times r}{1+r}
+$$&lt;p&gt;Here, $P$ is the pre-adjusted price, $D$ is the cash dividend per share, $K$ is the rights issue or new stock price, and $r$ is the proportion of circulating shares change. The most important point about this formula is not whether it has division, but that &lt;strong&gt;the cash dividend is deducted based on a fixed amount&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Thus, if a company&amp;rsquo;s actions are limited to cash dividends—with no stock transfers or bonus share allocations—the formula will directly simplify to:&lt;/p&gt;
+$$
+P&#39;=P-D
+$$&lt;p&gt;The consequence of this matter is very direct: for A-shares listed many years ago with high accumulated dividends, if the historical price is continuously extrapolated backward in time, it can indeed be calculated as a negative number. Occasionally, you might see such extremely early negative values on East Money (Dongfang Caifu). This does not necessarily mean that they have calculated it incorrectly; it is more likely that they are simply adhering to this common set of domestic pre-adjustment definitions.&lt;/p&gt;
+&lt;p&gt;I now prefer to understand it as an approach that prioritizes “graphical continuity.” If you open the software today, and the current price remains stable while projecting downward from previous K-lines, the chart connects smoothly, and the technical indicators look more natural. This is very useful for market analysis, but it does not naturally equal the total return series.&lt;/p&gt;
+&lt;h2 id=&#34;hkus-stocks-adjusted-close-first-how-to-calculate-the-total-return&#34;&gt;HK/US Stocks Adjusted Close, First, how to calculate the total return
+&lt;/h2&gt;&lt;p&gt;Yahoo&amp;rsquo;s official definition of &lt;code&gt;Adjusted close&lt;/code&gt; is very straightforward: It adjusts for both stock splits and dividends, and the dividend multiplier is calculated based on &amp;ldquo;the proportion of the dividend to the price.&amp;rdquo; Yahoo also explicitly states that one of the main purposes of doing this is to &lt;strong&gt;avoid negative historical prices&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;If written as a formula, the common approach is to first assign a multiplier to each company&amp;rsquo;s action:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Stock split multiplier: e.g., &lt;code&gt;2-for-1&lt;/code&gt;, historical price times &lt;code&gt;0.5&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Dividend multiplier: &lt;code&gt;m=1-D/C_{t-1}&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;where $D$ is the cash dividend per share, and $C_{t-1}$ is the closing price before the ex-dividend date. Then, multiplying all subsequent corporate action multipliers sequentially yields the cumulative adjustment factor $F_t$:&lt;/p&gt;
+$$
+F_t=\prod_{j&gt;t}(s_j\times m_j)
+$$&lt;p&gt;Therefore, the adjusted price is:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;$$
+P_t^{adj}=P_t\times F_t
+$$
+
+The meaning of this approach is very clear: It approximates what the total return would be if dividends were continuously reinvested back into this stock. Therefore, it is naturally better suited for calculating rates of return, long-term backtesting, and cross-period comparisons. This methodology is fundamentally different from the domestic approach that simply deducts cash dividends directly from historical prices; even though both might appear to adjust the candlestick charts, they are not the same at their core.
+
+I&#39;ll take this opportunity to add that the old article from June implied that Yahoo / yfinance&#39;s adjusted data and Tushare&#39;s qfq are &amp;quot;completely the same thing,&amp;quot; which is not strictly accurate. A more precise way to put it is: **they belong to the same family, both being multiplicative or factor-type adjustments, but the normalization anchor point may not be the same.**
+
+## Adjustment Factors Are Not a Universal Translator
+
+The core issue lies right here. Many people, upon seeing the phrase &amp;quot;adjustment factor,&amp;quot; assume that all markets can be abstracted into a single set of factors and then simply apply `price * factor` without question. This assumption is largely valid within the common adjusted close systems used by Hong Kong and US stocks, but it may not hold true in China&#39;s pre-adjustment system.
+
+The reason is not complex. This set of precise reweighting formulas used domestically in China is actually an affine transformation, not purely multiplicative:
+
+$$
+P&#39;=\frac{1}{1+r}P+\frac{Kr-D}{1+r}
+$$
+
+In other words, it is essentially:
+
+$$
+P&#39;=aP+b
+$$
+
+If a cash dividend occurs, the constant term $b$ will not be zero. When multiple corporate actions stack up, what you get is not a single cumulative multiplier, but a series of multiplications and additions of affine transformations. At this point, **a single &amp;quot;adjustment factor&amp;quot; is insufficient**; you need at least event information such as cash dividends, ex-rights prices/book values, share change ratios, or the equivalent $(A, B)$ parameters.
+
+Therefore, the answer is quite clear: **the concept of the adjustment factor cannot be directly generalized within these two sets of schemes.**
+
+- In the commonly used adjusted close system abroad, the adjustment factor is the core focus.
+- In this precise adjustment system domestically, the factor can only cover percentage changes related to &amp;quot;stock splits / bonus issues&amp;quot;; once it encounters cash dividends, a single factor cannot accommodate them.
+
+This is also why directly comparing pre-adjusted domestic software data with Yahoo adjusted close using the same metric often leads to increasingly confusing results.
+
+## Where Does Tushare Really Stand?
+
+The official documentation actually writes it very clearly. The formula provided in Tushare&#39;s A-share adjusted closing price data is:
+
+$$
+\text{Pre-adjusted Price} = \text{Daily Closing Price} \times \text{Daily Adjustment Factor} / \text{Latest Adjustment Factor}
+$$
+
+The same page also clearly stated two things:
+
+- It dynamically reprices/reweights based on your specified `end_date`
+- It uses a &amp;quot;dividend reinvestment&amp;quot; model
+
+These two sentences are sufficient for qualitative description. **Tushare&#39;s A-share `qfq` is conceptually closer to the multiplier/factor type adjusted close found overseas, rather than East Money’s precise adjustment pre-adjustment method.** However, it retains its own normalization approach: it does not always anchor to today, but anchors to the `end_date` of your current query window.
+
+So, the positioning for Tushare can be condensed into a single sentence:
+
+- It does not use the same pre-revised definition as East Money Fortune.
+- It is more similar to Yahoo, but the values may not be identical at every point.
+
+Tushare later also added adjusted factors and adjusted data interfaces for HK stocks and US stocks, with the official description remaining `price * adj_factor = Adjusted Price`. This further illustrates its product design thinking: fundamentally, it is based on multiplicative factors.
+
+## Back to Backtesting: First Define the Parameters, Then Discuss Accuracy
+
+Once you understand this matter, many of the debates will actually disappear automatically.
+
+If you want:
+
+- Aligned with screenshots from domestic financial charting software
+- Current price remains unchanged, historical K-lines are connected (or &#39;aligned flatly&#39;)
+- Viewing the &amp;quot;pre-adjusted graph&amp;quot; in the context of A-shares
+
+In that case, you should use the domestic set of standards for precise re-weighting/adjustment.
+
+If you are looking for:
+
+- Backtest Return Rate
+- Total Return from Dividend Reinvestment
+- Long-Term Strategy Evaluation
+
+You should better use the multiplicative factor metrics/basis, such as Tushare&#39;s `qfq` or Yahoo&#39;s `Adjusted close`.
+
+The biggest problem with that old piece from June wasn&#39;t that it was entirely incorrect, but rather that it merged two distinct sets of definitions into a single &amp;quot;definitive standard.&amp;quot; Looking back now, what you should truly remember isn&#39;t that &amp;quot;proportional methods are always correct and addition/subtraction methods are always wrong,&amp;quot; but rather: **Are you trying to fit the data visually, or are you calculating returns.** If these two questions aren&#39;t separated first, everything that follows—backtesting results, candlestick comparisons, even &#39;why negative numbers appear&#39;—will all become hopelessly tangled together.
+
+## References
+
+- [ChatGPT Shared Dialogue: Adjusted Price Calculation Difference Analysis](https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf)
+- [Tushare: A-Share Adjusted Price Data](https://tushare.pro/document/2?doc_id=146)
+- [Tushare: US Stock Adjusted Price Data](https://tushare.pro/document/2?doc_id=338)
+- [Yahoo Help: What is the adjusted close?](https://help.yahoo.com/kb/SLN28256.html)
+- [Shenzhen Stock Exchange: How to Calculate Adjusted (Ex-Dividend) Price?](https://investor.szse.cn/institute/video/
+
+## Writing Notes
+
+### Original Prompt
+
+```text
+$blog-writer analyze the content here: https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf, and also historical articles 27 - where to find backtesting data? First, outline the common pre-adjustment calculation formula used in China, then outline the common pre-adjustment calculation formula used overseas. Regarding the concept of adjustment factor/reversion factor, can it be general for both schemes? What type of method does Tushare&#39;s data belong to?
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;writing-approach-summary&#34;&gt;Writing Approach Summary
+&lt;/h3&gt;</description>
+        </item>
+        <item>
+        <title>Moutai&#39;s Net Profit Drops for the First Time, and it&#39;s Not Just Because Young People Aren&#39;t Drinking Baijiu</title>
+        <link>https://ttf248.life/en/p/moutai-profit-decline-and-real-estate-cycle/</link>
+        <pubDate>Wed, 22 Apr 2026 01:10:41 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/moutai-profit-decline-and-real-estate-cycle/</guid>
+        <description>&lt;p&gt;This matter deserves separate discussion because it directly impacts how we view Maotai. Previously, many people treated Maotai as an eternally rising consumption myth, and whether young people drank it or not was just a minor factor. Now, that is no longer the case. It is true that young people naturally have little interest in Baijiu (Chinese liquor), but this is more like a slow-moving variable. The sudden turnaround reported in the annual report appears to be driven by the contraction of an entire old system: obsolete business demands, traditional wealth distribution methods, and established status-driven consumption patterns.&lt;/p&gt;
+&lt;h2 id=&#34;its-just-superficially-that-young-people-dont-drink&#34;&gt;It&amp;rsquo;s Just Superficially That Young People Don&amp;rsquo;t Drink
+&lt;/h2&gt;&lt;p&gt;I used to casually attribute the cause to generational shifts, thinking that because young people were drinking craft beer, cocktails, and whisky, baijiu would naturally become marginalized. This conclusion isn&amp;rsquo;t necessarily wrong, but it&amp;rsquo;s insufficient to explain the sharp changes seen in Maotai’s latest financial report.&lt;/p&gt;
+&lt;p&gt;The reason is simple: generational preference changes are gradual; they won&amp;rsquo;t suddenly crash profits like this in a single quarter. What truly determines the marginal pricing and profit of high-end baijiu is never just whether &amp;ldquo;people drink it,&amp;rdquo; but rather &amp;ldquo;who buys it, what scenario they are in, and why they are willing to pay two thousand or three thousand yuan per bottle.&amp;rdquo; Often, high-end baijiu sells not its taste itself, but social efficiency, status affirmation, and relationship lubrication. When you are actually at a gathering, many people don&amp;rsquo;t care if this particular cup is worth the money; what they care about is whether the entire occasion matches this price point.&lt;/p&gt;
+&lt;p&gt;Kweichow Moutai itself has quite clearly articulated this change. At the national dealer gathering held on &lt;code&gt;2025-12-28&lt;/code&gt;, company management directly mentioned that &amp;ldquo;the demand from core traditional consumers is weakening,&amp;rdquo; while also emphasizing the need to find new customer groups and usage scenarios. This statement contains a great deal of information. It is tantamount to admitting that the core buyers who previously underpinned Moutai&amp;rsquo;s pricing structure are no longer as strong as they once were.&lt;/p&gt;
+&lt;h2 id=&#34;why-is-moutai-like-a-shadow-stock-of-real-estate&#34;&gt;Why is Moutai like a shadow stock of real estate?
+&lt;/h2&gt;&lt;p&gt;Here, by calling it a &amp;ldquo;shadow stock,&amp;rdquo; I don&amp;rsquo;t mean that Moutai&amp;rsquo;s reports contain a pile of real estate projects, nor do I mean that if real estate drops, Moutai will drop in perfect lockstep. I am more inclined to understand it as a reflection on the demand structure.&lt;/p&gt;
+&lt;p&gt;Over the past twenty years, many of China&amp;rsquo;s most prominent, sustained, and extravagant business scenarios were related to the real estate chain. Local government finances rely on land sales; municipal investment vehicles revolve around land assets, developers maintain high turnover rates, and general contractors, subcontractors, building materials, home decoration services, agents, and financial support systems all benefited immensely together. Once this chain was prosperous, business banquets, festival gifting, relationship maintenance, and project coordination would all be significantly amplified. The money wasn&amp;rsquo;t gradually chipped away from residents&amp;rsquo; daily consumption; rather, it flowed out of a system characterized by high leverage, high turnover, and high premium pricing.&lt;/p&gt;
+&lt;p&gt;In this environment, Maotai is not just liquor; it functions more like a high-end social status symbol. It possesses several characteristics that make it uniquely suited for this role: a powerful brand, an elevated price point, strong recognition, and excellent circulation. Often, whether a bottle costs two thousand or three thousand (yuan), does not alter the budget logic of the gathering; rather, the higher the cost, the better it executes the signal transmission of &amp;ldquo;I value you,&amp;rdquo; &amp;ldquo;I am capable,&amp;rdquo; and &amp;ldquo;this event has prestige.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;So, I largely agree with the statement that &amp;ldquo;Maotai is a shadow stock of real estate,&amp;rdquo; but to elaborate fully: it does not allude to the houses themselves, but rather the high-end business consumption order created during the era of real estate credit expansion.&lt;/p&gt;
+&lt;p&gt;This existing order is in decline. The national real estate data disclosed by the National Bureau of Statistics for &lt;code&gt;2025&lt;/code&gt; is also worrying: Real estate development investment fell year-on-year (YoY) by &lt;code&gt;17.2%&lt;/code&gt;, newly built commercial housing sales area declined by &lt;code&gt;8.7%&lt;/code&gt;, and capital secured by property developers dropped by &lt;code&gt;13.4%&lt;/code&gt;. When the real estate chain contracts, what often disappears first is not basic necessities like food and drink, but rather consumption that has the greatest budget flexibility, prioritizes prestige, and relies heavily on projects and connections to operate. High-end baijiu (Chinese liquor) is exactly caught in this predicament.&lt;/p&gt;
+&lt;h2 id=&#34;what-this-annual-report-truly-reveals-is-not-just-weak-performance&#34;&gt;What This Annual Report Truly Reveals Is Not Just Weak Performance
+&lt;/h2&gt;&lt;p&gt;The more crucial signal, actually, is that Moutai itself has started changing its narrative.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;2026-01-09&lt;/code&gt;, Moutai publicly stated at a distributor meeting that &amp;ldquo;market transformation has become an unavoidable question for Moutai.&amp;rdquo; It also pointed out thoroughly that the past sales sector&amp;rsquo;s &amp;ldquo;non-commercialization&amp;rdquo; made it difficult for ordinary consumers to purchase wine fairly, conveniently, and genuinely. This statement is quite strong. It suggests that the company is aware that in the previous system, a large portion of the value did not come from genuine consumption needs, but rather from scarcity, artificial pricing structures, status group allocation, and channel premiums.&lt;/p&gt;
+&lt;p&gt;In other words, what Maotai is currently doing fundamentally means it is attempting to shed its &amp;ldquo;financial attributes,&amp;rdquo; reduce its dependency on gift-giving consumption, and dismantle its historically closed consumer segments. By moving toward &amp;lsquo;iMaotai&amp;rsquo;, direct-to-consumer channels (D2C), and emphasizing service and genuine needs, this effort is not merely channel reform; it is about establishing a new pricing foundation for the next stage.&lt;/p&gt;
+&lt;p&gt;This also explains why the company could still maintain positive growth during the first three quarters of 2025, but then suddenly turned negative for the full year. Previously, it was buoyed by momentum, brand recognition, and channels, but it could not sustain that through the fourth quarter. Old demand is declining, and new demand has not fully taken over/picked up, so naturally, the profit statement looks poor in the interim.&lt;/p&gt;
+&lt;h2 id=&#34;rethinking-this-stock&#34;&gt;Rethinking This Stock
+&lt;/h2&gt;&lt;p&gt;I don&amp;rsquo;t think Moutai is done for just because of this. Its brand, region, process, and supply constraints are still there; the moat doesn&amp;rsquo;t crumble overnight. There&amp;rsquo;s another important data point in the annual report: the company expects cumulative cash dividends of &lt;code&gt;650.33&lt;/code&gt; billion yuan in &lt;code&gt;2025&lt;/code&gt;, which accounts for &lt;code&gt;79%&lt;/code&gt; of net profit attributable to owners. This is already very much like a cash cow machine.&lt;/p&gt;
+&lt;p&gt;But the challenge also lies here. Previously, the market was willing to give Moutai a high valuation because the core premise was that it was both a branded consumer product and operated like a highly predictable growth engine. Now that the growth component begins to weaken, the valuation anchor shifts in another direction: moving away from a high-growth consumption leader, and slowly drifting toward defensive assets characterized by lower growth rates, high dividends, and strong cash flow.&lt;/p&gt;
+&lt;p&gt;This is not the same thing for investors.&lt;/p&gt;
+&lt;p&gt;If you still look at it with the mindset of &amp;ldquo;earnings will always be double digits, wholesale prices will always be stable, and business demand will always be there,&amp;rdquo; it can be difficult to reconcile. Because the most lucrative demand from the old era truly declined along with real estate. But if you view Moutai as a super cash-flow asset that is going through de-bubbling, anti-speculation measures, and returning to its true consumption base, then it operates under a completely different valuation logic.&lt;/p&gt;
+&lt;h2 id=&#34;in-conclusion&#34;&gt;In Conclusion
+&lt;/h2&gt;&lt;p&gt;Therefore, my current understanding of this matter is quite different from what it used to be.&lt;/p&gt;
+&lt;p&gt;It is true that young people are not drinking baijiu, and it is also true that the culture of celebratory drinking has strong historical cyclical characteristics. However, the more critical point is that the era which placed high-end baijiu on a pedestal was never sustained by ordinary people drinking it in daily life. Instead, it was propped up by an entire system: real estate credit expansion, ballooning corporate banquets (business entertaining), and distorted consumption driven by status/face. After the decline of the property market, baijiu will obviously not disappear immediately. But the segment of demand that is most profitable, least concerned with cost-effectiveness, and indifferent to high prices is no longer as robust as it once was.&lt;/p&gt;
+&lt;p&gt;For Moutai&amp;rsquo;s stock, the &lt;code&gt;2025&lt;/code&gt; annual report will likely not be merely an ordinary performance fluctuation, but rather the beginning of a shift in its valuation narrative. Going forward, we cannot rely solely on brand loyalty; we must also assess the speed of genuine consumer uptake and determine whether channel reforms can successfully transform the past demand—which was propped up by temporary mechanisms/schemes—into a more sustainable consumption foundation.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;h2 id=&#34;authors-notes&#34;&gt;Author&amp;rsquo;s Notes
+&lt;/h2&gt;&lt;h3 id=&#34;original-prompts&#34;&gt;Original Prompts
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;Analyzing the A-share listed baijiu company Maotai&amp;rsquo;s 2025 financial report data reveals a decline in net profit for the first time. Previously, the understanding was that young people don&amp;rsquo;t drink baijiu, and China&amp;rsquo;s so-called &amp;ldquo;drinking culture&amp;rdquo; is mostly a historical product. The latest understanding suggests that this historical product &lt;em&gt;is&lt;/em&gt; real estate, and Maotai baijiu belongs to the shadow stocks of real estate. Since real estate has now declined, corresponding business banquets are no longer frantic, meaning this derivative product (baijiu) is not as needed anymore. Baijiu&amp;rsquo;s net profit remains high; for business banquets, they don&amp;rsquo;t care if the price is two thousand or three thousand—what they want is the &amp;ldquo;face&amp;rdquo; (prestige).&lt;/p&gt;&lt;/blockquote&gt;
+&lt;h3 id=&#34;writing-outline-summary&#34;&gt;Writing Outline Summary
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;Use the summary of Moutai&amp;rsquo;s &lt;code&gt;2025&lt;/code&gt; annual report, disclosed on &lt;code&gt;2026-04-17&lt;/code&gt;, to firmly establish &amp;ldquo;the initial decline in profit&amp;rdquo; as the key trigger point.&lt;/li&gt;
+&lt;li&gt;Instead of stating the main judgment as &amp;ldquo;young people don&amp;rsquo;t drink baijiu,&amp;rdquo; focus on the structure of business demand behind high-end liquor.&lt;/li&gt;
+&lt;li&gt;In the middle section, use three sets of official real estate data (development investment, sales area, and available funds) to explain why the real estate downturn will first hit high-end banquet budgets.&lt;/li&gt;
+&lt;li&gt;Separately added&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>Lock down the strongest model first, AI companies start selling access control.</title>
         <link>https://ttf248.life/en/p/anthropic-mythos-preview-access-control/</link>
         <pubDate>Thu, 16 Apr 2026 20:12:14 +0800</pubDate>

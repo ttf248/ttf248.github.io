@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="A few days ago, someone asked me using the pre-adjusted prices of very early Kweichow Moutai stock. Honestly, I was taken aback at first glance: Looking at the &ldquo;pre-adjustment&rdquo; values, Yahoo had no negative numbers, while East Money showed negative numbers. When I later reviewed my article from June, titled Detailed Explanation of &lsquo;Adjustment&rsquo; and Data Acquisition in Backtesting, I realized that I had mixed up several things. At the time, I presented the &ldquo;ratio method&rdquo; as if it were the single standard, but pre-adjustment in the domestic A-share context and the commonly used adjusted close for Hong Kong/US stocks are fundamentally different metrics.\nThis article only does one thing: separate these two metrics/standards. I will put my judgment first so that you don&rsquo;t get confused later: The pre-adjustment (or forward adjustment) of leading domestic apps is more like leveling the candlesticks by following the exchange&rsquo;s ex-rights/ex-dividend reference price; the commonly used international adjusted close is more like using a cumulative multiplier to express the total return from &ldquo;reinvesting dividends.&rdquo; They are both called pre-adjustment, but they answer different questions.\n">
+<title>The prior adjustment (pre-adjustment) for backtesting differs between domestic and international markets.</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/backtest-front-adjustment-formulas/'>
+
+<link rel="stylesheet" href="/scss/style.min.3feddf7433e05d0be4d114733bf2e2c6246546597e82c89c1c5943d545443503.css"><meta property='og:title' content="The prior adjustment (pre-adjustment) for backtesting differs between domestic and international markets.">
+<meta property='og:description' content="A few days ago, someone asked me using the pre-adjusted prices of very early Kweichow Moutai stock. Honestly, I was taken aback at first glance: Looking at the &ldquo;pre-adjustment&rdquo; values, Yahoo had no negative numbers, while East Money showed negative numbers. When I later reviewed my article from June, titled Detailed Explanation of &lsquo;Adjustment&rsquo; and Data Acquisition in Backtesting, I realized that I had mixed up several things. At the time, I presented the &ldquo;ratio method&rdquo; as if it were the single standard, but pre-adjustment in the domestic A-share context and the commonly used adjusted close for Hong Kong/US stocks are fundamentally different metrics.\nThis article only does one thing: separate these two metrics/standards. I will put my judgment first so that you don&rsquo;t get confused later: The pre-adjustment (or forward adjustment) of leading domestic apps is more like leveling the candlesticks by following the exchange&rsquo;s ex-rights/ex-dividend reference price; the commonly used international adjusted close is more like using a cumulative multiplier to express the total return from &ldquo;reinvesting dividends.&rdquo; They are both called pre-adjustment, but they answer different questions.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/backtest-front-adjustment-formulas/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='Quantization' /><meta property='article:tag' content='Backtesting' /><meta property='article:tag' content='Rebalancing' /><meta property='article:tag' content='AI Inspiration Hub' /><meta property='article:published_time' content='2026-04-22T01:31:44&#43;08:00'/><meta property='article:modified_time' content='2026-04-22T02:23:57&#43;08:00'/>
+<meta name="twitter:title" content="The prior adjustment (pre-adjustment) for backtesting differs between domestic and international markets.">
+<meta name="twitter:description" content="A few days ago, someone asked me using the pre-adjusted prices of very early Kweichow Moutai stock. Honestly, I was taken aback at first glance: Looking at the &ldquo;pre-adjustment&rdquo; values, Yahoo had no negative numbers, while East Money showed negative numbers. When I later reviewed my article from June, titled Detailed Explanation of &lsquo;Adjustment&rsquo; and Data Acquisition in Backtesting, I realized that I had mixed up several things. At the time, I presented the &ldquo;ratio method&rdquo; as if it were the single standard, but pre-adjustment in the domestic A-share context and the commonly used adjusted close for Hong Kong/US stocks are fundamentally different metrics.\nThis article only does one thing: separate these two metrics/standards. I will put my judgment first so that you don&rsquo;t get confused later: The pre-adjustment (or forward adjustment) of leading domestic apps is more like leveling the candlesticks by following the exchange&rsquo;s ex-rights/ex-dividend reference price; the commonly used international adjusted close is more like using a cumulative multiplier to express the total return from &ldquo;reinvesting dividends.&rdquo; They are both called pre-adjustment, but they answer different questions.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( false ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script>
+    </head>
+    <body class="
+    article-page
+    ">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<div class="container main-container flex on-phone--column extended"><aside class="sidebar left-sidebar sticky ">
+    <button class="hamburger hamburger--spin" type="button" id="toggle-menu" aria-label="Toggle Menu">
+        <span class="hamburger-box">
+            <span class="hamburger-inner"></span>
+        </span>
+    </button>
+
+    <header>
+        
+        
+        <div class="site-meta">
+            <h1 class="site-name"><a href="/en">Uncle Xiang&#39;s Notebook</a></h1>
+            <h2 class="site-description">Collecting Moments, Marking Time</h2>
+        </div>
+    </header><ol class="menu-social">
+            
+                <li>
+                    <a 
+                        href='https://github.com/ttf248'
+                        target="_blank"
+                        title="0-GitHub"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='mailto:tianlong.xiang@foxmail.com'
+                        target="_blank"
+                        title="Email"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="none"  stroke="currentColor"  stroke-width="2"  stroke-linecap="round"  stroke-linejoin="round"  class="icon icon-tabler icons-tabler-outline icon-tabler-mail"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10z" /><path d="M3 7l9 6l9 -6" /></svg>
+                        
+                    </a>
+                </li>
+            
+                <li>
+                    <a 
+                        href='/index.xml'
+                        target="_blank"
+                        title="RSS"
+                        rel="me"
+                    >
+                        
+                        
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-rss" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="5" cy="19" r="1" />
+  <path d="M4 4a16 16 0 0 1 16 16" />
+  <path d="M4 11a9 9 0 0 1 9 9" />
+</svg>
+
+
+
+                        
+                    </a>
+                </li>
+            
+        </ol><ol class="menu" id="main-menu">
+        
+        
+        <li class="menu-bottom-section">
+            <ol class="menu">
+                    
+                        <li id="i18n-switch">  
+                            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                            <select name="language" title="language" onchange="window.location.href = this.selectedOptions[0].value">
+                                
+                                    <option value="https://ttf248.life/" >中文</option>
+                                
+                                    <option value="https://ttf248.life/en/" selected>English</option>
+                                
+                                    <option value="https://ttf248.life/ja/" >日本語</option>
+                                
+                            </select>
+                        </li>
+                    
+                
+
+                
+                    <li id="dark-mode-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                        <span>Dark Mode</span>
+                    </li>
+                
+            </ol>
+        </li>
+    </ol>
+</aside>
+
+    <aside class="sidebar right-sidebar sticky">
+        
+            
+                
+    <section class="widget archives">
+        <div class="widget-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-hash" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <line x1="5" y1="9" x2="19" y2="9" />
+  <line x1="5" y1="15" x2="19" y2="15" />
+  <line x1="11" y1="4" x2="7" y2="20" />
+  <line x1="17" y1="4" x2="13" y2="20" />
+</svg>
+
+
+
+        </div>
+        <h2 class="widget-title section-title">Table of contents</h2>
+        
+        <div class="widget--toc">
+            <nav id="TableOfContents">
+  <ol>
+    <li><a href="#a-shares-pre-adjustment-how-to-connect-the-candlestick-data-the-core-issue">A-Shares Pre-adjustment: How to Connect the Candlestick Data (The Core Issue)</a></li>
+    <li><a href="#hkus-stocks-adjusted-close-first-how-to-calculate-the-total-return">HK/US Stocks Adjusted Close, First, how to calculate the total return</a>
+      <ol>
+        <li><a href="#writing-approach-summary">Writing Approach Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+        </div>
+    </section>
+
+            
+        
+    </aside>
+
+
+            <main class="main full-width">
+    
+<article class="main-article has-lead">
+    <header class="article-header">
+
+    
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/github-dark.min.css">
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
+
+<style>
+:root {
+    --copy-btn-bg: rgba(15, 23, 32, 0.72);
+    --copy-btn-hover-bg: rgba(30, 41, 59, 0.9);
+    --copy-btn-success-bg: rgba(22, 163, 74, 0.88);
+    --copy-btn-text-color: #ffffff;
+    --copy-btn-border-radius: 10px;
+    --copy-btn-transition: all 0.3s ease;
+}
+
+.code-container {
+    position: relative;
+    margin: 1.4rem 0 1.8rem;
+}
+
+.code-container pre,
+.code-container figure {
+    margin: 0;
+}
+
+.copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    padding: 6px 10px;
+    background: var(--copy-btn-bg);
+    color: var(--copy-btn-text-color);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--copy-btn-border-radius);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: var(--copy-btn-transition);
+    z-index: 10;
+    opacity: 0;
+    backdrop-filter: blur(8px);
+}
+
+.copy-btn:hover {
+    background: var(--copy-btn-hover-bg);
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: none;
+}
+
+.copy-btn:active {
+    transform: translateY(0);
+}
+
+.copy-btn.copied {
+    background: var(--copy-btn-success-bg);
+}
+
+.copy-btn:focus {
+    outline: 2px solid var(--copy-btn-success-bg);
+    outline-offset: 2px;
+}
+
+ 
+@media (max-width: 768px) {
+    .copy-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+        top: 8px;
+        right: 8px;
+    }
+}
+
+ 
+.code-container:hover .copy-btn {
+    opacity: 0.92;
+}
+</style>
+
+<script>
+class CodeCopyManager {
+    constructor() {
+        this.addCopyButtons();
+    }
+
+    addCopyButtons() {
+        document.querySelectorAll('pre code').forEach((block) => {
+            this.createCopyButton(block);
+        });
+    }
+
+    createCopyButton(codeBlock) {
+        const preElement = codeBlock.parentNode;
+        
+        
+        if (preElement.parentNode.classList.contains('code-container')) {
+            return;
+        }
+
+        const container = this.createContainer(preElement);
+        const button = this.createButton();
+        
+        container.appendChild(button);
+        
+        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
+    }
+
+    createContainer(preElement) {
+        const container = document.createElement('div');
+        container.classList.add('code-container');
+        
+        preElement.parentNode.insertBefore(container, preElement);
+        container.appendChild(preElement);
+        
+        return container;
+    }
+
+    createButton() {
+        const button = document.createElement('button');
+        button.classList.add('copy-btn');
+        button.innerText = '复制代码';
+        button.setAttribute('aria-label', '复制代码到剪贴板');
+        return button;
+    }
+
+    async handleCopy(button, codeBlock) {
+        try {
+            const code = codeBlock.innerText;
+            await navigator.clipboard.writeText(code);
+            this.showCopySuccess(button);
+        } catch (error) {
+            console.error('复制失败:', error);
+            this.showCopyError(button);
+        }
+    }
+
+    showCopySuccess(button) {
+        const originalText = button.innerText;
+        button.innerText = '已复制';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+            button.classList.remove('copied');
+        }, 2000);
+    }
+
+    showCopyError(button) {
+        const originalText = button.innerText;
+        button.innerText = '复制失败';
+        
+        setTimeout(() => {
+            button.innerText = originalText;
+        }, 2000);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new CodeCopyManager();
+
+    
+    const progressBar = document.getElementById('reading-progress');
+    const article = document.querySelector('.main-article');
+
+    if (progressBar && article) {
+        const updateProgress = () => {
+            const articleTop = article.offsetTop;
+            const articleHeight = article.offsetHeight;
+            const windowHeight = window.innerHeight;
+            const scrollY = window.scrollY;
+
+            const start = articleTop - windowHeight;
+            const end = articleTop + articleHeight - windowHeight;
+            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
+
+            progressBar.style.width = progress + '%';
+        };
+
+        window.addEventListener('scroll', updateProgress, { passive: true });
+        updateProgress();
+    }
+});
+</script>
+
+<div class="article-details">
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/financial-knowledge-base/" >
+                Financial Knowledge Base
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        <h2 class="article-title">
+            <a href="/en/p/backtest-front-adjustment-formulas/">The prior adjustment (pre-adjustment) for backtesting differs between domestic and international markets.</a>
+        </h2>
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Apr 22, 2026</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            6 minute read
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="https://ttf248.life/p/backtest-front-adjustment-formulas/" class="link">中文</a>
+                    
+                        <a href="https://ttf248.life/ja/p/backtest-front-adjustment-formulas/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>A few days ago, someone asked me using the pre-adjusted prices of very early Kweichow Moutai stock. Honestly, I was taken aback at first glance: Looking at the &ldquo;pre-adjustment&rdquo; values, Yahoo had no negative numbers, while East Money showed negative numbers. When I later reviewed my article from June, titled <em>Detailed Explanation of &lsquo;Adjustment&rsquo; and Data Acquisition in Backtesting</em>, I realized that I had mixed up several things. At the time, I presented the &ldquo;ratio method&rdquo; as if it were the single standard, but pre-adjustment in the domestic A-share context and the commonly used adjusted close for Hong Kong/US stocks are fundamentally different metrics.</p>
+<p>This article only does one thing: separate these two metrics/standards. I will put my judgment first so that you don&rsquo;t get confused later: <strong>The pre-adjustment (or forward adjustment) of leading domestic apps is more like leveling the candlesticks by following the exchange&rsquo;s ex-rights/ex-dividend reference price; the commonly used international adjusted close is more like using a cumulative multiplier to express the total return from &ldquo;reinvesting dividends.&rdquo; They are both called pre-adjustment, but they answer different questions.</strong></p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    <section class="article-content">
+    
+    
+    <h2 id="a-shares-pre-adjustment-how-to-connect-the-candlestick-data-the-core-issue">A-Shares Pre-adjustment: How to Connect the Candlestick Data (The Core Issue)
+</h2><p>With this domestic set of metrics, the public anchor points are actually not difficult to find. The SZSE has provided the reference price formula for ex-rights and ex-dividends:</p>
+$$
+\text{Adjusted (Dividends/Rights) Reference Price}=\frac{(\text{Previous Closing Price}-\text{Cash Dividend})+\text{Rights Issue Price}\times\text{Share Change Ratio}}{1+\text{Share Change Ratio}}
+$$<p>The formula for &ldquo;adjusted forward division&rdquo; written in the East Money Encyclopedia and this approach are basically on the same track:</p>
+$$
+P'=\frac{(P-D)+K\times r}{1+r}
+$$<p>Here, $P$ is the pre-adjusted price, $D$ is the cash dividend per share, $K$ is the rights issue or new stock price, and $r$ is the proportion of circulating shares change. The most important point about this formula is not whether it has division, but that <strong>the cash dividend is deducted based on a fixed amount</strong>.</p>
+<p>Thus, if a company&rsquo;s actions are limited to cash dividends—with no stock transfers or bonus share allocations—the formula will directly simplify to:</p>
+$$
+P'=P-D
+$$<p>The consequence of this matter is very direct: for A-shares listed many years ago with high accumulated dividends, if the historical price is continuously extrapolated backward in time, it can indeed be calculated as a negative number. Occasionally, you might see such extremely early negative values on East Money (Dongfang Caifu). This does not necessarily mean that they have calculated it incorrectly; it is more likely that they are simply adhering to this common set of domestic pre-adjustment definitions.</p>
+<p>I now prefer to understand it as an approach that prioritizes “graphical continuity.” If you open the software today, and the current price remains stable while projecting downward from previous K-lines, the chart connects smoothly, and the technical indicators look more natural. This is very useful for market analysis, but it does not naturally equal the total return series.</p>
+<h2 id="hkus-stocks-adjusted-close-first-how-to-calculate-the-total-return">HK/US Stocks Adjusted Close, First, how to calculate the total return
+</h2><p>Yahoo&rsquo;s official definition of <code>Adjusted close</code> is very straightforward: It adjusts for both stock splits and dividends, and the dividend multiplier is calculated based on &ldquo;the proportion of the dividend to the price.&rdquo; Yahoo also explicitly states that one of the main purposes of doing this is to <strong>avoid negative historical prices</strong>.</p>
+<p>If written as a formula, the common approach is to first assign a multiplier to each company&rsquo;s action:</p>
+<ul>
+<li>Stock split multiplier: e.g., <code>2-for-1</code>, historical price times <code>0.5</code></li>
+<li>Dividend multiplier: <code>m=1-D/C_{t-1}</code></li>
+</ul>
+<p>where $D$ is the cash dividend per share, and $C_{t-1}$ is the closing price before the ex-dividend date. Then, multiplying all subsequent corporate action multipliers sequentially yields the cumulative adjustment factor $F_t$:</p>
+$$
+F_t=\prod_{j>t}(s_j\times m_j)
+$$<p>Therefore, the adjusted price is:</p>
+<pre><code>$$
+P_t^{adj}=P_t\times F_t
+$$
+
+The meaning of this approach is very clear: It approximates what the total return would be if dividends were continuously reinvested back into this stock. Therefore, it is naturally better suited for calculating rates of return, long-term backtesting, and cross-period comparisons. This methodology is fundamentally different from the domestic approach that simply deducts cash dividends directly from historical prices; even though both might appear to adjust the candlestick charts, they are not the same at their core.
+
+I'll take this opportunity to add that the old article from June implied that Yahoo / yfinance's adjusted data and Tushare's qfq are &quot;completely the same thing,&quot; which is not strictly accurate. A more precise way to put it is: **they belong to the same family, both being multiplicative or factor-type adjustments, but the normalization anchor point may not be the same.**
+
+## Adjustment Factors Are Not a Universal Translator
+
+The core issue lies right here. Many people, upon seeing the phrase &quot;adjustment factor,&quot; assume that all markets can be abstracted into a single set of factors and then simply apply `price * factor` without question. This assumption is largely valid within the common adjusted close systems used by Hong Kong and US stocks, but it may not hold true in China's pre-adjustment system.
+
+The reason is not complex. This set of precise reweighting formulas used domestically in China is actually an affine transformation, not purely multiplicative:
+
+$$
+P'=\frac{1}{1+r}P+\frac{Kr-D}{1+r}
+$$
+
+In other words, it is essentially:
+
+$$
+P'=aP+b
+$$
+
+If a cash dividend occurs, the constant term $b$ will not be zero. When multiple corporate actions stack up, what you get is not a single cumulative multiplier, but a series of multiplications and additions of affine transformations. At this point, **a single &quot;adjustment factor&quot; is insufficient**; you need at least event information such as cash dividends, ex-rights prices/book values, share change ratios, or the equivalent $(A, B)$ parameters.
+
+Therefore, the answer is quite clear: **the concept of the adjustment factor cannot be directly generalized within these two sets of schemes.**
+
+- In the commonly used adjusted close system abroad, the adjustment factor is the core focus.
+- In this precise adjustment system domestically, the factor can only cover percentage changes related to &quot;stock splits / bonus issues&quot;; once it encounters cash dividends, a single factor cannot accommodate them.
+
+This is also why directly comparing pre-adjusted domestic software data with Yahoo adjusted close using the same metric often leads to increasingly confusing results.
+
+## Where Does Tushare Really Stand?
+
+The official documentation actually writes it very clearly. The formula provided in Tushare's A-share adjusted closing price data is:
+
+$$
+\text{Pre-adjusted Price} = \text{Daily Closing Price} \times \text{Daily Adjustment Factor} / \text{Latest Adjustment Factor}
+$$
+
+The same page also clearly stated two things:
+
+- It dynamically reprices/reweights based on your specified `end_date`
+- It uses a &quot;dividend reinvestment&quot; model
+
+These two sentences are sufficient for qualitative description. **Tushare's A-share `qfq` is conceptually closer to the multiplier/factor type adjusted close found overseas, rather than East Money’s precise adjustment pre-adjustment method.** However, it retains its own normalization approach: it does not always anchor to today, but anchors to the `end_date` of your current query window.
+
+So, the positioning for Tushare can be condensed into a single sentence:
+
+- It does not use the same pre-revised definition as East Money Fortune.
+- It is more similar to Yahoo, but the values may not be identical at every point.
+
+Tushare later also added adjusted factors and adjusted data interfaces for HK stocks and US stocks, with the official description remaining `price * adj_factor = Adjusted Price`. This further illustrates its product design thinking: fundamentally, it is based on multiplicative factors.
+
+## Back to Backtesting: First Define the Parameters, Then Discuss Accuracy
+
+Once you understand this matter, many of the debates will actually disappear automatically.
+
+If you want:
+
+- Aligned with screenshots from domestic financial charting software
+- Current price remains unchanged, historical K-lines are connected (or 'aligned flatly')
+- Viewing the &quot;pre-adjusted graph&quot; in the context of A-shares
+
+In that case, you should use the domestic set of standards for precise re-weighting/adjustment.
+
+If you are looking for:
+
+- Backtest Return Rate
+- Total Return from Dividend Reinvestment
+- Long-Term Strategy Evaluation
+
+You should better use the multiplicative factor metrics/basis, such as Tushare's `qfq` or Yahoo's `Adjusted close`.
+
+The biggest problem with that old piece from June wasn't that it was entirely incorrect, but rather that it merged two distinct sets of definitions into a single &quot;definitive standard.&quot; Looking back now, what you should truly remember isn't that &quot;proportional methods are always correct and addition/subtraction methods are always wrong,&quot; but rather: **Are you trying to fit the data visually, or are you calculating returns.** If these two questions aren't separated first, everything that follows—backtesting results, candlestick comparisons, even 'why negative numbers appear'—will all become hopelessly tangled together.
+
+## References
+
+- [ChatGPT Shared Dialogue: Adjusted Price Calculation Difference Analysis](https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf)
+- [Tushare: A-Share Adjusted Price Data](https://tushare.pro/document/2?doc_id=146)
+- [Tushare: US Stock Adjusted Price Data](https://tushare.pro/document/2?doc_id=338)
+- [Yahoo Help: What is the adjusted close?](https://help.yahoo.com/kb/SLN28256.html)
+- [Shenzhen Stock Exchange: How to Calculate Adjusted (Ex-Dividend) Price?](https://investor.szse.cn/institute/video/
+
+## Writing Notes
+
+### Original Prompt
+
+```text
+$blog-writer analyze the content here: https://chatgpt.com/share/69e653e4-2814-83ea-bd7d-4233343ca9cf, and also historical articles 27 - where to find backtesting data? First, outline the common pre-adjustment calculation formula used in China, then outline the common pre-adjustment calculation formula used overseas. Regarding the concept of adjustment factor/reversion factor, can it be general for both schemes? What type of method does Tushare's data belong to?
+</code></pre>
+<h3 id="writing-approach-summary">Writing Approach Summary
+</h3>
+</section>
+
+
+    <footer class="article-footer">
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/quantization/">Quantization</a>
+        
+            <a href="/en/tags/backtesting/">Backtesting</a>
+        
+            <a href="/en/tags/rebalancing/">Rebalancing</a>
+        
+            <a href="/en/tags/ai-inspiration-hub/">AI Inspiration Hub</a>
+        
+    </section>
+
+
+    <section class="article-author">
+        <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+        <span>
+            
+                Codex (GPT-5)
+            
+        </span>
+    </section>
+
+    
+    <section class="article-copyright">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-copyright" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <path d="M14.5 9a3.5 4 0 1 0 0 6" />
+</svg>
+
+
+
+        <span>
+            
+                Licensed under CC BY-NC-SA 4.0
+            
+        </span>
+    </section>
+    
+
+    
+    <section class="article-lastmod">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+        <span>
+            Last updated on Apr 22, 2026 02:23
+        </span>
+    </section>
+    
+    
+</footer>
+
+
+    
+        <link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"integrity="sha384-n8MVd4RsNIU0tAv4ct0nTaAbDJwPJzDEaqSD1odI&#43;WdtXRGWt2kTvGFasHpSy3SV"crossorigin="anonymous"
+            ><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"integrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG&#43;vnGctmUb0ZY0l8"crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"integrity="sha384-&#43;VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4&#43;/RRE05"crossorigin="anonymous"
+                defer
+                >
+            </script><script>
+    window.addEventListener("DOMContentLoaded", () => {
+	const mainArticleElement = document.querySelector(".main-article");
+        renderMathInElement(mainArticleElement, {
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "$", right: "$", display: false },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ],
+            ignoredClasses: ["gist"]
+        });})
+</script>
+
+    
+
+    
+</article>
+
+
+    
+
+    
+
+<aside class="related-content--wrapper">
+    <div class="related-content__shell">
+        <header class="related-content__header">
+            <h2 class="section-title">Related content</h2>
+            <span class="related-content__count">05</span>
+        </header>
+        <div class="related-content__list">
+            
+                <article class="related-content__item">
+                    <a href="/en/p/is-ai-getting-dumber-uncovering-the-game-between-parameter-precision-and-inference-costs/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Is AI Getting “Dumber”? Uncovering the Game Between Parameter Accuracy and Inference Costs</h3>
+                            <time class="related-content__date" datetime='2025-12-04T21:58:09&#43;08:00'>Dec 04, 2025</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/moutai-profit-decline-and-real-estate-cycle/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Moutai&#39;s Net Profit Drops for the First Time, and it&#39;s Not Just Because Young People Aren&#39;t Drinking Baijiu</h3>
+                            <time class="related-content__date" datetime='2026-04-22T01:10:41&#43;08:00'>Apr 22, 2026</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/understanding-spin-offs-and-splits-in-the-us-stock-market-can-be-challenging/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Understanding spin-offs and splits in the US stock market can be challenging.</h3>
+                            <time class="related-content__date" datetime='2025-08-13T22:09:31&#43;08:00'>Aug 13, 2025</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/hong-kong-stock-exchange-brokerage-fee-liberalization-and-market-competition/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Hong Kong Stock Exchange Brokerage Fee Liberalization and Market Competition</h3>
+                            <time class="related-content__date" datetime='2025-08-13T21:47:51&#43;08:00'>Aug 13, 2025</time>
+                        </div>
+                    </a>
+                </article>
+            
+                <article class="related-content__item">
+                    <a href="/en/p/significant-differences-in-trading-and-settlement-between-stocks-and-digital-currencies/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">- Significant differences in trading and settlement between stocks and digital currencies</h3>
+                            <time class="related-content__date" datetime='2025-07-28T18:28:54&#43;08:00'>Jul 28, 2025</time>
+                        </div>
+                    </a>
+                </article>
+            
+        </div>
+    </div>
+</aside>
+
+
+     
+    
+        
+    <link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css"/>
+<div id="waline" class="waline-container"></div>
+<style>
+    .waline-container {
+        background-color: var(--card-background);
+        border-radius: var(--card-border-radius);
+        box-shadow: var(--shadow-l1);
+        padding: var(--card-padding);
+        --waline-font-size: var(--article-font-size);
+    }
+    .waline-container .wl-count {
+        color: var(--card-text-color-main);
+    }
+</style><script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+    init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+</script>
+
+    
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="crossorigin="anonymous"
+                defer
+                >
+            </script><script 
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="crossorigin="anonymous"
+                defer
+                >
+            </script><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"crossorigin="anonymous"
+            ><link 
+                rel="stylesheet" 
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"crossorigin="anonymous"
+            >
+
+            </main>
+        </div>
+        <script 
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="crossorigin="anonymous"
+                
+                >
+            </script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+
+    </body>
+</html>
