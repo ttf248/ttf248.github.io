@@ -6,6 +6,230 @@
         <description>Recent content in codex on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/codex/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Codex 的 goal，不是多一条命令，是把“做到什么算完”抬成一等公民</title>
+        <link>https://ttf248.life/p/codex-goal-command-explained/</link>
+        <pubDate>Wed, 27 May 2026 20:11:41 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/codex-goal-command-explained/</guid>
+        <description>&lt;p&gt;最近看 Codex 的 &lt;code&gt;goal&lt;/code&gt;，最容易让人误会的一点，不是它会不会写代码，而是它为什么像能在终端里自己接力干活。你给它一句目标，它不是回你一段话就结束，而是能继续改、继续测、继续修，跑上几个小时。&lt;/p&gt;
+&lt;p&gt;新东西其实不在“更自动”，而在它开始把“做到什么算完”当成一等公民。&lt;/p&gt;
+&lt;p&gt;OpenAI 在 &lt;code&gt;2026-05-21&lt;/code&gt; 把 Goal mode 正式推到 Codex app、IDE extension 和 CLI。Claude Code 这边也已经有官方 &lt;code&gt;/goal&lt;/code&gt; 页面，而且实现口径写得更直白。两家终端现在都在往同一个方向收敛：把 agent 从“等你每轮喂一句话”改成“围着一个完成条件持续推进”。这篇就把这件事拆开讲清楚。&lt;/p&gt;
+&lt;h2 id=&#34;先把新东西说清楚&#34;&gt;先把新东西说清楚
+&lt;/h2&gt;&lt;p&gt;Codex 的 &lt;code&gt;goal&lt;/code&gt; 不是普通 prompt，也不是计划模式的另一个名字。&lt;/p&gt;
+&lt;p&gt;OpenAI 当前官方文档给出的定义很清楚：你用 &lt;code&gt;/goal &amp;lt;objective&amp;gt;&lt;/code&gt; 设定目标，用 &lt;code&gt;/goal&lt;/code&gt; 查看当前状态，用 &lt;code&gt;/goal pause&lt;/code&gt;、&lt;code&gt;/goal resume&lt;/code&gt; 和 &lt;code&gt;/goal clear&lt;/code&gt; 控制它；目标会一直附着在当前 thread 上，工作继续时它不会自己掉线。官方在 use case 页面里又补了一层：一个好的 goal，应该明确“要实现什么、不能动什么、怎么验证进度、什么时候停”。&lt;/p&gt;
+&lt;p&gt;这意味着 &lt;code&gt;goal&lt;/code&gt; 真正抬起来的，不是一句新命令，而是一个新的控制面：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;先把目标写成可停机的条件。&lt;/li&gt;
+&lt;li&gt;再让 agent 围着这个条件跑多轮。&lt;/li&gt;
+&lt;li&gt;每轮都拿测试、构建、日志、截图、diff 之类的证据证明进度。&lt;/li&gt;
+&lt;li&gt;满足条件就停，不满足就继续。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;普通 prompt 更像“你帮我做一轮”。&lt;code&gt;goal&lt;/code&gt; 更像“你围着这个完成条件持续干，直到真的过线”。&lt;/p&gt;
+&lt;h2 id=&#34;它怎么工作&#34;&gt;它怎么工作
+&lt;/h2&gt;&lt;p&gt;OpenAI 官方没有像 Anthropic 那样把 Codex &lt;code&gt;goal&lt;/code&gt; 的 evaluator 细节完全公开出来，所以这里要分成两层说。&lt;/p&gt;
+&lt;p&gt;第一层，是官方明确公开的行为契约。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;/goal&lt;/code&gt; 会把目标挂到当前 thread。&lt;/li&gt;
+&lt;li&gt;它适合“比一条 prompt 大、但又小于一个无限 backlog”的任务。&lt;/li&gt;
+&lt;li&gt;用户需要先定义 stopping condition，也就是“什么算 done”。&lt;/li&gt;
+&lt;li&gt;运行中可以查看状态、暂停、恢复、清除。&lt;/li&gt;
+&lt;li&gt;官方直接把它描述成一个你“不用一直盯着”的 background task。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;第二层，是从官方文档和长时任务文章里能比较稳地推出来的工作链路。&lt;/p&gt;
+&lt;p&gt;Codex 跑长任务时，本质上不是在做一口气吐完的大回答，而是在反复执行一个 agent loop：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;计划。&lt;/li&gt;
+&lt;li&gt;改代码或改文件。&lt;/li&gt;
+&lt;li&gt;跑工具，比如测试、lint、build、浏览器检查。&lt;/li&gt;
+&lt;li&gt;观察结果。&lt;/li&gt;
+&lt;li&gt;修失败点。&lt;/li&gt;
+&lt;li&gt;更新状态和文档。&lt;/li&gt;
+&lt;li&gt;继续下一轮。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;OpenAI 在 &lt;code&gt;Run long horizon tasks with Codex&lt;/code&gt; 那篇官方博客里，几乎把这条链路明说了。文中把 Codex 的长期运行拆成 &lt;code&gt;plan -&amp;gt; edit -&amp;gt; run tools -&amp;gt; observe -&amp;gt; repair -&amp;gt; update docs/status -&amp;gt; repeat&lt;/code&gt;，并强调长期任务的关键不在“单次 prompt 更聪明”，而在这个 loop 能不能持续拿到真实反馈、把状态外置到 repo 和文档里、并且在中途纠偏时不丢线程。&lt;/p&gt;
+&lt;p&gt;所以，如果只用一句话概括 Codex 的 &lt;code&gt;goal&lt;/code&gt;，我会写成：&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;goal = 一个绑定在线程上的完成条件 + 一个围着验证证据不断自驱的 agent loop&lt;/code&gt;&lt;/p&gt;
+&lt;h2 id=&#34;为什么它会持续工作很长时间&#34;&gt;为什么它会持续工作很长时间
+&lt;/h2&gt;&lt;p&gt;很多人第一眼看到 &lt;code&gt;goal&lt;/code&gt;，会下意识把它理解成“后台 daemon”或者“超长一次性生成”。这两个理解都不太对。&lt;/p&gt;
+&lt;p&gt;它能持续跑久，至少有三层原因。&lt;/p&gt;
+&lt;h3 id=&#34;第一层它不是一次生成而是多轮接力&#34;&gt;第一层：它不是一次生成，而是多轮接力
+&lt;/h3&gt;&lt;p&gt;OpenAI 在 &lt;code&gt;Follow a goal&lt;/code&gt; 文档里写得很直接，Codex 可以在一个 goal 下独立工作很多小时，而且当它“确信已经达到 stopping condition”时才会停。换句话说，长时间持续不是异常，而是这套接口本来就鼓励的运行形态。&lt;/p&gt;
+&lt;p&gt;这里的核心不是时长，而是回合制。它每跑完一轮，都可以继续下一轮，而不是把整个任务压成一次输出。&lt;/p&gt;
+&lt;h3 id=&#34;第二层done-when-被提前钉住了&#34;&gt;第二层：done-when 被提前钉住了
+&lt;/h3&gt;&lt;p&gt;OpenAI 官方反复强调的一点，是 contract。用户在开跑前最好先告诉 Codex：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;这次到底要完成什么&lt;/li&gt;
+&lt;li&gt;哪些边界不能动&lt;/li&gt;
+&lt;li&gt;用什么命令或产物证明进度&lt;/li&gt;
+&lt;li&gt;什么情况下必须暂停&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这会直接改变 agent 的行为方式。没有 stopping condition，agent 很容易在“继续做点什么”和“该停了”之间漂。把停机条件写清楚以后，长时运行反而更稳，因为每一轮都知道自己要拿什么证据回来。&lt;/p&gt;
+&lt;h3 id=&#34;第三层模型本身也在为长时任务做优化&#34;&gt;第三层：模型本身也在为长时任务做优化
+&lt;/h3&gt;&lt;p&gt;这不是只有产品层在补接口，模型层也在补。&lt;/p&gt;
+&lt;p&gt;OpenAI 在 &lt;code&gt;Introducing GPT-5.2-Codex&lt;/code&gt; 里明确说，GPT-5.2-Codex 针对 long-horizon agentic coding 做了优化，尤其提到 &lt;code&gt;context compaction&lt;/code&gt;、大规模代码修改、迁移和重构这类长链路任务。官方长文又补了一层：最近的 Codex 模型更擅长 &lt;code&gt;plan -&amp;gt; implement -&amp;gt; validate -&amp;gt; repair&lt;/code&gt; 这种多步执行，而且中途纠偏时不需要把整段进度推倒重来。&lt;/p&gt;
+&lt;p&gt;所以你看到的“持续工作很久”，并不是单靠 &lt;code&gt;goal&lt;/code&gt; 命令魔法般变出来的。它是三样东西叠起来的结果：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;goal&lt;/code&gt; 把完成条件显式化了。&lt;/li&gt;
+&lt;li&gt;agent loop 把任务切成了可验证的多轮。&lt;/li&gt;
+&lt;li&gt;长时任务优化和上下文压缩，让模型更不容易中途散掉。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;官方给了哪些案例&#34;&gt;官方给了哪些案例
+&lt;/h2&gt;&lt;p&gt;如果只看文档，OpenAI 对 &lt;code&gt;goal&lt;/code&gt; 给了三类非常直接的官方用法。&lt;/p&gt;
+&lt;h3 id=&#34;1-迁移&#34;&gt;1. 迁移
+&lt;/h3&gt;&lt;p&gt;官方示例是把旧栈迁到新栈，并要求界面视觉上保持一致，再用 Playwright 去验证输出。这个案例最能说明 &lt;code&gt;goal&lt;/code&gt; 的典型边界：目标明确、验证手段明确、而且一轮做不完。&lt;/p&gt;
+&lt;h3 id=&#34;2-原型开发&#34;&gt;2. 原型开发
+&lt;/h3&gt;&lt;p&gt;官方建议先写一个 &lt;code&gt;PLAN.md&lt;/code&gt;，把 milestone、测试和期望行为写清楚，然后让 Codex 依着计划边做边验。这个就不是“先让模型脑补一下方案”，而是让它围着一张可验收的清单持续交付第一版。&lt;/p&gt;
+&lt;h3 id=&#34;3-prompt-优化&#34;&gt;3. Prompt 优化
+&lt;/h3&gt;&lt;p&gt;如果你手里已经有 eval suite，官方建议可以直接把 &lt;code&gt;goal&lt;/code&gt; 用到 prompt 优化上：先看失败样本，再改 prompt，再复跑 eval，直到分数提升或达到 stopping condition。&lt;/p&gt;
+&lt;p&gt;这三类案例有一个共同点，它们都不是问答题，而是“需要反复执行和验证”的任务。&lt;/p&gt;
+&lt;p&gt;除了这些教科书式用法，OpenAI 最近两篇官方文章还给了两个更能说明方向的长时样本。&lt;/p&gt;
+&lt;h3 id=&#34;4-官方长时实验25-小时设计工具&#34;&gt;4. 官方长时实验：25 小时设计工具
+&lt;/h3&gt;&lt;p&gt;&lt;code&gt;2026-02-23&lt;/code&gt; 的官方博客里，作者给 Codex 一个空仓库和一份设计工具规格，让它在 &lt;code&gt;GPT-5.3-Codex&lt;/code&gt; 的 &lt;code&gt;Extra High&lt;/code&gt; 推理档位下持续运行。结果是大约 &lt;code&gt;25&lt;/code&gt; 小时不间断、用了约 &lt;code&gt;13M&lt;/code&gt; tokens、生成了约 &lt;code&gt;30k&lt;/code&gt; 行代码。&lt;/p&gt;
+&lt;p&gt;这不是 &lt;code&gt;goal&lt;/code&gt; 页面里的命令示例，但它非常说明 OpenAI 想把 Codex 往哪推：不是更会补代码，而是更能扛长期、多里程碑、可验证的大任务。&lt;/p&gt;
+&lt;h3 id=&#34;5-官方-app-演示7-million-tokens-的赛车游戏&#34;&gt;5. 官方 app 演示：7 million tokens 的赛车游戏
+&lt;/h3&gt;&lt;p&gt;OpenAI 在 &lt;code&gt;Introducing the Codex app&lt;/code&gt; 里也给了一个很抓眼球的例子：让 Codex 用一个初始 prompt 独立造一款赛车游戏，过程中用了超过 &lt;code&gt;7 million tokens&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;它同样不等于“人人都该开这么长的任务”，但它把产品方向说得很明白了。Codex 现在要卖给你的，不只是聊天式编程，而是“长时间、可并行、可回看、可验证”的 agent 工作流。&lt;/p&gt;
+&lt;h2 id=&#34;claude-code-有没有类似的命名&#34;&gt;Claude Code 有没有类似的命名
+&lt;/h2&gt;&lt;p&gt;有，而且不是“类似”，是现在就有官方 &lt;code&gt;/goal&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;Claude Code 当前文档写得比 OpenAI 更直白：&lt;code&gt;/goal&lt;/code&gt; 需要 &lt;code&gt;v2.1.139+&lt;/code&gt;，它会设置一个 completion condition。之后每一轮结束，会有一个“小而快的模型”检查条件是否成立；如果没成立，Claude 就自动进入下一轮，而不是把控制权交还给你。文档还明确说，这个 evaluator 默认走 Haiku，而且 &lt;code&gt;/goal&lt;/code&gt; 本质上是一个 session-scoped 的 Stop hook 包装层。&lt;/p&gt;
+&lt;p&gt;这就带来一个很清楚的结论：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;OpenAI Codex 的 &lt;code&gt;goal&lt;/code&gt;，官方公开的是行为契约和使用方式，没有把 evaluator 的内部实现完全展开。&lt;/li&gt;
+&lt;li&gt;Claude Code 的 &lt;code&gt;/goal&lt;/code&gt;，官方直接把评估器口径、作用范围和与 &lt;code&gt;/loop&lt;/code&gt;、Stop hook、auto mode 的关系都写明了。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;所以如果你问“Claude Code 有没有类似命名”，答案已经不是“有个差不多的东西”，而是“它现在也叫 &lt;code&gt;/goal&lt;/code&gt;，只是公开实现细节更多”。&lt;/p&gt;
+&lt;p&gt;顺手再把 Claude 这几个容易混的概念分开：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;/goal&lt;/code&gt;：条件驱动。上一轮结束后立刻判断是否继续。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;/loop&lt;/code&gt;：时间驱动。按间隔重跑 prompt，适合轮询部署、盯 PR、看长构建。&lt;/li&gt;
+&lt;li&gt;Stop hook：自定义驱动。你自己写规则，决定何时继续或停止。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;换句话说，&lt;code&gt;goal&lt;/code&gt; 不是 cron，也不是单纯自动批准权限。它是“每一轮结束以后，谁来决定还要不要继续”。&lt;/p&gt;
+&lt;h2 id=&#34;两家终端最近值得盯的功能&#34;&gt;两家终端最近值得盯的功能
+&lt;/h2&gt;&lt;p&gt;下面这张表不是严格的“热度排行榜”，而是按 &lt;code&gt;2025-09-29&lt;/code&gt; 到 &lt;code&gt;2026-05-27&lt;/code&gt; 这段时间内，两家官方推出、并且最能提高终端 agent 吞吐量的功能整理的。&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;产品&lt;/th&gt;
+          &lt;th&gt;功能&lt;/th&gt;
+          &lt;th&gt;时间 / 版本&lt;/th&gt;
+          &lt;th&gt;解决什么问题&lt;/th&gt;
+          &lt;th&gt;我的判断&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Codex&lt;/td&gt;
+          &lt;td&gt;Goal mode&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2026-05-21&lt;/code&gt; GA&lt;/td&gt;
+          &lt;td&gt;把 outcome 和 success criteria 绑定到持续运行的 thread 上&lt;/td&gt;
+          &lt;td&gt;这是 Codex 现在最关键的新抽象，适合迁移、重构、原型、多轮评测&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Codex&lt;/td&gt;
+          &lt;td&gt;In-app browser annotations + browser use improvements&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2026-05-21&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;前端和网页任务里，视觉反馈、资源抽取和浏览器操作更精细&lt;/td&gt;
+          &lt;td&gt;对 UI 迭代最实用，不再只是“看一眼截图说不像”&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Codex&lt;/td&gt;
+          &lt;td&gt;Locked computer use&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2026-05-21&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;Mac 锁屏后仍可远程继续 Computer Use&lt;/td&gt;
+          &lt;td&gt;真正把“我走开一会儿它继续跑”变成可用能力&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Codex&lt;/td&gt;
+          &lt;td&gt;Mobile access to remote Codex environments&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2026-05-14&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;人不在电脑前时，也能从手机接入、改方向、审批动作&lt;/td&gt;
+          &lt;td&gt;跟长时任务搭配非常实用，减少被桌面绑死&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Codex&lt;/td&gt;
+          &lt;td&gt;多 agent 并行、worktrees、skills&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2026-02-02&lt;/code&gt; app 发布，&lt;code&gt;2026-02-23&lt;/code&gt; 官方长文继续强调&lt;/td&gt;
+          &lt;td&gt;把并行任务、隔离 diff、流程固化放进同一套工作流&lt;/td&gt;
+          &lt;td&gt;真正提升吞吐量的不是模型本身，而是这一组配套能力&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Claude Code&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;/goal&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;v2.1.139+&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;用 completion condition 驱动跨 turn 持续工作&lt;/td&gt;
+          &lt;td&gt;和 Codex 已经收敛到同一个命名，但公开机制更透明&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Claude Code&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;/loop&lt;/code&gt; scheduled tasks&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;v2.1.72+&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;轮询部署、PR、长构建，或在会话内做定时回看&lt;/td&gt;
+          &lt;td&gt;它不是 &lt;code&gt;goal&lt;/code&gt; 的替代，而是时间驱动那一类需求的更优解&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Claude Code&lt;/td&gt;
+          &lt;td&gt;Checkpoints + &lt;code&gt;/rewind&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2025-09-29&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;大改动前自动存状态，随时回退代码或对话&lt;/td&gt;
+          &lt;td&gt;做宽范围探索和重构时，安全感提升非常明显&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Claude Code&lt;/td&gt;
+          &lt;td&gt;Subagents + hooks + background tasks&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2025-09-29&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;并行分工、自动测试/格式化、长进程不阻塞主任务&lt;/td&gt;
+          &lt;td&gt;这是 Claude 这边最像“自治工具箱”的一组能力&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;Claude Code&lt;/td&gt;
+          &lt;td&gt;Plugins + marketplace&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;2025-10-09&lt;/code&gt; public beta&lt;/td&gt;
+          &lt;td&gt;把 slash commands、subagents、MCP、hooks 打包分享&lt;/td&gt;
+          &lt;td&gt;生态扩展性很强，团队标准化和社区复用价值都高&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;最后收一下&#34;&gt;最后收一下
+&lt;/h2&gt;&lt;p&gt;如果你只把 Codex 的 &lt;code&gt;goal&lt;/code&gt; 看成一个新命令，结论大概率会很浅：无非是“可以让它多跑一会儿”。但真正值得注意的，不是时长，而是 agent 终端正在把“什么算完成、谁来判断完成、完成前怎么持续验证”做成一层显式接口。&lt;/p&gt;
+&lt;p&gt;这也是为什么两家最后都开始用 &lt;code&gt;/goal&lt;/code&gt; 这个名字。它们都在把终端 agent 从“单轮对话工具”往“带停机条件的持续工作者”推。&lt;/p&gt;
+&lt;p&gt;后面真要比，重点也不该只比谁能跑更久，而是谁的完成条件更好写、验证链路更稳、纠偏成本更低、进度更容易审计。这才是 &lt;code&gt;goal&lt;/code&gt; 这类能力真正会拉开差距的地方。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://help.openai.com/en/articles/6825453-chatgpt-release-notes&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;ChatGPT — Release Notes | OpenAI Help Center&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/codex/cli/slash-commands&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Slash commands in Codex CLI | OpenAI Developers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/codex/use-cases/follow-goals&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Follow a goal | Codex use cases&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/blog/run-long-horizon-tasks-with-codex&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Run long horizon tasks with Codex | OpenAI Developers&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/index/introducing-gpt-5-2-codex/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Introducing GPT-5.2-Codex | OpenAI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/index/introducing-the-codex-app/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Introducing the Codex app | OpenAI&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.claude.com/docs/en/goal&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Keep Claude working toward a goal | Claude Code Docs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://code.claude.com/docs/en/scheduled-tasks&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Run prompts on a schedule | Claude Code Docs&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Enabling Claude Code to work more autonomously | Anthropic&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://claude.com/blog/claude-code-plugins&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Customize Claude Code with plugins | Claude&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 详解 codex 新出的 goal 命令，工作原理是什么，为什么持续工作很长的时间，官方提供的案例是什么。claude code 有没有类似的命名，顺带整理近期 两家终端新出的，好用的、受欢迎的功能，整理为表格。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;保留了用户最关心的三件事：&lt;code&gt;goal&lt;/code&gt; 的机制、它为什么会长时间持续、官方到底给了哪些案例。&lt;/li&gt;
+&lt;li&gt;没把正文写成功能新闻汇总，而是先完成“表象 -&amp;gt; 机制 -&amp;gt; 样本 -&amp;gt; 边界”的解释闭环，再把近期功能压进表格。&lt;/li&gt;
+&lt;li&gt;对 Claude Code 没再用“类似能力”这种模糊说法，而是直接说明：当前官方文档里它也已经有 &lt;code&gt;/goal&lt;/code&gt;。&lt;/li&gt;
+&lt;li&gt;压掉了未公开实现的猜测，只在 OpenAI 没有明说 evaluator 细节的地方做了明确标注。&lt;/li&gt;
+&lt;/ul&gt;</description>
+        </item>
+        <item>
         <title>token 更少，为什么 GPT-5.5 在 Codex 里反而更贵了</title>
         <link>https://ttf248.life/p/gpt-5-5-cost-in-codex/</link>
         <pubDate>Mon, 27 Apr 2026 23:16:33 +0800</pubDate>
