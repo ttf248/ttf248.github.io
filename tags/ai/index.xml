@@ -11,97 +11,80 @@
         <pubDate>Wed, 27 May 2026 20:11:41 +0800</pubDate>
         
         <guid>https://ttf248.life/p/codex-goal-command-explained/</guid>
-        <description>&lt;p&gt;最容易把 Codex 的 &lt;code&gt;goal&lt;/code&gt; 讲浅的方式，是从 slash command 开始讲。&lt;/p&gt;
-&lt;p&gt;一旦从命令讲起，文章很快就会滑成清单：&lt;code&gt;/goal &amp;lt;objective&amp;gt;&lt;/code&gt; 怎么写，怎么看状态，怎么暂停恢复，Claude Code 有没有同名能力，OpenAI 又给了哪些长任务案例。信息都对，但读完以后只剩一个印象：原来 Codex 可以多跑一会儿。&lt;/p&gt;
-&lt;p&gt;这不是重点。&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 真正新的一层，是把以前藏在提示词里的“做到什么算完”，单独拎出来，变成 agent 工作时必须持续对齐的对象。它不是让 Codex 更有耐心，而是先问清楚一件事：这次任务到底凭什么停。&lt;/p&gt;
-&lt;h2 id=&#34;不是加时按钮&#34;&gt;不是加时按钮
-&lt;/h2&gt;&lt;p&gt;普通 prompt 解决的是“下一轮帮我做什么”。你说“把这个页面迁到 Next.js”，Codex 可以给计划，可以改文件，也可以跑测试。但这一轮结束以后，它是否该继续、继续到哪里、哪些失败必须先修，往往还要靠你在下一轮补。&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 改的是这里。&lt;/p&gt;
-&lt;p&gt;它把任务从一句请求，改成一个挂在线程上的完成条件。官方文档里强调的不是“写一个更长的 prompt”，而是把 objective、success criteria、constraints、validation 这些东西提前写清楚。换成人话，就是四个问题：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;这次要交付什么结果？&lt;/li&gt;
-&lt;li&gt;哪些边界不能顺手改掉？&lt;/li&gt;
-&lt;li&gt;用什么证据证明已经推进？&lt;/li&gt;
-&lt;li&gt;满足什么条件就停，什么情况必须暂停？&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;所以，一个含糊的 goal 长这样：&lt;/p&gt;
+        <description>&lt;p&gt;Codex 的 &lt;code&gt;goal&lt;/code&gt; 最容易被讲成一个新命令：输入 &lt;code&gt;/goal&lt;/code&gt;，它就能继续干。&lt;/p&gt;
+&lt;p&gt;这个说法没有错，但很浅。它把注意力放在“能多跑几轮”，而不是“它为什么知道还该不该跑”。真正值得看的地方，是 Codex 开始把以前藏在提示词里的完成条件拎出来，让它变成 agent 工作时持续对齐的对象。&lt;/p&gt;
+&lt;p&gt;也就是那句最容易被我们随口带过的话：做到什么算完。&lt;/p&gt;
+&lt;h2 id=&#34;先别问能跑多久&#34;&gt;先别问能跑多久
+&lt;/h2&gt;&lt;p&gt;看 &lt;code&gt;goal&lt;/code&gt;，第一反应很容易是问时长：它是不是能后台跑很久，是不是能一直修到好，是不是不用我盯着。&lt;/p&gt;
+&lt;p&gt;这些问题会把方向带偏。&lt;/p&gt;
+&lt;p&gt;更关键的问题应该是：它继续工作的依据是什么？&lt;/p&gt;
+&lt;p&gt;OpenAI 的 Codex 文档把 &lt;code&gt;/goal&lt;/code&gt; 描述成给当前线程挂一个持久目标。CLI 文档里，&lt;code&gt;/goal &amp;lt;objective&amp;gt;&lt;/code&gt; 用来设置目标，&lt;code&gt;/goal&lt;/code&gt; 可以查看，&lt;code&gt;pause / resume / clear&lt;/code&gt; 可以控制它；use case 页面又把它放在 long-running、clear success condition、validation loop 这一类场景里。&lt;/p&gt;
+&lt;p&gt;这说明 &lt;code&gt;goal&lt;/code&gt; 不是“再努力一点”的按钮。它更像把一个任务验收单挂到了线程上。后面每一轮，Codex 都应该围着这张验收单判断：还差什么，能不能继续，什么时候该停。&lt;/p&gt;
+&lt;p&gt;一个太松的目标长这样：&lt;/p&gt;
 &lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 帮我把前端迁到 Next.js
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;一个能工作的 goal 应该更接近这样：&lt;/p&gt;
+&lt;p&gt;这句话的问题不是短，而是没有停机条件。Codex 可以迁路由，可以改数据获取，可以顺手重构组件，也可以一直补它认为应该补的东西。你很难判断它是还没做完，还是已经开始扩写任务。&lt;/p&gt;
+&lt;p&gt;一个更可用的目标应该长这样：&lt;/p&gt;
 &lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 把订单后台从 React Router 迁到 Next.js App Router。登录页、订单列表、订单详情和下单页的视觉行为要和旧版一致；不要改 API 合约和数据库 schema；每完成一批页面都跑 npm run build、npm test 和 Playwright 关键路径。只有这些验证都通过，才算完成。
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;多出来的不是啰嗦，是停机条件。&lt;/p&gt;
-&lt;p&gt;没有这些条件，agent 很容易把“继续努力”误解成“继续改更多东西”。有了这些条件，它每一轮都能问自己：我离完成还差哪条证据？&lt;/p&gt;
-&lt;h2 id=&#34;控制权变了&#34;&gt;控制权变了
-&lt;/h2&gt;&lt;p&gt;以前我们把很多控制权塞在对话里。&lt;/p&gt;
-&lt;p&gt;“再跑一下测试。”&lt;/p&gt;
-&lt;p&gt;“这个不算完成，视觉还不对。”&lt;/p&gt;
-&lt;p&gt;“别动接口层，只修页面。”&lt;/p&gt;
-&lt;p&gt;“构建过了再说。”&lt;/p&gt;
-&lt;p&gt;这些话不是杂音，它们其实是任务契约的一部分。&lt;code&gt;goal&lt;/code&gt; 的价值，是把这些契约从一轮轮补充，提前变成一块稳定的工作面。&lt;/p&gt;
-&lt;p&gt;这会改变 Codex 的行为方式。它后面每次计划、改代码、跑命令、看日志、修失败点，都不是在追一个抽象的“帮我做好”，而是在追一个更可验收的状态：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;done = 目标结果出现 + 禁止边界没被破坏 + 验证证据通过
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;这里最关键的是第三项。&lt;code&gt;goal&lt;/code&gt; 不应该只写愿望，最好写证据。&lt;/p&gt;
-&lt;p&gt;“页面正常”不如“Playwright 跑完 login -&amp;gt; orders -&amp;gt; detail -&amp;gt; checkout”。&lt;/p&gt;
-&lt;p&gt;“代码质量可以”不如“npm test 和 npm run build 都是 0 退出码”。&lt;/p&gt;
-&lt;p&gt;“性能别太差”不如“列表页首屏接口不新增串行请求，Lighthouse performance 不低于旧版 5 分以内”。&lt;/p&gt;
-&lt;p&gt;一旦证据写清楚，Codex 的长时间工作才有意义。否则它只是长时间漂在一个模糊目标附近。&lt;/p&gt;
-&lt;h2 id=&#34;为什么能跑久&#34;&gt;为什么能跑久
-&lt;/h2&gt;&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 能跑久，不是因为它把一次回答拉得更长。&lt;/p&gt;
-&lt;p&gt;真正的运行方式更像一个循环：&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;先根据目标拆下一小步。&lt;/li&gt;
-&lt;li&gt;改文件或跑工具。&lt;/li&gt;
-&lt;li&gt;观察测试、构建、截图、日志或 diff。&lt;/li&gt;
-&lt;li&gt;修掉失败点。&lt;/li&gt;
-&lt;li&gt;更新当前状态。&lt;/li&gt;
-&lt;li&gt;再拿 goal 判断下一轮还要不要继续。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;OpenAI 在长时任务材料里反复强调的，也是这种 &lt;code&gt;plan -&amp;gt; implement -&amp;gt; validate -&amp;gt; repair&lt;/code&gt; 的循环。长任务不是靠模型把所有上下文硬背住，而是靠真实工具反馈、外置状态和持续验证把方向拉回来。&lt;/p&gt;
-&lt;p&gt;这也是为什么 &lt;code&gt;goal&lt;/code&gt; 更适合迁移、重构、原型、prompt eval 这类任务。&lt;/p&gt;
-&lt;p&gt;它们有三个共同点：&lt;/p&gt;
+&lt;p&gt;多出来的不是客套话，而是四样东西：&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;一轮做不完。&lt;/li&gt;
-&lt;li&gt;做完不是靠主观感觉判断。&lt;/li&gt;
-&lt;li&gt;中间失败可以被测试、构建、截图或评测样本暴露出来。&lt;/li&gt;
+&lt;li&gt;目标：要迁哪些页面。&lt;/li&gt;
+&lt;li&gt;边界：API 和数据库不能顺手动。&lt;/li&gt;
+&lt;li&gt;验证：构建、测试、Playwright 都要跑。&lt;/li&gt;
+&lt;li&gt;停机：这些都通过，才算完成。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;反过来，如果任务本身没有可验证的完成条件，比如“帮我想一个更有高级感的方案”“把这个产品方向再研究研究”，硬塞进 &lt;code&gt;goal&lt;/code&gt; 未必更好。它可能会跑很久，但跑久不等于有效。&lt;/p&gt;
-&lt;p&gt;这类任务要先收束成可验收对象。比如不要写：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 优化客服 prompt
+&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 抬高的就是这四样东西。&lt;/p&gt;
+&lt;h2 id=&#34;真正的新抽象&#34;&gt;真正的新抽象
+&lt;/h2&gt;&lt;p&gt;普通 prompt 更像“下一轮请你做什么”。你说一句，agent 做一轮，跑不跑测试、要不要继续、失败算不算阻塞，很多时候还要靠下一轮对话补。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 更像“这次任务的完成口径是什么”。它把控制权从一句临时请求，挪到一个更稳定的目标上。&lt;/p&gt;
+&lt;p&gt;这会改变任务写法。&lt;/p&gt;
+&lt;p&gt;以前我们常常这样补充：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;再跑一下测试。
+这个样式不算过。
+别动接口。
+构建失败先修，不要继续加功能。
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;而是写：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 优化 prompts/support-triage.md。先看 eval 失败样本，只做最小 prompt 修改；每次修改后跑 pnpm promptfoo eval。达到 92% 通过率，或者继续提高会触及产品/政策判断时停止。
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;后者才像一个 goal。它不仅告诉 agent 要做什么，也告诉它什么时候该停、什么时候不该硬冲。&lt;/p&gt;
-&lt;h2 id=&#34;claude-code-的同名能力&#34;&gt;Claude Code 的同名能力
-&lt;/h2&gt;&lt;p&gt;Claude Code 也有 &lt;code&gt;/goal&lt;/code&gt;。这一点比“某家有没有类似功能”更有意思。&lt;/p&gt;
-&lt;p&gt;Claude Code 文档把它说得更直白：用户设置的是 completion condition，系统会在轮次结束后检查条件是否满足；如果没有满足，就继续下一轮。它还把 &lt;code&gt;/goal&lt;/code&gt; 和 &lt;code&gt;/loop&lt;/code&gt;、Stop hook 这些能力区分开：&lt;code&gt;/goal&lt;/code&gt; 是条件驱动，&lt;code&gt;/loop&lt;/code&gt; 更偏时间驱动，hook 则是自定义规则驱动。&lt;/p&gt;
-&lt;p&gt;OpenAI Codex 的公开文档没有把内部 evaluator 细节摊得那么开，所以这里不该强行补一套“它一定怎么判断”的实现故事。能确定的是，两家都在把同一个东西抬高：&lt;/p&gt;
-&lt;p&gt;不是让 agent 多说几句，而是让 agent 每一轮结束后都面对一个更清楚的问题：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;完成条件满足了吗？
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;这就是为什么 &lt;code&gt;/goal&lt;/code&gt; 这个名字会同时出现。终端 agent 走到长任务以后，真正缺的不是又一个自动化开关，而是一个能长期约束行为的完成口径。&lt;/p&gt;
-&lt;h2 id=&#34;怎么写才不跑偏&#34;&gt;怎么写才不跑偏
-&lt;/h2&gt;&lt;p&gt;我现在会把一个好 goal 拆成四行，而不是一句话：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;目标：完成什么用户可见结果。
+&lt;p&gt;这些话不是杂音，它们本来就是任务的一部分。只是过去它们散落在多轮对话里，现在应该提前进入 goal。&lt;/p&gt;
+&lt;p&gt;所以我会把可用的 goal 拆成四行：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;目标：最终要出现什么用户可见结果。
 边界：哪些文件、接口、数据、视觉或行为不能乱动。
 验证：用哪些命令、测试、截图、评测或人工检查作为证据。
-停机：全部满足时停止；遇到哪些不确定性、权限、产品判断时暂停。
+停机：全部满足时停止；遇到哪些权限、事实、产品判断时暂停。
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;这四行看着普通，但它们决定了 agent 后面是不是有资格自驱。&lt;/p&gt;
-&lt;p&gt;如果只写目标，Codex 可能会补太多。&lt;/p&gt;
-&lt;p&gt;如果没有边界，它可能顺手重构不该重构的地方。&lt;/p&gt;
-&lt;p&gt;如果没有验证，它只能靠语言判断“应该好了”。&lt;/p&gt;
-&lt;p&gt;如果没有停机，它会在“再优化一点”和“已经可以交付”之间摇摆。&lt;/p&gt;
-&lt;p&gt;所以 &lt;code&gt;goal&lt;/code&gt; 不是把人从流程里拿掉。恰恰相反，它要求人在开跑前把验收标准写得更像工程契约。人少盯每一轮，但要更认真地定义什么叫完成。&lt;/p&gt;
-&lt;h2 id=&#34;留一个边界&#34;&gt;留一个边界
-&lt;/h2&gt;&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 很容易被包装成“让 agent 自己干到天荒地老”。这说法听着刺激，但会误导使用方式。&lt;/p&gt;
-&lt;p&gt;真正可用的长任务，通常不是无限开放的。它应该有清楚的仓库边界、验证命令、阶段状态和失败退出口。越是想让 agent 跑久，越要把停机条件写窄。&lt;/p&gt;
-&lt;p&gt;所以这篇最后只留一个判断：Codex 的 &lt;code&gt;goal&lt;/code&gt; 值得关注，不是因为它多了一条命令，也不是因为它能连续工作很长时间，而是因为它把“做到什么算完”从聊天里的临时补充，抬成了 agent 工作流里的第一等对象。&lt;/p&gt;
-&lt;p&gt;以后终端 agent 真正拉开差距的地方，也会越来越像这里：目标怎么写，证据怎么拿，失败怎么停，进度怎么审计。&lt;/p&gt;
-&lt;p&gt;跑得久只是表象。知道凭什么停，才是能力。&lt;/p&gt;
+&lt;p&gt;写到这里，&lt;code&gt;goal&lt;/code&gt; 就不只是命令了。它开始像一个小型工程契约。&lt;/p&gt;
+&lt;h2 id=&#34;为什么它能持续工作&#34;&gt;为什么它能持续工作
+&lt;/h2&gt;&lt;p&gt;Codex 能在一个 goal 下持续推进，不是因为一次回答被拉长了。&lt;/p&gt;
+&lt;p&gt;OpenAI 的长时任务文章把关键链路说得很清楚：长期工作依赖一个循环。大致是计划、改文件、跑工具、观察结果、修失败、更新状态，然后继续下一轮。&lt;/p&gt;
+&lt;p&gt;这个循环里，最重要的不是“模型更有耐心”，而是真实反馈一直在把任务拉回正轨。&lt;/p&gt;
+&lt;p&gt;构建失败会告诉它哪段迁移没过。&lt;/p&gt;
+&lt;p&gt;测试失败会告诉它哪个行为被破坏。&lt;/p&gt;
+&lt;p&gt;截图差异会告诉它页面不是“看起来差不多”。&lt;/p&gt;
+&lt;p&gt;eval 失败样本会告诉它 prompt 优化没有打到问题上。&lt;/p&gt;
+&lt;p&gt;如果 goal 里写清了验证方式，Codex 每轮就不是在凭感觉说“应该好了”，而是在追证据。证据没回来，就继续修；证据都回来，才有资格停。&lt;/p&gt;
+&lt;p&gt;这也是为什么 &lt;code&gt;goal&lt;/code&gt; 适合迁移、重构、prompt eval、原型这类任务。它们不一定复杂到不可控，但都有一个共同点：一轮做不完，而且完成不能只靠主观判断。&lt;/p&gt;
+&lt;p&gt;反过来，有些任务不适合直接丢给 goal。&lt;/p&gt;
+&lt;p&gt;比如：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 想一个更高级的产品方案
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这句话没有验证，没有边界，也没有停机条件。它可能跑很久，但跑久不代表有用。先把它收束成“产出 3 个方案，覆盖哪些约束，用什么标准筛掉，什么时候停”，它才有资格变成 goal。&lt;/p&gt;
+&lt;h2 id=&#34;claude-code-也在处理同一件事&#34;&gt;Claude Code 也在处理同一件事
+&lt;/h2&gt;&lt;p&gt;Claude Code 也有 &lt;code&gt;/goal&lt;/code&gt;，而且官方文档说得更直白：用户设置的是 completion condition，Claude 会跨 turn 持续工作，直到条件满足。文档还说明，每一轮结束后会检查条件是否成立；如果不成立，就继续下一轮。&lt;/p&gt;
+&lt;p&gt;这说明两家终端不是偶然撞了一个命令名。它们都在处理长任务里的同一个问题：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;上一轮结束后，谁来判断还要不要继续？
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;/loop&lt;/code&gt; 这类能力偏时间驱动，hook 偏自定义规则驱动，&lt;code&gt;goal&lt;/code&gt; 偏条件驱动。条件驱动的关键，不是“自动”，而是“有一个明确的完成条件在持续约束下一轮”。&lt;/p&gt;
+&lt;p&gt;OpenAI Codex 这边公开文档没有把内部 evaluator 细节完全摊开，所以不该替它脑补实现。但能确定的是，&lt;code&gt;goal&lt;/code&gt; 的使用价值不在命令名，而在它迫使使用者提前写清楚完成口径。&lt;/p&gt;
+&lt;h2 id=&#34;该被改变的是写目标的人&#34;&gt;该被改变的是写目标的人
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 很容易被包装成“agent 可以自己干很久”。这句话听起来爽，但真正落到工作里，反而会害人。&lt;/p&gt;
+&lt;p&gt;越想让 agent 自己跑，越要把目标写窄。&lt;/p&gt;
+&lt;p&gt;越想少盯过程，越要把验证写实。&lt;/p&gt;
+&lt;p&gt;越想让它别跑偏，越要把边界写清楚。&lt;/p&gt;
+&lt;p&gt;所以 Codex 的 &lt;code&gt;goal&lt;/code&gt; 不是把人从流程里拿掉。它只是把人的责任前移了。你不再每一轮提醒它“这个不算完成”，而是在一开始就把“什么算完成”写成它后续必须服从的条件。&lt;/p&gt;
+&lt;p&gt;这才是 &lt;code&gt;goal&lt;/code&gt; 真正值得关注的地方。&lt;/p&gt;
+&lt;p&gt;不是多一条命令。&lt;/p&gt;
+&lt;p&gt;不是更长时间的自动工作。&lt;/p&gt;
+&lt;p&gt;而是终端 agent 开始把“做到什么算完”抬成一等公民。跑得久只是表象，知道凭什么停，才是能力。&lt;/p&gt;
 &lt;h2 id=&#34;参考资料&#34;&gt;参考资料
 &lt;/h2&gt;&lt;ul&gt;
 &lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/codex/use-cases/follow-goals&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
@@ -115,9 +98,9 @@
 &lt;/ul&gt;
 &lt;h2 id=&#34;写作附记&#34;&gt;写作附记
 &lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
-&lt;/h3&gt;&lt;blockquote&gt;
-&lt;p&gt;这稿子废话太多了，梳理下思路，重写文章，27-Codex-的-goal-不是多一条命令-是把-做到什么算完-抬成一等公民&lt;/p&gt;&lt;/blockquote&gt;
-&lt;p&gt;这次保留原题眼，但把原稿里的近期功能表、长案例细节和发布时间清单都压掉了。正文只围绕一个问题推进：&lt;code&gt;goal&lt;/code&gt; 到底改变了什么。Claude Code 只作为同名能力的对照，不再展开成两家终端功能横评。&lt;/p&gt;</description>
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;刚用刚才的文章，测试下新的 skill
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这次测试沿用旧题：详解 Codex &lt;code&gt;goal&lt;/code&gt;，解释工作原理、持续工作的原因、官方案例和 Claude Code 对照。新版 &lt;code&gt;blog-writer v6.4.0&lt;/code&gt; 的取舍点，是把中心问题收束成“&lt;code&gt;goal&lt;/code&gt; 真正改变了什么”，删除原提示词里的两家近期功能表，只保留能支撑完成条件这条主线的材料。&lt;/p&gt;</description>
         </item>
         <item>
         <title>A股半导体和 AI 又在猛冲，最怕的不是踏空，是把节奏买反</title>
