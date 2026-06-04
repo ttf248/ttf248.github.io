@@ -69,85 +69,123 @@
 &lt;p&gt;正文把“盈利”拆成毛利、经调整亏损、净利润和现金流几个层次，只在公开材料能支撑的地方下结论。没有展开股价、市值和投资建议，因为那会把文章带到交易判断上，反而冲淡这篇真正要解释的账本问题。&lt;/p&gt;</description>
         </item>
         <item>
-        <title>Codex 的 goal 改的不是命令，是 agent 的收工条件</title>
+        <title>Codex 的 goal，真正改的是谁来判断已经做完</title>
         <link>https://ttf248.life/p/codex-goal-command-explained/</link>
         <pubDate>Wed, 27 May 2026 20:11:41 +0800</pubDate>
         
         <guid>https://ttf248.life/p/codex-goal-command-explained/</guid>
-        <description>&lt;p&gt;如果只把 Codex 的 goal 看成一条新命令，就会低估它。命令本身不稀奇，真正变化是它把“做到什么算完”从一句模糊提示，变成了 agent 可以围绕推进的目标。&lt;/p&gt;
-&lt;p&gt;普通提示词往往只告诉模型要做什么，比如修 bug、写文章、跑测试。goal 更像给一个持续工作的代理定义完成条件：什么时候可以停，停之前要拿到什么证据，遇到分支时应该优先推进哪条线。&lt;/p&gt;
-&lt;p&gt;这解释了为什么它能持续工作很久。长任务不是因为模型一次输出更长，而是因为它可以在目标、执行、验证、修正之间循环。做不到就继续查，测试失败就继续改，证据不够就继续补，直到接近 goal 描述的完成状态。&lt;/p&gt;
-&lt;h2 id=&#34;先别问能跑多久&#34;&gt;先别问能跑多久
-&lt;/h2&gt;&lt;p&gt;看 &lt;code&gt;goal&lt;/code&gt;，第一反应很容易是问时长：它是不是能后台跑很久，是不是能一直修到好，是不是不用我盯着。&lt;/p&gt;
-&lt;p&gt;这些问题会把方向带偏。&lt;/p&gt;
-&lt;p&gt;更关键的问题应该是：它继续工作的依据是什么？&lt;/p&gt;
-&lt;p&gt;OpenAI 的 Codex 文档把 &lt;code&gt;/goal&lt;/code&gt; 描述成给当前线程挂一个持久目标。CLI 文档里，&lt;code&gt;/goal &amp;lt;objective&amp;gt;&lt;/code&gt; 用来设置目标，&lt;code&gt;/goal&lt;/code&gt; 可以查看，&lt;code&gt;pause / resume / clear&lt;/code&gt; 可以控制它；use case 页面又把它放在 long-running、clear success condition、validation loop 这一类场景里。&lt;/p&gt;
-&lt;p&gt;这说明 &lt;code&gt;goal&lt;/code&gt; 不是“再努力一点”的按钮。它更像把一个任务验收单挂到了线程上。后面每一轮，Codex 都应该围着这张验收单判断：还差什么，能不能继续，什么时候该停。&lt;/p&gt;
-&lt;p&gt;一个太松的目标长这样：&lt;/p&gt;
+        <description>&lt;p&gt;&lt;code&gt;/goal&lt;/code&gt; 最容易被误解成一条“让 agent 多干一会儿”的命令。&lt;/p&gt;
+&lt;p&gt;这当然是它的表象。你给 Codex 一个目标，它可以围着这个目标持续推进，不是一轮回答完就停。但真正值得注意的不是“跑得久”，而是它把“做到什么算完”从一句临时提醒，变成了任务本身的一部分。&lt;/p&gt;
+&lt;p&gt;普通 prompt 说的是下一步要做什么。&lt;code&gt;goal&lt;/code&gt; 更像给 agent 挂了一张验收单：目标是什么，边界在哪里，哪些验证必须通过，满足什么条件才可以收工。&lt;/p&gt;
+&lt;h2 id=&#34;goal-不是继续按钮&#34;&gt;goal 不是继续按钮
+&lt;/h2&gt;&lt;p&gt;如果只看命令形态，&lt;code&gt;/goal&lt;/code&gt; 很像一句增强版的“继续做，直到完成”。但这会把重点带偏。&lt;/p&gt;
+&lt;p&gt;长任务最麻烦的地方，不是模型愿不愿意继续，而是每一轮结束以后，谁来判断还要不要继续。&lt;/p&gt;
+&lt;p&gt;你让 agent 迁移一个前端项目，它可能改了路由就觉得完成了；你让它修一个测试，它可能让当前失败用例通过就停了；你让它重写一批文章，它可能改了几篇高风险稿就认为已经处理了重点。&lt;/p&gt;
+&lt;p&gt;这些停点不一定是错的，但它们经常和人的验收口径不一样。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 要解决的就是这件事：把验收口径提前写清楚，让后续每一轮都能围着它判断。&lt;/p&gt;
+&lt;p&gt;一个松散目标是这样的：&lt;/p&gt;
 &lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 帮我把前端迁到 Next.js
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;这句话的问题不是短，而是没有停机条件。Codex 可以迁路由，可以改数据获取，可以顺手重构组件，也可以一直补它认为应该补的东西。你很难判断它是还没做完，还是已经开始扩写任务。&lt;/p&gt;
-&lt;p&gt;一个更可用的目标应该长这样：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 把订单后台从 React Router 迁到 Next.js App Router。登录页、订单列表、订单详情和下单页的视觉行为要和旧版一致；不要改 API 合约和数据库 schema；每完成一批页面都跑 npm run build、npm test 和 Playwright 关键路径。只有这些验证都通过，才算完成。
+&lt;p&gt;它的问题不是短，而是没有停机条件。Codex 可以迁几页，可以顺手重构组件，也可以一直补它认为该补的东西。&lt;/p&gt;
+&lt;p&gt;更可用的写法应该接近这样：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 把订单后台从 React Router 迁到 Next.js App Router。
+登录页、订单列表、订单详情和下单页的视觉行为要和旧版一致。
+不要改 API 合约和数据库 schema。
+每完成一批页面都跑 npm run build、npm test 和 Playwright 关键路径。
+只有这些验证都通过，才算完成。
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;多出来的不是客套话，而是四样东西：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;目标：要迁哪些页面。&lt;/li&gt;
-&lt;li&gt;边界：API 和数据库不能顺手动。&lt;/li&gt;
-&lt;li&gt;验证：构建、测试、Playwright 都要跑。&lt;/li&gt;
-&lt;li&gt;停机：这些都通过，才算完成。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 抬高的就是这四样东西。&lt;/p&gt;
-&lt;h2 id=&#34;真正的新抽象&#34;&gt;真正的新抽象
-&lt;/h2&gt;&lt;p&gt;普通 prompt 更像“下一轮请你做什么”。你说一句，agent 做一轮，跑不跑测试、要不要继续、失败算不算阻塞，很多时候还要靠下一轮对话补。&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 更像“这次任务的完成口径是什么”。它把控制权从一句临时请求，挪到一个更稳定的目标上。&lt;/p&gt;
-&lt;p&gt;这会改变任务写法。&lt;/p&gt;
-&lt;p&gt;以前我们常常这样补充：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;再跑一下测试。
-这个样式不算过。
-别动接口。
-构建失败先修，不要继续加功能。
+&lt;p&gt;这段话多出来的不是废话，而是四个控制面：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;要素&lt;/th&gt;
+          &lt;th&gt;作用&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;目标&lt;/td&gt;
+          &lt;td&gt;最终要出现什么结果&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;边界&lt;/td&gt;
+          &lt;td&gt;哪些接口、数据、文件或行为不能顺手动&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;验证&lt;/td&gt;
+          &lt;td&gt;用什么证据证明它真的完成&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;停机&lt;/td&gt;
+          &lt;td&gt;满足哪些条件以后才可以停&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 抬高的就是这四件事。&lt;/p&gt;
+&lt;h2 id=&#34;为什么它能跑很久&#34;&gt;为什么它能跑很久
+&lt;/h2&gt;&lt;p&gt;Codex 能在 goal 下持续推进，不是因为一次回答被拉长了。&lt;/p&gt;
+&lt;p&gt;真正的工作方式更接近一个循环：计划、执行、观察工具结果、修正，再决定是否继续。构建失败、测试失败、截图不一致、lint 报错、评估样本没过，都会把任务拉回下一轮。&lt;/p&gt;
+&lt;p&gt;如果目标里写了验证方式，agent 就不只是凭感觉说“应该好了”。它需要拿到证据。证据没有回来，就继续查；证据失败，就继续修；证据都通过，才有资格收工。&lt;/p&gt;
+&lt;p&gt;这就是为什么 &lt;code&gt;goal&lt;/code&gt; 适合迁移、重构、批量改稿、prompt eval、长链路排障这类任务。它们共同的特点是：一轮做不完，而且完成不能只靠主观判断。&lt;/p&gt;
+&lt;p&gt;反过来，这样的目标就很危险：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 想一个更高级的产品方案
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;这些话不是杂音，它们本来就是任务的一部分。只是过去它们散落在多轮对话里，现在应该提前进入 goal。&lt;/p&gt;
-&lt;p&gt;所以我会把可用的 goal 拆成四行：&lt;/p&gt;
+&lt;p&gt;它没有边界、没有验证，也没有停机条件。agent 可能跑很久，但跑久不等于有用。至少要写清楚产出几套方案、覆盖哪些约束、用什么标准筛掉、什么时候停。&lt;/p&gt;
+&lt;h2 id=&#34;claude-code-也在处理同一件事&#34;&gt;Claude Code 也在处理同一件事
+&lt;/h2&gt;&lt;p&gt;Claude Code 也有 &lt;code&gt;/goal&lt;/code&gt;，官方文档的说法更直白：用户设置 completion condition，Claude 会跨 turn 持续工作，直到条件满足。&lt;/p&gt;
+&lt;p&gt;Claude Code 文档还提到，每一轮结束后会检查完成条件是否成立；如果不成立，就继续下一轮。这一点很关键，因为它把“继续”从模型自己的主观收尾里拿出来，变成一个额外的条件判断。&lt;/p&gt;
+&lt;p&gt;两家的具体实现细节不必强行等同，但方向是一致的：终端 agent 开始从“执行下一条指令”，走向“围绕可验证目标持续推进”。&lt;/p&gt;
+&lt;p&gt;可以简单分一下：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;能力&lt;/th&gt;
+          &lt;th&gt;更像在解决什么问题&lt;/th&gt;
+          &lt;th&gt;适合场景&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;/goal&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;明确完成条件，跨轮推进到可验证结果&lt;/td&gt;
+          &lt;td&gt;迁移、重构、批量修复、长任务&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;&lt;code&gt;/loop&lt;/code&gt; 或循环类能力&lt;/td&gt;
+          &lt;td&gt;让同一任务按次数或条件反复执行&lt;/td&gt;
+          &lt;td&gt;重试、生成候选、批量探索&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;hooks&lt;/td&gt;
+          &lt;td&gt;在固定事件上自动执行规则&lt;/td&gt;
+          &lt;td&gt;格式化、测试、通知、日志&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;子代理/多代理视图&lt;/td&gt;
+          &lt;td&gt;把任务拆给不同工作线程观察和推进&lt;/td&gt;
+          &lt;td&gt;并行分析、分模块实现、长期后台任务&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;记忆/项目说明文件&lt;/td&gt;
+          &lt;td&gt;固化长期约束和仓库规则&lt;/td&gt;
+          &lt;td&gt;团队规范、代码风格、工具入口&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;这张表里，&lt;code&gt;goal&lt;/code&gt; 的位置很清楚：它不是替代 hooks，也不是替代记忆。它管的是“这次任务做到什么程度算完成”。&lt;/p&gt;
+&lt;h2 id=&#34;好-goal-要写得像验收条件&#34;&gt;好 goal 要写得像验收条件
+&lt;/h2&gt;&lt;p&gt;我现在会把一个 goal 写成四行：&lt;/p&gt;
 &lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;目标：最终要出现什么用户可见结果。
 边界：哪些文件、接口、数据、视觉或行为不能乱动。
 验证：用哪些命令、测试、截图、评测或人工检查作为证据。
 停机：全部满足时停止；遇到哪些权限、事实、产品判断时暂停。
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;写到这里，&lt;code&gt;goal&lt;/code&gt; 就不只是命令了。它开始像一个小型工程契约。&lt;/p&gt;
-&lt;h2 id=&#34;为什么它能持续工作&#34;&gt;为什么它能持续工作
-&lt;/h2&gt;&lt;p&gt;Codex 能在一个 goal 下持续推进，不是因为一次回答被拉长了。&lt;/p&gt;
-&lt;p&gt;OpenAI 的长时任务文章把关键链路说得很清楚：长期工作依赖一个循环。大致是计划、改文件、跑工具、观察结果、修失败、更新状态，然后继续下一轮。&lt;/p&gt;
-&lt;p&gt;这个循环里，最重要的不是“模型更有耐心”，而是真实反馈一直在把任务拉回正轨。&lt;/p&gt;
-&lt;p&gt;构建失败会告诉它哪段迁移没过。&lt;/p&gt;
-&lt;p&gt;测试失败会告诉它哪个行为被破坏。&lt;/p&gt;
-&lt;p&gt;截图差异会告诉它页面不是“看起来差不多”。&lt;/p&gt;
-&lt;p&gt;eval 失败样本会告诉它 prompt 优化没有打到问题上。&lt;/p&gt;
-&lt;p&gt;如果 goal 里写清了验证方式，Codex 每轮就不是在凭感觉说“应该好了”，而是在追证据。证据没回来，就继续修；证据都回来，才有资格停。&lt;/p&gt;
-&lt;p&gt;这也是为什么 &lt;code&gt;goal&lt;/code&gt; 适合迁移、重构、prompt eval、原型这类任务。它们不一定复杂到不可控，但都有一个共同点：一轮做不完，而且完成不能只靠主观判断。&lt;/p&gt;
-&lt;p&gt;反过来，有些任务不适合直接丢给 goal。&lt;/p&gt;
-&lt;p&gt;比如：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;/goal 想一个更高级的产品方案
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;这句话没有验证，没有边界，也没有停机条件。它可能跑很久，但跑久不代表有用。先把它收束成“产出 3 个方案，覆盖哪些约束，用什么标准筛掉，什么时候停”，它才有资格变成 goal。&lt;/p&gt;
-&lt;h2 id=&#34;claude-code-也在处理同一件事&#34;&gt;Claude Code 也在处理同一件事
-&lt;/h2&gt;&lt;p&gt;Claude Code 也有 &lt;code&gt;/goal&lt;/code&gt;，而且官方文档说得更直白：用户设置的是 completion condition，Claude 会跨 turn 持续工作，直到条件满足。文档还说明，每一轮结束后会检查条件是否成立；如果不成立，就继续下一轮。&lt;/p&gt;
-&lt;p&gt;这说明两家终端不是偶然撞了一个命令名。它们都在处理长任务里的同一个问题：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;上一轮结束后，谁来判断还要不要继续？
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;&lt;code&gt;/loop&lt;/code&gt; 这类能力偏时间驱动，hook 偏自定义规则驱动，&lt;code&gt;goal&lt;/code&gt; 偏条件驱动。条件驱动的关键，不是“自动”，而是“有一个明确的完成条件在持续约束下一轮”。&lt;/p&gt;
-&lt;p&gt;OpenAI Codex 这边公开文档没有把内部 evaluator 细节完全摊开，所以不该替它脑补实现。但能确定的是，&lt;code&gt;goal&lt;/code&gt; 的使用价值不在命令名，而在它迫使使用者提前写清楚完成口径。&lt;/p&gt;
-&lt;h2 id=&#34;该被改变的是写目标的人&#34;&gt;该被改变的是写目标的人
-&lt;/h2&gt;&lt;p&gt;&lt;code&gt;goal&lt;/code&gt; 很容易被包装成“agent 可以自己干很久”。这句话听起来爽，但真正落到工作里，反而会害人。&lt;/p&gt;
-&lt;p&gt;越想让 agent 自己跑，越要把目标写窄。&lt;/p&gt;
+&lt;p&gt;这和普通 prompt 的区别很大。&lt;/p&gt;
+&lt;p&gt;普通 prompt 更像下一步动作，goal 更像完成口径。它不是让人从流程里消失，而是把人的判断提前放进去。你不再每一轮提醒它“这个不算完成”，而是在一开始就把“什么算完成”写成后续必须服从的条件。&lt;/p&gt;
+&lt;p&gt;所以，越想让 agent 自己跑，越要把目标写窄。&lt;/p&gt;
 &lt;p&gt;越想少盯过程，越要把验证写实。&lt;/p&gt;
-&lt;p&gt;越想让它别跑偏，越要把边界写清楚。&lt;/p&gt;
-&lt;p&gt;所以 Codex 的 &lt;code&gt;goal&lt;/code&gt; 不是把人从流程里拿掉。它只是把人的责任前移了。你不再每一轮提醒它“这个不算完成”，而是在一开始就把“什么算完成”写成它后续必须服从的条件。&lt;/p&gt;
-&lt;p&gt;这才是 &lt;code&gt;goal&lt;/code&gt; 真正值得关注的地方。&lt;/p&gt;
-&lt;p&gt;不是多一条命令。&lt;/p&gt;
-&lt;p&gt;不是更长时间的自动工作。&lt;/p&gt;
-&lt;p&gt;而是终端 agent 开始把“做到什么算完”抬成一等公民。跑得久只是表象，知道凭什么停，才是能力。&lt;/p&gt;
+&lt;p&gt;越不想它跑偏，越要把边界写清楚。&lt;/p&gt;
+&lt;p&gt;这才是 &lt;code&gt;goal&lt;/code&gt; 真正值得关注的地方。不是多一条命令，不是可以跑多久，而是终端 agent 开始把“谁来判断做完”这件事抬到台面上。&lt;/p&gt;
 &lt;h2 id=&#34;参考资料&#34;&gt;参考资料
 &lt;/h2&gt;&lt;ul&gt;
 &lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/codex/use-cases/follow-goals&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
@@ -163,7 +201,12 @@
 &lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
 &lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 详解 codex 新出的 goal 命令，工作原理是什么，为什么持续工作很长的时间，官方提供的案例是什么。claude code 有没有类似的命名，顺带整理近期 两家终端新出的，好用的、受欢迎的功能，整理为表格。
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;这篇从上面的原始提示词出发，按第一次写稿的方式确定主线、材料密度和结构。&lt;code&gt;date&lt;/code&gt; 字段沿用原发布时间，其他内容只服务当前文章承诺。&lt;/p&gt;</description>
+&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;保留原文主判断：&lt;code&gt;goal&lt;/code&gt; 的核心不是命令名，而是完成条件。&lt;/li&gt;
+&lt;li&gt;补回原始提示词里要求的 Claude Code 对比和终端功能表格。&lt;/li&gt;
+&lt;li&gt;压掉“官方文档复述”，把重点放在如何写一个可用的 goal。&lt;/li&gt;
+&lt;/ul&gt;</description>
         </item>
         <item>
         <title>追半导体最怕的不是高位，是把产业逻辑买成拥挤交易</title>
@@ -5007,48 +5050,51 @@ $$&lt;p&gt;同一页还明确写了两件事:&lt;/p&gt;
 &lt;/ul&gt;</description>
         </item>
         <item>
-        <title>搬家换到联通后，美国节点突然没那么香了</title>
+        <title>换到联通以后，我才发现美国节点不是默认答案</title>
         <link>https://ttf248.life/p/us-nodes-not-as-good-after-switching-to-china-unicom/</link>
         <pubDate>Thu, 16 Apr 2026 01:56:14 +0800</pubDate>
         
         <guid>https://ttf248.life/p/us-nodes-not-as-good-after-switching-to-china-unicom/</guid>
-        <description>&lt;p&gt;最近搬家，家里的宽带从电信换成了联通。平时看剧、打游戏，其实没什么明显感觉，直到前两天想下点资料，习惯性切到美国节点，速度怎么都上不去，我当时有点傻眼。&lt;/p&gt;
-&lt;p&gt;这事后来想明白了。以前我一直以为，美国机房带宽给得足，所以美国节点天然更猛。现在看，这个认知只对了一半。美国服务器资源足是一回事，国内这边走哪家宽带、国际出口怎么走、回程有没有吃到更好的骨干，才是另一半。以前用电信没暴露的问题，换到联通以后，全出来了。&lt;/p&gt;
-&lt;h2 id=&#34;平时真的很难发现&#34;&gt;平时真的很难发现
-&lt;/h2&gt;&lt;p&gt;这类差异，平时很容易被藏住。&lt;/p&gt;
-&lt;p&gt;看剧走的是视频平台自己的调度，很多时候跨境带宽不需要一直拉满。打游戏更看延迟抖动和节点稳定，真到大文件下载、持续跑高带宽的时候，线路是不是对味，立马就露馅了。&lt;/p&gt;
-&lt;p&gt;所以我现在反而觉得，下载速度才是最诚实的测速。你平时觉得一切正常，不代表这条路真的宽，只是没把它跑到极限。&lt;/p&gt;
-&lt;h2 id=&#34;以前美国节点能打满不只是美国机房厉害&#34;&gt;以前美国节点能打满，不只是美国机房厉害
-&lt;/h2&gt;&lt;p&gt;中国电信自己公开的资料里，ChinaNet 是它的大网，&lt;code&gt;CN2 (AS4809)&lt;/code&gt; 则是它强调低时延和高质量的下一代全球承载网，面向的是更重视国际质量的业务。这个东西很多人都听过，平时机场商家也爱拿它当卖点。&lt;/p&gt;
-&lt;p&gt;所以我以前在电信宽带下，切到美国节点就能把下载速度拉上去，现在回头看，大概率不是“美国天生更快”，而是“美国机房资源 + 节点上游线路 + 电信这边的国际路由”刚好叠在一起了。线路一旦踩中电信友好的方向，体验确实会很好。&lt;/p&gt;
-&lt;p&gt;说白了，以前那个速度，不一定是节点普遍强，更像是我正好站在了更占便宜的一侧。&lt;/p&gt;
-&lt;h2 id=&#34;联通不是没国际网但路不一定和你原来那条一样&#34;&gt;联通不是没国际网，但路不一定和你原来那条一样
-&lt;/h2&gt;&lt;p&gt;不过这事也不能简单理解成“联通全靠租电信网络”。&lt;/p&gt;
-&lt;p&gt;中国联通自己的国际网络也不小。联通国际官网写得很清楚，它的骨干网 &lt;code&gt;AS4837&lt;/code&gt; 在全球有 400 多个 PoP，也有更偏高质量承载的 &lt;code&gt;AS9929&lt;/code&gt;。从覆盖看，新加坡、台湾、美国这些点位，它自己都有布局。&lt;/p&gt;
-&lt;p&gt;但问题就在这。&lt;code&gt;有国际网络&lt;/code&gt;，和 &lt;code&gt;你现在买的代理节点刚好对这家运营商友好&lt;/code&gt;，不是一回事。&lt;/p&gt;
-&lt;p&gt;家庭宽带用户真正感受到的，不只是运营商有没有海外资源，还包括：&lt;/p&gt;
+        <description>&lt;p&gt;搬家以后，家里的宽带从电信换成了联通。刷剧、打游戏都没什么明显变化，我一开始也没太当回事。&lt;/p&gt;
+&lt;p&gt;真正露馅是在下载资料的时候。我习惯性切到美国节点，按以前的经验，美国机房带宽足，下载大文件通常能跑得很满。结果这次怎么切都上不去，反而新加坡、台湾节点顺了很多。&lt;/p&gt;
+&lt;p&gt;这一下把我原来那个很粗的判断拆开了：节点快不快，不能只看服务器在哪个国家，也不能只看机房带宽。你家宽带站在哪张网、代理服务商买了什么上游、回程更偏哪家运营商，最后都会落到同一个下载进度条上。&lt;/p&gt;
+&lt;h2 id=&#34;日常使用会把差异藏起来&#34;&gt;日常使用会把差异藏起来
+&lt;/h2&gt;&lt;p&gt;这类问题平时不容易发现。&lt;/p&gt;
+&lt;p&gt;看剧有平台自己的 CDN 和调度，很多流量不需要一路跨境拉回来。打游戏更敏感的是延迟、抖动和稳定性，不一定会持续把带宽跑满。只有下载大文件这种场景，才会把链路的上限逼出来。&lt;/p&gt;
+&lt;p&gt;所以这次的体感很直接：不是联通不能用，也不是美国节点突然都变差了，而是我原来那套“美国机房资源足，所以默认选美国”的经验，换了一条家宽之后不再成立。&lt;/p&gt;
+&lt;p&gt;以前用电信时，美国节点能打满，我容易把功劳都归给美国机房。现在回头看，那更像是几件事刚好叠在一起：美国服务器资源够、节点线路对电信友好、回程也没有明显卡住。换到联通以后，同一个选择就不一定占便宜了。&lt;/p&gt;
+&lt;h2 id=&#34;关键不是有没有国际网络而是你走到哪条路上&#34;&gt;关键不是有没有国际网络，而是你走到哪条路上
+&lt;/h2&gt;&lt;p&gt;原始提示词里提到一个判断：&lt;code&gt;CN2&lt;/code&gt; 是电信的，所以联通要租电信网络。这个说法只能算抓到了一部分。&lt;/p&gt;
+&lt;p&gt;电信确实有自己的 ChinaNet 和 &lt;code&gt;CN2 (AS4809)&lt;/code&gt;，很多跨境线路商也会把 &lt;code&gt;CN2&lt;/code&gt; 当卖点。它通常意味着更重视质量的承载网络，尤其在面向国际业务的时候很容易被拿来比较。&lt;/p&gt;
+&lt;p&gt;但联通并不是没有自己的国际网络。联通国际公开资料里写到 &lt;code&gt;AS4837&lt;/code&gt;，也提到更偏高质量承载的 &lt;code&gt;AS9929&lt;/code&gt;，海外节点覆盖也包括新加坡、台湾、美国等地区。&lt;/p&gt;
+&lt;p&gt;真正影响普通家庭宽带体验的，不是“谁有没有网”这么简单，而是你具体买到的节点线路和家宽运营商是否匹配：&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;你本地是哪家运营商&lt;/li&gt;
-&lt;li&gt;代理服务商买的上游更偏哪条回程&lt;/li&gt;
-&lt;li&gt;节点的去程和回程是不是同一类优化&lt;/li&gt;
-&lt;li&gt;高峰期有没有拥塞&lt;/li&gt;
-&lt;li&gt;这条链路更偏中国电信，还是更偏联通、移动&lt;/li&gt;
+&lt;li&gt;去程从你家到节点怎么走；&lt;/li&gt;
+&lt;li&gt;回程从节点回你家怎么走；&lt;/li&gt;
+&lt;li&gt;代理服务商上游更偏电信、联通还是移动；&lt;/li&gt;
+&lt;li&gt;高峰期有没有拥塞；&lt;/li&gt;
+&lt;li&gt;这个节点是不是只在某一家运营商下表现好。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;很多美国节点，过去我用电信时能打满，换到联通以后不行，我更倾向于把它理解成：这些节点的线路组合，本来就更偏电信友好。之前没觉得，是因为我自己就在电信上。&lt;/p&gt;
-&lt;h2 id=&#34;为什么新加坡和台湾反而顺了&#34;&gt;为什么新加坡和台湾反而顺了
-&lt;/h2&gt;&lt;p&gt;这个也挺有意思。&lt;/p&gt;
-&lt;p&gt;换到联通以后，美国节点不行了，新加坡、台湾却舒服了不少。这个变化，反而比“美国节点掉速”更能说明问题。&lt;/p&gt;
-&lt;p&gt;我的理解是，亚洲方向本来就更近，路径更短，区域互联也更密。联通自己在新加坡、台湾都有网络资源和 PoP，这种情况下，代理服务商如果在亚洲节点上给的是更顺的区域路径，下载速度自然就更容易跑起来。&lt;/p&gt;
-&lt;p&gt;这不一定代表新加坡、台湾机房比美国更强，也不代表所有联通宽带都该选亚洲节点。更像是你现在这条宽带，和这些区域节点的线路匹配度更高。&lt;/p&gt;
-&lt;p&gt;怎么说呢，节点强不强，真不是只看机房所在地，还是得看回家那条路认不认你。&lt;/p&gt;
-&lt;h2 id=&#34;这事最后把我之前的认知修正了&#34;&gt;这事最后把我之前的认知修正了
-&lt;/h2&gt;&lt;p&gt;我以前的想法挺朴素：美国机房大，宽带资源足，所以下资料选美国节点，基本不会错。&lt;/p&gt;
-&lt;p&gt;现在看，这个判断太粗了。&lt;/p&gt;
-&lt;p&gt;更准确一点的说法应该是：&lt;/p&gt;
-&lt;p&gt;美国节点能不能打满，看的从来不只是美国机房，也看你家宽带站在哪张骨干网上。&lt;/p&gt;
-&lt;p&gt;电信用户能跑得很舒服的线路，换到联通，不一定还成立。联通下反而更顺的新加坡、台湾，也不是“亚洲节点突然变强了”，只是线路终于对味了。&lt;/p&gt;
-&lt;p&gt;所以以后买代理或者挑节点，我大概率不会再先入为主盯着美国了。先看自己是什么宽带，再看服务商更偏哪条线路，这事比“机房在美国还是在亚洲”更重要。&lt;/p&gt;
-&lt;p&gt;哎，这种差异，平时刷剧打游戏真不容易看出来。真到拉大文件的时候，宽带家底一下就露出来了。&lt;/p&gt;
+&lt;p&gt;以前我在电信下用得舒服，可能只是刚好站在了那条线路更偏爱的入口。换到联通后，入口变了，美国节点的优势也就没那么稳了。&lt;/p&gt;
+&lt;h2 id=&#34;新加坡和台湾变顺不代表它们天然更强&#34;&gt;新加坡和台湾变顺，不代表它们天然更强
+&lt;/h2&gt;&lt;p&gt;更有意思的是，美国节点掉速之后，新加坡和台湾节点反而更顺。&lt;/p&gt;
+&lt;p&gt;这不说明亚洲机房一定比美国强，也不说明联通用户以后都该默认选亚洲节点。更合理的解释是：亚洲方向距离更近，区域互联更密，我现在这条联通宽带和这些节点的线路组合更合拍。&lt;/p&gt;
+&lt;p&gt;节点体验其实像一条完整回家路线。机房所在地只是其中一段，国内入口、国际出口、回程策略和高峰拥塞都要一起算。美国机房再强，如果回程绕、上游偏、或者高峰期堵，最后还是跑不起来。&lt;/p&gt;
+&lt;p&gt;所以后来我选节点的顺序变了。&lt;/p&gt;
+&lt;p&gt;以前是先看国家：美国优先，新加坡、台湾备选。现在是先看线路匹配：我家是什么宽带，这个服务商在哪些地区对这家运营商友好，实际下载能不能稳定跑起来。&lt;/p&gt;
+&lt;h2 id=&#34;以后买节点先别急着看国家&#34;&gt;以后买节点，先别急着看国家
+&lt;/h2&gt;&lt;p&gt;这次换宽带给我的修正很实用。&lt;/p&gt;
+&lt;p&gt;美国节点不是默认答案。它只是一个在很多场景下资源充足、选择多、价格也容易做下来的方向。它能不能变成你的最快节点，还要看你家宽带和它之间那条路。&lt;/p&gt;
+&lt;p&gt;对普通用户来说，最好的办法不是背运营商骨干网名词，而是换个测试方式：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;别只测网页打开速度，要测大文件持续下载；&lt;/li&gt;
+&lt;li&gt;别只看一个时间点，晚高峰也要测一次；&lt;/li&gt;
+&lt;li&gt;同时测美国、新加坡、台湾、日本等几个方向；&lt;/li&gt;
+&lt;li&gt;记录不同节点在自己这条宽带上的稳定表现；&lt;/li&gt;
+&lt;li&gt;如果服务商标了线路类型，再看它更偏哪家运营商。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;我现在不太相信“某国节点一定快”这种说法了。更准确的说法是：某个节点，在某家宽带、某个时间段、某条回程下，可能很快。&lt;/p&gt;
+&lt;p&gt;这个判断听起来麻烦，但比盲选美国节点靠谱。家宽一换，原来的经验就可能过期。真正诚实的不是节点介绍页，而是你自己那条下载曲线。&lt;/p&gt;
 &lt;h2 id=&#34;参考资料&#34;&gt;参考资料
 &lt;/h2&gt;&lt;ul&gt;
 &lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.ctamericas.com/wp-content/uploads/2018/10/IP-Access.pdf&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
@@ -5064,11 +5110,9 @@ $$&lt;p&gt;同一页还明确写了两件事:&lt;/p&gt;
 &lt;p&gt;提示词：中国内地，走代理软件，科学上网，发现联通、电信宽带的区别了，日常看剧、打游戏都很难发现。偶尔下载资料，喜欢选择美国节点，那边的节点，下载速度基本能打满，这样也符合以前的认知，美国机房的服务器，宽带资源给的很足。近期搬家换到了联通的带宽发现了问题，美国节点的下载速度上不去了，切换到新加坡、台湾倒是好了很多，这和中国宽带的骨干网络有关系，CN2高速骨干网络，都是电信的，联通要租用电信的网络。&lt;/p&gt;&lt;/blockquote&gt;
 &lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
 &lt;/h3&gt;&lt;ul&gt;
-&lt;li&gt;先保留“搬家换宽带后才看出差异”这个真实触发点，不把文章写成网络科普。&lt;/li&gt;
-&lt;li&gt;核心判断保留为“节点快不快，不能只看美国机房，还要看国内宽带和国际路由”。&lt;/li&gt;
-&lt;li&gt;对 &lt;code&gt;CN2&lt;/code&gt;、联通国际骨干和海外 PoP 做了补充核验，把“联通全靠租电信网络”修正成更准确的表述。&lt;/li&gt;
-&lt;li&gt;新加坡、台湾更快这部分，按“区域路径更短、线路匹配度更高”来解释，不硬写成绝对规律。&lt;/li&gt;
-&lt;li&gt;结构上先写体感，再解释原因，最后把结论落回“以后怎么选节点”。&lt;/li&gt;
+&lt;li&gt;保留“搬家换宽带后才发现差异”的真实触发点，不写成运营商百科。&lt;/li&gt;
+&lt;li&gt;修正“联通只能租电信网络”的绝对说法，改成线路匹配、去程回程和服务商上游共同决定体验。&lt;/li&gt;
+&lt;li&gt;把结论落到节点选择方法：先测自己家宽下的实际表现，再谈美国、亚洲或机房资源。&lt;/li&gt;
 &lt;/ul&gt;</description>
         </item>
         <item>
@@ -6312,74 +6356,75 @@ controllers/
 &lt;/ul&gt;</description>
         </item>
         <item>
-        <title>Codex 默认 medium，我后来还是切到 high</title>
+        <title>Codex 里我为什么不再默认用 medium</title>
         <link>https://ttf248.life/p/codex-default-medium-vs-high/</link>
         <pubDate>Wed, 08 Apr 2026 22:57:47 +0800</pubDate>
         
         <guid>https://ttf248.life/p/codex-default-medium-vs-high/</guid>
-        <description>&lt;p&gt;用 Codex 这段时间，有个问题一直挺别扭：默认思考档位是 &lt;code&gt;medium&lt;/code&gt;，但网上一聊到 &lt;code&gt;GPT-5.4&lt;/code&gt;，口气又都很猛。真到自己手里，&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt; 到底差多少，官方也没给一张特别直白的表。&lt;/p&gt;
-&lt;p&gt;我现在的结论挺明确，日常编码我更愿意直接开 &lt;code&gt;high&lt;/code&gt;。&lt;code&gt;medium&lt;/code&gt; 不是不能用，快活、小修小补、试探方向没问题；但真到多文件修改、需求有歧义、还要边看代码边判断的时候，&lt;code&gt;medium&lt;/code&gt; 很容易把算力省错地方。&lt;code&gt;xhigh&lt;/code&gt; 我反而不会常开，留给卡壳的大活更合适。&lt;/p&gt;
-&lt;h2 id=&#34;先把-medium-说清楚&#34;&gt;先把 medium 说清楚
-&lt;/h2&gt;&lt;p&gt;这事最容易绕晕人的地方，是 &lt;code&gt;medium&lt;/code&gt; 不止一套含义。&lt;/p&gt;
-&lt;p&gt;截至 &lt;code&gt;2026-04-08&lt;/code&gt;，OpenAI 公开文档里，&lt;code&gt;GPT-5.4&lt;/code&gt; 的 &lt;code&gt;reasoning.effort&lt;/code&gt; 支持的是 &lt;code&gt;none&lt;/code&gt;、&lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt;，默认还是 &lt;code&gt;none&lt;/code&gt;。但同一套文档里，&lt;code&gt;verbosity&lt;/code&gt; 也有 &lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;，而且 &lt;code&gt;GPT-5.4&lt;/code&gt; 的 &lt;code&gt;verbosity&lt;/code&gt; 默认值就是 &lt;code&gt;medium&lt;/code&gt;。&lt;/p&gt;
-&lt;p&gt;所以你在网上看到一句“默认是 medium”，先别急着往“思考等级”上套。很多时候，说的根本不是一回事。&lt;/p&gt;
-&lt;p&gt;如果你是在 Codex 里直接用，看到默认是 &lt;code&gt;medium&lt;/code&gt;，我更倾向于把它理解成产品层给你的预设，而不是模型文档里的底层默认值。这个区别不拆开，后面讨论就会一直打架。&lt;/p&gt;
-&lt;h2 id=&#34;官方其实没把差距讲透&#34;&gt;官方其实没把差距讲透
-&lt;/h2&gt;&lt;p&gt;再说官方说明。&lt;/p&gt;
-&lt;p&gt;公开文档现在能确认几件事：&lt;/p&gt;
+        <description>&lt;p&gt;刚开始用 Codex 的时候，我对 &lt;code&gt;medium&lt;/code&gt; 这个默认档位有点误会。&lt;/p&gt;
+&lt;p&gt;它看起来像一个很稳的中间值：不至于太慢，也不至于太省。网上又经常有人说 &lt;code&gt;GPT-5.4&lt;/code&gt; 编码很强，于是很容易顺手把两件事合在一起理解：既然模型强，那默认 &lt;code&gt;medium&lt;/code&gt; 应该就够了。&lt;/p&gt;
+&lt;p&gt;用了一段时间以后，我的结论变了。小修小补可以继续 &lt;code&gt;medium&lt;/code&gt;，但只要任务开始跨文件、需求有歧义、需要先读代码再判断，我更愿意直接开 &lt;code&gt;high&lt;/code&gt;。&lt;code&gt;xhigh&lt;/code&gt; 不当日常默认，留给 &lt;code&gt;high&lt;/code&gt; 已经证明啃不动的任务。&lt;/p&gt;
+&lt;h2 id=&#34;medium-最容易省错地方&#34;&gt;medium 最容易省错地方
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;medium&lt;/code&gt; 的问题不是弱，而是它会在复杂任务里制造一种错觉：模型看起来已经理解了，但关键判断少想了一层。&lt;/p&gt;
+&lt;p&gt;这种差异在简单任务里不明显。比如改一个明显的拼写、补一个小函数、按现成模式加一个字段，&lt;code&gt;medium&lt;/code&gt; 通常没什么问题。它快，成本也比较舒服。&lt;/p&gt;
+&lt;p&gt;但一到下面这些场景，差距就出来了：&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;&lt;code&gt;gpt-5.4&lt;/code&gt; 是官方推荐的通用编码默认模型。&lt;/li&gt;
-&lt;li&gt;代码生成指南里，官方给 &lt;code&gt;gpt-5.4&lt;/code&gt; 的示例，直接配的是 &lt;code&gt;reasoning: high&lt;/code&gt;。&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;gpt-5.3-codex&lt;/code&gt; 这类 Codex 定向模型，公开页面明确支持 &lt;code&gt;low&lt;/code&gt;、&lt;code&gt;medium&lt;/code&gt;、&lt;code&gt;high&lt;/code&gt;、&lt;code&gt;xhigh&lt;/code&gt;。&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;gpt-5.4-pro&lt;/code&gt; 是另一条线，不是普通 &lt;code&gt;gpt-5.4&lt;/code&gt; 单纯把档位拧高那么简单，它本身就是“用更多算力想更久”的独立型号。&lt;/li&gt;
+&lt;li&gt;要先读几处代码，判断真正的入口在哪里；&lt;/li&gt;
+&lt;li&gt;用户描述有歧义，需要自己收束需求；&lt;/li&gt;
+&lt;li&gt;改动会影响测试、文档、配置或调用链；&lt;/li&gt;
+&lt;li&gt;需要决定“该不该做”，而不是只问“怎么写”；&lt;/li&gt;
+&lt;li&gt;第一轮失败后要根据工具输出继续修。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;但官方没有给出一张特别实用的表，比如：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;medium&lt;/code&gt; 比 &lt;code&gt;high&lt;/code&gt; 到底差多少成功率&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;high&lt;/code&gt; 比 &lt;code&gt;xhigh&lt;/code&gt; 多花多少时间、多少 token&lt;/li&gt;
-&lt;li&gt;在编码场景里，什么任务值得直接上 &lt;code&gt;xhigh&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;也就是说，官方把旋钮给你了，没把经验曲线替你画完。&lt;/p&gt;
-&lt;h2 id=&#34;真正有用的还是看排行榜怎么拆档位&#34;&gt;真正有用的，还是看排行榜怎么拆档位
-&lt;/h2&gt;&lt;p&gt;灵光一闪，我去翻了 Arena 的代码榜，这下就清楚多了。&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;arena.ai&lt;/code&gt; 的代码排行榜把档位拆开写了。页面更新时间是 &lt;code&gt;2026-04-01&lt;/code&gt;，截至我写这篇文章时：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;gpt-5.4-high (codex-harness)&lt;/code&gt; 排第 &lt;code&gt;6&lt;/code&gt;，分数 &lt;code&gt;1457&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;gpt-5.4-medium (codex-harness)&lt;/code&gt; 排第 &lt;code&gt;16&lt;/code&gt;，分数 &lt;code&gt;1427&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;gpt-5.3-codex (codex-harness)&lt;/code&gt; 排第 &lt;code&gt;18&lt;/code&gt;，分数 &lt;code&gt;1407&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;这几个数放一起看，意思已经很直接了。&lt;/p&gt;
-&lt;p&gt;同一个 &lt;code&gt;GPT-5.4&lt;/code&gt;，&lt;code&gt;high&lt;/code&gt; 和 &lt;code&gt;medium&lt;/code&gt; 不是“差一点点体验”，而是已经能拉开一个明显档次。你要是只看“GPT-5.4 很强”这句话，其实信息不够，因为榜单自己都把 &lt;code&gt;high&lt;/code&gt; 和 &lt;code&gt;medium&lt;/code&gt; 拆成两条了。很多人口中的“很强”，大概率说的是高思考档跑出来的效果，不是在替 &lt;code&gt;medium&lt;/code&gt; 站台。&lt;/p&gt;
-&lt;p&gt;当然，排行榜不是你项目里的真理。它测的是 agentic coding + harness 场景，不是你本地这一个仓库。但方向已经很明显了：编码这种事，推理档位真会改结果，不只是改速度。&lt;/p&gt;
-&lt;h2 id=&#34;我现在怎么选&#34;&gt;我现在怎么选
-&lt;/h2&gt;&lt;p&gt;说白了，我现在的用法很简单。&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;medium&lt;/code&gt; 留给下面这些场景：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;改几个小文件&lt;/li&gt;
-&lt;li&gt;修明显 bug&lt;/li&gt;
-&lt;li&gt;先让模型吐个草稿&lt;/li&gt;
-&lt;li&gt;要速度，不想等太久&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;code&gt;high&lt;/code&gt; 适合当日常默认：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;多文件联动修改&lt;/li&gt;
-&lt;li&gt;需求里有一点模糊地方&lt;/li&gt;
-&lt;li&gt;需要先读代码再下手&lt;/li&gt;
-&lt;li&gt;要做判断，不只是补全代码&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;code&gt;xhigh&lt;/code&gt; 我会留给硬骨头：&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;高风险重构&lt;/li&gt;
-&lt;li&gt;长链路排障&lt;/li&gt;
-&lt;li&gt;架构改动&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;high&lt;/code&gt; 连着两轮都没把问题啃下来&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;这里面最关键的，不是 &lt;code&gt;xhigh&lt;/code&gt; 有多神，而是别把 &lt;code&gt;medium&lt;/code&gt; 用成“万金油”。&lt;code&gt;medium&lt;/code&gt; 真正的问题不是弱，而是它太容易在复杂任务上给你一种“差一点就行”的错觉。结果就是第一轮省了点时间，后面返工更多。&lt;/p&gt;
-&lt;h2 id=&#34;说回-gpt-54到底强的是哪个级别&#34;&gt;说回 GPT-5.4，到底强的是哪个级别
-&lt;/h2&gt;&lt;p&gt;所以最后回到那个问题：网上说 &lt;code&gt;GPT-5.4&lt;/code&gt; 很强，说的到底是哪个级别？&lt;/p&gt;
-&lt;p&gt;我的判断是，没写清楚档位的“GPT-5.4 很强”，默认按高思考档理解更靠谱一点。至少在编码场景里，你别直接把它理解成 &lt;code&gt;medium&lt;/code&gt;。如果对方说的是 &lt;code&gt;gpt-5.4-pro&lt;/code&gt;，那就更不是一回事了，那是单独的更重计算版本。&lt;/p&gt;
-&lt;p&gt;前文写过 &lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/command-line-ai-coding-interaction/&#34; &gt;基于命令行的AI编码交互&lt;/a&gt;，那会更多还在聊交互方式的变化。现在回头看，交互变了是一回事，模型到底开哪档，其实已经变成另一个更现实的问题了。&lt;/p&gt;
-&lt;p&gt;我现在站得很明确：日常用 &lt;code&gt;high&lt;/code&gt; 足矣，搞不定再试 &lt;code&gt;xhigh&lt;/code&gt;。这样在速度、成本和成功率之间，平衡点更像是对的。&lt;/p&gt;
+&lt;p&gt;这类任务里，&lt;code&gt;medium&lt;/code&gt; 不是不会给答案，而是更容易给一个“看上去差不多”的答案。第一轮省了时间，后面靠你发现遗漏，再补一轮、再补一轮。&lt;/p&gt;
+&lt;p&gt;我现在对它的定位更窄：&lt;code&gt;medium&lt;/code&gt; 是试探档，不是复杂编码任务的默认档。&lt;/p&gt;
+&lt;h2 id=&#34;别把两个-medium-混在一起&#34;&gt;别把两个 medium 混在一起
+&lt;/h2&gt;&lt;p&gt;当时让我困惑的另一个原因，是文档和产品里的 &lt;code&gt;medium&lt;/code&gt; 不一定指同一件事。&lt;/p&gt;
+&lt;p&gt;OpenAI API 文档里既有 &lt;code&gt;reasoning.effort&lt;/code&gt;，也有 &lt;code&gt;verbosity&lt;/code&gt;。前者控制推理投入，后者更接近输出详略。它们都可能出现 &lt;code&gt;medium&lt;/code&gt;，但不是一个旋钮。&lt;/p&gt;
+&lt;p&gt;所以看到“默认是 medium”这句话，不能马上推断它说的是推理档位。它可能说的是产品预设，也可能说的是输出详略，甚至只是某个界面的默认值。&lt;/p&gt;
+&lt;p&gt;这点拆开以后，问题反而简单了：我不需要证明所有地方的默认值都应该改。我只需要回答一个实践问题：在 Codex 里做真实编码任务时，我愿意把哪档当成日常工作档。&lt;/p&gt;
+&lt;p&gt;我的答案是 &lt;code&gt;high&lt;/code&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;榜单给了一个方向不是使用说明书&#34;&gt;榜单给了一个方向，不是使用说明书
+&lt;/h2&gt;&lt;p&gt;原始提示词里提到 Arena 代码榜，这个线索很有用。&lt;/p&gt;
+&lt;p&gt;当时榜单把同一个模型按不同思考档位拆开，&lt;code&gt;gpt-5.4-high (codex-harness)&lt;/code&gt; 和 &lt;code&gt;gpt-5.4-medium (codex-harness)&lt;/code&gt; 是两条结果。这个拆法本身就说明一件事：在 agentic coding 这类任务里，推理档位不是装饰项，它真的会改变结果。&lt;/p&gt;
+&lt;p&gt;当然，榜单不能直接替代你本地仓库里的经验。它测的是一套公开 harness，不是你的业务代码，也不是你的测试链路。可它能提醒我们别犯一个错误：看到“GPT-5.4 很强”，就默认 &lt;code&gt;medium&lt;/code&gt; 也等于那个强度。&lt;/p&gt;
+&lt;p&gt;很多时候，大家口中的“强”，说的是高推理投入下的表现。把这个评价直接套到默认档位上，会高估 &lt;code&gt;medium&lt;/code&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;我现在的用法&#34;&gt;我现在的用法
+&lt;/h2&gt;&lt;p&gt;我会这样分档：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;场景&lt;/th&gt;
+          &lt;th&gt;默认档位&lt;/th&gt;
+          &lt;th&gt;理由&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;改小 bug、补小函数、改文案、跑一次方向&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;medium&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;快，够用，失败成本低&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;多文件修改、需求不清、需要读代码判断&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;high&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;少返工，比省第一轮时间更重要&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;重构、迁移、长链路排障、&lt;code&gt;high&lt;/code&gt; 两轮失败&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;xhigh&lt;/code&gt;&lt;/td&gt;
+          &lt;td&gt;留给真正需要更长推理链的任务&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;这张表不是绝对规则。它只是把我的使用习惯固定下来：默认不要把 &lt;code&gt;medium&lt;/code&gt; 用成万金油。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;xhigh&lt;/code&gt; 也没必要神化。它更贵、更慢，也不保证每次都赢。对我来说，它的价值不在“永远更聪明”，而在 &lt;code&gt;high&lt;/code&gt; 已经暴露出任务复杂度以后，再给模型更多时间把依赖关系想完整。&lt;/p&gt;
+&lt;h2 id=&#34;真正要改的是任务入口&#34;&gt;真正要改的是任务入口
+&lt;/h2&gt;&lt;p&gt;最后回到原始问题：日常用哪个？&lt;/p&gt;
+&lt;p&gt;如果是在 Codex 里认真改代码，我会直接用 &lt;code&gt;high&lt;/code&gt;。它不是最省的档位，但通常能减少“第一轮看着对，第二轮才发现漏了边界”的返工。&lt;/p&gt;
+&lt;p&gt;如果只是让模型先探路，或者做一个很明确的小改动，&lt;code&gt;medium&lt;/code&gt; 仍然合适。它不该被废掉，只是不该承担所有任务。&lt;/p&gt;
+&lt;p&gt;这件事对我最大的提醒是：模型名只回答了一半问题。另一半是你给它多少推理预算，以及任务本身到底需要多少判断。&lt;/p&gt;
+&lt;p&gt;所以以后看到“GPT-5.4 很强”这种说法，我会先追问一句：它是在什么档位、什么 harness、什么任务上强？&lt;/p&gt;
+&lt;p&gt;问清这一句，比盲目相信默认值有用。&lt;/p&gt;
 &lt;h2 id=&#34;参考资料&#34;&gt;参考资料
 &lt;/h2&gt;&lt;ul&gt;
 &lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://developers.openai.com/api/docs/guides/latest-model&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
@@ -6401,11 +6446,9 @@ controllers/
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
 &lt;/h3&gt;&lt;ul&gt;
-&lt;li&gt;把“日常用 high，xhigh 兜底”作为主判断，没有写成档位百科。&lt;/li&gt;
-&lt;li&gt;先拆开 &lt;code&gt;reasoning&lt;/code&gt; 和 &lt;code&gt;verbosity&lt;/code&gt;，避免把公开文档里的两个 &lt;code&gt;medium&lt;/code&gt; 混为一谈。&lt;/li&gt;
-&lt;li&gt;官方资料主要用来确认支持档位、默认值和代码生成示例，没有硬编一张官方并未提供的能力差距表。&lt;/li&gt;
-&lt;li&gt;Arena 榜单用了 &lt;code&gt;2026-04-01&lt;/code&gt; 页面里的名次和分数，给“high 明显强于 medium”补事实锚点。&lt;/li&gt;
-&lt;li&gt;结构上先讲为什么会困惑，再讲官方口径的边界，最后收口到日常怎么选。&lt;/li&gt;
+&lt;li&gt;保留原文主判断：日常复杂编码用 &lt;code&gt;high&lt;/code&gt;，&lt;code&gt;xhigh&lt;/code&gt; 留给卡住的大活。&lt;/li&gt;
+&lt;li&gt;把原稿里偏资料说明的部分压缩成使用决策，不再逐条解释所有官方页面。&lt;/li&gt;
+&lt;li&gt;明确榜单只能提供方向，不能替代本地任务里的成本、速度和返工经验。&lt;/li&gt;
 &lt;/ul&gt;</description>
         </item>
         <item>
@@ -7487,54 +7530,116 @@ description: Explain exactly when this skill should and should not trigger.
 &lt;p&gt;毕竟，在算力霸权面前，所有的运营技巧都显得有些无力。&lt;/p&gt;</description>
         </item>
         <item>
-        <title>深度解析 C&#43;&#43; 中 `static lambda` 引发的内存空转与缓存污染</title>
+        <title>unordered_map 查到了，值却像串了号</title>
         <link>https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/</link>
         <pubDate>Mon, 16 Mar 2026 20:18:18 +0800</pubDate>
         
         <guid>https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/</guid>
-        <description>&lt;p&gt;本文分析了 C++ 开发中 &lt;code&gt;unordered_map::find&lt;/code&gt; 命中后返回对象字段不匹配的诡异现象。根因在于在函数内部定义 &lt;code&gt;static lambda&lt;/code&gt; 并使用引用捕获局部变量，导致首轮调用后产生悬空引用，后续调用引发未定义行为（UB）并污染缓存数据。建议通过显式传参替代隐式捕获、规范生命周期管理及使用 Sanitizer 工具来根治此类问题。&lt;/p&gt;
-&lt;p&gt;在构建高性能行情服务或分布式缓存时，程序员常会遇到一个“灵异事件”：通过 Key 明确从 &lt;code&gt;std::unordered_map&lt;/code&gt; 中 &lt;code&gt;find&lt;/code&gt; 到了对象，但读取其内部字段时，发现它竟然变成了另一个 Key 的数据。这种“身份错位”往往指向了一个隐蔽的 C++ 陷阱：&lt;strong&gt;&lt;code&gt;static lambda&lt;/code&gt; 与生命周期捕获冲突导致的未定义行为（UB）。&lt;/strong&gt;&lt;/p&gt;
-&lt;h2 id=&#34;故障模式被长久保存的短生命周期引用&#34;&gt;故障模式：被“长久保存”的短生命周期引用
-&lt;/h2&gt;&lt;p&gt;在优化性能时，有些开发者习惯在函数内定义 &lt;code&gt;static lambda&lt;/code&gt; 以减少闭包创建开销。然而，如果配合隐式引用捕获 &lt;code&gt;[&amp;amp;]&lt;/code&gt;，就会埋下炸弹：&lt;/p&gt;
+        <description>&lt;p&gt;有一种 C++ 问题特别容易把人带偏：&lt;code&gt;unordered_map::find&lt;/code&gt; 明明命中了，&lt;code&gt;it-&amp;gt;first&lt;/code&gt; 也对，可你再看 &lt;code&gt;it-&amp;gt;second&lt;/code&gt; 里面的字段，像是变成了另一个 key 的数据。&lt;/p&gt;
+&lt;p&gt;第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 &lt;code&gt;unordered_map&lt;/code&gt; 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。&lt;/p&gt;
+&lt;p&gt;这篇记录的坑，就是函数内部的 &lt;code&gt;static lambda&lt;/code&gt; 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。&lt;/p&gt;
+&lt;h2 id=&#34;先看那个很像优化的小动作&#34;&gt;先看那个很像优化的小动作
+&lt;/h2&gt;&lt;p&gt;问题代码大概长这样：&lt;/p&gt;
 &lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;void UpdateCache(std::unordered_map&amp;lt;std::string, Tick&amp;gt;&amp;amp; cache, Tick&amp;amp; current_input) {
-    // 危险：static 延长了 lambda 的生命周期至进程级别
-    // [&amp;amp;] 捕获了栈上的局部引用 current_input
-    static auto patch_func = [&amp;amp;](auto it) {
-        it-&amp;gt;second.price = current_input.price; // 第二次执行时，这里的引用已失效
+    static auto patch = [&amp;amp;](auto it) {
+        it-&amp;gt;second.price = current_input.price;
+        it-&amp;gt;second.volume = current_input.volume;
     };
 
     auto it = cache.find(current_input.symbol);
     if (it != cache.end()) {
-        patch_func(it); 
+        patch(it);
     }
 }
-
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id=&#34;技术原理剖析&#34;&gt;技术原理剖析
-&lt;/h2&gt;&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;生命周期错位&lt;/strong&gt;：&lt;code&gt;static&lt;/code&gt; 变量在程序首次执行到该行时初始化，且在整个进程运行期间只初始化一次。这意味着 &lt;code&gt;patch_func&lt;/code&gt; 内部捕获的 &lt;code&gt;current_input&lt;/code&gt; 引用，永远固定在了&lt;strong&gt;第一次调用该函数时&lt;/strong&gt;栈帧上的内存地址。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;悬空引用（Dangling Reference）&lt;/strong&gt;：当第一次 &lt;code&gt;UpdateCache&lt;/code&gt; 执行完毕，原有的栈侦被销毁。第二次调用时，&lt;code&gt;patch_func&lt;/code&gt; 仍在试图读写那个已经失效的地址。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;隐蔽的内存污染&lt;/strong&gt;：由于栈空间会被重复利用，该地址可能存放着新的业务数据。此时写入数据，表面上是在更新当前 Key 的 Value，实际上是在一片“随机”的内存上进行非法写操作。这解释了为什么 &lt;code&gt;find&lt;/code&gt; 的 Key 是 A，读出来的 Value 字段却是 B。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 id=&#34;解决方案与工程实践&#34;&gt;解决方案与工程实践
-&lt;/h2&gt;&lt;h3 id=&#34;1-消除隐式捕获改用显式传参&#34;&gt;1. 消除隐式捕获，改用显式传参
-&lt;/h3&gt;&lt;p&gt;最稳妥的办法是让 Lambda 保持“无状态”（Stateless），将所有依赖的对象通过参数传递。&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;// 推荐做法：无状态 lambda，显式传递 src 
-auto patch = [](auto it, const Tick&amp;amp; src) {
+&lt;p&gt;写这段代码的人可能不是想偷懒，而是想少创建一次 lambda。&lt;code&gt;patch&lt;/code&gt; 看起来只是一个小更新函数，放成 &lt;code&gt;static&lt;/code&gt; 好像还能省点开销。&lt;/p&gt;
+&lt;p&gt;真正危险的是这两个东西叠在一起：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;static&lt;/code&gt; 让这个 lambda 只初始化一次，并且活到进程结束；&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;[&amp;amp;]&lt;/code&gt; 让它捕获当前栈帧里的局部引用。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;第一次调用 &lt;code&gt;UpdateCache&lt;/code&gt; 时，&lt;code&gt;patch&lt;/code&gt; 被初始化。它捕获到的 &lt;code&gt;current_input&lt;/code&gt;，不是一个抽象名字，而是第一次调用时那块栈上的对象引用。&lt;/p&gt;
+&lt;p&gt;函数返回以后，那块栈帧结束了。第二次再调用，&lt;code&gt;patch&lt;/code&gt; 不会重新初始化，它还拿着第一次的引用。后面发生什么，就已经进入未定义行为。&lt;/p&gt;
+&lt;h2 id=&#34;为什么现象会像-map-查错了&#34;&gt;为什么现象会像 map 查错了
+&lt;/h2&gt;&lt;p&gt;这个 bug 迷惑人的地方在于，&lt;code&gt;find&lt;/code&gt; 可能一直是对的。&lt;/p&gt;
+&lt;p&gt;你用当前输入的 &lt;code&gt;symbol&lt;/code&gt; 去查 map，查到了正确的 iterator。到这一步，容器没有错。错发生在后面的更新函数里：它读到的 &lt;code&gt;current_input.price&lt;/code&gt;、&lt;code&gt;current_input.volume&lt;/code&gt;，可能已经不是当前这次调用的输入。&lt;/p&gt;
+&lt;p&gt;如果那块失效栈内存刚好被复用了，你看到的现象就会很奇怪：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;key 是 A；&lt;/li&gt;
+&lt;li&gt;iterator 也确实指向 A；&lt;/li&gt;
+&lt;li&gt;但写进去的字段像来自 B；&lt;/li&gt;
+&lt;li&gt;偶尔还会因为栈布局变化表现不稳定。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这就很容易让人误判成“map 里缓存污染了”。其实污染不是 map 自己产生的，而是更新逻辑从一个悬空引用里拿了数据。&lt;/p&gt;
+&lt;p&gt;更糟的是，这类问题不一定马上崩。它可能只是偶尔错字段、偶尔错价格、偶尔在高并发或不同编译优化下变得更明显。越不像崩溃，越容易被当成业务数据问题。&lt;/p&gt;
+&lt;h2 id=&#34;不要用-static-保存带捕获的局部闭包&#34;&gt;不要用 static 保存带捕获的局部闭包
+&lt;/h2&gt;&lt;p&gt;这条经验可以说得很直接：函数内部的 &lt;code&gt;static lambda&lt;/code&gt;，如果捕获局部变量，优先当成危险代码处理。&lt;/p&gt;
+&lt;p&gt;安全写法是让 lambda 无状态，依赖都通过参数传进去：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;void UpdateCache(std::unordered_map&amp;lt;std::string, Tick&amp;gt;&amp;amp; cache, const Tick&amp;amp; current_input) {
+    auto patch = [](auto it, const Tick&amp;amp; src) {
+        it-&amp;gt;second.price = src.price;
+        it-&amp;gt;second.volume = src.volume;
+    };
+
+    auto it = cache.find(current_input.symbol);
+    if (it != cache.end()) {
+        patch(it, current_input);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果真想避免重复写这段更新逻辑，可以把它提成普通函数，或者写成不捕获任何局部状态的 lambda：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;static auto patch = [](auto it, const Tick&amp;amp; src) {
     it-&amp;gt;second.price = src.price;
+    it-&amp;gt;second.volume = src.volume;
 };
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;关键不在于 &lt;code&gt;static&lt;/code&gt; 这个词绝对不能出现，而在于它不能把短生命周期对象悄悄带进长生命周期闭包里。&lt;/p&gt;
+&lt;h2 id=&#34;排查时先证明-key-和-value-的身份一致&#34;&gt;排查时先证明 key 和 value 的身份一致
+&lt;/h2&gt;&lt;p&gt;遇到“查到了但值不对”的问题，我现在会先加几个很笨但有效的检查。&lt;/p&gt;
+&lt;p&gt;比如更新前后都确认身份：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-cpp&#34;&gt;auto it = cache.find(current_input.symbol);
+assert(it != cache.end());
+assert(it-&amp;gt;first == current_input.symbol);
+
 patch(it, current_input);
 
+assert(it-&amp;gt;first == it-&amp;gt;second.symbol);
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;2-慎用-static-修饰闭包&#34;&gt;2. 慎用 &lt;code&gt;static&lt;/code&gt; 修饰闭包
-&lt;/h3&gt;&lt;p&gt;在函数内部，除非闭包不捕获任何局部变量，否则不应使用 &lt;code&gt;static&lt;/code&gt;。现代编译器对非 &lt;code&gt;static&lt;/code&gt; lambda 的优化已经非常出色，盲目使用 &lt;code&gt;static&lt;/code&gt; 带来的性能提升微乎其微，却带来了巨大的安全风险。&lt;/p&gt;
-&lt;h3 id=&#34;3-强化一致性校验与动态检测&#34;&gt;3. 强化一致性校验与动态检测
-&lt;/h3&gt;&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;断言检查&lt;/strong&gt;：在更新逻辑后，增加 &lt;code&gt;assert(it-&amp;gt;first == it-&amp;gt;second.symbol)&lt;/code&gt;，在开发阶段拦截“身份不一致”问题。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;工具辅助&lt;/strong&gt;：在测试环境开启 &lt;code&gt;ASan&lt;/code&gt; (AddressSanitizer) 和 &lt;code&gt;UBSan&lt;/code&gt; (UndefinedBehaviorSanitizer)。这些工具能精准捕捉到访问失效栈内存的行为并立即报错。&lt;/li&gt;
+&lt;p&gt;这些断言不是为了修 bug，而是为了缩小现场：到底是 &lt;code&gt;find&lt;/code&gt; 找错了，还是更新以后 value 被写错了。&lt;/p&gt;
+&lt;p&gt;测试环境还应该打开工具：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;AddressSanitizer&lt;/code&gt; 用来抓失效栈内存访问；&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;UndefinedBehaviorSanitizer&lt;/code&gt; 用来抓未定义行为；&lt;/li&gt;
+&lt;li&gt;如果和线程有关，再补 &lt;code&gt;ThreadSanitizer&lt;/code&gt;。&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h2 id=&#34;结论&#34;&gt;结论
-&lt;/h2&gt;&lt;p&gt;C++ 中的“查表错误”往往只是表象，背后的真相通常是内存管理契约的失效。&lt;strong&gt;Key 查找正确，不代表 Value 依然可信&lt;/strong&gt;。在处理长生命周期对象（如 &lt;code&gt;static&lt;/code&gt;、全局变量、长效回调）时，必须时刻警惕其捕获的引用是否已经随栈侦消失而“随风而去”。&lt;/p&gt;</description>
+&lt;p&gt;如果 sanitizer 一开就报 use-after-scope 或类似问题，就别再围着 hash、bucket、rehash 打转了。容器通常只是案发现场，不一定是凶手。&lt;/p&gt;
+&lt;h2 id=&#34;真正的教训&#34;&gt;真正的教训
+&lt;/h2&gt;&lt;p&gt;这类问题的教训不只是“不要写 static lambda”。&lt;/p&gt;
+&lt;p&gt;更准确地说，是不要让一个长生命周期对象，偷偷引用短生命周期数据。&lt;code&gt;static&lt;/code&gt;、全局回调、缓存下来的函数对象、异步任务，都会把这个问题放大。&lt;/p&gt;
+&lt;p&gt;C++ 里很多诡异现象，本质上不是语法难，而是生命周期边界没有写清楚。代码表面看起来像一次小优化，实际是在把第一次调用的栈帧钉到进程生命周期里。&lt;/p&gt;
+&lt;p&gt;所以以后再遇到 &lt;code&gt;unordered_map&lt;/code&gt; 查到了但 value 像串号，我会先问一句：&lt;/p&gt;
+&lt;p&gt;是不是有人在更新 value 的时候，拿了一个已经不该存在的引用？&lt;/p&gt;
+&lt;p&gt;这比先怀疑容器本身靠谱得多。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://en.cppreference.com/w/cpp/language/lambda&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;cppreference: Lambda expressions&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://en.cppreference.com/w/cpp/language/storage_duration&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;cppreference: Storage duration&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://clang.llvm.org/docs/AddressSanitizer.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Clang AddressSanitizer documentation&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Clang UndefinedBehaviorSanitizer documentation&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;原文没有保留原始提示词；本次重写只基于旧文中的问题描述、示例代码和修复方向。&lt;/li&gt;
+&lt;li&gt;把旧稿的“深度解析”口吻改成排障记录，先让读者看到为什么像 &lt;code&gt;unordered_map&lt;/code&gt; 查错了。&lt;/li&gt;
+&lt;li&gt;保留核心技术判断：&lt;code&gt;static lambda&lt;/code&gt; 配合引用捕获会把短生命周期引用带进长生命周期闭包。&lt;/li&gt;
+&lt;li&gt;补充排查顺序和 sanitizer 工具，避免只停留在概念解释。&lt;/li&gt;
+&lt;/ul&gt;</description>
         </item>
         <item>
         <title>小米的“新老交替”与电车板块的防守战</title>
