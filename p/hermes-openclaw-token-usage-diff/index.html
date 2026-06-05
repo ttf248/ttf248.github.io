@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr">
     <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="昨天那篇《把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了》写完以后，我又去翻了一圈两边的文档。越翻越觉得，真要看这两个东西差在哪，光看功能还不够，看 token 怎么烧，反而更直接。\n我的判断先摆这。\nOpenClaw 默认更像一个长期在线的工作台，很多身份、规则、工作区文件、消息面约束，会天然跟着每轮对话走，所以基础盘通常更重。Hermes 则明显更克制一点，很多上下文是按需发现、按需注入，系统提示词也在刻意维持稳定前缀，默认情况下更容易把 token 压住。\n当然，这话不是说 Hermes 一定更省。你把 memory provider、skills、sub-agent、长工具输出全开起来，一样能烧得飞起。但是说白了，这两套架构从第一天起，就不是同一种吃 token 的方式。\n">
-<title>架构一换，Hermes 和 OpenClaw 的 token 就不是一个吃法</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="写完上一篇 Hermes 和 OpenClaw 的对比以后，我又去翻了一遍两边文档。越看越觉得，如果只问功能像不像，很容易看偏。\n更直接的问题是：它们把 token 花在了哪里。\nOpenClaw 更像一个长期在线的助理工作台，默认就要带身份、工作区、消息面和记忆边界。Hermes 更像一个本地 agent 内核，默认先把上下文压住，需要时再发现、再注入、再展开。一个把成本前置，一个把成本后置。最后账单长得当然不一样。\n">
+<title>Hermes 和 OpenClaw，真正不一样的是账单结构</title>
 
 <link rel='canonical' href='https://ttf248.life/p/hermes-openclaw-token-usage-diff/'>
 
-<link rel="stylesheet" href="/scss/style.min.a8a8aaf5e5325af5941fbb13107ddb03a9c810cab6fec6636a3e45a96363b232.css"><meta property='og:title' content="架构一换，Hermes 和 OpenClaw 的 token 就不是一个吃法">
-<meta property='og:description' content="昨天那篇《把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了》写完以后，我又去翻了一圈两边的文档。越翻越觉得，真要看这两个东西差在哪，光看功能还不够，看 token 怎么烧，反而更直接。\n我的判断先摆这。\nOpenClaw 默认更像一个长期在线的工作台，很多身份、规则、工作区文件、消息面约束，会天然跟着每轮对话走，所以基础盘通常更重。Hermes 则明显更克制一点，很多上下文是按需发现、按需注入，系统提示词也在刻意维持稳定前缀，默认情况下更容易把 token 压住。\n当然，这话不是说 Hermes 一定更省。你把 memory provider、skills、sub-agent、长工具输出全开起来，一样能烧得飞起。但是说白了，这两套架构从第一天起，就不是同一种吃 token 的方式。\n">
+<link rel="stylesheet" href="/scss/style.min.a8a8aaf5e5325af5941fbb13107ddb03a9c810cab6fec6636a3e45a96363b232.css"><meta property='og:title' content="Hermes 和 OpenClaw，真正不一样的是账单结构">
+<meta property='og:description' content="写完上一篇 Hermes 和 OpenClaw 的对比以后，我又去翻了一遍两边文档。越看越觉得，如果只问功能像不像，很容易看偏。\n更直接的问题是：它们把 token 花在了哪里。\nOpenClaw 更像一个长期在线的助理工作台，默认就要带身份、工作区、消息面和记忆边界。Hermes 更像一个本地 agent 内核，默认先把上下文压住，需要时再发现、再注入、再展开。一个把成本前置，一个把成本后置。最后账单长得当然不一样。\n">
 <meta property='og:url' content='https://ttf248.life/p/hermes-openclaw-token-usage-diff/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:tag' content='ai' /><meta property='article:published_time' content='2026-04-16T01:13:53&#43;08:00'/><meta property='article:modified_time' content='2026-04-27T19:25:37&#43;08:00'/>
-<meta name="twitter:title" content="架构一换，Hermes 和 OpenClaw 的 token 就不是一个吃法">
-<meta name="twitter:description" content="昨天那篇《把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了》写完以后，我又去翻了一圈两边的文档。越翻越觉得，真要看这两个东西差在哪，光看功能还不够，看 token 怎么烧，反而更直接。\n我的判断先摆这。\nOpenClaw 默认更像一个长期在线的工作台，很多身份、规则、工作区文件、消息面约束，会天然跟着每轮对话走，所以基础盘通常更重。Hermes 则明显更克制一点，很多上下文是按需发现、按需注入，系统提示词也在刻意维持稳定前缀，默认情况下更容易把 token 压住。\n当然，这话不是说 Hermes 一定更省。你把 memory provider、skills、sub-agent、长工具输出全开起来，一样能烧得飞起。但是说白了，这两套架构从第一天起，就不是同一种吃 token 的方式。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:tag' content='ai' /><meta property='article:published_time' content='2026-04-16T01:13:53&#43;08:00'/><meta property='article:modified_time' content='2026-06-05T05:06:29&#43;08:00'/>
+<meta name="twitter:title" content="Hermes 和 OpenClaw，真正不一样的是账单结构">
+<meta name="twitter:description" content="写完上一篇 Hermes 和 OpenClaw 的对比以后，我又去翻了一遍两边文档。越看越觉得，如果只问功能像不像，很容易看偏。\n更直接的问题是：它们把 token 花在了哪里。\nOpenClaw 更像一个长期在线的助理工作台，默认就要带身份、工作区、消息面和记忆边界。Hermes 更像一个本地 agent 内核，默认先把上下文压住，需要时再发现、再注入、再展开。一个把成本前置，一个把成本后置。最后账单长得当然不一样。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -265,12 +265,10 @@
         <div class="widget--toc">
             <nav id="TableOfContents">
   <ol>
-    <li><a href="#openclaw-为什么默认就更重">OpenClaw 为什么默认就更重</a></li>
-    <li><a href="#hermes-为什么看起来更克制">Hermes 为什么看起来更克制</a></li>
-    <li><a href="#这不是谁更先进而是谁把成本放在哪">这不是谁更先进，而是谁把成本放在哪</a></li>
-    <li><a href="#真正拉开差距的不只是-system-prompt">真正拉开差距的，不只是 system prompt</a></li>
-    <li><a href="#真要算别靠嘴">真要算，别靠嘴</a></li>
-    <li><a href="#我最后还是站这一边">我最后还是站这一边</a></li>
+    <li><a href="#openclaw-的固定盘更厚">OpenClaw 的固定盘更厚</a></li>
+    <li><a href="#hermes-的默认姿势更克制">Hermes 的默认姿势更克制</a></li>
+    <li><a href="#谁更省要看你在养什么">谁更省，要看你在养什么</a></li>
+    <li><a href="#真要算账别靠体感">真要算账，别靠体感</a></li>
     <li><a href="#参考资料">参考资料</a></li>
     <li><a href="#写作附记">写作附记</a>
       <ol>
@@ -491,7 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     <div class="article-title-wrapper">
         <h2 class="article-title">
-            <a href="/p/hermes-openclaw-token-usage-diff/">架构一换，Hermes 和 OpenClaw 的 token 就不是一个吃法</a>
+            <a href="/p/hermes-openclaw-token-usage-diff/">Hermes 和 OpenClaw，真正不一样的是账单结构</a>
         </h2>
     
         
@@ -541,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         
                         
-                            阅读约 11 分钟
+                            阅读约 8 分钟
                         
                     </time>
                 </div>
@@ -552,12 +550,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
                     <span class="article-time--author">
                         
-                            Codex (GPT-5.4)
+                            Codex (GPT-5)
                         
                     </span>
                 </div>
             
 
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">
+                        v7.2.6
+                    </span>
+                </div>
             
         </footer>
         
@@ -589,10 +601,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
     <div class="article-lead article-prose">
-        <p>昨天那篇<a class="link" href="/p/hermes-openclaw-not-the-same-game/" >《把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了》</a>写完以后，我又去翻了一圈两边的文档。越翻越觉得，真要看这两个东西差在哪，光看功能还不够，看 token 怎么烧，反而更直接。</p>
-<p>我的判断先摆这。</p>
-<p>OpenClaw 默认更像一个长期在线的工作台，很多身份、规则、工作区文件、消息面约束，会天然跟着每轮对话走，所以基础盘通常更重。Hermes 则明显更克制一点，很多上下文是按需发现、按需注入，系统提示词也在刻意维持稳定前缀，默认情况下更容易把 token 压住。</p>
-<p>当然，这话不是说 Hermes 一定更省。你把 memory provider、skills、sub-agent、长工具输出全开起来，一样能烧得飞起。但是说白了，这两套架构从第一天起，就不是同一种吃 token 的方式。</p>
+        <p>写完上一篇 <a class="link" href="/p/hermes-openclaw-not-the-same-game/" >Hermes 和 OpenClaw 的对比</a>以后，我又去翻了一遍两边文档。越看越觉得，如果只问功能像不像，很容易看偏。</p>
+<p>更直接的问题是：它们把 token 花在了哪里。</p>
+<p>OpenClaw 更像一个长期在线的助理工作台，默认就要带身份、工作区、消息面和记忆边界。Hermes 更像一个本地 agent 内核，默认先把上下文压住，需要时再发现、再注入、再展开。一个把成本前置，一个把成本后置。最后账单长得当然不一样。</p>
     </div>
     
 </div>
@@ -603,52 +614,86 @@ document.addEventListener('DOMContentLoaded', () => {
     <section class="article-content">
     
     
-    <h2 id="openclaw-为什么默认就更重">OpenClaw 为什么默认就更重
-</h2><p>OpenClaw 的设计逻辑，本来就不是“来一个轻量 agent，先聊两句再说”，而是“先把一个长期存在的 agent 工作台搭起来”。这一点在官方 workspace 文档里写得很直白。</p>
-<p><code>AGENTS.md</code>、<code>SOUL.md</code>、<code>USER.md</code> 都是每个 session 都会加载。<code>IDENTITY.md</code>、<code>TOOLS.md</code>、<code>HEARTBEAT.md</code>、<code>BOOT.md</code>、<code>MEMORY.md</code> 这些文件，也都围着同一个 workspace 在转。文档甚至专门提醒，<code>HEARTBEAT.md</code> 要保持很短，避免 token burn。这种提醒本身就说明，OpenClaw 很清楚自己的默认上下文是偏厚的。</p>
-<p>不过有一点也得说清楚，OpenClaw 不是所有东西都傻乎乎全文常驻。它官方的 token 文档明确写了，skills 进系统提示词时默认只是 metadata，具体说明要按需 <code>read</code>。所以它的问题不是“不会省”，而是“默认要带着走的底座本来就更大”。</p>
-<p>这事其实不难理解。OpenClaw 要解决的是“长期在线”和“多消息面存在感”。</p>
-<p>你让一个 agent 同时活在 Telegram、Discord、Slack、WhatsApp 这些地方，还要带身份、带路由、带边界、带 delegate，很多规则就不能是临时拼上去的。它得先知道自己是谁，怎么说话，面对谁，当前工作区的约束是什么，技能从哪里找，哪些记忆该带，哪些记忆不该带。</p>
-<p>所以 OpenClaw 的 token 消耗，更像固定开销比较大。</p>
-<p>你每次发消息，不只是跟一个模型说一句话，而是在调起一整套已经成型的“助理环境”。这套环境好用，代价就是基础 prompt 更厚，很多上下文即使这一轮没直接用上，也会先放在那里。</p>
-<h2 id="hermes-为什么看起来更克制">Hermes 为什么看起来更克制
-</h2><p>Hermes 这边，文档里最有意思的地方，是它一直在强调两件事：按需加载，和 prompt cache preservation。</p>
-<p>先看 context files。Hermes 在 session 启动时只加载当前工作目录命中的那一类项目上下文，像 <code>AGENTS.md</code>、<code>CLAUDE.md</code>、<code>.cursorrules</code> 这些是 first match wins，不会一口气全塞进去。更关键的是，子目录里的 <code>AGENTS.md</code> 不是开局全读，而是等你真的走到那个目录、读到那个文件、跑到那条路径时，才逐步发现、逐步注入。</p>
-<p>官方文档把这个设计的好处写得很明确：</p>
+    <h2 id="openclaw-的固定盘更厚">OpenClaw 的固定盘更厚
+</h2><p>OpenClaw 的出发点，不是“启动一个轻量 CLI agent 先干活”，而是“让一个助理在工作区里长期存在”。</p>
+<p>它的 workspace 文档里，<code>AGENTS.md</code>、<code>SOUL.md</code>、<code>USER.md</code> 这类文件会围绕 session 工作。<code>IDENTITY.md</code>、<code>TOOLS.md</code>、<code>HEARTBEAT.md</code>、<code>BOOT.md</code>、<code>MEMORY.md</code> 也都在同一套助理环境里。文档还专门提醒 <code>HEARTBEAT.md</code> 要短，避免 token burn。</p>
+<p>这句话其实很说明问题。OpenClaw 不是不知道 token 贵，而是它的产品目标决定了很多上下文必须提前在场。</p>
+<p>你要一个 agent 同时面对 Telegram、Discord、Slack、WhatsApp，还要知道自己是谁、该怎么说话、该怎么路由任务、哪些记忆能用、哪些工具能开，这些规则就不能每次临时拼。</p>
+<p>所以 OpenClaw 的 token 消耗更像一张“长期在线助理”的账：</p>
 <ul>
-<li>no system prompt bloat</li>
-<li>prompt cache preservation</li>
+<li>固定身份要带；</li>
+<li>工作区规则要带；</li>
+<li>多消息面边界要带；</li>
+<li>记忆和路由规则要带；</li>
+<li>一部分工具和技能索引也要能被看见。</li>
 </ul>
-<p>这个味道和 OpenClaw 很不一样。Hermes 很像在说，系统提示词最好别乱长，能后置的上下文就后置，能只在相关时刻出现的，就别在第一轮先塞满。</p>
-<p>skills 也是同一个思路。Hermes 的 skills 文档明确写了 progressive disclosure，目标就是 minimize token usage。换句话说，skill 不是默认全文常驻，而是让模型先看到一个轻量索引，真需要的时候再展开具体内容。</p>
-<p>再加上它的记忆体系也偏组合式。官方文档把内置记忆限制得很死，<code>MEMORY.md</code> 大约 800 tokens，<code>USER.md</code> 大约 500 tokens，合起来固定盘差不多 1300 tokens。<code>SOUL.md</code> 是固定身份，<code>USER.md</code> 和记忆会进系统提示词，但 session search、memory provider、Honcho 这些更像外挂层。这个结构不会天然让 prompt 变短，但它给了一个更容易控成本的默认姿势。</p>
-<p>所以从架构倾向上看，我会更愿意把 Hermes 归类成“默认克制，逐步变重”。</p>
-<h2 id="这不是谁更先进而是谁把成本放在哪">这不是谁更先进，而是谁把成本放在哪
-</h2><p>很多对比文章喜欢把 token 消耗写成单一结论，这个我觉得不太对。</p>
-<p>OpenClaw 更重，不代表它设计差。相反，它是故意把很多东西前置了。你要一个长期在线、跨平台、带人格、带工作区、带路由的助理，那这些上下文迟早都要付钱。它只是选择在默认路径上先把这些东西带齐。</p>
-<p>Hermes 更克制，也不代表它没有大开销。你一旦把长 <code>SOUL.md</code>、项目 <code>AGENTS.md</code>、多 skill、MCP、memory provider、sub-agent、长工具输出一起叠上去，token 一样能滚得很快。特别是如果工具结果本身就很长，或者你让它在复杂代码库里来回搜索，那也不是靠架构名字就能省下来的。</p>
-<p>所以更准确的说法应该是：</p>
-<p>OpenClaw 把成本前置到“助理环境常驻”上。</p>
-<p>Hermes 把成本后置到“能力按需展开”上。</p>
-<p>这两种路子没有绝对高下，但是账单结构完全不一样。</p>
-<h2 id="真正拉开差距的不只是-system-prompt">真正拉开差距的，不只是 system prompt
-</h2><p>还有几个细节，挺容易被忽略。</p>
-<p>第一，Hermes 在 context files 这块明确为了稳定前缀去做设计。子目录 hint 是追加到相关工具结果里，而不是把所有项目上下文不断回灌到 system prompt 里。这个做法不只是在省 token，本质上也是在给 provider 的 prompt cache 留空间。</p>
-<p>第二，Hermes 的 <code>execute_code</code> 这种工具，设计上就只把脚本最终 <code>print()</code> 出来的结果回给模型，中间那堆 RPC 工具调用结果不会全部进上下文。复杂流程里，这种结构能少掉一大截无意义的工具噪音。</p>
-<p>第三，OpenClaw 的 workspace 哲学决定了它更像“把家当都带着”。哪怕很多文件本身不长，只要种类多、人格层多、规则层多、技能和记忆层次多，基础上下文就会一点点厚起来。这个厚度不是 bug，是它的产品取舍。</p>
-<p>第四，两边对 sub-agent 的处理，也会影响总账。Hermes 的很多设计都在强调局部上下文和局部执行，OpenClaw 则更强调多 agent 身份、route、delegate 的组织能力。一个更像在切上下文，一个更像在组织存在关系。最后打到 token 账单上，形状当然不一样。</p>
-<h2 id="真要算别靠嘴">真要算，别靠嘴
-</h2><p>如果你真准备长期用，别听谁一句“这个更省”就完事，直接看工具给出来的数据。</p>
-<p>OpenClaw 官方有 <code>/context detail</code> 和 <code>/usage tokens</code> 这类命令，文档也会提醒你哪些文件会在每次 session 启动时注入。这个很适合看基础盘到底有多厚。</p>
-<p>Hermes 这边，官方在 Honcho 和相关特性里也给了 token budget、skills progressive disclosure、context files 注入方式这些线索。你可以结合 <code>hermes insights</code>、session 存储和实际 provider 账单一起看。</p>
-<p>说白了，架构只能决定“怎么花”，不能替你决定“花多少”。真正决定账单的，还是你写了多长的 <code>SOUL.md</code>，塞了多少记忆，开了多少 skill，工具输出有没有收住，模型本身贵不贵。</p>
-<h2 id="我最后还是站这一边">我最后还是站这一边
-</h2><p>如果只看默认架构，不看极端配置，我还是倾向于认为 Hermes 更容易把 token 消耗压在一个相对克制的范围里。</p>
-<p>不是因为它更强，而是因为它从 prompt 设计开始，就一直在躲“无意义的常驻上下文膨胀”这件事。OpenClaw 则相反，它宁愿多带一点，也要保证那个长期在线助理的身份、工作台和消息面边界别散掉。</p>
-<p>所以如果你特别在意 token 成本，而且工作流主要发生在本地、CLI、代码仓库、技能沉淀这些场景里，Hermes 这套思路一般会更顺手。</p>
-<p>如果你要的是一个真的活在各种消息面上的长期助理，那 OpenClaw 多花一点 token，我觉得反而是正常代价。你总不能既要它像个人一样长期在线，又要求它每轮都像一次性小工具那么轻。</p>
-<p>哎，这事最后还是回到老问题。</p>
-<p>你到底是在养一个在线助理，还是在养一个本地 agent 内核。想清楚这个，token 账就没那么难理解了。</p>
+<p>它不是不会省。OpenClaw 的 token 文档也写了，skills 默认进系统提示词的是 metadata，具体内容按需读。问题在于，它的底座本来就更像一个完整助理环境。这个底座好用，但不会特别轻。</p>
+<h2 id="hermes-的默认姿势更克制">Hermes 的默认姿势更克制
+</h2><p>Hermes 的文档里反复出现两个思路：按需加载，保住 prompt cache。</p>
+<p>它处理 context files 的方式很典型。启动时只拿当前目录命中的项目上下文，像 <code>AGENTS.md</code>、<code>CLAUDE.md</code>、<code>.cursorrules</code> 这类文件是 first match wins，不是一口气全塞进系统提示词。子目录里的上下文，也不是一开始全文加载，而是等 agent 真的走到相关路径、读到相关文件，再逐步发现。</p>
+<p>这和 OpenClaw 的气质完全不一样。</p>
+<p>Hermes 更像是在说：系统提示词最好别乱长。能后置的就后置，能按需出现的就按需出现。skill 也是同一套 progressive disclosure 逻辑，先给模型一个轻量索引，需要的时候再打开具体说明。</p>
+<p>它的记忆设计也更像组合件。<code>SOUL.md</code>、<code>USER.md</code>、内置 memory 有固定边界，session search、memory provider、Honcho 这些再按需要叠上去。这个设计不保证所有任务都省 token，但它让默认路径更不容易膨胀。</p>
+<p>所以我会把 Hermes 归成另一种账：</p>
+<ul>
+<li>开局固定上下文更克制；</li>
+<li>项目上下文按路径发现；</li>
+<li>skill 按需展开；</li>
+<li>工具输出尽量只回关键结果；</li>
+<li>真复杂时再把 memory、sub-agent、长工具结果叠上去。</li>
+</ul>
+<p>它不是“天然便宜”，而是更容易从轻状态开始。</p>
+<h2 id="谁更省要看你在养什么">谁更省，要看你在养什么
+</h2><p>很多工具对比最后都会落成一句“谁更省 token”。这个说法太粗。</p>
+<p>如果你要的是长期在线、跨平台、有身份感、能维持多消息面关系的助理，OpenClaw 把上下文前置是合理代价。你不能既要它像一个一直在场的人，又要求每轮都像一次性 CLI 小工具那么轻。</p>
+<p>如果你主要在本地仓库里做代码、技能、上下文发现和工具执行，Hermes 的后置加载会更顺手。它把“现在不用的东西先别进上下文”当成默认设计，token 账就更容易控。</p>
+<p>这不是谁更先进，而是谁把成本放在哪。</p>
+<div class="table-wrapper"><table>
+  <thead>
+      <tr>
+          <th>取舍</th>
+          <th>OpenClaw</th>
+          <th>Hermes</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>默认形态</td>
+          <td>长期在线助理工作台</td>
+          <td>本地 agent 内核</td>
+      </tr>
+      <tr>
+          <td>成本位置</td>
+          <td>身份、工作区、消息面先在场</td>
+          <td>上下文和能力按需展开</td>
+      </tr>
+      <tr>
+          <td>优势</td>
+          <td>存在感稳定，多平台边界清楚</td>
+          <td>起步轻，prompt cache 更容易保住</td>
+      </tr>
+      <tr>
+          <td>风险</td>
+          <td>固定盘容易变厚</td>
+          <td>复杂任务展开后一样会烧 token</td>
+      </tr>
+  </tbody>
+</table></div>
+<p>如果只看默认架构，我会倾向于说 Hermes 更容易把 token 压住。但如果任务目标是“养一个在线助理”，那 OpenClaw 多花的 token 不一定是浪费，可能就是它要交付的产品体验。</p>
+<h2 id="真要算账别靠体感">真要算账，别靠体感
+</h2><p>还有一点比架构名字更重要：实际账单要看工具给出的上下文和用量。</p>
+<p>OpenClaw 有 <code>/context detail</code>、<code>/usage tokens</code> 这类命令，适合看每次 session 到底带了什么。Hermes 也可以结合 context 注入、skills 展开、Honcho 或 provider 账单去看实际消耗。</p>
+<p>光看文档只能判断倾向，不能替你算最终成本。真正决定账单的，是你写了多长的 <code>SOUL.md</code>，塞了多少 memory，开了多少 skill，工具输出有没有收住，模型本身贵不贵。</p>
+<p>我现在会这样看：</p>
+<ul>
+<li>如果每轮都要带身份、人格、消息面和工作区规则，那是固定开销；</li>
+<li>如果每次任务都要读一大段工具输出，那是工具噪音；</li>
+<li>如果 skill 和 memory 全开，那是能力扩张；</li>
+<li>如果子代理各自复制大量上下文，那是并行成本；</li>
+<li>如果 prompt 前缀稳定，缓存命中才有意义。</li>
+</ul>
+<p>所以比较 Hermes 和 OpenClaw，不该只问“谁省”。应该问：我的任务是不是需要一个长期在线助理，还是只需要一个能在本地仓库里按需展开的 agent。</p>
+<p>这个问题答清楚，token 账就清楚了一半。</p>
 <h2 id="参考资料">参考资料
 </h2><ul>
 <li><a class="link" href="/p/hermes-openclaw-not-the-same-game/" >前一篇：把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了</a></li>
@@ -681,11 +726,9 @@ document.addEventListener('DOMContentLoaded', () => {
 <p>提示词：Hermes 和 OpenClaw 再写一篇文章，关于两者 token 消耗的情况，架构不同，消耗必然不一样</p></blockquote>
 <h3 id="写作思路摘要">写作思路摘要
 </h3><ul>
-<li>延续上一篇的判断，但把主线收窄到 token 消耗，不再重复总体架构对比。</li>
-<li>重点比较两边的默认上下文装配方式，而不是空谈“谁更省”。</li>
-<li>Hermes 侧重点放在 progressive disclosure、按需发现和 prompt cache preservation。</li>
-<li>OpenClaw 侧重点放在 workspace 常驻文件、长期在线助理环境和固定开销。</li>
-<li>结尾保留用户给出的核心判断，但补了一层现实提醒：真要看账单，还得结合官方 usage/context 工具和实际 provider 计费。</li>
+<li>保留“架构不同，token 消耗必然不同”的原始判断。</li>
+<li>把旧稿里过密的文档摘录改成账单结构比较：固定盘、按需展开、工具输出和缓存。</li>
+<li>不写成“谁更省”的绝对结论，而是落到使用场景：长期在线助理和本地 agent 内核不是同一种成本模型。</li>
 </ul>
 </section>
 
@@ -705,11 +748,23 @@ document.addEventListener('DOMContentLoaded', () => {
         <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
         <span>
             
-                Codex (GPT-5.4)
+                Codex (GPT-5)
             
         </span>
     </section>
 
+    
+    <section class="article-skill">
+        <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+        <span>v7.2.6</span>
+    </section>
     
 
     
@@ -741,7 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         <span>
-            最后更新于 2026年04月27日 19:25
+            最后更新于 2026年06月05日 05:06
         </span>
     </section>
     
@@ -847,7 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <a href="/p/when-ai-writes-code-how-juniors-level-up/" class="related-content__link">
                         <span class="related-content__index">04</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">AI 会写代码了，新人靠什么练级</h3>
+                            <h3 class="related-content__title">AI 会写代码以后，新人的新手村变窄了</h3>
                             <time class="related-content__date" datetime='2026-04-27T23:18:36&#43;08:00'>2026年04月27日</time>
                         </div>
                     </a>
