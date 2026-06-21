@@ -6,6 +6,583 @@
         <description>Recent content in AI 灵感碰撞坊 on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/ai-inspiration-hub/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Hermes 搜索不稳定时，把 SearXNG 的出站交给 Mihomo</title>
+        <link>https://ttf248.life/p/hermes-searxng-mihomo-proxy/</link>
+        <pubDate>Sun, 21 Jun 2026 20:33:01 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/hermes-searxng-mihomo-proxy/</guid>
+        <description>&lt;p&gt;Hermes 接上 SearXNG 以后，表面上已经把搜索问题收回到了本机：&lt;code&gt;SEARXNG_URL=http://localhost:8888&lt;/code&gt;。但境内服务器真正容易卡住的地方不在 Hermes 到 SearXNG 这一跳，而在 SearXNG 自己还要访问 Google、DuckDuckGo、Brave、Startpage 这些搜索源。&lt;/p&gt;
+&lt;p&gt;我最后把链路拆成三层：Hermes 只访问本机 SearXNG；SearXNG 在配置里显式把 HTTP/HTTPS 出站请求交给 Mihomo；Mihomo 单独负责订阅、健康检查和自动选节点。这样做的好处不是“配置更酷”，而是出问题时可以分层看：Hermes 有没有请求本地搜索，SearXNG 有没有返回 JSON，Mihomo 有没有可用节点，订阅本身有没有解析失败。&lt;/p&gt;
+&lt;p&gt;整体链路是这样：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;Hermes Agent
+  -&amp;gt; http://localhost:8888
+  -&amp;gt; SearXNG
+  -&amp;gt; http://mihomo:7890
+  -&amp;gt; Mihomo 自动选择可用节点
+  -&amp;gt; 海外搜索引擎
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;宿主机上只暴露本机端口：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;127.0.0.1:8888  -&amp;gt; SearXNG
+127.0.0.1:7897  -&amp;gt; Mihomo mixed proxy，用于调试
+127.0.0.1:9097  -&amp;gt; Mihomo controller，用于本机管理
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;SearXNG 和 Mihomo 在同一个 Docker 网络里，所以 SearXNG 不访问宿主机的 &lt;code&gt;127.0.0.1:7897&lt;/code&gt;，而是访问容器名：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;http://mihomo:7890
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;searxng-里最容易漏的两处&#34;&gt;SearXNG 里最容易漏的两处
+&lt;/h2&gt;&lt;p&gt;Hermes 调 SearXNG 时会请求 JSON。SearXNG 官方 Search API 文档也写得很清楚：&lt;code&gt;format&lt;/code&gt; 参数能不能用，取决于 &lt;code&gt;settings.yml&lt;/code&gt; 里 &lt;code&gt;search.formats&lt;/code&gt; 是否启用；请求未启用的格式会返回 403。所以这里不能只保留默认 HTML：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;search:
+  safe_search: 0
+  autocomplete: &amp;quot;&amp;quot;
+  formats:
+    - html
+    - json
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;第二处是代理。不要只指望 Docker 环境变量或系统级 &lt;code&gt;http_proxy&lt;/code&gt; 被应用层稳定继承。SearXNG 的请求是它自己发起的，最直接的办法是在 &lt;code&gt;outgoing.proxies&lt;/code&gt; 里写清楚：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;outgoing:
+  request_timeout: 15.0
+  max_request_timeout: 40.0
+  extra_proxy_timeout: 10
+  proxies:
+    &amp;quot;http://&amp;quot;: &amp;quot;http://mihomo:7890&amp;quot;
+    &amp;quot;https://&amp;quot;: &amp;quot;http://mihomo:7890&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;SearXNG 默认配置示例里能看到 &lt;code&gt;all://:&lt;/code&gt; 这种写法，所以它不是一个天然错误的配置项。但在我这次使用的环境里，&lt;code&gt;all://:&lt;/code&gt; 没有按预期匹配，最后稳定下来的是把 &lt;code&gt;http://&lt;/code&gt; 和 &lt;code&gt;https://&lt;/code&gt; 分开写。文章里保留这个边界，是为了避免把一次实测写成所有版本的定论。&lt;/p&gt;
+&lt;p&gt;完整的 SearXNG 关键配置可以压到下面这样：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;use_default_settings: true
+
+general:
+  instance_name: &amp;quot;Hermes SearXNG&amp;quot;
+
+search:
+  safe_search: 0
+  autocomplete: &amp;quot;&amp;quot;
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: &amp;quot;请替换成随机密钥&amp;quot;
+  limiter: false
+  image_proxy: true
+  bind_address: &amp;quot;0.0.0.0&amp;quot;
+
+valkey:
+  url: valkey://valkey:6379/0
+
+outgoing:
+  request_timeout: 15.0
+  max_request_timeout: 40.0
+  extra_proxy_timeout: 10
+  proxies:
+    &amp;quot;http://&amp;quot;: &amp;quot;http://mihomo:7890&amp;quot;
+    &amp;quot;https://&amp;quot;: &amp;quot;http://mihomo:7890&amp;quot;
+
+engines:
+  - name: bing
+    disabled: false
+    shortcut: bi
+
+  - name: bing news
+    disabled: false
+    shortcut: bin
+
+  - name: google
+    disabled: false
+    shortcut: go
+    timeout: 8.0
+
+  - name: brave
+    disabled: false
+    shortcut: br
+    timeout: 8.0
+
+  - name: duckduckgo
+    disabled: false
+    shortcut: ddg
+    timeout: 8.0
+
+  - name: startpage
+    disabled: false
+    shortcut: sp
+    timeout: 8.0
+
+  - name: wikipedia
+    disabled: false
+    shortcut: wp
+
+  - name: arxiv
+    disabled: false
+    shortcut: arx
+
+  - name: sogou
+    disabled: true
+
+  - name: 360search
+    disabled: true
+
+ui:
+  static_use_hash: true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里有一个小坑：SearXNG 默认引擎配置里，Bing 新闻的 &lt;code&gt;name&lt;/code&gt; 是 &lt;code&gt;bing news&lt;/code&gt;，&lt;code&gt;engine&lt;/code&gt; 才是 &lt;code&gt;bing_news&lt;/code&gt;。在 &lt;code&gt;use_default_settings: true&lt;/code&gt; 下，&lt;code&gt;engines&lt;/code&gt; 是按 &lt;code&gt;name&lt;/code&gt; 合并覆盖的，所以这里要写 &lt;code&gt;name: bing news&lt;/code&gt;，不要写成 &lt;code&gt;name: bing_news&lt;/code&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;mihomo-只做一件事给-searxng-一个稳定出口&#34;&gt;Mihomo 只做一件事：给 SearXNG 一个稳定出口
+&lt;/h2&gt;&lt;p&gt;Mihomo 这边不需要接管整台服务器，也不需要让 Docker 全局走代理。它只开一个 mixed port，让同一个 Docker 网络里的 SearXNG 能访问：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;mixed-port: 7890
+allow-lan: true
+bind-address: &#39;*&#39;
+mode: rule
+log-level: info
+ipv6: false
+
+external-controller: 0.0.0.0:9090
+secret: &amp;quot;请替换成随机密钥&amp;quot;
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+proxy-providers:
+  sub:
+    type: http
+    url: &amp;quot;你的订阅地址&amp;quot;
+    interval: 3600
+    path: ./proxy_providers/sub.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 5000
+      lazy: false
+      expected-status: 204
+
+proxy-groups:
+  - name: AUTO
+    type: url-test
+    use:
+      - sub
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    tolerance: 50
+    lazy: false
+    expected-status: 204
+
+  - name: PROXY
+    type: select
+    proxies:
+      - AUTO
+      - DIRECT
+    use:
+      - sub
+
+rules:
+  - MATCH,PROXY
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这份配置的意思很窄：订阅每 3600 秒更新一次，节点每 300 秒做一次健康检查，&lt;code&gt;AUTO&lt;/code&gt; 用 &lt;code&gt;url-test&lt;/code&gt; 按延迟选择节点，所有流量最后匹配到 &lt;code&gt;PROXY&lt;/code&gt;。新配置第一次启动时，&lt;code&gt;PROXY&lt;/code&gt; 列表里第一个就是 &lt;code&gt;AUTO&lt;/code&gt;；如果以后你在控制面板里手动切过节点，&lt;code&gt;store-selected: true&lt;/code&gt; 会保留选择，这时“默认走 AUTO”就不一定成立了。&lt;/p&gt;
+&lt;p&gt;还要注意订阅格式。&lt;code&gt;proxy-providers&lt;/code&gt; 适合 provider 格式或能被 Mihomo 作为 provider 解析的订阅；有些服务商给的是完整 Clash 配置，有些给的是节点列表。如果日志里报解析失败，不要先怀疑 SearXNG，先去服务商后台切成 &lt;code&gt;Clash Meta&lt;/code&gt;、&lt;code&gt;Mihomo&lt;/code&gt; 或 &lt;code&gt;Proxy Provider&lt;/code&gt; 格式。&lt;/p&gt;
+&lt;h2 id=&#34;改造脚本&#34;&gt;改造脚本
+&lt;/h2&gt;&lt;p&gt;下面这个脚本适合已经把 SearXNG 放在 &lt;code&gt;/opt/searxng&lt;/code&gt; 的机器。它会备份现有 &lt;code&gt;docker-compose.yml&lt;/code&gt; 和 &lt;code&gt;searxng/settings.yml&lt;/code&gt;，复用本机已有的 &lt;code&gt;metacubex/mihomo&lt;/code&gt; 镜像，并把 SearXNG、Valkey、Mihomo 放进同一个 compose 项目。&lt;/p&gt;
+&lt;p&gt;脚本不会主动拉取 Mihomo 镜像；SearXNG 和 Valkey 如果本机没有对应镜像，&lt;code&gt;docker compose up&lt;/code&gt; 是否能启动取决于你的本机镜像和网络环境。完全离线环境里，先把三个镜像都准备好。&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;sudo bash -s &amp;lt;&amp;lt;&#39;EOF&#39;
+set -euo pipefail
+
+APP_DIR=&amp;quot;/opt/searxng&amp;quot;
+COMPOSE_FILE=&amp;quot;$APP_DIR/docker-compose.yml&amp;quot;
+SETTINGS_FILE=&amp;quot;$APP_DIR/searxng/settings.yml&amp;quot;
+MIHOMO_DIR=&amp;quot;$APP_DIR/mihomo&amp;quot;
+
+if [ ! -f &amp;quot;$COMPOSE_FILE&amp;quot; ]; then
+  echo &amp;quot;未找到 $COMPOSE_FILE，请确认 SearXNG 是否部署在 /opt/searxng&amp;quot;
+  exit 1
+fi
+
+if [ ! -f &amp;quot;$SETTINGS_FILE&amp;quot; ]; then
+  echo &amp;quot;未找到 $SETTINGS_FILE，请确认 SearXNG settings.yml 路径&amp;quot;
+  exit 1
+fi
+
+if docker image inspect metacubex/mihomo:latest &amp;gt;/dev/null 2&amp;gt;&amp;amp;1; then
+  MIHOMO_IMAGE=&amp;quot;metacubex/mihomo:latest&amp;quot;
+else
+  MIHOMO_IMAGE=&amp;quot;$(docker images --format &#39;{{.Repository}}:{{.Tag}}&#39; \
+    | awk -F: &#39;$1==&amp;quot;metacubex/mihomo&amp;quot; &amp;amp;&amp;amp; $2!=&amp;quot;&amp;lt;none&amp;gt;&amp;quot; {print; exit}&#39;)&amp;quot;
+fi
+
+if [ -z &amp;quot;${MIHOMO_IMAGE:-}&amp;quot; ]; then
+  echo &amp;quot;未检测到可用的本地 metacubex/mihomo 镜像。&amp;quot;
+  echo &amp;quot;请先确认：docker images | grep -i mihomo&amp;quot;
+  exit 1
+fi
+
+echo &amp;quot;检测到本地 Mihomo 镜像：$MIHOMO_IMAGE&amp;quot;
+
+LOCAL_MIHOMO_IMAGE=&amp;quot;searxng-mihomo-local:latest&amp;quot;
+docker tag &amp;quot;$MIHOMO_IMAGE&amp;quot; &amp;quot;$LOCAL_MIHOMO_IMAGE&amp;quot;
+
+printf &amp;quot;请输入你的 Clash/Mihomo 订阅 URL: &amp;quot; &amp;gt; /dev/tty
+IFS= read -r -s SUB_URL &amp;lt; /dev/tty
+printf &amp;quot;\n&amp;quot; &amp;gt; /dev/tty
+
+if [ -z &amp;quot;$SUB_URL&amp;quot; ]; then
+  echo &amp;quot;订阅 URL 为空，退出。&amp;quot;
+  exit 1
+fi
+
+mkdir -p &amp;quot;$MIHOMO_DIR/proxy_providers&amp;quot;
+chmod 700 &amp;quot;$MIHOMO_DIR&amp;quot;
+
+TS=&amp;quot;$(date +%Y%m%d-%H%M%S)&amp;quot;
+
+cp -a &amp;quot;$COMPOSE_FILE&amp;quot; &amp;quot;$COMPOSE_FILE.bak.$TS&amp;quot;
+cp -a &amp;quot;$SETTINGS_FILE&amp;quot; &amp;quot;$SETTINGS_FILE.bak.$TS&amp;quot;
+
+echo &amp;quot;已备份：&amp;quot;
+echo &amp;quot;  $COMPOSE_FILE.bak.$TS&amp;quot;
+echo &amp;quot;  $SETTINGS_FILE.bak.$TS&amp;quot;
+
+MIHOMO_SECRET=&amp;quot;$(openssl rand -hex 16)&amp;quot;
+
+cat &amp;gt; &amp;quot;$MIHOMO_DIR/config.yaml&amp;quot; &amp;lt;&amp;lt;YAML
+mixed-port: 7890
+allow-lan: true
+bind-address: &#39;*&#39;
+mode: rule
+log-level: info
+ipv6: false
+
+external-controller: 0.0.0.0:9090
+secret: &amp;quot;$MIHOMO_SECRET&amp;quot;
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+proxy-providers:
+  sub:
+    type: http
+    url: &amp;quot;$SUB_URL&amp;quot;
+    interval: 3600
+    path: ./proxy_providers/sub.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 5000
+      lazy: false
+      expected-status: 204
+
+proxy-groups:
+  - name: AUTO
+    type: url-test
+    use:
+      - sub
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    timeout: 5000
+    tolerance: 50
+    lazy: false
+    expected-status: 204
+
+  - name: PROXY
+    type: select
+    proxies:
+      - AUTO
+      - DIRECT
+    use:
+      - sub
+
+rules:
+  - MATCH,PROXY
+YAML
+
+chmod 600 &amp;quot;$MIHOMO_DIR/config.yaml&amp;quot;
+
+OLD_SECRET=&amp;quot;$(grep -E &#39;^[[:space:]]*secret_key:&#39; &amp;quot;$SETTINGS_FILE&amp;quot; | head -n1 | sed -E &amp;quot;s/.*secret_key:[[:space:]]*[&#39;\&amp;quot;]?([^&#39;\&amp;quot;]+)[&#39;\&amp;quot;]?.*/\1/&amp;quot; || true)&amp;quot;
+
+if [ -z &amp;quot;$OLD_SECRET&amp;quot; ] || [ &amp;quot;$OLD_SECRET&amp;quot; = &amp;quot;secret_key:&amp;quot; ]; then
+  OLD_SECRET=&amp;quot;$(openssl rand -hex 32)&amp;quot;
+fi
+
+cat &amp;gt; &amp;quot;$SETTINGS_FILE&amp;quot; &amp;lt;&amp;lt;YAML
+use_default_settings: true
+
+general:
+  instance_name: &amp;quot;Hermes SearXNG&amp;quot;
+
+search:
+  safe_search: 0
+  autocomplete: &amp;quot;&amp;quot;
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: &amp;quot;$OLD_SECRET&amp;quot;
+  limiter: false
+  image_proxy: true
+  bind_address: &amp;quot;0.0.0.0&amp;quot;
+
+valkey:
+  url: valkey://valkey:6379/0
+
+outgoing:
+  request_timeout: 15.0
+  max_request_timeout: 40.0
+  extra_proxy_timeout: 10
+  proxies:
+    &amp;quot;http://&amp;quot;: &amp;quot;http://mihomo:7890&amp;quot;
+    &amp;quot;https://&amp;quot;: &amp;quot;http://mihomo:7890&amp;quot;
+
+engines:
+  - name: bing
+    disabled: false
+    shortcut: bi
+
+  - name: bing news
+    disabled: false
+    shortcut: bin
+
+  - name: google
+    disabled: false
+    shortcut: go
+    timeout: 8.0
+
+  - name: brave
+    disabled: false
+    shortcut: br
+    timeout: 8.0
+
+  - name: duckduckgo
+    disabled: false
+    shortcut: ddg
+    timeout: 8.0
+
+  - name: startpage
+    disabled: false
+    shortcut: sp
+    timeout: 8.0
+
+  - name: wikipedia
+    disabled: false
+    shortcut: wp
+
+  - name: arxiv
+    disabled: false
+    shortcut: arx
+
+  - name: sogou
+    disabled: true
+
+  - name: 360search
+    disabled: true
+
+ui:
+  static_use_hash: true
+YAML
+
+cat &amp;gt; &amp;quot;$COMPOSE_FILE&amp;quot; &amp;lt;&amp;lt;YAML
+services:
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - &amp;quot;127.0.0.1:8888:8080&amp;quot;
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng-cache:/var/cache/searxng:rw
+    depends_on:
+      - valkey
+      - mihomo
+    networks:
+      - searxng-net
+    logging:
+      driver: json-file
+      options:
+        max-size: &amp;quot;2m&amp;quot;
+        max-file: &amp;quot;3&amp;quot;
+
+  valkey:
+    image: docker.io/valkey/valkey:8-alpine
+    container_name: searxng-valkey
+    restart: unless-stopped
+    command: valkey-server --save 30 1 --loglevel warning
+    volumes:
+      - valkey-data:/data
+    networks:
+      - searxng-net
+    logging:
+      driver: json-file
+      options:
+        max-size: &amp;quot;2m&amp;quot;
+        max-file: &amp;quot;3&amp;quot;
+
+  mihomo:
+    image: $LOCAL_MIHOMO_IMAGE
+    container_name: searxng-mihomo
+    restart: unless-stopped
+    command: [&amp;quot;-d&amp;quot;, &amp;quot;/root/.config/mihomo&amp;quot;]
+    ports:
+      - &amp;quot;127.0.0.1:7897:7890&amp;quot;
+      - &amp;quot;127.0.0.1:9097:9090&amp;quot;
+    volumes:
+      - ./mihomo:/root/.config/mihomo
+    networks:
+      - searxng-net
+    logging:
+      driver: json-file
+      options:
+        max-size: &amp;quot;2m&amp;quot;
+        max-file: &amp;quot;3&amp;quot;
+
+networks:
+  searxng-net:
+
+volumes:
+  searxng-cache:
+  valkey-data:
+YAML
+
+cd &amp;quot;$APP_DIR&amp;quot;
+
+if docker compose version &amp;gt;/dev/null 2&amp;gt;&amp;amp;1; then
+  DC=&amp;quot;docker compose&amp;quot;
+elif command -v docker-compose &amp;gt;/dev/null 2&amp;gt;&amp;amp;1; then
+  DC=&amp;quot;docker-compose&amp;quot;
+else
+  echo &amp;quot;未检测到 docker compose / docker-compose&amp;quot;
+  exit 1
+fi
+
+echo
+echo &amp;quot;启动服务...&amp;quot;
+$DC up -d --no-build
+
+echo
+echo &amp;quot;等待服务启动...&amp;quot;
+sleep 12
+
+echo
+echo &amp;quot;容器状态：&amp;quot;
+$DC ps
+
+echo
+echo &amp;quot;Mihomo 最近日志：&amp;quot;
+$DC logs --tail=80 mihomo || true
+
+echo
+echo &amp;quot;测试 Mihomo 本机代理端口 127.0.0.1:7897：&amp;quot;
+curl -I -sS --max-time 25 --proxy http://127.0.0.1:7897 https://www.gstatic.com/generate_204 || true
+
+echo
+echo
+echo &amp;quot;测试 SearXNG JSON 搜索：&amp;quot;
+curl -sS --max-time 50 &amp;quot;http://127.0.0.1:8888/search?q=openai%20gpt&amp;amp;format=json&amp;quot; \
+  | python3 -c &#39;import sys,json; d=json.load(sys.stdin); print(&amp;quot;OK:&amp;quot;, len(d.get(&amp;quot;results&amp;quot;, [])), &amp;quot;results&amp;quot;)&#39; || true
+
+echo
+echo &amp;quot;完成。&amp;quot;
+echo &amp;quot;Hermes 继续使用：SEARXNG_URL=http://localhost:8888&amp;quot;
+echo &amp;quot;SearXNG 出站代理：searxng -&amp;gt; http://mihomo:7890&amp;quot;
+echo &amp;quot;Mihomo 本机调试代理：http://127.0.0.1:7897&amp;quot;
+echo &amp;quot;Mihomo 控制端口：http://127.0.0.1:9097&amp;quot;
+echo &amp;quot;Mihomo 配置文件：$MIHOMO_DIR/config.yaml&amp;quot;
+EOF
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&#34;hermes-只保留搜索入口&#34;&gt;Hermes 只保留搜索入口
+&lt;/h2&gt;&lt;p&gt;Hermes 侧不用知道 Mihomo。它只需要知道本机有一个 SearXNG：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;nano ~/.hermes/.env
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;写入：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;SEARXNG_URL=http://localhost:8888
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;然后在 &lt;code&gt;~/.hermes/config.yaml&lt;/code&gt; 里指定搜索后端：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;web:
+  search_backend: &amp;quot;searxng&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果你装的是 Hermes 官方 SearXNG skill，可以继续使用：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;hermes skills install official/research/searxng-search
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果 Hermes 是 user service：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;systemctl --user restart hermes
+systemctl --user status hermes --no-pager
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;这里还有一个边界：SearXNG 负责搜索，不负责网页正文抽取。Hermes 文档里也把 search backend 和 extract backend 分开。如果后续要让 Hermes 读取搜索结果页面正文，还需要再给 &lt;code&gt;web.extract_backend&lt;/code&gt; 配 Firecrawl、Tavily、Exa、Parallel 或其他抽取方案。&lt;/p&gt;
+&lt;h2 id=&#34;验证不要跳层&#34;&gt;验证不要跳层
+&lt;/h2&gt;&lt;p&gt;先测 Mihomo，不要一上来就问 Hermes：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;curl -I --proxy http://127.0.0.1:7897 https://www.gstatic.com/generate_204
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;能返回 HTTP 状态，说明宿主机调试代理端口可用。然后测 SearXNG JSON：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;curl -s --max-time 50 \
+  &amp;quot;http://127.0.0.1:8888/search?q=openai%20gpt&amp;amp;format=json&amp;quot; \
+  | python3 -c &#39;import sys,json; d=json.load(sys.stdin); print(len(d.get(&amp;quot;results&amp;quot;, [])), &amp;quot;results&amp;quot;)&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;如果这里出现 403，优先看 &lt;code&gt;search.formats&lt;/code&gt; 有没有 &lt;code&gt;json&lt;/code&gt;。如果这里超时或结果为空，再看 SearXNG 日志：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;cd /opt/searxng
+docker compose logs -f searxng
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;然后在 Hermes 里发一条会触发搜索的请求：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;请联网搜索 OpenAI GPT 的最新资料，列出来源链接。
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;日志里如果出现 &lt;code&gt;/search?...format=json&lt;/code&gt;，说明 Hermes 已经在调本地 SearXNG。再看 Mihomo：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;cd /opt/searxng
+docker compose logs -f mihomo
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;重点看订阅更新、provider、health check、AUTO 这些信息。如果 Mihomo 连订阅都没解析出来，SearXNG 配得再对也没用。&lt;/p&gt;
+&lt;h2 id=&#34;几个不要省掉的边界&#34;&gt;几个不要省掉的边界
+&lt;/h2&gt;&lt;p&gt;第一，不要把端口暴露到公网。本文里的 compose 只绑定本机：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;ports:
+  - &amp;quot;127.0.0.1:8888:8080&amp;quot;
+  - &amp;quot;127.0.0.1:7897:7890&amp;quot;
+  - &amp;quot;127.0.0.1:9097:9090&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;不要改成：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;0.0.0.0:8888:8080
+0.0.0.0:7897:7890
+0.0.0.0:9097:9090
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;否则搜索服务、代理端口和 Mihomo 控制端口都有被公网滥用的风险。&lt;code&gt;external-controller: 0.0.0.0:9090&lt;/code&gt; 是容器内监听，真正决定外部能不能访问的是 compose 的端口绑定。&lt;/p&gt;
+&lt;p&gt;第二，如果 Google 或 Startpage 总是超时，不要急着把整套链路推翻。先保留 Bing、Brave、DuckDuckGo、Wikipedia、arXiv，等 Mihomo 订阅和健康检查稳定以后，再打开更容易触发验证码或超时的引擎。&lt;/p&gt;
+&lt;p&gt;第三，脚本的回滚点很直接：&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;cd /opt/searxng
+
+cp docker-compose.yml.bak.你的时间戳 docker-compose.yml
+cp searxng/settings.yml.bak.你的时间戳 searxng/settings.yml
+
+docker compose up -d
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;我更倾向于这种拆层方案，而不是给整台服务器套全局代理。全局代理的问题是影响面太大，出了问题以后很难判断是系统环境、Docker、应用配置还是代理节点本身。Hermes、SearXNG、Mihomo 各自只做一件事，排障的时候反而省事。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/features/web-search&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent：Web Search &amp;amp; Extract&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://hermes-agent.nousresearch.com/docs/user-guide/skills/optional/research/research-searxng-search&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Hermes Agent：Free meta-search via SearXNG&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.searxng.org/dev/search_api.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;SearXNG Search API&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.searxng.org/admin/settings/settings.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;SearXNG settings.yml&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.searxng.org/admin/settings/settings_outgoing.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;SearXNG outgoing settings&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://docs.searxng.org/admin/settings/settings_engines.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;SearXNG engines settings&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://github.com/searxng/searxng/blob/master/searx/settings.yml&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;SearXNG 默认 settings.yml&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://wiki.metacubex.one/en/config/proxy-providers/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Mihomo proxy-providers configuration&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://wiki.metacubex.one/en/config/proxy-groups/url-test/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Mihomo url-test proxy group&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;p&gt;这篇保留了原始材料里最有操作价值的部分：分层架构、SearXNG JSON、显式 outgoing proxy、Mihomo provider 和健康检查、Docker Compose、Hermes 配置、验证命令、常见问题和回滚。压掉的是重复解释，以及容易误导的绝对化表述；例如 &lt;code&gt;all://:&lt;/code&gt; 不是通用无效配置，只是在这次环境里没有按预期匹配。&lt;/p&gt;
+&lt;p&gt;另外修正了一处配置名：SearXNG 的 Bing 新闻引擎应写 &lt;code&gt;name: bing news&lt;/code&gt;。如果写成 &lt;code&gt;name: bing_news&lt;/code&gt;，它和默认引擎名对不上，风险比普通拼写问题更高。&lt;/p&gt;
+&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;用户提供了一份题为《中国境内服务器部署 Hermes + SearXNG + Mihomo：让 Hermes 搜索走代理并自动选择可用节点》的完整部署材料，要求整理分析、确认文章内容没有错误，然后调用博客写作 skill 写成文章。
+
+材料包含：背景、目标架构、为什么不用系统代理、SearXNG settings.yml、Mihomo config.yaml、Docker Compose、改造脚本、Hermes 配置、验证链路、常见问题、回滚方法和最终效果。
+&lt;/code&gt;&lt;/pre&gt;</description>
+        </item>
+        <item>
         <title>Loop engineering 把人挪到检查点</title>
         <link>https://ttf248.life/p/loop-engineering-human-checkpoints/</link>
         <pubDate>Sun, 14 Jun 2026 07:35:00 +0800</pubDate>
