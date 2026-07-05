@@ -6,6 +6,83 @@
         <description>Recent content in ai on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/ai/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>给编码模型几个代码锚点</title>
+        <link>https://ttf248.life/p/code-anchors-for-llm-requirements/</link>
+        <pubDate>Sun, 05 Jul 2026 23:04:15 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/code-anchors-for-llm-requirements/</guid>
+        <description>&lt;p&gt;给编码模型写需求时，我越来越倾向于顺手带上几个能在仓库里搜到的名字：函数名、组件名、CSS 类名，或者接口路径。少了这些词，模型未必做不了，但它经常要先花一轮时间猜“这句话对应哪段代码”。&lt;/p&gt;
+&lt;p&gt;比如只写：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;调整登录按钮的禁用状态，提交中不要重复点击，样式也要变灰。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;人能借助页面印象理解“登录按钮”在哪，编码模型面对的却可能是几十个按钮、多个登录入口，以及散落在组件、状态管理和样式文件里的实现。它首先要把自然语言中的“登录按钮”映射到仓库里的具体符号，然后才能判断该改事件处理、状态变量，还是 CSS。&lt;/p&gt;
+&lt;p&gt;如果需求改成下面这样，搜索空间会小很多：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;调整 &lt;code&gt;LoginForm&lt;/code&gt; 中 &lt;code&gt;handleSubmit&lt;/code&gt; 的提交状态。提交期间禁用 &lt;code&gt;.login-submit&lt;/code&gt;，避免重复请求；现有错误提示行为不变。验收：请求未结束时再次点击不会发出第二个请求，按钮呈禁用样式，请求结束后恢复。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;这里真正有用的不是提示词变长，而是多了几枚可以落到代码上的锚点。&lt;/p&gt;
+&lt;h2 id=&#34;模型在预测代理还要先找代码&#34;&gt;模型在预测，代理还要先找代码
+&lt;/h2&gt;&lt;p&gt;当前主流大语言模型通常把输入切成 token，根据已有上下文逐步预测后续 token。Transformer 的自注意力机制让序列中的 token 能彼此建立联系；经过大规模预训练和后续对齐，模型可以遵循指令、解释代码，并生成修改方案。但“能根据上下文生成”不等于“天然知道你当前仓库里登录按钮放在哪”。&lt;/p&gt;
+&lt;p&gt;编码代理还多了一层工作：它会调用文件搜索、文本检索、读取和测试工具，把仓库里的相关代码放进模型上下文。函数名 &lt;code&gt;handleSubmit&lt;/code&gt; 和类名 &lt;code&gt;.login-submit&lt;/code&gt; 在这个阶段有双重作用。&lt;/p&gt;
+&lt;p&gt;第一重是&lt;strong&gt;检索锚点&lt;/strong&gt;。自然语言里的“登录按钮”可能匹配文案、注释、测试和多个组件；精确符号可以直接交给文本搜索工具，较快找到定义、引用和相邻测试。少读几个无关文件，不只节省时间和 token，也减少无关代码干扰判断。&lt;/p&gt;
+&lt;p&gt;第二重是&lt;strong&gt;语义约束&lt;/strong&gt;。&lt;code&gt;handleSubmit&lt;/code&gt; 暗示改动与提交链路有关，&lt;code&gt;.login-submit&lt;/code&gt; 把视觉状态限定到一个具体选择器，&lt;code&gt;LoginForm&lt;/code&gt; 又给出了组件边界。它们共同降低了“按钮究竟是哪一个、状态应该放在哪一层”的歧义。模型仍在做概率生成，但可选解释少了，下一步更容易沿着正确代码路径展开。&lt;/p&gt;
+&lt;p&gt;这也是为什么我更愿意把这种写法叫“提供坐标”，而不是“提示词技巧”。它同时帮助了模型和模型外面的工具链。哪怕换成另一个编码模型，只要它也需要检索仓库，这些坐标仍然有价值。&lt;/p&gt;
+&lt;h2 id=&#34;好需求不只是一串关键词&#34;&gt;好需求不只是一串关键词
+&lt;/h2&gt;&lt;p&gt;只有符号名也不够。下面这种写法虽然容易搜索，仍然不知道要改成什么：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;code&gt;LoginForm&lt;/code&gt;、&lt;code&gt;handleSubmit&lt;/code&gt;、&lt;code&gt;.login-submit&lt;/code&gt;，优化一下。&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;我现在更常用的写法包含四类信息：&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;信息&lt;/th&gt;
+          &lt;th&gt;作用&lt;/th&gt;
+          &lt;th&gt;示例&lt;/th&gt;
+      &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+      &lt;tr&gt;
+          &lt;td&gt;代码锚点&lt;/td&gt;
+          &lt;td&gt;缩小检索范围&lt;/td&gt;
+          &lt;td&gt;&lt;code&gt;LoginForm&lt;/code&gt;、&lt;code&gt;handleSubmit&lt;/code&gt;、&lt;code&gt;.login-submit&lt;/code&gt;&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;目标行为&lt;/td&gt;
+          &lt;td&gt;说明改完发生什么&lt;/td&gt;
+          &lt;td&gt;提交期间禁止重复请求&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;保持项&lt;/td&gt;
+          &lt;td&gt;防止顺手改坏邻接行为&lt;/td&gt;
+          &lt;td&gt;现有错误提示不变&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+          &lt;td&gt;验收条件&lt;/td&gt;
+          &lt;td&gt;给实现和测试一个终点&lt;/td&gt;
+          &lt;td&gt;第二次点击不发请求，请求结束后恢复&lt;/td&gt;
+      &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;文件路径、测试名、接口名和报错文本也能充当锚点。优先给自己确认过、辨识度高的名字，不必为了显得具体而堆满所有相关符号。通常一两个入口函数、一个组件或样式名，已经足够让代理开始检索；剩余调用关系应该让它从代码里验证，而不是由需求编写者凭记忆补全。&lt;/p&gt;
+&lt;p&gt;还要警惕错误坐标。函数已经重命名、类名在多处复用，或者需求指向的其实是另一个页面时，精确但错误的关键词会让模型更快地走错路。稳妥的表达可以加一句“名称可能已调整，请先搜索确认”，或者同时给出页面行为和可见文案，让代理交叉验证。&lt;/p&gt;
+&lt;p&gt;所以更实用的结论不是“需求里多塞关键词”，而是：&lt;strong&gt;把人的页面印象翻译成仓库可检索的坐标，再用行为和验收条件约束修改结果。&lt;/strong&gt; 前者减少寻找代码的成本，后者减少写错代码的空间。两部分同时存在，编码模型的效率提升才更稳定。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/1706.03762&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Attention Is All You Need&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/2005.14165&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Language Models are Few-Shot Learners&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/academy/what-is-ai/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenAI Academy：AI fundamentals&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/index/why-language-models-hallucinate/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenAI：Why language models hallucinate&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;写作附记&#34;&gt;写作附记
+&lt;/h2&gt;&lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;大模型编码写需求的时候，如果能带上一些关键词，比如：关联的函数名称、前端关联的样式名称，能让模型的效率更高，稍微讲解下 LLM 的原来，当前大模型的原理，解释下我这样做为什么更好&lt;/p&gt;&lt;/blockquote&gt;
+&lt;p&gt;这篇保留了“函数名、样式名能提高编码效率”的现场判断，并补上语言模型生成与编码代理检索之间的区别。压掉了完整 Transformer 教程、模型代际比较和泛化的提示词清单，避免机制介绍抢走工程问题的主线。&lt;/p&gt;</description>
+        </item>
+        <item>
         <title>AI 的账单先到了，应用还没跑通</title>
         <link>https://ttf248.life/p/ai-bill-arrived-before-app-loop/</link>
         <pubDate>Sun, 28 Jun 2026 00:07:24 +0800</pubDate>
