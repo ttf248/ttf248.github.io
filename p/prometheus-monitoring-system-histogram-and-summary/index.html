@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.life/p/prometheus-monitoring-system-histogram-and-summary/'>
 
-<link rel="stylesheet" href="/scss/style.min.9554d29271c97b2f1640e544425f634e145982360e44e6eb5411a4364af72b6a.css"><meta property='og:title' content="Prometheus监控系统Histogram和Summary">
+<link rel="stylesheet" href="/scss/style.min.7d511a49d9189cead1f65b29ccfc068ceb7435ce9678a3817059f80285012458.css"><meta property='og:title' content="Prometheus监控系统Histogram和Summary">
 <meta property='og:description' content="业务系统设计了 Summary 类型的监控指标，计算平均耗时：request_duration_milliseconds_sum / request_duration_milliseconds_count。\n查看数据，发现某个接口平均耗时很高，翻看时序图，平均耗时是突然增加的，等于就是某次请求耗时很高，拉高了平均值，想查具体是什么时候发生的请求，由于时段内的请求太少，查出来的数据一直空。\n">
 <meta property='og:url' content='https://ttf248.life/p/prometheus-monitoring-system-histogram-and-summary/'>
 <meta property='og:site_name' content='向叔记事簿'>
@@ -55,7 +55,7 @@
     })();
 </script>
 <header class="site-header">
-    <div class="site-header__inner">
+    <div class="site-header__inner" data-mobile-header>
         <a class="site-header__brand" href="/" aria-label="向叔记事簿首页">
             <span class="site-header__title">向叔记事簿</span>
             <span class="site-header__subtitle">拾光记事，岁月有痕</span>
@@ -107,37 +107,38 @@
         </div>
     </div>
 
-    <div class="mobile-navigation" id="mobile-navigation" hidden>
-        <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
-        <nav class="mobile-navigation__panel" aria-label="移动端主导航">
-            <div class="mobile-navigation__header">
-                <span>导航</span>
-                <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
-            </div>
-            <div class="mobile-navigation__links">
-                <a href="/">首页</a>
-                <a href="/archives/">归档</a>
-                <a href="/search/">搜索</a>
-                <a href="/writing/author/">作者写作</a>
-                <a href="/writing/ai/">AI 写作</a>
-            </div>
-            
-                <label class="mobile-navigation__language">
-                    <span>语言</span>
-                    <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value">
-                        
-                            <option value="/" selected>中文</option>
-                        
-                            <option value="/en/">English</option>
-                        
-                            <option value="/ja/">日本語</option>
-                        
-                    </select>
-                </label>
-            
-        </nav>
-    </div>
 </header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="移动端主导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <a href="/">首页</a>
+            <a href="/archives/">归档</a>
+            <a href="/search/">搜索</a>
+            <a href="/writing/author/">作者写作</a>
+            <a href="/writing/ai/">AI 写作</a>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value">
+                    
+                        <option value="/" selected>中文</option>
+                    
+                        <option value="/en/">English</option>
+                    
+                        <option value="/ja/">日本語</option>
+                    
+                </select>
+            </label>
+        
+    </nav>
+</div>
 
 <script>
     (() => {
@@ -146,11 +147,20 @@
         if (!toggle || !navigation) return;
 
         const closeButtons = navigation.querySelectorAll('[data-mobile-menu-close]');
+        let lastFocusedElement = null;
 
         const setOpen = (open) => {
+            if (open) {
+                lastFocusedElement = document.activeElement;
+            }
             toggle.setAttribute('aria-expanded', String(open));
             navigation.hidden = !open;
             document.body.classList.toggle('mobile-menu-open', open);
+            if (open) {
+                navigation.querySelector('.mobile-navigation__close')?.focus();
+            } else if (lastFocusedElement) {
+                lastFocusedElement.focus();
+            }
         };
 
         toggle.addEventListener('click', () => setOpen(navigation.hidden));
@@ -158,7 +168,21 @@
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && !navigation.hidden) {
                 setOpen(false);
-                toggle.focus();
+            }
+
+            if (event.key === 'Tab' && !navigation.hidden) {
+                const focusable = Array.from(navigation.querySelectorAll('a, button, select'))
+                    .filter((element) => !element.disabled && element.offsetParent !== null);
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
             }
         });
         navigation.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setOpen(false)));
@@ -166,6 +190,23 @@
 </script>
 <main class="editorial-main" id="main-content">
     
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    <a class="article-mobile-toolbar__back" href="/archives/">← <span>文章列表</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="选择阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
 <article class="main-article has-lead">
     <header class="article-header">
 
@@ -406,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     
-    <details class="article-toc">
+    <details class="article-toc" id="article-toc">
         <summary>本文目录</summary>
         <nav id="TableOfContents">
   <ol>
@@ -703,6 +744,61 @@ Summary 会在客户端直接计算分位数，并上报到 Prometheus。它还�
 
     
 </article>
+
+<script>
+    (() => {
+        const toolbar = document.querySelector('.article-mobile-toolbar');
+        if (!toolbar) return;
+
+        const toc = document.getElementById('article-toc');
+        const tocToggle = toolbar.querySelector('[data-article-toc-toggle]');
+        const settings = document.getElementById('article-reading-settings');
+        const settingsToggle = toolbar.querySelector('[data-reading-settings-toggle]');
+        const sizeButtons = Array.from(toolbar.querySelectorAll('[data-reading-size]'));
+        const storageKey = 'mobile-reading-font-size';
+
+        tocToggle?.addEventListener('click', () => {
+            if (!toc) return;
+            toc.open = !toc.open;
+            tocToggle.setAttribute('aria-expanded', String(toc.open));
+            if (toc.open) toc.scrollIntoView({ block: 'nearest' });
+        });
+
+        settingsToggle?.addEventListener('click', () => {
+            const open = settings.hidden;
+            settings.hidden = !open;
+            settingsToggle.setAttribute('aria-expanded', String(open));
+        });
+
+        const applyReadingSize = (size) => {
+            const validSize = ['small', 'default', 'large'].includes(size) ? size : 'default';
+            document.documentElement.dataset.mobileReadingSize = validSize;
+            sizeButtons.forEach((button) => {
+                button.setAttribute('aria-pressed', String(button.dataset.readingSize === validSize));
+            });
+        };
+
+        let savedSize = 'default';
+        try {
+            savedSize = localStorage.getItem(storageKey) || 'default';
+        } catch (error) {
+            savedSize = 'default';
+        }
+        applyReadingSize(savedSize);
+
+        sizeButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const size = button.dataset.readingSize;
+                applyReadingSize(size);
+                try {
+                    localStorage.setItem(storageKey, size);
+                } catch (error) {
+                    
+                }
+            });
+        });
+    })();
+</script>
 
 
     
