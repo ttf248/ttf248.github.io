@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.life/en/p/alibaba-large-model-strategy/'>
 
-<link rel="stylesheet" href="/scss/style.min.874cfbee0f34d26ade775af6f97898efb775471f1fc878c951d10f746770c6dd.css"><meta property='og:title' content="Alibaba Large Model Strategy">
+<link rel="stylesheet" href="/scss/style.min.64c83735c3a9266f9985fc59e134e5c01873c400a43d7b59431dbb84fe43e36b.css"><meta property='og:title' content="Alibaba Large Model Strategy">
 <meta property='og:description' content="Alibaba (Ali) has released numerous large models, not simply a matter of “volume chasing,” but a carefully planned “Model-as-a-Service” (MaaS) ecosystem strategy. There are multiple considerations behind this, which can be summarized as “internal empowerment and external ecosystem building.”\nInternal Business Driven (Inward Empowerment) Alibaba possesses an extremely vast and diverse business landscape, including e-commerce (Taobao &amp; Tmall), finance (Ant Financial), logistics (Cainiao), cloud computing (Aliyun), and entertainment (Youku), among others.\n">
 <meta property='og:url' content='https://ttf248.life/en/p/alibaba-large-model-strategy/'>
 <meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
@@ -207,6 +207,29 @@
         </div>
     </div>
 </div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="文章目录">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span>本文目录</span>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#internal-business-driven-inward-empowerment">Internal Business Driven (Inward Empowerment)</a></li>
+    <li><a href="#building-a-cloud-service-ecosystem-external-ecosystem-building">Building a Cloud Service Ecosystem (External Ecosystem Building)</a></li>
+    <li><a href="#summary">Summary</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
 <article class="main-article">
     <header class="article-header">
 
@@ -568,14 +591,78 @@ document.addEventListener('DOMContentLoaded', () => {
 <script>
     (() => {
         const toolbar = document.querySelector('.article-mobile-toolbar');
-        if (!toolbar) return;
-
         const toc = document.getElementById('article-toc');
-        const tocToggle = toolbar.querySelector('[data-article-toc-toggle]');
+        const tocToggle = toolbar?.querySelector('[data-article-toc-toggle]');
         const settings = document.getElementById('article-reading-settings');
-        const settingsToggle = toolbar.querySelector('[data-reading-settings-toggle]');
-        const sizeButtons = Array.from(toolbar.querySelectorAll('[data-reading-size]'));
+        const settingsToggle = toolbar?.querySelector('[data-reading-settings-toggle]');
+        const sizeButtons = toolbar ? Array.from(toolbar.querySelectorAll('[data-reading-size]')) : [];
+        const rail = document.querySelector('[data-article-toc-rail]');
+        const railToggle = rail?.querySelector('[data-article-toc-rail-toggle]');
+        const railPanel = rail?.querySelector('[data-article-toc-rail-panel]');
+        const railProgress = rail?.querySelector('[data-article-toc-progress]');
+        const railProgressLabel = rail?.querySelector('[data-article-toc-progress-label]');
+        const article = document.querySelector('.main-article');
+        if (!toolbar && !rail) return;
         const storageKey = 'mobile-reading-font-size';
+
+        const setRailOpen = (open) => {
+            if (!rail || !railToggle || !railPanel) return;
+            railPanel.hidden = !open;
+            railToggle.setAttribute('aria-expanded', String(open));
+            rail.classList.toggle('is-open', open);
+        };
+
+        railToggle?.addEventListener('click', () => {
+            setRailOpen(railPanel.hidden);
+        });
+
+        const railLinks = rail ? Array.from(rail.querySelectorAll('a[href^="#"]')) : [];
+        const headings = article ? Array.from(article.querySelectorAll('.article-content h2[id], .article-content h3[id], .article-content h4[id]')) : [];
+        const headingLinks = headings.map((heading) => ({
+            heading,
+            link: railLinks.find((candidate) => candidate.getAttribute('href') === `#${heading.id}`)
+        })).filter((item) => item.link);
+
+        const setActiveHeading = (headingId) => {
+            const active = headingLinks.find((item) => item.heading.id === headingId);
+            headingLinks.forEach(({ link }) => {
+                const isActive = link === active?.link;
+                link.classList.toggle('is-active', isActive);
+                if (isActive) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        };
+
+        if (headingLinks.length) {
+            const observer = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                if (visible[0]) setActiveHeading(visible[0].target.id);
+            }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, 1] });
+            headingLinks.forEach(({ heading }) => observer.observe(heading));
+
+            const initialCandidates = headingLinks
+                .filter(({ heading }) => heading.getBoundingClientRect().top <= window.innerHeight * 0.22);
+            const initialHeading = initialCandidates[initialCandidates.length - 1] || headingLinks[0];
+            setActiveHeading(initialHeading.heading.id);
+        }
+
+        const updateRailProgress = () => {
+            if (!article || !railProgress) return;
+            const articleTop = window.scrollY + article.getBoundingClientRect().top;
+            const articleEnd = articleTop + article.offsetHeight - window.innerHeight;
+            const progress = articleEnd <= articleTop
+                ? 100
+                : Math.min(Math.max((window.scrollY - articleTop) / (articleEnd - articleTop) * 100, 0), 100);
+            railProgress.style.height = `${progress}%`;
+            railProgressLabel?.replaceChildren(document.createTextNode(`${Math.round(progress)}%`));
+            railProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
+        };
+
+        window.addEventListener('scroll', updateRailProgress, { passive: true });
+        window.addEventListener('resize', updateRailProgress);
+        updateRailProgress();
 
         tocToggle?.addEventListener('click', () => {
             if (!toc) return;
@@ -633,28 +720,8 @@ document.addEventListener('DOMContentLoaded', () => {
     <ol class="related-content__list">
             
                 <li class="related-content__item">
-                    <a href="/en/p/model-war-now-hits-pricing-and-chips/" class="related-content__link">
-                        <span class="related-content__index">01</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">The current wave of model competition has escalated to pricing and chips.</h3>
-                            <time class="related-content__date" datetime='2026-04-24T23:22:01&#43;08:00'>Apr 24, 2026</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
-                    <a href="/en/p/next-8-ai-topics-after-reviewing-two-years-of-posts/" class="related-content__link">
-                        <span class="related-content__index">02</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">After reviewing AI articles from the past two years, I think these are the 8 topics I should write about next.</h3>
-                            <time class="related-content__date" datetime='2026-03-30T22:20:00&#43;08:00'>Mar 30, 2026</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
                     <a href="/en/p/the-end-of-low-cost-api-relays/" class="related-content__link">
-                        <span class="related-content__index">03</span>
+                        <span class="related-content__index">01</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">The End of Low-Cost API Gateways: Large Model Experiences and the Impossible Triangle in March</h3>
                             <time class="related-content__date" datetime='2026-03-30T20:00:00&#43;08:00'>Mar 30, 2026</time>
@@ -663,21 +730,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/en/p/computing-power-hegemony-and-valuation-bubble-we-are-entering-a-costly-new-era/" class="related-content__link">
-                        <span class="related-content__index">04</span>
+                    <a href="/en/p/is-ai-getting-dumber-uncovering-the-game-between-parameter-precision-and-inference-costs/" class="related-content__link">
+                        <span class="related-content__index">02</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">Computing Power Hegemony and Valuation “Bubble”: We are entering a costly new era.</h3>
-                            <time class="related-content__date" datetime='2026-03-18T13:09:26&#43;08:00'>Mar 18, 2026</time>
+                            <h3 class="related-content__title">Is AI Getting “Dumber”? Uncovering the Game Between Parameter Accuracy and Inference Costs</h3>
+                            <time class="related-content__date" datetime='2025-12-04T21:58:09&#43;08:00'>Dec 04, 2025</time>
                         </div>
                     </a>
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/en/p/is-ai-getting-dumber-uncovering-the-game-between-parameter-precision-and-inference-costs/" class="related-content__link">
+                    <a href="/en/p/ai-giants-common-battleground-2026/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">The big model development has indeed drawn the internet giants into the same competitive arena.</h3>
+                            <time class="related-content__date" datetime='2026-05-12T00:59:12&#43;08:00'>May 12, 2026</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/en/p/codex-goal-command-explained/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex goal embeds the completion criteria within the task itself</h3>
+                            <time class="related-content__date" datetime='2026-05-27T20:11:41&#43;08:00'>May 27, 2026</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/en/p/nvidia-data-center-gpu-since-chatgpt/" class="related-content__link">
                         <span class="related-content__index">05</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">Is AI Getting “Dumber”? Uncovering the Game Between Parameter Accuracy and Inference Costs</h3>
-                            <time class="related-content__date" datetime='2025-12-04T21:58:09&#43;08:00'>Dec 04, 2025</time>
+                            <h3 class="related-content__title">How do NVIDIA data center GPUs iterate after the release of ChatGPT?</h3>
+                            <time class="related-content__date" datetime='2026-05-15T19:58:51&#43;08:00'>May 15, 2026</time>
                         </div>
                     </a>
                 </li>

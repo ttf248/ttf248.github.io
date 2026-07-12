@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 
-<link rel="stylesheet" href="/scss/style.min.874cfbee0f34d26ade775af6f97898efb775471f1fc878c951d10f746770c6dd.css"><meta property='og:title' content="unordered_map 查得到却取错值，一次静态 lambda 的内存事故">
+<link rel="stylesheet" href="/scss/style.min.64c83735c3a9266f9985fc59e134e5c01873c400a43d7b59431dbb84fe43e36b.css"><meta property='og:title' content="unordered_map 查得到却取错值，一次静态 lambda 的内存事故">
 <meta property='og:description' content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，就是函数内部的 static lambda 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。\n">
 <meta property='og:url' content='https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 <meta property='og:site_name' content='向叔记事簿'>
@@ -207,6 +207,32 @@
         </div>
     </div>
 </div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="文章目录">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span>本文目录</span>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#先看那个很像优化的小动作">先看那个很像优化的小动作</a></li>
+    <li><a href="#为什么现象会像-map-查错了">为什么现象会像 map 查错了</a></li>
+    <li><a href="#不要用-static-保存带捕获的局部闭包">不要用 static 保存带捕获的局部闭包</a></li>
+    <li><a href="#排查时先证明-key-和-value-的身份一致">排查时先证明 key 和 value 的身份一致</a></li>
+    <li><a href="#真正的教训">真正的教训</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
 <article class="main-article has-lead">
     <header class="article-header">
 
@@ -661,14 +687,78 @@ assert(it-&gt;first == it-&gt;second.symbol);
 <script>
     (() => {
         const toolbar = document.querySelector('.article-mobile-toolbar');
-        if (!toolbar) return;
-
         const toc = document.getElementById('article-toc');
-        const tocToggle = toolbar.querySelector('[data-article-toc-toggle]');
+        const tocToggle = toolbar?.querySelector('[data-article-toc-toggle]');
         const settings = document.getElementById('article-reading-settings');
-        const settingsToggle = toolbar.querySelector('[data-reading-settings-toggle]');
-        const sizeButtons = Array.from(toolbar.querySelectorAll('[data-reading-size]'));
+        const settingsToggle = toolbar?.querySelector('[data-reading-settings-toggle]');
+        const sizeButtons = toolbar ? Array.from(toolbar.querySelectorAll('[data-reading-size]')) : [];
+        const rail = document.querySelector('[data-article-toc-rail]');
+        const railToggle = rail?.querySelector('[data-article-toc-rail-toggle]');
+        const railPanel = rail?.querySelector('[data-article-toc-rail-panel]');
+        const railProgress = rail?.querySelector('[data-article-toc-progress]');
+        const railProgressLabel = rail?.querySelector('[data-article-toc-progress-label]');
+        const article = document.querySelector('.main-article');
+        if (!toolbar && !rail) return;
         const storageKey = 'mobile-reading-font-size';
+
+        const setRailOpen = (open) => {
+            if (!rail || !railToggle || !railPanel) return;
+            railPanel.hidden = !open;
+            railToggle.setAttribute('aria-expanded', String(open));
+            rail.classList.toggle('is-open', open);
+        };
+
+        railToggle?.addEventListener('click', () => {
+            setRailOpen(railPanel.hidden);
+        });
+
+        const railLinks = rail ? Array.from(rail.querySelectorAll('a[href^="#"]')) : [];
+        const headings = article ? Array.from(article.querySelectorAll('.article-content h2[id], .article-content h3[id], .article-content h4[id]')) : [];
+        const headingLinks = headings.map((heading) => ({
+            heading,
+            link: railLinks.find((candidate) => candidate.getAttribute('href') === `#${heading.id}`)
+        })).filter((item) => item.link);
+
+        const setActiveHeading = (headingId) => {
+            const active = headingLinks.find((item) => item.heading.id === headingId);
+            headingLinks.forEach(({ link }) => {
+                const isActive = link === active?.link;
+                link.classList.toggle('is-active', isActive);
+                if (isActive) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        };
+
+        if (headingLinks.length) {
+            const observer = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                if (visible[0]) setActiveHeading(visible[0].target.id);
+            }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, 1] });
+            headingLinks.forEach(({ heading }) => observer.observe(heading));
+
+            const initialCandidates = headingLinks
+                .filter(({ heading }) => heading.getBoundingClientRect().top <= window.innerHeight * 0.22);
+            const initialHeading = initialCandidates[initialCandidates.length - 1] || headingLinks[0];
+            setActiveHeading(initialHeading.heading.id);
+        }
+
+        const updateRailProgress = () => {
+            if (!article || !railProgress) return;
+            const articleTop = window.scrollY + article.getBoundingClientRect().top;
+            const articleEnd = articleTop + article.offsetHeight - window.innerHeight;
+            const progress = articleEnd <= articleTop
+                ? 100
+                : Math.min(Math.max((window.scrollY - articleTop) / (articleEnd - articleTop) * 100, 0), 100);
+            railProgress.style.height = `${progress}%`;
+            railProgressLabel?.replaceChildren(document.createTextNode(`${Math.round(progress)}%`));
+            railProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
+        };
+
+        window.addEventListener('scroll', updateRailProgress, { passive: true });
+        window.addEventListener('resize', updateRailProgress);
+        updateRailProgress();
 
         tocToggle?.addEventListener('click', () => {
             if (!toc) return;

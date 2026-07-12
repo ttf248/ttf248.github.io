@@ -6,56 +6,6 @@
         <description>Recent content in 自动化 on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/automation/index.xml" rel="self" type="application/rss+xml" /><item>
-        <title>端午试 Hermes：真正有用的是记住坑</title>
-        <link>https://ttf248.life/p/dragon-boat-hermes-pitfalls/</link>
-        <pubDate>Sun, 21 Jun 2026 20:48:46 +0800</pubDate>
-        
-        <guid>https://ttf248.life/p/dragon-boat-hermes-pitfalls/</guid>
-        <description>&lt;p&gt;端午假期把 Hermes 部署起来，路上零零散散让它写了一些东西。说实话，前一阵子另一拨工具很热的时候，我没怎么动手，评估下来感觉用处有限；这次等热闹过去，再看后出来的 Hermes，反而更适合慢慢试。&lt;/p&gt;
-&lt;p&gt;试下来不是那种“忽然很聪明”的感觉。它能把一堆定时任务、搜索通道和 LLM 流水线跑起来以后，开始暴露出一些真实的工程问题：什么地方会超时，什么地方会误判，什么输出会污染群消息，什么协作偏好下次要提前记住。&lt;/p&gt;
-&lt;p&gt;这类东西说有用，也不是立刻改变生活；说没用，又确实能省下一些反复敲打的成本。&lt;/p&gt;
-&lt;h2 id=&#34;它先变成一个会跑活的系统&#34;&gt;它先变成一个会跑活的系统
-&lt;/h2&gt;&lt;p&gt;这两天最明显的变化，是 Hermes 不再只是一个聊天窗口，而是被塞进了一套固定工作流里。&lt;/p&gt;
-&lt;p&gt;6 月 20 日早上，AI 早报 v3 开始跑，流程被拆成四段：先采集，再让 LLM 做摘要，然后跨源验证，最后拼成飞书卡片推送。到 6 月 21 日早上，8 点的 LLM 分析 cron 已经能正常触发，并把 JSON 交给后续验证脚本接力。&lt;/p&gt;
-&lt;p&gt;下午强制触发所有 cron 时，才发现它手里已经有 28 个定时任务，其中 4 个会真实推送飞书卡片，2 个处在 error 状态。再往后做架构评估，一个 301 条消息的长会话把金融早报架构重新盘了一遍，问题也不是抽象的“系统还要优化”，而是几件很具体的事：DuckDuckGo 单点搜索太脆，跨源验证函数有旧 bug，cron 排程有点密。&lt;/p&gt;
-&lt;p&gt;这些听起来都不像演示片里的进化，更像一个脚本堆真正开始跑以后，终于有了现场。&lt;/p&gt;
-&lt;p&gt;我比较在意的也是这点。很多 AI 工具在“给我写一段东西”时都能显得不错，但一旦进入定时任务、消息推送、失败重试、外部搜索、群里实际展示，就会从模型能力问题变成工程卫生问题。Hermes 这次给人的有效感，不在于它能把每句话写得多漂亮，而在于它能被迫面对这些脏活。&lt;/p&gt;
-&lt;h2 id=&#34;有些坑开始变成记忆&#34;&gt;有些坑开始变成记忆
-&lt;/h2&gt;&lt;p&gt;原始复盘里最有价值的不是功能清单，而是几个坑。&lt;/p&gt;
-&lt;p&gt;第一个是跨源验证。早报里本来希望两家以上独立来源验证同一条新闻，卡片上才点亮可信度标记。结果过去 badge 几乎不亮。后来查到根因：验证代码算的是 &lt;code&gt;source&lt;/code&gt;，而采集回来的 &lt;code&gt;source&lt;/code&gt; 很可能都叫 &lt;code&gt;ddg_api&lt;/code&gt;。哪怕结果来自不同网站，集合里也只有一个来源。&lt;/p&gt;
-&lt;p&gt;修法很简单：不要只按采集接口算来源，改成按域名加搜索引擎算独立源。改完后，同一轮里终于识别出 9 条有 2 个以上独立来源的新闻。这个改动不大，但性质很关键：原来“跨源验证”只是一个看起来很合理的流程名，修完以后才开始真的提供可信度信号。&lt;/p&gt;
-&lt;p&gt;第二个是 SearXNG。把搜索从旧的 mx-finance-search 迁到 SearXNG 时，最麻烦的不是容器能不能起来，而是某些引擎返空却不报错。比如 Bing 通道查出来是 0 条，&lt;code&gt;unresponsive_engines&lt;/code&gt; 里又没有它，因为返空不等于 timeout。最后只能承认这个通道在当前环境里不可靠，转到 sogou 和 360search 这类更稳定的组合。&lt;/p&gt;
-&lt;p&gt;这类坑如果只写在一次终端输出里，下次大概率还会再踩。它被写进 PITFALLS，价值才出来：下个会话看到“返空但不报错”，不用重新从网络、DNS、代理、容器日志一路猜起。&lt;/p&gt;
-&lt;p&gt;第三个坑更细碎，是 patch 工具的参数闭合。早期会把 &lt;code&gt;&amp;lt;/old_string&amp;gt;&lt;/code&gt; 这种标签误落进代码里，以为是模板语法，实际是参数没闭合。这个坑和业务无关，却很典型：一个 agent 要长时间做事，靠的不是一次性推理多强，而是能不能记住自己在哪些工具调用上容易犯错。&lt;/p&gt;
-&lt;p&gt;PITFALLS 从 18、41、57 一路涨到 74，看起来不太体面，但这反而是我更愿意相信的进化曲线。真正跑过系统的人都知道，功能数往上涨不稀奇，坑的编号往上涨才说明它在碰真实边界。&lt;/p&gt;
-&lt;h2 id=&#34;协作偏好也会被系统吸收&#34;&gt;协作偏好也会被系统吸收
-&lt;/h2&gt;&lt;p&gt;Hermes 自我复盘里还有一块很有意思：它不只记录技术坑，也记录我怎么和它协作。&lt;/p&gt;
-&lt;p&gt;比如我说“测试下”“执行下”，它现在应该理解成先跑端到端验证再提交，而不是只在终端里跑个局部脚本。比如我说“我要看效果”，它就不能只给我返回 code=0，而要把飞书群里真实卡片推出来。比如我问两个方案，它不要平铺四个选项，而是应该直接给推荐和理由。&lt;/p&gt;
-&lt;p&gt;这些偏好不算宏大的智能，但对长期使用很重要。工具如果每次都要重新解释“我这里说测试不是让你模拟一下”，成本会很高。反过来，它如果能把这种协作习惯记住，就算单次模型能力没有变化，体感也会稳定很多。&lt;/p&gt;
-&lt;p&gt;还有一条更像工作流设计原则：让 LLM 干真正的事。脚本能完成的格式化、拼数据、JSON 校验，就不要交给 LLM；LLM 只负责脚本做不到的跨信号关联、深度解读和投资研判。所以那套早报流水线才会被拆成“脚本采集 -&amp;gt; LLM 分析 -&amp;gt; 脚本验证 -&amp;gt; 脚本拼卡”。这比把所有事情都丢给模型更麻烦，但也更不容易把错误藏起来。&lt;/p&gt;
-&lt;p&gt;我对 Hermes 的判断也基本落在这里。它不是一个“开箱就替你想清楚”的东西，更像一个会在使用中沉淀约束的执行体。前提是你真的给它任务、真的让它推送、真的让它面对失败，而不是只让它写几段漂亮总结。&lt;/p&gt;
-&lt;h2 id=&#34;还不能急着说它稳定&#34;&gt;还不能急着说它稳定
-&lt;/h2&gt;&lt;p&gt;这几天跑通的东西不少，但还没到可以夸稳定的程度。&lt;/p&gt;
-&lt;p&gt;多搜索通道现在能并发跑，可单个通道卡 30 秒仍然会拖慢整个 query，下一步需要 per-channel timeout。28 个 cron 也只是跑到第 4 天，还没经过 7x24 的验证。群里偶尔会残留 &lt;code&gt;tool_call&lt;/code&gt; 噪声，说明自动 deliver 的边界还没收拾干净。PITFALLS 已经堆到 74 条，继续塞 memory 不是办法，后面要按主题归档。&lt;/p&gt;
-&lt;p&gt;还有一个协作层面的欠账：它现在大多是等我说“测试下”“执行下”才去跑完整验证。更理想的状态，是大改动后它主动问一句要不要跑一遍、发群里看效果。这个动作看起来很小，但对一个自动化系统来说，能不能主动把验证推到交付前面，差别很大。&lt;/p&gt;
-&lt;p&gt;所以这次端午试用以后，我不会说 Hermes 已经多聪明。它开始知道自己容易在哪里犯错，并且愿意把错误写成下次能用的约束。这种进化很朴素，却是我愿意长期留下来的理由。&lt;/p&gt;
-&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
-&lt;/h2&gt;&lt;ul&gt;
-&lt;li&gt;本人端午假期 Hermes 部署和试用记录，2026-06-20 至 2026-06-21。&lt;/li&gt;
-&lt;li&gt;Hermes 自我复盘记录：《Hermes 这几天的复盘稿》，2026-06-21。&lt;/li&gt;
-&lt;/ul&gt;
-&lt;details class=&#34;article-notes&#34;&gt;
-    &lt;summary&gt;写作附记&lt;/summary&gt;
-    &lt;div class=&#34;article-notes__content&#34;&gt;
-        &lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
-&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 趁着端午假期，部署了 hermes，路途上，陆陆续续让它写了一些东西，之前龙虾很火的时候，我也没尝试，评估下来是没什么特别的用处，最近这波浪潮算是过去了，后出来的 hermes 凭借自我进化，自带众多 skill 出圈，空了，刚好试试。弄了挺多定时任务，说有用，也不是那么有用，说没用，倒是有些用。具体的任务这里就不说了，倒是有一份 hermes 自我进化的记录，你整理下这份记录，融入到博客里面，不要贴原文，太长了。
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
-&lt;/h3&gt;&lt;p&gt;这篇保留了端午假期部署、路上试用、28 个 cron、搜索迁移、跨源验证 bug、PITFALLS 增长和协作偏好这些材料。压掉了完整时间线、所有原始复盘段落和具体任务细节，避免正文变成 Hermes 自述稿或流水账。&lt;/p&gt;
-    &lt;/div&gt;
-&lt;/details&gt;</description>
-        </item>
-        <item>
         <title>Claude4发布，尝试开发：hugo标签、超链接翻译助手</title>
         <link>https://ttf248.life/p/claude-4-release-hugo-tags-hyperlink-translation-assistant/</link>
         <pubDate>Sat, 24 May 2025 03:05:31 +0800</pubDate>

@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.life/p/us-nodes-not-as-good-after-switching-to-china-unicom/'>
 
-<link rel="stylesheet" href="/scss/style.min.874cfbee0f34d26ade775af6f97898efb775471f1fc878c951d10f746770c6dd.css"><meta property='og:title' content="换到联通之后，美国节点不再是默认最优">
+<link rel="stylesheet" href="/scss/style.min.64c83735c3a9266f9985fc59e134e5c01873c400a43d7b59431dbb84fe43e36b.css"><meta property='og:title' content="换到联通之后，美国节点不再是默认最优">
 <meta property='og:description' content="搬家以后，家里的宽带从电信换成了联通。刷剧、打游戏都没什么明显变化，我一开始也没太当回事。\n真正露馅是在下载资料的时候。我习惯性切到美国节点，按以前的经验，美国机房带宽足，下载大文件通常能跑得很满。结果这次怎么切都上不去，反而新加坡、台湾节点顺了很多。\n这一下把我原来那个很粗的判断拆开了：节点快不快，不能只看服务器在哪个国家，也不能只看机房带宽。你家宽带站在哪张网、代理服务商买了什么上游、回程更偏哪家运营商，最后都会落到同一个下载进度条上。\n">
 <meta property='og:url' content='https://ttf248.life/p/us-nodes-not-as-good-after-switching-to-china-unicom/'>
 <meta property='og:site_name' content='向叔记事簿'>
@@ -207,6 +207,31 @@
         </div>
     </div>
 </div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="文章目录">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span>本文目录</span>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#日常使用会把差异藏起来">日常使用会把差异藏起来</a></li>
+    <li><a href="#关键不是有没有国际网络而是你走到哪条路上">关键不是有没有国际网络，而是你走到哪条路上</a></li>
+    <li><a href="#新加坡和台湾变顺不代表它们天然更强">新加坡和台湾变顺，不代表它们天然更强</a></li>
+    <li><a href="#以后买节点先别急着看国家">以后买节点，先别急着看国家</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
 <article class="main-article has-lead">
     <header class="article-header">
 
@@ -616,14 +641,78 @@ document.addEventListener('DOMContentLoaded', () => {
 <script>
     (() => {
         const toolbar = document.querySelector('.article-mobile-toolbar');
-        if (!toolbar) return;
-
         const toc = document.getElementById('article-toc');
-        const tocToggle = toolbar.querySelector('[data-article-toc-toggle]');
+        const tocToggle = toolbar?.querySelector('[data-article-toc-toggle]');
         const settings = document.getElementById('article-reading-settings');
-        const settingsToggle = toolbar.querySelector('[data-reading-settings-toggle]');
-        const sizeButtons = Array.from(toolbar.querySelectorAll('[data-reading-size]'));
+        const settingsToggle = toolbar?.querySelector('[data-reading-settings-toggle]');
+        const sizeButtons = toolbar ? Array.from(toolbar.querySelectorAll('[data-reading-size]')) : [];
+        const rail = document.querySelector('[data-article-toc-rail]');
+        const railToggle = rail?.querySelector('[data-article-toc-rail-toggle]');
+        const railPanel = rail?.querySelector('[data-article-toc-rail-panel]');
+        const railProgress = rail?.querySelector('[data-article-toc-progress]');
+        const railProgressLabel = rail?.querySelector('[data-article-toc-progress-label]');
+        const article = document.querySelector('.main-article');
+        if (!toolbar && !rail) return;
         const storageKey = 'mobile-reading-font-size';
+
+        const setRailOpen = (open) => {
+            if (!rail || !railToggle || !railPanel) return;
+            railPanel.hidden = !open;
+            railToggle.setAttribute('aria-expanded', String(open));
+            rail.classList.toggle('is-open', open);
+        };
+
+        railToggle?.addEventListener('click', () => {
+            setRailOpen(railPanel.hidden);
+        });
+
+        const railLinks = rail ? Array.from(rail.querySelectorAll('a[href^="#"]')) : [];
+        const headings = article ? Array.from(article.querySelectorAll('.article-content h2[id], .article-content h3[id], .article-content h4[id]')) : [];
+        const headingLinks = headings.map((heading) => ({
+            heading,
+            link: railLinks.find((candidate) => candidate.getAttribute('href') === `#${heading.id}`)
+        })).filter((item) => item.link);
+
+        const setActiveHeading = (headingId) => {
+            const active = headingLinks.find((item) => item.heading.id === headingId);
+            headingLinks.forEach(({ link }) => {
+                const isActive = link === active?.link;
+                link.classList.toggle('is-active', isActive);
+                if (isActive) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        };
+
+        if (headingLinks.length) {
+            const observer = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                if (visible[0]) setActiveHeading(visible[0].target.id);
+            }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, 1] });
+            headingLinks.forEach(({ heading }) => observer.observe(heading));
+
+            const initialCandidates = headingLinks
+                .filter(({ heading }) => heading.getBoundingClientRect().top <= window.innerHeight * 0.22);
+            const initialHeading = initialCandidates[initialCandidates.length - 1] || headingLinks[0];
+            setActiveHeading(initialHeading.heading.id);
+        }
+
+        const updateRailProgress = () => {
+            if (!article || !railProgress) return;
+            const articleTop = window.scrollY + article.getBoundingClientRect().top;
+            const articleEnd = articleTop + article.offsetHeight - window.innerHeight;
+            const progress = articleEnd <= articleTop
+                ? 100
+                : Math.min(Math.max((window.scrollY - articleTop) / (articleEnd - articleTop) * 100, 0), 100);
+            railProgress.style.height = `${progress}%`;
+            railProgressLabel?.replaceChildren(document.createTextNode(`${Math.round(progress)}%`));
+            railProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
+        };
+
+        window.addEventListener('scroll', updateRailProgress, { passive: true });
+        window.addEventListener('resize', updateRailProgress);
+        updateRailProgress();
 
         tocToggle?.addEventListener('click', () => {
             if (!toc) return;
@@ -691,18 +780,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/minimax-m3-coding-agent-performance-optimization/" class="related-content__link">
-                        <span class="related-content__index">02</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">同一个模型，为什么这次 Claude Code 把性能优化做完了</h3>
-                            <time class="related-content__date" datetime='2026-07-10T00:00:00Z'>2026年07月10日</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
                     <a href="/p/code-anchors-for-llm-requirements/" class="related-content__link">
-                        <span class="related-content__index">03</span>
+                        <span class="related-content__index">02</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">给编码模型几个代码锚点</h3>
                             <time class="related-content__date" datetime='2026-07-05T23:04:15&#43;08:00'>2026年07月05日</time>
@@ -711,21 +790,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/dragon-boat-hermes-pitfalls/" class="related-content__link">
-                        <span class="related-content__index">04</span>
+                    <a href="/p/hermes-searxng-mihomo-proxy/" class="related-content__link">
+                        <span class="related-content__index">03</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">端午试 Hermes：真正有用的是记住坑</h3>
-                            <time class="related-content__date" datetime='2026-06-21T20:48:46&#43;08:00'>2026年06月21日</time>
+                            <h3 class="related-content__title">Hermes 搜索不稳：SearXNG 出站交给 Mihomo</h3>
+                            <time class="related-content__date" datetime='2026-06-21T20:33:01&#43;08:00'>2026年06月21日</time>
                         </div>
                     </a>
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/hermes-searxng-mihomo-proxy/" class="related-content__link">
+                    <a href="/p/loop-engineering-human-checkpoints/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Loop engineering 把人挪到检查点</h3>
+                            <time class="related-content__date" datetime='2026-06-14T07:35:00&#43;08:00'>2026年06月14日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/codex-chatgpt-ui-mockup-workflow/" class="related-content__link">
                         <span class="related-content__index">05</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">Hermes 搜索不稳：SearXNG 出站交给 Mihomo</h3>
-                            <time class="related-content__date" datetime='2026-06-21T20:33:01&#43;08:00'>2026年06月21日</time>
+                            <h3 class="related-content__title">Codex 写界面扑街之后，让 ChatGPT 画 UI</h3>
+                            <time class="related-content__date" datetime='2026-06-14T05:14:22&#43;08:00'>2026年06月14日</time>
                         </div>
                     </a>
                 </li>

@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.life/p/how-blog-style-suite-split-style-and-token-cost/'>
 
-<link rel="stylesheet" href="/scss/style.min.874cfbee0f34d26ade775af6f97898efb775471f1fc878c951d10f746770c6dd.css"><meta property='og:title' content="AI 博客工程（二）：把风格学习和 token 成本拆开">
+<link rel="stylesheet" href="/scss/style.min.64c83735c3a9266f9985fc59e134e5c01873c400a43d7b59431dbb84fe43e36b.css"><meta property='og:title' content="AI 博客工程（二）：把风格学习和 token 成本拆开">
 <meta property='og:description' content="如果 token 足够，最省脑子的办法其实很粗暴：把历史文章直接塞给模型，让它自己学。\n问题在于，这种办法只适合偶尔来一篇，不适合反复写。你要是真把博客写作当成长期工作流来做，生吃历史文章这条路，很快就会从“简单直接”变成“又贵又乱”。\n">
 <meta property='og:url' content='https://ttf248.life/p/how-blog-style-suite-split-style-and-token-cost/'>
 <meta property='og:site_name' content='向叔记事簿'>
@@ -207,6 +207,39 @@
         </div>
     </div>
 </div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="文章目录">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span>本文目录</span>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#一开始最自然的想法就是直接喂历史文章">一开始最自然的想法，就是直接喂历史文章</a></li>
+    <li><a href="#这也是为什么数据模块和数据生成模块必须拆开">这也是为什么数据模块和数据生成模块必须拆开</a></li>
+    <li><a href="#省-token不靠玄学靠的是预处理和批量化">省 token，不靠玄学，靠的是预处理和批量化</a></li>
+    <li><a href="#现在这套数据结构本质上就是在压缩真正有用的信号">现在这套数据结构，本质上就是在压缩真正有用的信号</a>
+      <ol>
+        <li><a href="#第一层scanjson">第一层：<code>scan.json</code></a></li>
+        <li><a href="#第二层providersourcejson">第二层：<code>{provider}.source.json</code></a></li>
+        <li><a href="#第三层providerruntimejson-和-publishedruntimejson">第三层：<code>{provider}.runtime.json</code> 和 <code>published.runtime.json</code></a></li>
+      </ol>
+    </li>
+    <li><a href="#不是所有事情都该让模型做">不是所有事情都该让模型做</a></li>
+    <li><a href="#预处理不是为了省一点-token是为了让写稿这件事可持续">预处理不是为了省一点 token，是为了让写稿这件事可持续</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
 <article class="main-article has-lead">
     <header class="article-header">
 
@@ -689,14 +722,78 @@ document.addEventListener('DOMContentLoaded', () => {
 <script>
     (() => {
         const toolbar = document.querySelector('.article-mobile-toolbar');
-        if (!toolbar) return;
-
         const toc = document.getElementById('article-toc');
-        const tocToggle = toolbar.querySelector('[data-article-toc-toggle]');
+        const tocToggle = toolbar?.querySelector('[data-article-toc-toggle]');
         const settings = document.getElementById('article-reading-settings');
-        const settingsToggle = toolbar.querySelector('[data-reading-settings-toggle]');
-        const sizeButtons = Array.from(toolbar.querySelectorAll('[data-reading-size]'));
+        const settingsToggle = toolbar?.querySelector('[data-reading-settings-toggle]');
+        const sizeButtons = toolbar ? Array.from(toolbar.querySelectorAll('[data-reading-size]')) : [];
+        const rail = document.querySelector('[data-article-toc-rail]');
+        const railToggle = rail?.querySelector('[data-article-toc-rail-toggle]');
+        const railPanel = rail?.querySelector('[data-article-toc-rail-panel]');
+        const railProgress = rail?.querySelector('[data-article-toc-progress]');
+        const railProgressLabel = rail?.querySelector('[data-article-toc-progress-label]');
+        const article = document.querySelector('.main-article');
+        if (!toolbar && !rail) return;
         const storageKey = 'mobile-reading-font-size';
+
+        const setRailOpen = (open) => {
+            if (!rail || !railToggle || !railPanel) return;
+            railPanel.hidden = !open;
+            railToggle.setAttribute('aria-expanded', String(open));
+            rail.classList.toggle('is-open', open);
+        };
+
+        railToggle?.addEventListener('click', () => {
+            setRailOpen(railPanel.hidden);
+        });
+
+        const railLinks = rail ? Array.from(rail.querySelectorAll('a[href^="#"]')) : [];
+        const headings = article ? Array.from(article.querySelectorAll('.article-content h2[id], .article-content h3[id], .article-content h4[id]')) : [];
+        const headingLinks = headings.map((heading) => ({
+            heading,
+            link: railLinks.find((candidate) => candidate.getAttribute('href') === `#${heading.id}`)
+        })).filter((item) => item.link);
+
+        const setActiveHeading = (headingId) => {
+            const active = headingLinks.find((item) => item.heading.id === headingId);
+            headingLinks.forEach(({ link }) => {
+                const isActive = link === active?.link;
+                link.classList.toggle('is-active', isActive);
+                if (isActive) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        };
+
+        if (headingLinks.length) {
+            const observer = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                if (visible[0]) setActiveHeading(visible[0].target.id);
+            }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, 1] });
+            headingLinks.forEach(({ heading }) => observer.observe(heading));
+
+            const initialCandidates = headingLinks
+                .filter(({ heading }) => heading.getBoundingClientRect().top <= window.innerHeight * 0.22);
+            const initialHeading = initialCandidates[initialCandidates.length - 1] || headingLinks[0];
+            setActiveHeading(initialHeading.heading.id);
+        }
+
+        const updateRailProgress = () => {
+            if (!article || !railProgress) return;
+            const articleTop = window.scrollY + article.getBoundingClientRect().top;
+            const articleEnd = articleTop + article.offsetHeight - window.innerHeight;
+            const progress = articleEnd <= articleTop
+                ? 100
+                : Math.min(Math.max((window.scrollY - articleTop) / (articleEnd - articleTop) * 100, 0), 100);
+            railProgress.style.height = `${progress}%`;
+            railProgressLabel?.replaceChildren(document.createTextNode(`${Math.round(progress)}%`));
+            railProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
+        };
+
+        window.addEventListener('scroll', updateRailProgress, { passive: true });
+        window.addEventListener('resize', updateRailProgress);
+        updateRailProgress();
 
         tocToggle?.addEventListener('click', () => {
             if (!toc) return;
@@ -774,18 +871,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/next-8-ai-topics-after-reviewing-two-years-of-posts/" class="related-content__link">
-                        <span class="related-content__index">03</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">复盘近两年 AI 文章后，我觉得接下来该写这 8 个选题</h3>
-                            <time class="related-content__date" datetime='2026-03-30T22:20:00&#43;08:00'>2026年03月30日</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
                     <a href="/p/skill-is-an-agent-handbook/" class="related-content__link">
-                        <span class="related-content__index">04</span>
+                        <span class="related-content__index">03</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">Skill 更像 agent 的工种手册</h3>
                             <time class="related-content__date" datetime='2026-04-02T22:43:16&#43;08:00'>2026年04月02日</time>
@@ -794,11 +881,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/minimax-m3-coding-agent-performance-optimization/" class="related-content__link">
+                    <a href="/p/code-anchors-for-llm-requirements/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">给编码模型几个代码锚点</h3>
+                            <time class="related-content__date" datetime='2026-07-05T23:04:15&#43;08:00'>2026年07月05日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/loop-engineering-human-checkpoints/" class="related-content__link">
                         <span class="related-content__index">05</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">同一个模型，为什么这次 Claude Code 把性能优化做完了</h3>
-                            <time class="related-content__date" datetime='2026-07-10T00:00:00Z'>2026年07月10日</time>
+                            <h3 class="related-content__title">Loop engineering 把人挪到检查点</h3>
+                            <time class="related-content__date" datetime='2026-06-14T07:35:00&#43;08:00'>2026年06月14日</time>
                         </div>
                     </a>
                 </li>

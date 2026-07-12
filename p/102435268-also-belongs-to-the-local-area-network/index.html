@@ -6,7 +6,7 @@
 
 <link rel='canonical' href='https://ttf248.life/p/102435268-also-belongs-to-the-local-area-network/'>
 
-<link rel="stylesheet" href="/scss/style.min.874cfbee0f34d26ade775af6f97898efb775471f1fc878c951d10f746770c6dd.css"><meta property='og:title' content="10.243.52.68 也属于局域网">
+<link rel="stylesheet" href="/scss/style.min.64c83735c3a9266f9985fc59e134e5c01873c400a43d7b59431dbb84fe43e36b.css"><meta property='og:title' content="10.243.52.68 也属于局域网">
 <meta property='og:description' content="紧接上文，今天继续聊聊局域网的 IP 地址。上次为了同步代码，服务器配置了代理，服务器和家里的台式机打通了网络，在一个局域网里面，代理程序部署在台式机上，服务器通过代理访问外网。同步代码很慢，扔那边就没管了，隔了半个月，到服务器验证代码，发现Git代码同步失败，网络错误，也没太过脑子，细看报错信息。\n">
 <meta property='og:url' content='https://ttf248.life/p/102435268-also-belongs-to-the-local-area-network/'>
 <meta property='og:site_name' content='向叔记事簿'>
@@ -207,6 +207,42 @@
         </div>
     </div>
 </div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="文章目录">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span>本文目录</span>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#案发现场">案发现场</a></li>
+    <li><a href="#私有ip地址的分类与范围"><strong>私有IP地址的分类与范围</strong></a>
+      <ol>
+        <li><a href="#你的问题中的ip地址解析"><strong>你的问题中的IP地址解析：</strong></a></li>
+      </ol>
+    </li>
+    <li><a href="#两者的核心区别"><strong>两者的核心区别</strong></a>
+      <ol>
+        <li><a href="#地址空间大小"><strong>地址空间大小</strong></a></li>
+        <li><a href="#子网划分灵活性"><strong>子网划分灵活性</strong></a></li>
+        <li><a href="#常见应用场景"><strong>常见应用场景</strong></a></li>
+        <li><a href="#与公网的隔离性"><strong>与公网的隔离性</strong></a></li>
+      </ol>
+    </li>
+    <li><a href="#为什么你会看到"><strong>为什么你会看到 <code>10.</code> 段地址？</strong></a></li>
+    <li><a href="#总结如何选择使用"><strong>总结：如何选择使用？</strong></a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
 <article class="main-article has-lead">
     <header class="article-header">
 
@@ -663,14 +699,78 @@ document.addEventListener('DOMContentLoaded', () => {
 <script>
     (() => {
         const toolbar = document.querySelector('.article-mobile-toolbar');
-        if (!toolbar) return;
-
         const toc = document.getElementById('article-toc');
-        const tocToggle = toolbar.querySelector('[data-article-toc-toggle]');
+        const tocToggle = toolbar?.querySelector('[data-article-toc-toggle]');
         const settings = document.getElementById('article-reading-settings');
-        const settingsToggle = toolbar.querySelector('[data-reading-settings-toggle]');
-        const sizeButtons = Array.from(toolbar.querySelectorAll('[data-reading-size]'));
+        const settingsToggle = toolbar?.querySelector('[data-reading-settings-toggle]');
+        const sizeButtons = toolbar ? Array.from(toolbar.querySelectorAll('[data-reading-size]')) : [];
+        const rail = document.querySelector('[data-article-toc-rail]');
+        const railToggle = rail?.querySelector('[data-article-toc-rail-toggle]');
+        const railPanel = rail?.querySelector('[data-article-toc-rail-panel]');
+        const railProgress = rail?.querySelector('[data-article-toc-progress]');
+        const railProgressLabel = rail?.querySelector('[data-article-toc-progress-label]');
+        const article = document.querySelector('.main-article');
+        if (!toolbar && !rail) return;
         const storageKey = 'mobile-reading-font-size';
+
+        const setRailOpen = (open) => {
+            if (!rail || !railToggle || !railPanel) return;
+            railPanel.hidden = !open;
+            railToggle.setAttribute('aria-expanded', String(open));
+            rail.classList.toggle('is-open', open);
+        };
+
+        railToggle?.addEventListener('click', () => {
+            setRailOpen(railPanel.hidden);
+        });
+
+        const railLinks = rail ? Array.from(rail.querySelectorAll('a[href^="#"]')) : [];
+        const headings = article ? Array.from(article.querySelectorAll('.article-content h2[id], .article-content h3[id], .article-content h4[id]')) : [];
+        const headingLinks = headings.map((heading) => ({
+            heading,
+            link: railLinks.find((candidate) => candidate.getAttribute('href') === `#${heading.id}`)
+        })).filter((item) => item.link);
+
+        const setActiveHeading = (headingId) => {
+            const active = headingLinks.find((item) => item.heading.id === headingId);
+            headingLinks.forEach(({ link }) => {
+                const isActive = link === active?.link;
+                link.classList.toggle('is-active', isActive);
+                if (isActive) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
+            });
+        };
+
+        if (headingLinks.length) {
+            const observer = new IntersectionObserver((entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                if (visible[0]) setActiveHeading(visible[0].target.id);
+            }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, 1] });
+            headingLinks.forEach(({ heading }) => observer.observe(heading));
+
+            const initialCandidates = headingLinks
+                .filter(({ heading }) => heading.getBoundingClientRect().top <= window.innerHeight * 0.22);
+            const initialHeading = initialCandidates[initialCandidates.length - 1] || headingLinks[0];
+            setActiveHeading(initialHeading.heading.id);
+        }
+
+        const updateRailProgress = () => {
+            if (!article || !railProgress) return;
+            const articleTop = window.scrollY + article.getBoundingClientRect().top;
+            const articleEnd = articleTop + article.offsetHeight - window.innerHeight;
+            const progress = articleEnd <= articleTop
+                ? 100
+                : Math.min(Math.max((window.scrollY - articleTop) / (articleEnd - articleTop) * 100, 0), 100);
+            railProgress.style.height = `${progress}%`;
+            railProgressLabel?.replaceChildren(document.createTextNode(`${Math.round(progress)}%`));
+            railProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
+        };
+
+        window.addEventListener('scroll', updateRailProgress, { passive: true });
+        window.addEventListener('resize', updateRailProgress);
+        updateRailProgress();
 
         tocToggle?.addEventListener('click', () => {
             if (!toc) return;
