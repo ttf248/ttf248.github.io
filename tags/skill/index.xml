@@ -85,9 +85,8 @@
     &lt;summary&gt;写作附记&lt;/summary&gt;
     &lt;div class=&#34;article-notes__content&#34;&gt;
         &lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
-&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;$blog-writer 本次的内容比较多，拆分成系列文章：去年就有很多稿子是通过大模型写的，那会是自己写个大纲或者问题清单，然后AI出稿子，复制内容到本地 md 文档，填写头信息，标签信息、发布文章；近期 codex 用了很多，发现 codex 里面的联网搜索能力很强，那我是不是能写个 skill，将这些事情自动化，此时诞生了 skill blog-writer 的第一稿，我还想着让 AI 学习我以前文章的风格，这就导致 blog-writer 运行的时候，很费 token，后续我针对 blog-writer 进行了多个版本的优化，拆分了 数据模块，数据生成的模块，原本数据生成的模块还是独立的 skill，写着写着，我就发现，更适合做成 Python 项目，此时就有了 blog-style-suite，然后我又发现，训练风格数据，也是比较费 token，我就想着用本地的大模型，对接了本地的大模型，我又想到了对比下本地大模型和在线版本的区别，又对接了 minimax；blog-style-suite 和 blog-writer 的演化历史可以分析的 git 提价记录。顺带基于本地 blog-writer、blog-style-suite 的代码，可以讲讲里面的设计思路，是如何做到了节约 token，数据结构是如何设计的，核心的设计思路。Token 富裕完全能生吃历史文章，预处理能节约很多 token
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
+&lt;/h3&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;$blog-writer 本次的内容比较多，拆分成系列文章：去年就有很多稿子是通过大模型写的，那会是自己写个大纲或者问题清单，然后AI出稿子，复制内容到本地 md 文档，填写头信息，标签信息、发布文章；近期 codex 用了很多，发现 codex 里面的联网搜索能力很强，那我是不是能写个 skill，将这些事情自动化，此时诞生了 skill blog-writer 的第一稿，我还想着让 AI 学习我以前文章的风格，这就导致 blog-writer 运行的时候，很费 token，后续我针对 blog-writer 进行了多个版本的优化，拆分了 数据模块，数据生成的模块，原本数据生成的模块还是独立的 skill，写着写着，我就发现，更适合做成 Python 项目，此时就有了 blog-style-suite，然后我又发现，训练风格数据，也是比较费 token，我就想着用本地的大模型，对接了本地的大模型，我又想到了对比下本地大模型和在线版本的区别，又对接了 minimax；blog-style-suite 和 blog-writer 的演化历史可以分析的 git 提价记录。顺带基于本地 blog-writer、blog-style-suite 的代码，可以讲讲里面的设计思路，是如何做到了节约 token，数据结构是如何设计的，核心的设计思路。Token 富裕完全能生吃历史文章，预处理能节约很多 token
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;写作思路摘要&#34;&gt;写作思路摘要
 &lt;/h3&gt;&lt;ul&gt;
 &lt;li&gt;第一篇先收在工作流触发点，不急着展开 token 和模型分工，避免三篇一起抢主线。&lt;/li&gt;
 &lt;li&gt;重点保留了“正文不难，麻烦的是发布前后那串机械动作”这个判断。&lt;/li&gt;
@@ -135,19 +134,17 @@
 &lt;/h2&gt;&lt;p&gt;这东西真没想象中那么重。&lt;/p&gt;
 &lt;p&gt;OpenAI 官方建议先用内置的 &lt;code&gt;$skill-creator&lt;/code&gt;，让它帮你把触发条件、范围、是否需要脚本这些骨架先搭出来。默认优先是 instruction-only，也就是先别急着上脚本，先把说明写清楚。&lt;/p&gt;
 &lt;p&gt;如果手工写，最小结构也很简单：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-text&#34;&gt;my-skill/
-├── SKILL.md
-├── scripts/
-├── references/
-└── assets/
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;其中真正必需的，只有 &lt;code&gt;SKILL.md&lt;/code&gt;。并且这个文件至少要有两项元数据：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-yaml&#34;&gt;---
-name: skill-name
-description: Explain exactly when this skill should and should not trigger.
----
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;真正要避免的，是把 Skill 写成“我希望模型更聪明”的愿望清单。它应该回答的是更具体的问题：哪类任务会反复出现，哪一步总跑偏，哪些资料只有在这类任务里才需要加载，哪些动作必须用脚本保证确定性。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-text&#34; data-lang=&#34;text&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;my-skill/
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;├── SKILL.md
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;├── scripts/
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;├── references/
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;└── assets/
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;其中真正必需的，只有 &lt;code&gt;SKILL.md&lt;/code&gt;。并且这个文件至少要有两项元数据：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-yaml&#34; data-lang=&#34;yaml&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nn&#34;&gt;---&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nt&#34;&gt;name&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;l&#34;&gt;skill-name&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nt&#34;&gt;description&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;:&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;l&#34;&gt;Explain exactly when this skill should and should not trigger.&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nn&#34;&gt;---&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;真正要避免的，是把 Skill 写成“我希望模型更聪明”的愿望清单。它应该回答的是更具体的问题：哪类任务会反复出现，哪一步总跑偏，哪些资料只有在这类任务里才需要加载，哪些动作必须用脚本保证确定性。&lt;/p&gt;
 &lt;h3 id=&#34;1-先找重复出现的偏差&#34;&gt;1. 先找“重复出现的偏差”
 &lt;/h3&gt;&lt;p&gt;不是所有任务都值得做成 &lt;code&gt;Skill&lt;/code&gt;。&lt;/p&gt;
 &lt;p&gt;如果你只是偶尔让 agent 干一次活，普通 prompt 就够了。真正适合抽成 &lt;code&gt;Skill&lt;/code&gt; 的，通常是这种情况：&lt;/p&gt;

@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-cn" dir="ltr">
+<html lang="zh-cn" dir="ltr" data-theme="editorial">
 <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
 <title>VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</title>
 
 <link rel='canonical' href='https://ttf248.life/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/'>
 
-<link rel="stylesheet" href="/scss/style.min.9dae17661104dfb3121bfb9f7010ca859c78216c25fdb6f48cd8abfb14911d8c.css"><meta property='og:title' content="VS Code 调 C++，CMake 和 GDB Printer 要一起配">
+<link rel="stylesheet" href="/scss/style.min.2bc35ba502ee8185222d09bbbc51f8e7bb66cbfa59deb3874f2f1145202c55f3.css"><meta property='og:title' content="VS Code 调 C++，CMake 和 GDB Printer 要一起配">
 <meta property='og:description' content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
 <meta property='og:url' content='https://ttf248.life/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/'>
 <meta property='og:site_name' content='向叔记事簿'>
@@ -158,55 +158,6 @@
         
     </nav>
 </div>
-
-<script>
-    (() => {
-        const toggle = document.querySelector('.site-header__menu-toggle');
-        const navigation = document.getElementById('mobile-navigation');
-        if (!toggle || !navigation) return;
-
-        const closeButtons = navigation.querySelectorAll('[data-mobile-menu-close]');
-        let lastFocusedElement = null;
-
-        const setOpen = (open) => {
-            if (open) {
-                lastFocusedElement = document.activeElement;
-            }
-            toggle.setAttribute('aria-expanded', String(open));
-            navigation.hidden = !open;
-            document.body.classList.toggle('mobile-menu-open', open);
-            if (open) {
-                navigation.querySelector('.mobile-navigation__close')?.focus();
-            } else if (lastFocusedElement) {
-                lastFocusedElement.focus();
-            }
-        };
-
-        toggle.addEventListener('click', () => setOpen(navigation.hidden));
-        closeButtons.forEach((button) => button.addEventListener('click', () => setOpen(false)));
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && !navigation.hidden) {
-                setOpen(false);
-            }
-
-            if (event.key === 'Tab' && !navigation.hidden) {
-                const focusable = Array.from(navigation.querySelectorAll('a, button, select'))
-                    .filter((element) => !element.disabled && element.offsetParent !== null);
-                if (!focusable.length) return;
-                const first = focusable[0];
-                const last = focusable[focusable.length - 1];
-                if (event.shiftKey && document.activeElement === first) {
-                    event.preventDefault();
-                    last.focus();
-                } else if (!event.shiftKey && document.activeElement === last) {
-                    event.preventDefault();
-                    first.focus();
-                }
-            }
-        });
-        navigation.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setOpen(false)));
-    })();
-</script>
 <main class="editorial-main" id="main-content">
     
 <div class="article-mobile-toolbar" aria-label="文章阅读工具">
@@ -256,120 +207,7 @@
 <article class="main-article has-lead">
     <header class="article-header">
 
-    
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
-
-<script>
-class CodeCopyManager {
-    constructor() {
-        this.addCopyButtons();
-    }
-
-    addCopyButtons() {
-        document.querySelectorAll('pre code').forEach((block) => {
-            
-            
-            if (window.hljs && !block.dataset.highlighted && !block.classList.contains('nohighlight')) {
-                window.hljs.highlightElement(block);
-            }
-            this.createCopyButton(block);
-        });
-    }
-
-    createCopyButton(codeBlock) {
-        const preElement = codeBlock.parentNode;
-        
-        
-        if (preElement.parentNode.classList.contains('code-container')) {
-            return;
-        }
-
-        const container = this.createContainer(preElement);
-        const button = this.createButton();
-        
-        container.appendChild(button);
-        
-        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
-    }
-
-    createContainer(preElement) {
-        const container = document.createElement('div');
-        container.classList.add('code-container');
-        
-        preElement.parentNode.insertBefore(container, preElement);
-        container.appendChild(preElement);
-        
-        return container;
-    }
-
-    createButton() {
-        const button = document.createElement('button');
-        button.classList.add('copy-btn');
-        button.innerText = '复制代码';
-        button.setAttribute('aria-label', '复制代码到剪贴板');
-        return button;
-    }
-
-    async handleCopy(button, codeBlock) {
-        try {
-            const code = codeBlock.innerText;
-            await navigator.clipboard.writeText(code);
-            this.showCopySuccess(button);
-        } catch (error) {
-            console.error('复制失败:', error);
-            this.showCopyError(button);
-        }
-    }
-
-    showCopySuccess(button) {
-        const originalText = button.innerText;
-        button.innerText = '已复制';
-        button.classList.add('copied');
-        
-        setTimeout(() => {
-            button.innerText = originalText;
-            button.classList.remove('copied');
-        }, 2000);
-    }
-
-    showCopyError(button) {
-        const originalText = button.innerText;
-        button.innerText = '复制失败';
-        
-        setTimeout(() => {
-            button.innerText = originalText;
-        }, 2000);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    new CodeCopyManager();
-
-    
-    const progressBar = document.getElementById('reading-progress');
-    const article = document.querySelector('.main-article');
-
-    if (progressBar && article) {
-        const updateProgress = () => {
-            const articleTop = article.offsetTop;
-            const articleHeight = article.offsetHeight;
-            const windowHeight = window.innerHeight;
-            const scrollY = window.scrollY;
-
-            const start = articleTop - windowHeight;
-            const end = articleTop + articleHeight - windowHeight;
-            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
-
-            progressBar.style.width = progress + '%';
-        };
-
-        window.addEventListener('scroll', updateProgress, { passive: true });
-        updateProgress();
-    }
-});
-</script>
-
-<div class="article-details"><div class="article-origin">
+    <div class="article-details"><div class="article-origin">
         <span class="content-source content-source--ai">AI 写作</span>
         
     </div>
@@ -518,31 +356,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     <h2 id="以前只配了一半">以前只配了一半
 </h2><p>很多教程里的 <code>.vscode/launch.json</code>，大概是这个意思：</p>
-<pre><code class="language-json">{
-  &quot;version&quot;: &quot;0.2.0&quot;,
-  &quot;configurations&quot;: [
-    {
-      &quot;name&quot;: &quot;Debug with GDB&quot;,
-      &quot;type&quot;: &quot;cppdbg&quot;,
-      &quot;request&quot;: &quot;launch&quot;,
-      &quot;program&quot;: &quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&quot;,
-      &quot;args&quot;: [],
-      &quot;stopAtEntry&quot;: false,
-      &quot;cwd&quot;: &quot;${workspaceFolder}&quot;,
-      &quot;MIMode&quot;: &quot;gdb&quot;,
-      &quot;miDebuggerPath&quot;: &quot;/usr/bin/gdb&quot;,
-      &quot;setupCommands&quot;: [
-        {
-          &quot;description&quot;: &quot;Enable pretty-printing for gdb&quot;,
-          &quot;text&quot;: &quot;-enable-pretty-printing&quot;,
-          &quot;ignoreFailures&quot;: true
-        }
-      ]
-    }
-  ]
-}
-</code></pre>
-<p>这段不能说错。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;0.2.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;configurations&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;Debug with GDB&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;cppdbg&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;request&#34;</span><span class="p">:</span> <span class="s2">&#34;launch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;program&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;stopAtEntry&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;cwd&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;MIMode&#34;</span><span class="p">:</span> <span class="s2">&#34;gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;miDebuggerPath&#34;</span><span class="p">:</span> <span class="s2">&#34;/usr/bin/gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;setupCommands&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这段不能说错。</p>
 <p>VS Code 官方的 C++ 示例里，也是类似这一套结构：<code>type</code> 用 <code>cppdbg</code>，<code>MIMode</code> 用 <code>gdb</code>，<code>setupCommands</code> 里打开 pretty-printing。</p>
 <p>但是少了一个关键动作。</p>
 <p>你点 F5 的时候，它会去启动 <code>program</code> 指向的那个可执行文件。问题是，这个文件是不是刚刚编出来的？</p>
@@ -552,108 +389,102 @@ document.addEventListener('DOMContentLoaded', () => {
 </h2><p>VS Code 的 Tasks，本质上就是把外部命令挂进编辑器。</p>
 <p>编译、测试、打包，原来要在终端敲，现在可以写到 <code>.vscode/tasks.json</code>。然后 <code>launch.json</code> 里的 <code>preLaunchTask</code>，再按 label 去找那一个 task。</p>
 <p>一个最小的 CMake 项目，可以这么放：</p>
-<pre><code class="language-text">.
-├── .vscode/
-│   ├── launch.json
-│   └── tasks.json
-├── CMakeLists.txt
-├── src/
-│   └── main.cpp
-└── tools/
-    └── gdb_printers.py
-</code></pre>
-<p><code>CMakeLists.txt</code> 先写到够用：</p>
-<pre><code class="language-cmake">cmake_minimum_required(VERSION 3.16)
-
-project(vscode_cpp_debug_demo LANGUAGES CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-add_executable(vscode_cpp_debug_demo
-    src/main.cpp
-)
-</code></pre>
-<p>然后是 <code>.vscode/tasks.json</code>：</p>
-<pre><code class="language-json">{
-  &quot;version&quot;: &quot;2.0.0&quot;,
-  &quot;tasks&quot;: [
-    {
-      &quot;label&quot;: &quot;cmake: configure debug&quot;,
-      &quot;type&quot;: &quot;process&quot;,
-      &quot;command&quot;: &quot;cmake&quot;,
-      &quot;args&quot;: [
-        &quot;-S&quot;, &quot;${workspaceFolder}&quot;,
-        &quot;-B&quot;, &quot;${workspaceFolder}/build/debug&quot;,
-        &quot;-DCMAKE_BUILD_TYPE=Debug&quot;
-      ],
-      &quot;problemMatcher&quot;: []
-    },
-    {
-      &quot;label&quot;: &quot;cmake: build debug&quot;,
-      &quot;type&quot;: &quot;process&quot;,
-      &quot;command&quot;: &quot;cmake&quot;,
-      &quot;args&quot;: [
-        &quot;--build&quot;, &quot;${workspaceFolder}/build/debug&quot;,
-        &quot;--parallel&quot;
-      ],
-      &quot;dependsOn&quot;: [&quot;cmake: configure debug&quot;],
-      &quot;group&quot;: {
-        &quot;kind&quot;: &quot;build&quot;,
-        &quot;isDefault&quot;: true
-      },
-      &quot;problemMatcher&quot;: [&quot;$gcc&quot;]
-    }
-  ]
-}
-</code></pre>
-<p>注意这里的 <code>cmake --build</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">.
+</span></span><span class="line"><span class="cl">├── .vscode/
+</span></span><span class="line"><span class="cl">│   ├── launch.json
+</span></span><span class="line"><span class="cl">│   └── tasks.json
+</span></span><span class="line"><span class="cl">├── CMakeLists.txt
+</span></span><span class="line"><span class="cl">├── src/
+</span></span><span class="line"><span class="cl">│   └── main.cpp
+</span></span><span class="line"><span class="cl">└── tools/
+</span></span><span class="line"><span class="cl">    └── gdb_printers.py
+</span></span></code></pre></div><p><code>CMakeLists.txt</code> 先写到够用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cmake" data-lang="cmake"><span class="line"><span class="cl"><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span> <span class="s">3.16</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">project</span><span class="p">(</span><span class="s">vscode_cpp_debug_demo</span> <span class="s">LANGUAGES</span> <span class="s">CXX</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_STANDARD</span> <span class="s">20</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_STANDARD_REQUIRED</span> <span class="s">ON</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_RUNTIME_OUTPUT_DIRECTORY</span> <span class="o">${</span><span class="nv">CMAKE_BINARY_DIR</span><span class="o">}</span><span class="s">/bin</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">add_executable</span><span class="p">(</span><span class="s">vscode_cpp_debug_demo</span>
+</span></span><span class="line"><span class="cl">    <span class="s">src/main.cpp</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span><span class="err">
+</span></span></span></code></pre></div><p>然后是 <code>.vscode/tasks.json</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;2.0.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;tasks&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;label&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: configure debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;process&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-S&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-B&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}/build/debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-DCMAKE_BUILD_TYPE=Debug&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;problemMatcher&#34;</span><span class="p">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;label&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: build debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;process&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;--build&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}/build/debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;--parallel&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;dependsOn&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;cmake: configure debug&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;group&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;kind&#34;</span><span class="p">:</span> <span class="s2">&#34;build&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;isDefault&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">      <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;problemMatcher&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;$gcc&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>注意这里的 <code>cmake --build</code>。</p>
 <p>CMake 官方给的构建入口就是这个形式：<code>cmake --build &lt;dir&gt;</code>。它会去调用背后的原生构建工具，比如 Make、Ninja、MSBuild 这一类。</p>
 <p>也就是说，VS Code 不需要知道你的项目到底该敲 <code>make</code> 还是 <code>ninja</code>。</p>
 <p>这件事交给 CMake。</p>
 <h2 id="f5-之前先编译">F5 之前，先编译
 </h2><p>然后回到 <code>.vscode/launch.json</code>，把 <code>preLaunchTask</code> 补进去：</p>
-<pre><code class="language-json">{
-  &quot;version&quot;: &quot;0.2.0&quot;,
-  &quot;configurations&quot;: [
-    {
-      &quot;name&quot;: &quot;CMake Debug with GDB&quot;,
-      &quot;type&quot;: &quot;cppdbg&quot;,
-      &quot;request&quot;: &quot;launch&quot;,
-      &quot;program&quot;: &quot;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&quot;,
-      &quot;args&quot;: [],
-      &quot;stopAtEntry&quot;: false,
-      &quot;cwd&quot;: &quot;${workspaceFolder}&quot;,
-      &quot;environment&quot;: [],
-      &quot;externalConsole&quot;: false,
-      &quot;MIMode&quot;: &quot;gdb&quot;,
-      &quot;miDebuggerPath&quot;: &quot;/usr/bin/gdb&quot;,
-      &quot;setupCommands&quot;: [
-        {
-          &quot;description&quot;: &quot;Enable pretty-printing for gdb&quot;,
-          &quot;text&quot;: &quot;-enable-pretty-printing&quot;,
-          &quot;ignoreFailures&quot;: true
-        }
-      ],
-      &quot;preLaunchTask&quot;: &quot;cmake: build debug&quot;
-    }
-  ]
-}
-</code></pre>
-<p>这一行才是重点：</p>
-<pre><code class="language-json">&quot;preLaunchTask&quot;: &quot;cmake: build debug&quot;
-</code></pre>
-<p>按 F5 的链路就变成了：</p>
-<pre><code class="language-text">launch.json
-  -&gt; preLaunchTask
-    -&gt; tasks.json: cmake: build debug
-      -&gt; dependsOn: cmake: configure debug
-        -&gt; cmake -S ... -B ...
-      -&gt; cmake --build ...
-  -&gt; gdb 启动最新的 program
-</code></pre>
-<p>如果是 Windows + MinGW，<code>program</code> 大概率要改成带 <code>.exe</code> 的路径，<code>miDebuggerPath</code> 也要指到自己的 <code>gdb.exe</code>。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;0.2.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;configurations&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;CMake Debug with GDB&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;cppdbg&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;request&#34;</span><span class="p">:</span> <span class="s2">&#34;launch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;program&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;stopAtEntry&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;cwd&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;environment&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;externalConsole&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;MIMode&#34;</span><span class="p">:</span> <span class="s2">&#34;gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;miDebuggerPath&#34;</span><span class="p">:</span> <span class="s2">&#34;/usr/bin/gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;setupCommands&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;preLaunchTask&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: build debug&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这一行才是重点：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;preLaunchTask&#34;</span><span class="err">:</span> <span class="s2">&#34;cmake: build debug&#34;</span>
+</span></span></code></pre></div><p>按 F5 的链路就变成了：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">launch.json
+</span></span><span class="line"><span class="cl">  -&gt; preLaunchTask
+</span></span><span class="line"><span class="cl">    -&gt; tasks.json: cmake: build debug
+</span></span><span class="line"><span class="cl">      -&gt; dependsOn: cmake: configure debug
+</span></span><span class="line"><span class="cl">        -&gt; cmake -S ... -B ...
+</span></span><span class="line"><span class="cl">      -&gt; cmake --build ...
+</span></span><span class="line"><span class="cl">  -&gt; gdb 启动最新的 program
+</span></span></code></pre></div><p>如果是 Windows + MinGW，<code>program</code> 大概率要改成带 <code>.exe</code> 的路径，<code>miDebuggerPath</code> 也要指到自己的 <code>gdb.exe</code>。</p>
 <p>如果是 Visual Studio Generator 那种多配置生成器，构建参数通常还要加 <code>--config Debug</code>。</p>
 <p>但是主线不变。</p>
 <p>调试前让 VS Code 先跑一次构建任务，别靠自己脑子记。</p>
@@ -662,121 +493,115 @@ add_executable(vscode_cpp_debug_demo
 <p>C++ 代码里稍微封装一点业务类型，VS Code 左边那个变量窗口就开始变得难看。</p>
 <p>比如下面这个例子。</p>
 <p><code>src/main.cpp</code>：</p>
-<pre><code class="language-cpp">#include &lt;cstdint&gt;
-#include &lt;cstdio&gt;
-#include &lt;string_view&gt;
-#include &lt;vector&gt;
-
-namespace market {
-
-struct Price {
-    std::int64_t raw{};
-
-    static Price from_double(double value) {
-        return Price{static_cast&lt;std::int64_t&gt;(value * 10000)};
-    }
-
-    double to_double() const {
-        return static_cast&lt;double&gt;(raw) / 10000.0;
-    }
-};
-
-struct Instrument {
-    char symbol[16]{};
-    Price last;
-};
-
-Instrument make_instrument(std::string_view symbol, double price) {
-    Instrument instrument;
-    std::snprintf(instrument.symbol, sizeof(instrument.symbol), &quot;%s&quot;, symbol.data());
-    instrument.last = Price::from_double(price);
-    return instrument;
-}
-
-} // namespace market
-
-int main() {
-    std::vector&lt;market::Instrument&gt; watchlist{
-        market::make_instrument(&quot;IF2406&quot;, 3578.6),
-        market::make_instrument(&quot;IH2406&quot;, 2468.2),
-    };
-
-    market::Price limit = market::Price::from_double(3600.5);
-
-    // 在这里打断点，观察 watchlist 和 limit。
-    return watchlist.empty() || limit.raw == 0;
-}
-</code></pre>
-<p><code>market::Price</code> 在业务里是价格。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdint&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdio&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string_view&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;vector&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">market</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span> <span class="n">raw</span><span class="p">{};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">Price</span> <span class="nf">from_double</span><span class="p">(</span><span class="kt">double</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">Price</span><span class="p">{</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">value</span> <span class="o">*</span> <span class="mi">10000</span><span class="p">)};</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="nf">to_double</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">/</span> <span class="mf">10000.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Instrument</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">symbol</span><span class="p">[</span><span class="mi">16</span><span class="p">]{};</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Price</span> <span class="n">last</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Instrument</span> <span class="nf">make_instrument</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span> <span class="n">symbol</span><span class="p">,</span> <span class="kt">double</span> <span class="n">price</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Instrument</span> <span class="n">instrument</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">snprintf</span><span class="p">(</span><span class="n">instrument</span><span class="p">.</span><span class="n">symbol</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">instrument</span><span class="p">.</span><span class="n">symbol</span><span class="p">),</span> <span class="s">&#34;%s&#34;</span><span class="p">,</span> <span class="n">symbol</span><span class="p">.</span><span class="n">data</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">    <span class="n">instrument</span><span class="p">.</span><span class="n">last</span> <span class="o">=</span> <span class="n">Price</span><span class="o">::</span><span class="n">from_double</span><span class="p">(</span><span class="n">price</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">instrument</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="c1">// namespace market
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">market</span><span class="o">::</span><span class="n">Instrument</span><span class="o">&gt;</span> <span class="n">watchlist</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">market</span><span class="o">::</span><span class="n">make_instrument</span><span class="p">(</span><span class="s">&#34;IF2406&#34;</span><span class="p">,</span> <span class="mf">3578.6</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="n">market</span><span class="o">::</span><span class="n">make_instrument</span><span class="p">(</span><span class="s">&#34;IH2406&#34;</span><span class="p">,</span> <span class="mf">2468.2</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">market</span><span class="o">::</span><span class="n">Price</span> <span class="n">limit</span> <span class="o">=</span> <span class="n">market</span><span class="o">::</span><span class="n">Price</span><span class="o">::</span><span class="n">from_double</span><span class="p">(</span><span class="mf">3600.5</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 在这里打断点，观察 watchlist 和 limit。
+</span></span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">watchlist</span><span class="p">.</span><span class="n">empty</span><span class="p">()</span> <span class="o">||</span> <span class="n">limit</span><span class="p">.</span><span class="n">raw</span> <span class="o">==</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>market::Price</code> 在业务里是价格。</p>
 <p>但是调试器默认看到的可能只有：</p>
-<pre><code class="language-text">limit = {raw = 36005000}
-</code></pre>
-<p>没错，数据是对的。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">limit = {raw = 36005000}
+</span></span></code></pre></div><p>没错，数据是对的。</p>
 <p>但是我脑子里还要自己把 <code>36005000</code> 换算成 <code>3600.5000</code>。如果项目里有一堆 <code>Price</code>、<code>Quantity</code>、<code>OrderId</code>、<code>Instrument</code>、<code>AlgoState</code>，调试窗口很快就变成结构体坟场。</p>
 <p>这个时候就该上 GDB pretty-printer 了。</p>
 <p>GDB 官方手册说得很直接：它提供了一套机制，可以用 Python 代码 pretty-print 值，而且这个机制同时适用于 MI 和命令行。</p>
 <p>VS Code 的 C++ 调试刚好走的就是 GDB/MI 这条路。</p>
 <h2 id="给业务类型写一个-python-展示层">给业务类型写一个 Python 展示层
 </h2><p>新建 <code>tools/gdb_printers.py</code>：</p>
-<pre><code class="language-python">import gdb
-import gdb.printing
-
-
-class PricePrinter:
-    def __init__(self, val):
-        self.val = val
-
-    def to_string(self):
-        raw = int(self.val[&quot;raw&quot;])
-        return f&quot;{raw / 10000.0:.4f}&quot;
-
-
-class InstrumentPrinter:
-    def __init__(self, val):
-        self.val = val
-
-    def to_string(self):
-        symbol = self.val[&quot;symbol&quot;].string()
-        price_raw = int(self.val[&quot;last&quot;][&quot;raw&quot;])
-        price = price_raw / 10000.0
-        return f&quot;{symbol} last={price:.4f}&quot;
-
-
-def build_pretty_printer():
-    printer = gdb.printing.RegexpCollectionPrettyPrinter(&quot;market&quot;)
-    printer.add_printer(&quot;Price&quot;, &quot;^market::Price$&quot;, PricePrinter)
-    printer.add_printer(&quot;Instrument&quot;, &quot;^market::Instrument$&quot;, InstrumentPrinter)
-    return printer
-
-
-gdb.printing.register_pretty_printer(
-    gdb.current_objfile(),
-    build_pretty_printer(),
-    replace=True,
-)
-</code></pre>
-<p>然后在 <code>launch.json</code> 的 <code>setupCommands</code> 里把它 source 进去：</p>
-<pre><code class="language-json">&quot;setupCommands&quot;: [
-  {
-    &quot;description&quot;: &quot;Enable pretty-printing for gdb&quot;,
-    &quot;text&quot;: &quot;-enable-pretty-printing&quot;,
-    &quot;ignoreFailures&quot;: true
-  },
-  {
-    &quot;description&quot;: &quot;Load project pretty-printers&quot;,
-    &quot;text&quot;: &quot;-interpreter-exec console \&quot;source ${workspaceFolder}/tools/gdb_printers.py\&quot;&quot;,
-    &quot;ignoreFailures&quot;: false
-  }
-]
-</code></pre>
-<p>重新 F5。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">gdb</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">gdb.printing</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">PricePrinter</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">val</span> <span class="o">=</span> <span class="n">val</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">raw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;raw&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">raw</span> <span class="o">/</span> <span class="mf">10000.0</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">InstrumentPrinter</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">val</span> <span class="o">=</span> <span class="n">val</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">symbol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;symbol&#34;</span><span class="p">]</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">price_raw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;last&#34;</span><span class="p">][</span><span class="s2">&#34;raw&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">        <span class="n">price</span> <span class="o">=</span> <span class="n">price_raw</span> <span class="o">/</span> <span class="mf">10000.0</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">symbol</span><span class="si">}</span><span class="s2"> last=</span><span class="si">{</span><span class="n">price</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">build_pretty_printer</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span> <span class="o">=</span> <span class="n">gdb</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">RegexpCollectionPrettyPrinter</span><span class="p">(</span><span class="s2">&#34;market&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span><span class="o">.</span><span class="n">add_printer</span><span class="p">(</span><span class="s2">&#34;Price&#34;</span><span class="p">,</span> <span class="s2">&#34;^market::Price$&#34;</span><span class="p">,</span> <span class="n">PricePrinter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span><span class="o">.</span><span class="n">add_printer</span><span class="p">(</span><span class="s2">&#34;Instrument&#34;</span><span class="p">,</span> <span class="s2">&#34;^market::Instrument$&#34;</span><span class="p">,</span> <span class="n">InstrumentPrinter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">printer</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">gdb</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">register_pretty_printer</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">gdb</span><span class="o">.</span><span class="n">current_objfile</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="n">build_pretty_printer</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="n">replace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>然后在 <code>launch.json</code> 的 <code>setupCommands</code> 里把它 source 进去：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;setupCommands&#34;</span><span class="err">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Load project pretty-printers&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-interpreter-exec console \&#34;source ${workspaceFolder}/tools/gdb_printers.py\&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>重新 F5。</p>
 <p>这时候再看调试窗口，<code>Price</code> 的展示就应该接近：</p>
-<pre><code class="language-text">limit = 3600.5000
-</code></pre>
-<p><code>Instrument</code> 也会从一坨数组、结构体，变成更接近业务的：</p>
-<pre><code class="language-text">IF2406 last=3578.6000
-</code></pre>
-<p>这里我故意说“接近”，因为 pretty-printer 要和编译器、类型名字、真实字段布局匹配。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">limit = 3600.5000
+</span></span></code></pre></div><p><code>Instrument</code> 也会从一坨数组、结构体，变成更接近业务的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">IF2406 last=3578.6000
+</span></span></code></pre></div><p>这里我故意说“接近”，因为 pretty-printer 要和编译器、类型名字、真实字段布局匹配。</p>
 <p>如果你的业务类型里面又套了 <code>std::vector</code>、<code>std::array</code>、智能指针，Python 脚本里访问的字段可能还要继续调。不要指望一个脚本通吃所有项目。</p>
 <p>但是思路是稳的。</p>
 <p>把“调试时人想看的样子”，单独写成一层 Python 展示逻辑。</p>
@@ -920,126 +745,7 @@ gdb.printing.register_pretty_printer(
     
 
     
-</article>
-
-<script>
-    (() => {
-        const toolbar = document.querySelector('.article-mobile-toolbar');
-        const toc = document.getElementById('article-toc');
-        const tocToggle = toolbar?.querySelector('[data-article-toc-toggle]');
-        const settings = document.getElementById('article-reading-settings');
-        const settingsToggle = toolbar?.querySelector('[data-reading-settings-toggle]');
-        const sizeButtons = toolbar ? Array.from(toolbar.querySelectorAll('[data-reading-size]')) : [];
-        const rail = document.querySelector('[data-article-toc-rail]');
-        const railToggle = rail?.querySelector('[data-article-toc-rail-toggle]');
-        const railPanel = rail?.querySelector('[data-article-toc-rail-panel]');
-        const railProgress = rail?.querySelector('[data-article-toc-progress]');
-        const railProgressLabel = rail?.querySelector('[data-article-toc-progress-label]');
-        const article = document.querySelector('.main-article');
-        if (!toolbar && !rail) return;
-        const storageKey = 'mobile-reading-font-size';
-
-        const setRailOpen = (open) => {
-            if (!rail || !railToggle || !railPanel) return;
-            railPanel.hidden = !open;
-            railToggle.setAttribute('aria-expanded', String(open));
-            rail.classList.toggle('is-open', open);
-        };
-
-        railToggle?.addEventListener('click', () => {
-            setRailOpen(railPanel.hidden);
-        });
-
-        const railLinks = rail ? Array.from(rail.querySelectorAll('a[href^="#"]')) : [];
-        const headings = article ? Array.from(article.querySelectorAll('.article-content h2[id], .article-content h3[id], .article-content h4[id]')) : [];
-        const headingLinks = headings.map((heading) => ({
-            heading,
-            link: railLinks.find((candidate) => candidate.getAttribute('href') === `#${heading.id}`)
-        })).filter((item) => item.link);
-
-        const setActiveHeading = (headingId) => {
-            const active = headingLinks.find((item) => item.heading.id === headingId);
-            headingLinks.forEach(({ link }) => {
-                const isActive = link === active?.link;
-                link.classList.toggle('is-active', isActive);
-                if (isActive) link.setAttribute('aria-current', 'location');
-                else link.removeAttribute('aria-current');
-            });
-        };
-
-        if (headingLinks.length) {
-            const observer = new IntersectionObserver((entries) => {
-                const visible = entries
-                    .filter((entry) => entry.isIntersecting)
-                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-                if (visible[0]) setActiveHeading(visible[0].target.id);
-            }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, 1] });
-            headingLinks.forEach(({ heading }) => observer.observe(heading));
-
-            const initialCandidates = headingLinks
-                .filter(({ heading }) => heading.getBoundingClientRect().top <= window.innerHeight * 0.22);
-            const initialHeading = initialCandidates[initialCandidates.length - 1] || headingLinks[0];
-            setActiveHeading(initialHeading.heading.id);
-        }
-
-        const updateRailProgress = () => {
-            if (!article || !railProgress) return;
-            const articleTop = window.scrollY + article.getBoundingClientRect().top;
-            const articleEnd = articleTop + article.offsetHeight - window.innerHeight;
-            const progress = articleEnd <= articleTop
-                ? 100
-                : Math.min(Math.max((window.scrollY - articleTop) / (articleEnd - articleTop) * 100, 0), 100);
-            railProgress.style.height = `${progress}%`;
-            railProgressLabel?.replaceChildren(document.createTextNode(`${Math.round(progress)}%`));
-            railProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
-        };
-
-        window.addEventListener('scroll', updateRailProgress, { passive: true });
-        window.addEventListener('resize', updateRailProgress);
-        updateRailProgress();
-
-        tocToggle?.addEventListener('click', () => {
-            if (!toc) return;
-            toc.open = !toc.open;
-            tocToggle.setAttribute('aria-expanded', String(toc.open));
-            if (toc.open) toc.scrollIntoView({ block: 'nearest' });
-        });
-
-        settingsToggle?.addEventListener('click', () => {
-            const open = settings.hidden;
-            settings.hidden = !open;
-            settingsToggle.setAttribute('aria-expanded', String(open));
-        });
-
-        const applyReadingSize = (size) => {
-            const validSize = ['small', 'default', 'large'].includes(size) ? size : 'default';
-            document.documentElement.dataset.mobileReadingSize = validSize;
-            sizeButtons.forEach((button) => {
-                button.setAttribute('aria-pressed', String(button.dataset.readingSize === validSize));
-            });
-        };
-
-        let savedSize = 'default';
-        try {
-            savedSize = localStorage.getItem(storageKey) || 'default';
-        } catch (error) {
-            savedSize = 'default';
-        }
-        applyReadingSize(savedSize);
-
-        sizeButtons.forEach((button) => {
-            button.addEventListener('click', () => {
-                const size = button.dataset.readingSize;
-                applyReadingSize(size);
-                try {
-                    localStorage.setItem(storageKey, size);
-                } catch (error) {
-                    
-                }
-            });
-        });
-    })();
-</script>
+</article><script src="/ts/article-tools.e2a3fd23d22acc7fe6c3f7f29a5c7c8745762b517d418acafef21c8006093a9f.js" integrity="sha256-4qP9I9IqzH/mw/fymlx8h0V2K1F9QYrK/vIcgAYJOp8=" defer></script>
 
 
     
@@ -1252,37 +958,6 @@ gdb.printing.register_pretty_printer(
         <path d="m5 14 7-7 7 7" />
     </svg>
 </button>
-
-<script>
-(() => {
-    const button = document.querySelector('[data-back-to-top]');
-    if (!button) return;
-
-    const visibilityThreshold = 320;
-    let ticking = false;
-
-    const updateVisibility = () => {
-        button.hidden = window.scrollY < visibilityThreshold;
-        ticking = false;
-    };
-
-    window.addEventListener('scroll', () => {
-        if (!ticking) {
-            window.requestAnimationFrame(updateVisibility);
-            ticking = true;
-        }
-    }, { passive: true });
-
-    button.addEventListener('click', () => {
-        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-            ? 'auto'
-            : 'smooth';
-        window.scrollTo({ top: 0, behavior });
-    });
-
-    updateVisibility();
-})();
-</script>
 <script
                 src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
                 integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
@@ -1300,5 +975,6 @@ gdb.printing.register_pretty_printer(
         document.head.appendChild(customFont);
     }());
 </script>
+<script src="/ts/site-shell.b0c7d091a4dd3194be4e347bfc2179a52cf3ca25830fbbcac798ce7b793123ed.js" integrity="sha256-sMfQkaTdMZS&#43;TjR7/CF5pSzzyiWDD7vKx5jOe3kxI&#43;0=" defer></script>
 </body>
 </html>

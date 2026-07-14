@@ -129,7 +129,7 @@ Keepalived通过VRRP协议在多台服务器之间共享一个虚拟IP地址。�
 &lt;/ul&gt;
 &lt;h2 id=&#34;架构设计&#34;&gt;架构设计
 &lt;/h2&gt;&lt;h3 id=&#34;整体架构&#34;&gt;整体架构
-&lt;/h3&gt;&lt;pre&gt;&lt;code&gt;                    ┌─────────────────┐
+&lt;/h3&gt;&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;                    ┌─────────────────┐
                     │   Client        │
                     └─────────┬───────┘
                               │
@@ -154,8 +154,7 @@ Keepalived通过VRRP协议在多台服务器之间共享一个虚拟IP地址。�
 │  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
 │   Backend     │ │   Backend   │ │   Backend     │
 └───────────────┘ └─────────────┘ └───────────────┘
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;组件说明&#34;&gt;组件说明
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;组件说明&#34;&gt;组件说明
 &lt;/h3&gt;&lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;虚拟IP (VIP)&lt;/strong&gt;：客户端访问的统一入口&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;HAProxy主备节点&lt;/strong&gt;：提供负载均衡服务，通过Keepalived实现高可用&lt;/li&gt;
@@ -213,206 +212,199 @@ Keepalived通过VRRP协议在多台服务器之间共享一个虚拟IP地址。�
 &lt;/table&gt;
 &lt;h3 id=&#34;软件安装&#34;&gt;软件安装
 &lt;/h3&gt;&lt;p&gt;在HAProxy主备节点上安装必要软件：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# CentOS/RHEL
-yum install -y haproxy keepalived
-
-# Ubuntu/Debian
-apt-get update
-apt-get install -y haproxy keepalived
-
-# 启用服务开机自启
-systemctl enable haproxy keepalived
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id=&#34;keepalived-配置&#34;&gt;Keepalived 配置
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# CentOS/RHEL&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;yum install -y haproxy keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# Ubuntu/Debian&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;apt-get update
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;apt-get install -y haproxy keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 启用服务开机自启&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;systemctl &lt;span class=&#34;nb&#34;&gt;enable&lt;/span&gt; haproxy keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;keepalived-配置&#34;&gt;Keepalived 配置
 &lt;/h2&gt;&lt;h3 id=&#34;主节点配置-lb-master&#34;&gt;主节点配置 (lb-master)
 &lt;/h3&gt;&lt;p&gt;创建配置文件 &lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt;：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! Configuration File for keepalived
-
-global_defs {
-    router_id LB_MASTER
-    script_user root
-    enable_script_security
-}
-
-# 检查HAProxy服务状态的脚本
-vrrp_script chk_haproxy {
-    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
-    interval 2
-    weight -2
-    fall 3
-    rise 2
-}
-
-vrrp_instance VI_1 {
-    state MASTER
-    interface eth0
-    virtual_router_id 51
-    priority 100
-    advert_int 1
-    authentication {
-        auth_type PASS
-        auth_pass mypassword123
-    }
-    
-    virtual_ipaddress {
-        192.168.1.100/24
-    }
-    
-    track_script {
-        chk_haproxy
-    }
-    
-    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
-    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
-    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;备节点配置-lb-backup&#34;&gt;备节点配置 (lb-backup)
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;! Configuration File &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;global_defs &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    router_id LB_MASTER
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    script_user root
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    enable_script_security
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 检查HAProxy服务状态的脚本&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;vrrp_script chk_haproxy &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    script &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/check_haproxy.sh&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    interval &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    weight -2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    fall &lt;span class=&#34;m&#34;&gt;3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    rise &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;vrrp_instance VI_1 &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    state MASTER
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    interface eth0
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    virtual_router_id &lt;span class=&#34;m&#34;&gt;51&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    priority &lt;span class=&#34;m&#34;&gt;100&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    advert_int &lt;span class=&#34;m&#34;&gt;1&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    authentication &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        auth_type PASS
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        auth_pass mypassword123
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    virtual_ipaddress &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        192.168.1.100/24
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    track_script &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        chk_haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    notify_master &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/notify.sh master&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    notify_backup &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/notify.sh backup&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    notify_fault &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/notify.sh fault&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;备节点配置-lb-backup&#34;&gt;备节点配置 (lb-backup)
 &lt;/h3&gt;&lt;p&gt;创建配置文件 &lt;code&gt;/etc/keepalived/keepalived.conf&lt;/code&gt;：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;! Configuration File for keepalived
-
-global_defs {
-    router_id LB_BACKUP
-    script_user root
-    enable_script_security
-}
-
-vrrp_script chk_haproxy {
-    script &amp;quot;/etc/keepalived/check_haproxy.sh&amp;quot;
-    interval 2
-    weight -2
-    fall 3
-    rise 2
-}
-
-vrrp_instance VI_1 {
-    state BACKUP
-    interface eth0
-    virtual_router_id 51
-    priority 90
-    advert_int 1
-    authentication {
-        auth_type PASS
-        auth_pass mypassword123
-    }
-    
-    virtual_ipaddress {
-        192.168.1.100/24
-    }
-    
-    track_script {
-        chk_haproxy
-    }
-    
-    notify_master &amp;quot;/etc/keepalived/notify.sh master&amp;quot;
-    notify_backup &amp;quot;/etc/keepalived/notify.sh backup&amp;quot;
-    notify_fault &amp;quot;/etc/keepalived/notify.sh fault&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;健康检查脚本&#34;&gt;健康检查脚本
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;! Configuration File &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;global_defs &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    router_id LB_BACKUP
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    script_user root
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    enable_script_security
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;vrrp_script chk_haproxy &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    script &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/check_haproxy.sh&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    interval &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    weight -2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    fall &lt;span class=&#34;m&#34;&gt;3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    rise &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;vrrp_instance VI_1 &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    state BACKUP
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    interface eth0
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    virtual_router_id &lt;span class=&#34;m&#34;&gt;51&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    priority &lt;span class=&#34;m&#34;&gt;90&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    advert_int &lt;span class=&#34;m&#34;&gt;1&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    authentication &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        auth_type PASS
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        auth_pass mypassword123
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    virtual_ipaddress &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        192.168.1.100/24
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    track_script &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        chk_haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    notify_master &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/notify.sh master&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    notify_backup &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/notify.sh backup&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    notify_fault &lt;span class=&#34;s2&#34;&gt;&amp;#34;/etc/keepalived/notify.sh fault&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;健康检查脚本&#34;&gt;健康检查脚本
 &lt;/h3&gt;&lt;p&gt;创建HAProxy健康检查脚本 &lt;code&gt;/etc/keepalived/check_haproxy.sh&lt;/code&gt;：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
-
-# 检查HAProxy进程是否运行
-if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
-    # 尝试启动HAProxy
-    systemctl start haproxy
-    sleep 2
-    
-    # 再次检查，如果还是没有运行则退出
-    if [ $(ps -C haproxy --no-header | wc -l) -eq 0 ]; then
-        exit 1
-    fi
-fi
-
-# 检查HAProxy端口是否监听
-if ! netstat -tuln | grep -q &amp;quot;:80 &amp;quot;; then
-    exit 1
-fi
-
-exit 0
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;状态通知脚本&#34;&gt;状态通知脚本
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cp&#34;&gt;#!/bin/bash
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 检查HAProxy进程是否运行&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;$(&lt;/span&gt;ps -C haproxy --no-header &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; wc -l&lt;span class=&#34;k&#34;&gt;)&lt;/span&gt; -eq &lt;span class=&#34;m&#34;&gt;0&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;then&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;c1&#34;&gt;# 尝试启动HAProxy&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    systemctl start haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    sleep &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;c1&#34;&gt;# 再次检查，如果还是没有运行则退出&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;$(&lt;/span&gt;ps -C haproxy --no-header &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; wc -l&lt;span class=&#34;k&#34;&gt;)&lt;/span&gt; -eq &lt;span class=&#34;m&#34;&gt;0&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;then&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;nb&#34;&gt;exit&lt;/span&gt; &lt;span class=&#34;m&#34;&gt;1&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;fi&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;fi&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 检查HAProxy端口是否监听&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; ! netstat -tuln &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; grep -q &lt;span class=&#34;s2&#34;&gt;&amp;#34;:80 &amp;#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;then&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;nb&#34;&gt;exit&lt;/span&gt; &lt;span class=&#34;m&#34;&gt;1&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;fi&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;exit&lt;/span&gt; &lt;span class=&#34;m&#34;&gt;0&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;状态通知脚本&#34;&gt;状态通知脚本
 &lt;/h3&gt;&lt;p&gt;创建状态通知脚本 &lt;code&gt;/etc/keepalived/notify.sh&lt;/code&gt;：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;#!/bin/bash
-
-TYPE=$1
-NAME=$2
-STATE=$3
-
-case $STATE in
-    &amp;quot;MASTER&amp;quot;)
-        echo &amp;quot;$(date): Became MASTER&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
-        ;;
-    &amp;quot;BACKUP&amp;quot;)
-        echo &amp;quot;$(date): Became BACKUP&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
-        ;;
-    &amp;quot;FAULT&amp;quot;)
-        echo &amp;quot;$(date): Fault detected&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
-        ;;
-    *)
-        echo &amp;quot;$(date): Unknown state: $STATE&amp;quot; &amp;gt;&amp;gt; /var/log/keepalived-state.log
-        ;;
-esac
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;设置脚本执行权限：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;chmod +x /etc/keepalived/check_haproxy.sh
-chmod +x /etc/keepalived/notify.sh
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id=&#34;haproxy-配置&#34;&gt;HAProxy 配置
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;cp&#34;&gt;#!/bin/bash
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nv&#34;&gt;TYPE&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$1&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nv&#34;&gt;NAME&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nv&#34;&gt;STATE&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;case&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$STATE&lt;/span&gt; in
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;s2&#34;&gt;&amp;#34;MASTER&amp;#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;$(&lt;/span&gt;date&lt;span class=&#34;k&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;: Became MASTER&amp;#34;&lt;/span&gt; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;p&#34;&gt;;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;s2&#34;&gt;&amp;#34;BACKUP&amp;#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;$(&lt;/span&gt;date&lt;span class=&#34;k&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;: Became BACKUP&amp;#34;&lt;/span&gt; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;p&#34;&gt;;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;s2&#34;&gt;&amp;#34;FAULT&amp;#34;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;$(&lt;/span&gt;date&lt;span class=&#34;k&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;: Fault detected&amp;#34;&lt;/span&gt; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;p&#34;&gt;;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    *&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;$(&lt;/span&gt;date&lt;span class=&#34;k&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;: Unknown state: &lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$STATE&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;&lt;/span&gt; &amp;gt;&amp;gt; /var/log/keepalived-state.log
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;p&#34;&gt;;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;esac&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;设置脚本执行权限：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;chmod +x /etc/keepalived/check_haproxy.sh
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;chmod +x /etc/keepalived/notify.sh
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;haproxy-配置&#34;&gt;HAProxy 配置
 &lt;/h2&gt;&lt;h3 id=&#34;主配置文件&#34;&gt;主配置文件
 &lt;/h3&gt;&lt;p&gt;在主备节点上创建相同的HAProxy配置文件 &lt;code&gt;/etc/haproxy/haproxy.cfg&lt;/code&gt;：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;global
-    log 127.0.0.1:514 local0
-    chroot /var/lib/haproxy
-    stats socket /run/haproxy/admin.sock mode 660 level admin
-    stats timeout 30s
-    user haproxy
-    group haproxy
-    daemon
-
-defaults
-    mode http
-    log global
-    option httplog
-    option dontlognull
-    option log-health-checks
-    option forwardfor except 127.0.0.0/8
-    option redispatch
-    retries 3
-    timeout http-request 10s
-    timeout queue 1m
-    timeout connect 10s
-    timeout client 1m
-    timeout server 1m
-    timeout http-keep-alive 10s
-    timeout check 10s
-    maxconn 3000
-
-# 统计页面配置
-listen stats
-    bind *:8080
-    stats enable
-    stats uri /stats
-    stats realm HAProxy\ Statistics
-    stats auth admin:password123
-    stats refresh 30s
-
-# 前端配置
-frontend web_frontend
-    bind *:80
-    default_backend web_servers
-
-# 后端服务器配置
-backend web_servers
-    balance roundrobin
-    option httpchk GET /health
-    
-    server web1 192.168.1.20:80 check inter 2000 rise 2 fall 3
-    server web2 192.168.1.21:80 check inter 2000 rise 2 fall 3
-    server web3 192.168.1.22:80 check inter 2000 rise 2 fall 3
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;配置说明&#34;&gt;配置说明
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;global
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    log 127.0.0.1:514 local0
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    chroot /var/lib/haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    stats socket /run/haproxy/admin.sock mode &lt;span class=&#34;m&#34;&gt;660&lt;/span&gt; level admin
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    stats timeout 30s
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    user haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    group haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    daemon
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;defaults
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    mode http
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    log global
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    option httplog
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    option dontlognull
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    option log-health-checks
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    option forwardfor except 127.0.0.0/8
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    option redispatch
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    retries &lt;span class=&#34;m&#34;&gt;3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    timeout http-request 10s
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    timeout queue 1m
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    timeout connect 10s
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    timeout client 1m
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    timeout server 1m
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    timeout http-keep-alive 10s
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    timeout check 10s
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    maxconn &lt;span class=&#34;m&#34;&gt;3000&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 统计页面配置&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;listen stats
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;nb&#34;&gt;bind&lt;/span&gt; *:8080
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    stats &lt;span class=&#34;nb&#34;&gt;enable&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    stats uri /stats
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    stats realm HAProxy&lt;span class=&#34;se&#34;&gt;\ &lt;/span&gt;Statistics
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    stats auth admin:password123
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    stats refresh 30s
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 前端配置&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;frontend web_frontend
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;nb&#34;&gt;bind&lt;/span&gt; *:80
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    default_backend web_servers
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 后端服务器配置&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;backend web_servers
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    balance roundrobin
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    option httpchk GET /health
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    server web1 192.168.1.20:80 check inter &lt;span class=&#34;m&#34;&gt;2000&lt;/span&gt; rise &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt; fall &lt;span class=&#34;m&#34;&gt;3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    server web2 192.168.1.21:80 check inter &lt;span class=&#34;m&#34;&gt;2000&lt;/span&gt; rise &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt; fall &lt;span class=&#34;m&#34;&gt;3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    server web3 192.168.1.22:80 check inter &lt;span class=&#34;m&#34;&gt;2000&lt;/span&gt; rise &lt;span class=&#34;m&#34;&gt;2&lt;/span&gt; fall &lt;span class=&#34;m&#34;&gt;3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;配置说明&#34;&gt;配置说明
 &lt;/h3&gt;&lt;p&gt;&lt;strong&gt;全局配置：&lt;/strong&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;code&gt;log&lt;/code&gt;：日志配置&lt;/li&gt;
@@ -437,66 +429,59 @@ backend web_servers
 &lt;h2 id=&#34;服务启动与测试&#34;&gt;服务启动与测试
 &lt;/h2&gt;&lt;h3 id=&#34;启动服务&#34;&gt;启动服务
 &lt;/h3&gt;&lt;p&gt;在主备节点上启动服务：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 启动HAProxy
-systemctl start haproxy
-systemctl status haproxy
-
-# 启动Keepalived
-systemctl start keepalived
-systemctl status keepalived
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;验证vip绑定&#34;&gt;验证VIP绑定
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 启动HAProxy&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;systemctl start haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;systemctl status haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 启动Keepalived&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;systemctl start keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;systemctl status keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;验证vip绑定&#34;&gt;验证VIP绑定
 &lt;/h3&gt;&lt;p&gt;检查虚拟IP是否正确绑定：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 在主节点查看IP地址
-ip addr show
-
-# 应该能看到类似输出：
-# eth0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
-#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0
-#     inet 192.168.1.100/24 scope global secondary eth0:0
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;功能测试&#34;&gt;功能测试
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 在主节点查看IP地址&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ip addr show
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 应该能看到类似输出：&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# eth0: &amp;lt;BROADCAST,MULTICAST,UP,LOWER_UP&amp;gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#     inet 192.168.1.100/24 scope global secondary eth0:0&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;功能测试&#34;&gt;功能测试
 &lt;/h3&gt;&lt;h4 id=&#34;1-负载均衡测试&#34;&gt;1. 负载均衡测试
-&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 多次访问VIP，观察请求分发
-for i in {1..10}; do
-    curl -s http://192.168.1.100/ | grep &amp;quot;Server&amp;quot;
-done
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h4 id=&#34;2-故障切换测试&#34;&gt;2. 故障切换测试
-&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 在主节点停止HAProxy服务
-systemctl stop haproxy
-
-# 观察VIP是否切换到备节点
-ip addr show
-
-# 测试服务是否正常
-curl http://192.168.1.100/
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h4 id=&#34;3-后端服务器故障测试&#34;&gt;3. 后端服务器故障测试
-&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 停止其中一台Web服务器
-# 在web1服务器上：
-systemctl stop nginx
-
-# 观察HAProxy统计页面
-curl http://192.168.1.100:8080/stats
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id=&#34;监控与维护&#34;&gt;监控与维护
+&lt;/h4&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 多次访问VIP，观察请求分发&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; i in &lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;1..10&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;do&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    curl -s http://192.168.1.100/ &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; grep &lt;span class=&#34;s2&#34;&gt;&amp;#34;Server&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;done&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;2-故障切换测试&#34;&gt;2. 故障切换测试
+&lt;/h4&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 在主节点停止HAProxy服务&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;systemctl stop haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 观察VIP是否切换到备节点&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ip addr show
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 测试服务是否正常&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;curl http://192.168.1.100/
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;3-后端服务器故障测试&#34;&gt;3. 后端服务器故障测试
+&lt;/h4&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 停止其中一台Web服务器&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 在web1服务器上：&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;systemctl stop nginx
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 观察HAProxy统计页面&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;curl http://192.168.1.100:8080/stats
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;监控与维护&#34;&gt;监控与维护
 &lt;/h2&gt;&lt;h3 id=&#34;日志监控&#34;&gt;日志监控
 &lt;/h3&gt;&lt;h4 id=&#34;haproxy日志&#34;&gt;HAProxy日志
-&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看HAProxy日志
-tail -f /var/log/haproxy.log
-
-# 查看访问统计
-grep &amp;quot;HTTP/1.1&amp;quot; /var/log/haproxy.log | tail -20
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h4 id=&#34;keepalived日志&#34;&gt;Keepalived日志
-&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看Keepalived日志
-tail -f /var/log/messages | grep keepalived
-
-# 查看状态变化日志
-tail -f /var/log/keepalived-state.log
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;性能监控&#34;&gt;性能监控
+&lt;/h4&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看HAProxy日志&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;tail -f /var/log/haproxy.log
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看访问统计&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;grep &lt;span class=&#34;s2&#34;&gt;&amp;#34;HTTP/1.1&amp;#34;&lt;/span&gt; /var/log/haproxy.log &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; tail -20
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h4 id=&#34;keepalived日志&#34;&gt;Keepalived日志
+&lt;/h4&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看Keepalived日志&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;tail -f /var/log/messages &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; grep keepalived
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看状态变化日志&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;tail -f /var/log/keepalived-state.log
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;性能监控&#34;&gt;性能监控
 &lt;/h3&gt;&lt;h4 id=&#34;统计页面监控&#34;&gt;统计页面监控
 &lt;/h4&gt;&lt;p&gt;访问HAProxy统计页面：&lt;code&gt;http://192.168.1.100:8080/stats&lt;/code&gt;&lt;/p&gt;
 &lt;p&gt;关键指标：&lt;/p&gt;
@@ -508,30 +493,28 @@ tail -f /var/log/keepalived-state.log
 &lt;li&gt;&lt;strong&gt;Server Status&lt;/strong&gt;：服务器状态&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h4 id=&#34;命令行监控&#34;&gt;命令行监控
-&lt;/h4&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看HAProxy进程状态
-ps aux | grep haproxy
-
-# 查看端口监听状态
-netstat -tuln | grep -E &amp;quot;(80|8080)&amp;quot;
-
-# 查看连接数
-ss -ant | grep :80 | wc -l
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id=&#34;常见问题排查&#34;&gt;常见问题排查
+&lt;/h4&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看HAProxy进程状态&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ps aux &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; grep haproxy
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看端口监听状态&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;netstat -tuln &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; grep -E &lt;span class=&#34;s2&#34;&gt;&amp;#34;(80|8080)&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看连接数&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ss -ant &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; grep :80 &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; wc -l
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;常见问题排查&#34;&gt;常见问题排查
 &lt;/h2&gt;&lt;h3 id=&#34;1-vip无法切换&#34;&gt;1. VIP无法切换
 &lt;/h3&gt;&lt;p&gt;&lt;strong&gt;问题现象：&lt;/strong&gt;
 主节点故障后，VIP没有切换到备节点&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;排查步骤：&lt;/strong&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 检查Keepalived配置
-keepalived -t -f /etc/keepalived/keepalived.conf
-
-# 查看VRRP通信
-tcpdump -i eth0 vrrp
-
-# 检查防火墙设置
-iptables -L | grep vrrp
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 检查Keepalived配置&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;keepalived -t -f /etc/keepalived/keepalived.conf
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看VRRP通信&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;tcpdump -i eth0 vrrp
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 检查防火墙设置&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;iptables -L &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; grep vrrp
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;确保VRRP协议通信正常&lt;/li&gt;
 &lt;li&gt;检查网络接口配置&lt;/li&gt;
@@ -541,13 +524,12 @@ iptables -L | grep vrrp
 &lt;/h3&gt;&lt;p&gt;&lt;strong&gt;问题现象：&lt;/strong&gt;
 后端服务器被标记为不可用&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;排查步骤：&lt;/strong&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 手动执行健康检查
-curl -I http://192.168.1.20/health
-
-# 查看HAProxy日志
-grep &amp;quot;Health check&amp;quot; /var/log/haproxy.log
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 手动执行健康检查&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;curl -I http://192.168.1.20/health
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看HAProxy日志&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;grep &lt;span class=&#34;s2&#34;&gt;&amp;#34;Health check&amp;#34;&lt;/span&gt; /var/log/haproxy.log
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;确保健康检查URL可访问&lt;/li&gt;
 &lt;li&gt;调整检查间隔和阈值&lt;/li&gt;
@@ -557,13 +539,12 @@ grep &amp;quot;Health check&amp;quot; /var/log/haproxy.log
 &lt;/h3&gt;&lt;p&gt;&lt;strong&gt;问题现象：&lt;/strong&gt;
 请求没有均匀分发到后端服务器&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;排查步骤：&lt;/strong&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 查看统计页面
-curl -s http://192.168.1.100:8080/stats
-
-# 分析访问日志
-awk &#39;{print $6}&#39; /var/log/haproxy.log | sort | uniq -c
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 查看统计页面&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;curl -s http://192.168.1.100:8080/stats
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 分析访问日志&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;awk &lt;span class=&#34;s1&#34;&gt;&amp;#39;{print $6}&amp;#39;&lt;/span&gt; /var/log/haproxy.log &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; sort &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; uniq -c
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;strong&gt;解决方案：&lt;/strong&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;检查负载均衡算法配置&lt;/li&gt;
 &lt;li&gt;验证服务器权重设置&lt;/li&gt;
@@ -571,33 +552,30 @@ awk &#39;{print $6}&#39; /var/log/haproxy.log | sort | uniq -c
 &lt;/ul&gt;
 &lt;h2 id=&#34;优化建议&#34;&gt;优化建议
 &lt;/h2&gt;&lt;h3 id=&#34;1-性能优化&#34;&gt;1. 性能优化
-&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 调整系统参数
-echo &#39;net.core.somaxconn = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
-echo &#39;net.ipv4.tcp_max_syn_backlog = 65535&#39; &amp;gt;&amp;gt; /etc/sysctl.conf
-sysctl -p
-
-# 优化HAProxy配置
-# 增加maxconn值
-# 调整timeout参数
-# 启用压缩功能
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;2-安全加固&#34;&gt;2. 安全加固
-&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 限制统计页面访问
-# 在haproxy.cfg中添加ACL规则
-acl allowed_ips src 192.168.1.0/24
-http-request deny if !allowed_ips
-
-# 启用SSL/TLS
-bind *:443 ssl crt /etc/ssl/certs/server.pem
-redirect scheme https if !{ ssl_fc }
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;3-监控告警&#34;&gt;3. 监控告警
-&lt;/h3&gt;&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;# 集成监控系统
-# 配置Prometheus监控
-# 设置Grafana仪表板
-# 配置告警规则
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id=&#34;总结&#34;&gt;总结
+&lt;/h3&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 调整系统参数&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&amp;#39;net.core.somaxconn = 65535&amp;#39;&lt;/span&gt; &amp;gt;&amp;gt; /etc/sysctl.conf
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;echo&lt;/span&gt; &lt;span class=&#34;s1&#34;&gt;&amp;#39;net.ipv4.tcp_max_syn_backlog = 65535&amp;#39;&lt;/span&gt; &amp;gt;&amp;gt; /etc/sysctl.conf
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;sysctl -p
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 优化HAProxy配置&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 增加maxconn值&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 调整timeout参数&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 启用压缩功能&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;2-安全加固&#34;&gt;2. 安全加固
+&lt;/h3&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 限制统计页面访问&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 在haproxy.cfg中添加ACL规则&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;acl allowed_ips src 192.168.1.0/24
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;http-request deny &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; !allowed_ips
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 启用SSL/TLS&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;nb&#34;&gt;bind&lt;/span&gt; *:443 ssl crt /etc/ssl/certs/server.pem
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;redirect scheme https &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; !&lt;span class=&#34;o&#34;&gt;{&lt;/span&gt; ssl_fc &lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;3-监控告警&#34;&gt;3. 监控告警
+&lt;/h3&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-bash&#34; data-lang=&#34;bash&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 集成监控系统&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 配置Prometheus监控&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 设置Grafana仪表板&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# 配置告警规则&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;总结&#34;&gt;总结
 &lt;/h2&gt;&lt;p&gt;通过Keepalived和HAProxy的组合，我们成功构建了一个高可用的负载均衡集群。这个方案具有以下优势：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;高可用性&lt;/strong&gt;：通过VRRP协议实现自动故障切换&lt;/li&gt;
@@ -618,69 +596,65 @@ redirect scheme https if !{ ssl_fc }
 &lt;p&gt;特意选了上海地区的服务器，低延迟代理家里的机器，win11 和 windows server 2022，server 版本是后面部署的，使用的时候，突然收到拒绝访问的消息，本来以为是服务器更新，等会就能恢复正常。隔了五分钟，再去尝试，依旧拒绝登录，检索相关的报错，提示有人正在尝试登录，并且由于密码错误次数太多，现在无法登录。&lt;/p&gt;
 &lt;p&gt;以前也是接触过安防攻击的脚本，立马就想到了，这些登录大概率不是正常的行为，是有人在攻击服务，尝试暴力破解登录服务器。服务器防火墙设置图省事，没有设置白名单，代理了两台机器的 3389 端口，在公网里面暴露出来，就和鱼塘里面的鱼饵差不多。既然知道了是脚本小子在攻击，接下来的事情就简单了，设置防火墙白名单，仅允许公司的IP地址和家里的IP地址访问代理服务。&lt;/p&gt;
 &lt;p&gt;&lt;code&gt;frps&lt;/code&gt;代理服务端以前也没配置运行日志，开启日志后，给我看乐了，全国各地的代理IP，都在尝试登录家里的服务器，还好有一台是 server 版本，让我意识到了问题，不然 win11 那台机器，迟早别攻破，密码设置的比较简单。&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;2023/11/17 16:51:14 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [101.43.98.211:50486]
-2023/11/17 16:51:14 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [218.93.202.63:56970]
-2023/11/17 16:51:14 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [222.179.106.174:60812]
-2023/11/17 16:51:15 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [58.16.204.238:2839]
-2023/11/17 16:51:15 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [124.223.47.24:50274]
-2023/11/17 16:51:16 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [43.248.128.22:55883]
-2023/11/17 16:51:16 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [43.143.53.138:56955]
-2023/11/17 16:51:16 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [43.228.7.250:61550]
-2023/11/17 16:51:16 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [125.76.228.9:55842]
-2023/11/17 16:51:17 [I] [proxy.go:204] [4dfcc2259937dcb9] [winserver-remote] get a user connection [91.240.118.187:49326]
-2023/11/17 16:51:17 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [91.240.118.187:49324]
-2023/11/17 16:51:17 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [89.248.163.79:51712]
-2023/11/17 16:51:18 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [218.63.75.24:62387]
-2023/11/17 16:51:19 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [103.186.109.227:51396]
-2023/11/17 16:51:20 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [116.233.234.104:51567]
-2023/11/17 16:51:20 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [222.187.193.202:51585]
-2023/11/17 16:51:20 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [59.48.98.42:57489]
-2023/11/17 16:51:20 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [146.56.241.134:53558]
-2023/11/17 16:51:21 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [222.179.106.174:30620]
-2023/11/17 16:51:23 [I] [proxy.go:204] [639d8947325142ac] [host-remote] get a user connection [183.14.214.51:62128]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;捎带手，查了下linux服务的登录日志，除开阿里云这台机器，还有朋友一台华为云的机器&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;sudo grep &amp;quot;Failed password&amp;quot; /var/log/secure  centos系列
-sudo grep &amp;quot;Failed password&amp;quot; /var/log/auth.log  ubuntu系列
-&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Nov 16 04:46:34 aliyun-sh sshd[156625]: Failed password for root from 120.55.164.64 port 53410 ssh2
-Nov 16 04:46:34 aliyun-sh sshd[156623]: Failed password for root from 111.16.215.122 port 36548 ssh2
-Nov 16 04:46:58 aliyun-sh sshd[156630]: Failed password for invalid user share from 139.9.233.78 port 53872 ssh2
-Nov 16 04:47:23 aliyun-sh sshd[156634]: Failed password for invalid user spark from 139.9.233.78 port 36134 ssh2
-Nov 16 04:47:26 aliyun-sh sshd[156636]: Failed password for root from 120.55.164.64 port 46142 ssh2
-Nov 16 04:47:47 aliyun-sh sshd[156640]: Failed password for root from 111.16.215.122 port 42962 ssh2
-Nov 16 04:48:24 aliyun-sh sshd[156652]: Failed password for root from 120.55.164.64 port 38868 ssh2
-Nov 16 04:48:25 aliyun-sh sshd[156654]: Failed password for root from 111.16.215.122 port 46164 ssh2
-Nov 16 04:48:39 aliyun-sh sshd[156657]: Failed password for invalid user test from 139.9.233.78 port 39386 ssh2
-Nov 16 04:48:50 aliyun-sh sshd[156659]: Failed password for root from 111.16.215.122 port 38892 ssh2
-Nov 16 04:48:53 aliyun-sh sshd[156662]: Failed password for root from 120.55.164.64 port 49348 ssh2
-Nov 16 04:48:53 aliyun-sh sshd[156664]: Failed password for invalid user test from 139.9.233.78 port 49864 ssh2
-Nov 16 04:50:02 aliyun-sh sshd[156672]: Failed password for root from 111.16.215.122 port 45294 ssh2
-Nov 16 04:50:30 aliyun-sh sshd[156680]: Failed password for invalid user zabbix from 139.9.233.78 port 52206 ssh2
-Nov 16 04:50:50 aliyun-sh sshd[156683]: Failed password for root from 120.55.164.64 port 34820 ssh2
-Nov 16 04:50:51 aliyun-sh sshd[156685]: Failed password for root from 111.16.215.122 port 58978 ssh2
-Nov 16 04:51:18 aliyun-sh sshd[156689]: Failed password for root from 120.55.164.64 port 45306 ssh2
-Nov 16 04:51:25 aliyun-sh sshd[156692]: Failed password for root from 111.16.215.122 port 33938 ssh2
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;华为云这台机器开启的时间比较长，已经开始进入字典爆破的中期，各种奇怪的用户都开始出现。&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;Nov 16 20:30:35 hecs-411458 sshd[182965]: Failed password for invalid user oeh from 39.129.9.180 port 26459 ssh2
-Nov 16 20:32:17 hecs-411458 sshd[182967]: Failed password for invalid user dnu from 39.129.9.180 port 27079 ssh2
-Nov 16 20:34:12 hecs-411458 sshd[182971]: Failed password for invalid user rq from 39.129.9.180 port 27742 ssh2
-Nov 16 20:36:07 hecs-411458 sshd[182979]: Failed password for invalid user zw from 39.129.9.180 port 28415 ssh2
-Nov 16 20:37:59 hecs-411458 sshd[182981]: Failed password for invalid user egi from 39.129.9.180 port 29068 ssh2
-Nov 16 20:39:52 hecs-411458 sshd[182984]: Failed password for invalid user bjb from 39.129.9.180 port 29723 ssh2
-Nov 16 20:41:53 hecs-411458 sshd[182988]: Failed password for invalid user hna from 39.129.9.180 port 30375 ssh2
-Nov 16 20:43:46 hecs-411458 sshd[182994]: Failed password for invalid user gar from 39.129.9.180 port 31036 ssh2
-Nov 16 20:45:40 hecs-411458 sshd[183003]: Failed password for invalid user mze from 39.129.9.180 port 31703 ssh2
-Nov 16 20:47:35 hecs-411458 sshd[183007]: Failed password for invalid user tmh from 39.129.9.180 port 32381 ssh2
-Nov 16 21:23:01 hecs-411458 sshd[183047]: Failed password for invalid user amax from 112.4.65.118 port 41188 ssh2
-Nov 16 22:31:20 hecs-411458 sshd[183116]: Failed password for root from 211.228.203.123 port 60213 ssh2
-Nov 16 22:53:44 hecs-411458 sshd[183162]: Failed password for root from 112.132.249.164 port 39272 ssh2
-Nov 17 11:44:26 hecs-411458 sshd[184811]: Failed password for invalid user jsh from 43.157.103.27 port 54608 ssh2
-Nov 17 11:47:23 hecs-411458 sshd[184818]: Failed password for invalid user mrunal from 43.157.103.27 port 50448 ssh2
-Nov 17 11:48:46 hecs-411458 sshd[184820]: Failed password for invalid user robertsheen from 43.157.103.27 port 50560 ssh2
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h2 id=&#34;后记&#34;&gt;后记
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:14 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;101.43.98.211:50486&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:14 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;218.93.202.63:56970&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:14 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;222.179.106.174:60812&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:15 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;58.16.204.238:2839&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:15 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;124.223.47.24:50274&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:16 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;43.248.128.22:55883&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:16 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;43.143.53.138:56955&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:16 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;43.228.7.250:61550&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:16 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;125.76.228.9:55842&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:17 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;4dfcc2259937dcb9&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;winserver-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;91.240.118.187:49326&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:17 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;91.240.118.187:49324&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:17 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;89.248.163.79:51712&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:18 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;218.63.75.24:62387&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:19 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;103.186.109.227:51396&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:20 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;116.233.234.104:51567&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:20 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;222.187.193.202:51585&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:20 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;59.48.98.42:57489&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:20 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;146.56.241.134:53558&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:21 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;222.179.106.174:30620&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;2023/11/17 16:51:23 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;I&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;proxy.go:204&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;639d8947325142ac&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;host-remote&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; get a user connection &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;183.14.214.51:62128&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;捎带手，查了下linux服务的登录日志，除开阿里云这台机器，还有朋友一台华为云的机器&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;sudo grep &lt;span class=&#34;s2&#34;&gt;&amp;#34;Failed password&amp;#34;&lt;/span&gt; /var/log/secure  centos系列
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;sudo grep &lt;span class=&#34;s2&#34;&gt;&amp;#34;Failed password&amp;#34;&lt;/span&gt; /var/log/auth.log  ubuntu系列
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:46:34 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156625&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 120.55.164.64 port &lt;span class=&#34;m&#34;&gt;53410&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:46:34 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156623&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 111.16.215.122 port &lt;span class=&#34;m&#34;&gt;36548&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:46:58 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156630&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user share from 139.9.233.78 port &lt;span class=&#34;m&#34;&gt;53872&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:47:23 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156634&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user spark from 139.9.233.78 port &lt;span class=&#34;m&#34;&gt;36134&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:47:26 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156636&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 120.55.164.64 port &lt;span class=&#34;m&#34;&gt;46142&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:47:47 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156640&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 111.16.215.122 port &lt;span class=&#34;m&#34;&gt;42962&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:48:24 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156652&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 120.55.164.64 port &lt;span class=&#34;m&#34;&gt;38868&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:48:25 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156654&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 111.16.215.122 port &lt;span class=&#34;m&#34;&gt;46164&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:48:39 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156657&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user &lt;span class=&#34;nb&#34;&gt;test&lt;/span&gt; from 139.9.233.78 port &lt;span class=&#34;m&#34;&gt;39386&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:48:50 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156659&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 111.16.215.122 port &lt;span class=&#34;m&#34;&gt;38892&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:48:53 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156662&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 120.55.164.64 port &lt;span class=&#34;m&#34;&gt;49348&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:48:53 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156664&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user &lt;span class=&#34;nb&#34;&gt;test&lt;/span&gt; from 139.9.233.78 port &lt;span class=&#34;m&#34;&gt;49864&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:50:02 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156672&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 111.16.215.122 port &lt;span class=&#34;m&#34;&gt;45294&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:50:30 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156680&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user zabbix from 139.9.233.78 port &lt;span class=&#34;m&#34;&gt;52206&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:50:50 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156683&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 120.55.164.64 port &lt;span class=&#34;m&#34;&gt;34820&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:50:51 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156685&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 111.16.215.122 port &lt;span class=&#34;m&#34;&gt;58978&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:51:18 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156689&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 120.55.164.64 port &lt;span class=&#34;m&#34;&gt;45306&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 04:51:25 aliyun-sh sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;156692&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 111.16.215.122 port &lt;span class=&#34;m&#34;&gt;33938&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;华为云这台机器开启的时间比较长，已经开始进入字典爆破的中期，各种奇怪的用户都开始出现。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:30:35 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182965&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user oeh from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;26459&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:32:17 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182967&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user dnu from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;27079&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:34:12 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182971&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user rq from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;27742&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:36:07 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182979&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user zw from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;28415&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:37:59 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182981&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user egi from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;29068&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:39:52 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182984&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user bjb from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;29723&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:41:53 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182988&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user hna from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;30375&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:43:46 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;182994&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user gar from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;31036&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:45:40 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;183003&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user mze from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;31703&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 20:47:35 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;183007&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user tmh from 39.129.9.180 port &lt;span class=&#34;m&#34;&gt;32381&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 21:23:01 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;183047&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user amax from 112.4.65.118 port &lt;span class=&#34;m&#34;&gt;41188&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 22:31:20 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;183116&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 211.228.203.123 port &lt;span class=&#34;m&#34;&gt;60213&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 22:53:44 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;183162&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; root from 112.132.249.164 port &lt;span class=&#34;m&#34;&gt;39272&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;17&lt;/span&gt; 11:44:26 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;184811&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user jsh from 43.157.103.27 port &lt;span class=&#34;m&#34;&gt;54608&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;17&lt;/span&gt; 11:47:23 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;184818&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user mrunal from 43.157.103.27 port &lt;span class=&#34;m&#34;&gt;50448&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Nov &lt;span class=&#34;m&#34;&gt;17&lt;/span&gt; 11:48:46 hecs-411458 sshd&lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;184820&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt;: Failed password &lt;span class=&#34;k&#34;&gt;for&lt;/span&gt; invalid user robertsheen from 43.157.103.27 port &lt;span class=&#34;m&#34;&gt;50560&lt;/span&gt; ssh2
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h2 id=&#34;后记&#34;&gt;后记
 &lt;/h2&gt;&lt;p&gt;开发自用的服务器，windows 公网访问需要设置白名单，linux 建议禁止密码登录，开启秘钥文件登录。&lt;/p&gt;</description>
         </item>
         <item>
@@ -701,9 +675,8 @@ Nov 17 11:48:46 hecs-411458 sshd[184820]: Failed password for invalid user rober
 &lt;h2 id=&#34;工具&#34;&gt;工具
 &lt;/h2&gt;&lt;p&gt;官方提供了&lt;code&gt;open-vm-tools&lt;/code&gt;包，可以通过 yum 安装或者 vmware-tools 镜像包安装&lt;/p&gt;
 &lt;h2 id=&#34;命令&#34;&gt;命令
-&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;vmware-toolbox-cmd disk shrink /
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;执行了以后，虚拟机会自动关机，vmware 宿主程序会执行磁盘压缩，执行时间取决于虚拟机的体积和磁盘的访问速度。&lt;/p&gt;
+&lt;/h2&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;vmware-toolbox-cmd disk shrink /
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;执行了以后，虚拟机会自动关机，vmware 宿主程序会执行磁盘压缩，执行时间取决于虚拟机的体积和磁盘的访问速度。&lt;/p&gt;
 &lt;p&gt;执行效果还是很不错的，虚拟机的磁盘空间占用基本等于&lt;code&gt;df -h&lt;/code&gt;的磁盘信息。&lt;/p&gt;</description>
         </item>
         <item>
@@ -734,12 +707,11 @@ Nov 17 11:48:46 hecs-411458 sshd[184820]: Failed password for invalid user rober
 &lt;p&gt;起初呢以为是服务器网段设置问题，新的工位的有线网络，不在防火墙配置的名单里面，联系IT同事调整下就好了；这个网段呢，不止一台服务器，试着访问其他服务器，都是正常的，逐渐产生疑惑？专业的事情交给专业的人来处理，最后运维部门的同事定位到，由于这台服务器部署了&lt;code&gt;docker&lt;/code&gt;，服务的默认网络&lt;code&gt;docker0&lt;/code&gt;和办公室有线网络配置的网段冲突了，导致发过去的数据包，都收不到应答，被路由给了&lt;code&gt;docker&lt;/code&gt;服务。&lt;/p&gt;
 &lt;p&gt;其他服务器都没部署&lt;code&gt;docker&lt;/code&gt;服务，也就这台，我比较常用，偶尔用容器部署一些测试服务，没想到还能碰到这个场景。后来细想想，由于整个集团都在一个办公大楼里面，IT部门的同事划分网段，用到了&lt;code&gt;172&lt;/code&gt;打头的地址也不奇怪。&lt;/p&gt;
 &lt;h2 id=&#34;docker0&#34;&gt;docker0
-&lt;/h2&gt;&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;# vim /etc/docker/daemon.json
-{
-    &amp;quot;bip&amp;quot;:&amp;quot;172.200.0.1/24&amp;quot;
-}
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;重启下服务，切换到新的网络，服务器恢复正常访问。&lt;/p&gt;
+&lt;/h2&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;# vim /etc/docker/daemon.json&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;s2&#34;&gt;&amp;#34;bip&amp;#34;&lt;/span&gt;:&lt;span class=&#34;s2&#34;&gt;&amp;#34;172.200.0.1/24&amp;#34;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;o&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;重启下服务，切换到新的网络，服务器恢复正常访问。&lt;/p&gt;
 &lt;h2 id=&#34;参考资料&#34;&gt;参考资料
 &lt;/h2&gt;&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://yeasy.gitbook.io/docker_practice/advanced_network/docker0&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
     &gt;Docker从入门到实践-docker0&lt;/a&gt;&lt;/p&gt;</description>
@@ -756,12 +728,11 @@ Nov 17 11:48:46 hecs-411458 sshd[184820]: Failed password for invalid user rober
 &lt;h2 id=&#34;重置密码&#34;&gt;重置密码
 &lt;/h2&gt;&lt;p&gt;编辑配置文件 &lt;code&gt;vim /etc/my.cnf&lt;/code&gt;，&lt;code&gt;mysqld&lt;/code&gt;节点增加配置：&lt;code&gt;skip-grant-tables&lt;/code&gt;，执行命令重启数据：&lt;code&gt;systemctl restart mysql&lt;/code&gt;&lt;/p&gt;
 &lt;p&gt;再使用&lt;code&gt;mysql&lt;/code&gt;直接登录数据，接来下就是正常操作了，重置&lt;code&gt;root&lt;/code&gt;用户密码，顺带开启下允许远程登录&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-sql&#34;&gt;USE mysql;
-UPDATE user SET authentication_string = password (&#39;pass&#39;) WHERE User = &#39;root&#39;;
-grant all privileges on *.* to &#39;root&#39;@&#39;%&#39; identified by &#39;pass&#39; with grant option;
-flush privileges;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;回退修改的配置文件，重启下数据库，搞定。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-sql&#34; data-lang=&#34;sql&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;USE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;mysql&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;UPDATE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;user&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;SET&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;authentication_string&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;password&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;pass&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;WHERE&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;User&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;root&amp;#39;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;grant&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;all&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;privileges&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;on&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;to&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;root&amp;#39;&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;@&lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;%&amp;#39;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;n&#34;&gt;identified&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;by&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;s1&#34;&gt;&amp;#39;pass&amp;#39;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;with&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;grant&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;option&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;flush&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;k&#34;&gt;privileges&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;回退修改的配置文件，重启下数据库，搞定。&lt;/p&gt;
 &lt;h2 id=&#34;参考资料&#34;&gt;参考资料
 &lt;/h2&gt;&lt;ul&gt;
 &lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://help.aliyun.com/document_detail/42520.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
@@ -777,9 +748,8 @@ flush privileges;
         <description>&lt;p&gt;Deployment控制器实现了Kubernetes集群中一个很重要的功能，Pod的水平拓展和收缩功能。这个功能是传统云时代平台所必备的能力。&lt;/p&gt;
 &lt;p&gt;碰到一个业务场景，需要修改数据库中的数据，调整后重启Pod节点。但是在Pod运行过程中，一直在修改表字段，需要临时性的暂停应用对表的更新，调整数据后恢复Pod。&lt;/p&gt;
 &lt;p&gt;除了暴力的删除Deployment，有没有其他的方式，实现类似暂停的效果？&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;kubectl scale --replicas=0 deployment/&amp;lt;your-deployment&amp;gt;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;在看到答案之前，很多人可能都没想到，看到答案后，会心一笑，脑子没有转弯，思路还停留在直接操作进程的时代，想着直接操作业务进程。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;kubectl scale --replicas&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;m&#34;&gt;0&lt;/span&gt; deployment/&amp;lt;your-deployment&amp;gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;在看到答案之前，很多人可能都没想到，看到答案后，会心一笑，脑子没有转弯，思路还停留在直接操作进程的时代，想着直接操作业务进程。&lt;/p&gt;
 &lt;h2 id=&#34;参考链接&#34;&gt;参考链接
 &lt;/h2&gt;&lt;p&gt;&lt;a class=&#34;link&#34; href=&#34;https://stackoverflow.com/questions/54821044/how-to-stop-pause-a-pod-in-kubernetes&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
     &gt;how to stop/pause a pod in kubernetes&lt;/a&gt;&lt;/p&gt;</description>

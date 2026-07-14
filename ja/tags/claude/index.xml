@@ -114,40 +114,37 @@
 &lt;/h2&gt;&lt;p&gt;この注文に関する説明では、大規模モデルの呼び出し回数を減らすだけでなく、実際に12Bモデルをローカルで実行すると効率が非常に高く、時間ロスもありません。しかし、毎回大規模モデルを呼び出す場合は、やはり少し遅くなります。また、文章のリンクを固定するために、全量更新を実行した場合、文章のタイトルが長いため、稀に2回の翻訳結果が異なり、リンクが変わってしまうという状況が発生します。これは非常に困ります。&lt;/p&gt;
 &lt;h2 id=&#34;機能最適化&#34;&gt;機能最適化
 &lt;/h2&gt;&lt;p&gt;プロジェクト全体を &lt;code&gt;Claude4&lt;/code&gt; に引き渡して、最適化の余地を分析し、以下の提案を得ました：&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;外部化の設定 - メンテナンス性と柔軟性を向上
-構造化ログ - 問題のトラブルシューティングと監視が容易になる
-パフォーマンスモニタリング - システムの状態を把握する
-ユーザーエクスペリエンス - プログレスバーなどの視覚的なフィードバック
-エラー処理 - より包括的な例外処理メカニズム
-コード整理 - より明確なモジュール分割
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;コードをレビューしたところ、問題点は一切なく、例えば設定ファイルについては、元のコードから設定を変換し、デフォルト設定に変換した後、設定ファイルを読み込む際に、対応する設定ファイルが存在しない場合に自動的にデフォルト設定ファイルを生成することで、ユーザーの操作ミスを防いでいました。
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;外部化の設定 - メンテナンス性と柔軟性を向上
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;構造化ログ - 問題のトラブルシューティングと監視が容易になる
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;パフォーマンスモニタリング - システムの状態を把握する
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;ユーザーエクスペリエンス - プログレスバーなどの視覚的なフィードバック
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;エラー処理 - より包括的な例外処理メカニズム
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;コード整理 - より明確なモジュール分割
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;コードをレビューしたところ、問題点は一切なく、例えば設定ファイルについては、元のコードから設定を変換し、デフォルト設定に変換した後、設定ファイルを読み込む際に、対応する設定ファイルが存在しない場合に自動的にデフォルト設定ファイルを生成することで、ユーザーの操作ミスを防いでいました。
 要件：翻訳文の正体を翻訳する際に、翻訳効率を動的に計算し、残りの時間を予測して、関連情報をコンソールに出力しました。現在、文章の文字数を取得し、各行の翻訳時に現在の翻訳文字数、時間、100文字あたりの翻訳時間を適合計算しています。同時に、文章全体の翻訳残り時間を推定します。
 コードが完了した後、新しい驚きを発見しました。翻訳効率の統計情報がリアルタイムで大量に表示されますが、無制限にスクロールダウンすることはありませんでした。&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-shell&#34;&gt;原文を英語に翻訳中（合計 7163 文字）...
-翻訳する必要がある行数が 53 行検出されました。
-  [1/53] Stage1/6 [░░░░░░░░░░░░░░░░░░░░░░░░░] 1.9% 354 文字の翻訳...
-    ✅ 完了 (3.1秒) | API呼び出し #1
-    ✅ 完了 (1.5秒) | API呼び出し #2
-    ✅ 完了 (0.9秒) | API呼び出し #3
-    ✅ 完了 (0.2秒) | API呼び出し #4
-    ✅ 完了 (1.0秒) | API呼び出し #5
-    ✅ 完了 (1.0秒) | API呼び出し #6
-    ✅ 完了 (0.2秒) | API呼び出し #7
-    📊 進捗: 行の 13.2% (7/53) | 文字の 12.9% (925/7163) 114.6 文字/秒 📊
-    ⚡ 効率：リアルタイム 76.4 | 平均 117.9 | 最近 109.0 | ステージ 113.6 文字/秒 📊
-    🎯 正確度: 100.0% (7/7) | 残り: 46行 7 秒] 9.4% 110 文字の翻訳...
-    ⏱️ 残りの推定時間: 55秒 | 予想完了時間: 00:10:19 8秒] 11.3% 114 文字の翻訳...
-    💾 处理速度：3211.3 行/分钟 | 总用时：8秒] 13.2% 16 文字の翻訳...
-  [8/53] Stage1/6 [███░░░░░░░░░░░░░░░░░░░░░░] 15.1% 166 文字の翻訳...
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;以前、プログラムを制御するコードはあまり書かれていませんでしたが、どのように実装されているのか知りたくて、コードを調べてみました。&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-golang&#34;&gt;// キャッシュクリアと再表示（動的更新効果）
-if translationCount &amp;gt; 1 {
-   fmt.Print(&amp;quot;\033[6A\033[K&amp;quot;) // 上に 6 行移動し、内容をクリア
-}
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;パフォーマンス統計メニュー&#34;&gt;パフォーマンス統計メニュー
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;原文を英語に翻訳中（合計 &lt;span class=&#34;m&#34;&gt;7163&lt;/span&gt; 文字）...
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;翻訳する必要がある行数が &lt;span class=&#34;m&#34;&gt;53&lt;/span&gt; 行検出されました。
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;1/53&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; Stage1/6 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;░░░░░░░░░░░░░░░░░░░░░░░░░&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; 1.9% &lt;span class=&#34;m&#34;&gt;354&lt;/span&gt; 文字の翻訳...
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ✅ 完了 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;3.1秒&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; API呼び出し &lt;span class=&#34;c1&#34;&gt;#1&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ✅ 完了 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;1.5秒&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; API呼び出し &lt;span class=&#34;c1&#34;&gt;#2&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ✅ 完了 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0.9秒&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; API呼び出し &lt;span class=&#34;c1&#34;&gt;#3&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ✅ 完了 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0.2秒&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; API呼び出し &lt;span class=&#34;c1&#34;&gt;#4&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ✅ 完了 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;1.0秒&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; API呼び出し &lt;span class=&#34;c1&#34;&gt;#5&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ✅ 完了 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;1.0秒&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; API呼び出し &lt;span class=&#34;c1&#34;&gt;#6&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ✅ 完了 &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;0.2秒&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; API呼び出し &lt;span class=&#34;c1&#34;&gt;#7&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    📊 進捗: 行の 13.2% &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;7/53&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; 文字の 12.9% &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;925/7163&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; 114.6 文字/秒 📊
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ⚡ 効率：リアルタイム 76.4 &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; 平均 117.9 &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; 最近 109.0 &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; ステージ 113.6 文字/秒 📊
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    🎯 正確度: 100.0% &lt;span class=&#34;o&#34;&gt;(&lt;/span&gt;7/7&lt;span class=&#34;o&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; 残り: 46行 &lt;span class=&#34;m&#34;&gt;7&lt;/span&gt; 秒&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; 9.4% &lt;span class=&#34;m&#34;&gt;110&lt;/span&gt; 文字の翻訳...
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    ⏱️ 残りの推定時間: 55秒 &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; 予想完了時間: 00:10:19 8秒&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; 11.3% &lt;span class=&#34;m&#34;&gt;114&lt;/span&gt; 文字の翻訳...
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    💾 处理速度：3211.3 行/分钟 &lt;span class=&#34;p&#34;&gt;|&lt;/span&gt; 总用时：8秒&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; 13.2% &lt;span class=&#34;m&#34;&gt;16&lt;/span&gt; 文字の翻訳...
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;  &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;8/53&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; Stage1/6 &lt;span class=&#34;o&#34;&gt;[&lt;/span&gt;███░░░░░░░░░░░░░░░░░░░░░░&lt;span class=&#34;o&#34;&gt;]&lt;/span&gt; 15.1% &lt;span class=&#34;m&#34;&gt;166&lt;/span&gt; 文字の翻訳...
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;以前、プログラムを制御するコードはあまり書かれていませんでしたが、どのように実装されているのか知りたくて、コードを調べてみました。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-golang&#34; data-lang=&#34;golang&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;// キャッシュクリアと再表示（動的更新効果）&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;nx&#34;&gt;translationCount&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;&amp;gt;&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;mi&#34;&gt;1&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;w&#34;&gt;   &lt;/span&gt;&lt;span class=&#34;nx&#34;&gt;fmt&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;nf&#34;&gt;Print&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;s&#34;&gt;&amp;#34;\033[6A\033[K&amp;#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;&lt;span class=&#34;w&#34;&gt; &lt;/span&gt;&lt;span class=&#34;c1&#34;&gt;// 上に 6 行移動し、内容をクリア&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;&lt;span class=&#34;w&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;h3 id=&#34;パフォーマンス統計メニュー&#34;&gt;パフォーマンス統計メニュー
 &lt;/h3&gt;&lt;p&gt;新たに作成された&lt;strong&gt;パフォーマンス統計メニュー&lt;/strong&gt;は、私自身が設計したものでも、これほど完璧とは言えない。&lt;/p&gt;
 &lt;p&gt;📊 パフォーマンス統計：
 🔄 翻訳回数：360

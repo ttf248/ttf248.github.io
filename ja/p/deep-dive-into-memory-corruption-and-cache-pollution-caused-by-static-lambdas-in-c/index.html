@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="ja" dir="ltr">
+<html lang="ja" dir="ltr" data-theme="editorial">
 <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="本記事では、C++開発における unordered_map::find がヒットした後にオブジェクトフィールドが一致しないという奇妙な現象を分析しています。原因は、関数内部で static lambda を定義し、参照キャプチャによってローカル変数を捕捉することです。これにより、最初の呼び出し後には幽霊参照が発生し、その後の呼び出しで未定義動作（UB）を引き起こし、キャッシュデータを汚染します。この問題を解決するには、明示的なパラメータの渡しを介して暗黙のキャプチャを置き換え、ライフサイクルの管理を標準化し、Sanitizerツールを使用することを推奨します。\n">
 <title>深層解析：C&#43;&#43; における `static lambda` が引き起こすメモリリークとキャッシュ汚染</title>
 
 <link rel='canonical' href='https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 
-<link rel="stylesheet" href="/scss/style.min.9dae17661104dfb3121bfb9f7010ca859c78216c25fdb6f48cd8abfb14911d8c.css"><meta property='og:title' content="深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染">
+<link rel="stylesheet" href="/scss/style.min.2bc35ba502ee8185222d09bbbc51f8e7bb66cbfa59deb3874f2f1145202c55f3.css"><meta property='og:title' content="深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染">
 <meta property='og:description' content="本記事では、C++開発における unordered_map::find がヒットした後にオブジェクトフィールドが一致しないという奇妙な現象を分析しています。原因は、関数内部で static lambda を定義し、参照キャプチャによってローカル変数を捕捉することです。これにより、最初の呼び出し後には幽霊参照が発生し、その後の呼び出しで未定義動作（UB）を引き起こし、キャッシュデータを汚染します。この問題を解決するには、明示的なパラメータの渡しを介して暗黙のキャプチャを置き換え、ライフサイクルの管理を標準化し、Sanitizerツールを使用することを推奨します。\n">
 <meta property='og:url' content='https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 <meta property='og:site_name' content='向叔の手帳'>
@@ -158,55 +158,6 @@
         
     </nav>
 </div>
-
-<script>
-    (() => {
-        const toggle = document.querySelector('.site-header__menu-toggle');
-        const navigation = document.getElementById('mobile-navigation');
-        if (!toggle || !navigation) return;
-
-        const closeButtons = navigation.querySelectorAll('[data-mobile-menu-close]');
-        let lastFocusedElement = null;
-
-        const setOpen = (open) => {
-            if (open) {
-                lastFocusedElement = document.activeElement;
-            }
-            toggle.setAttribute('aria-expanded', String(open));
-            navigation.hidden = !open;
-            document.body.classList.toggle('mobile-menu-open', open);
-            if (open) {
-                navigation.querySelector('.mobile-navigation__close')?.focus();
-            } else if (lastFocusedElement) {
-                lastFocusedElement.focus();
-            }
-        };
-
-        toggle.addEventListener('click', () => setOpen(navigation.hidden));
-        closeButtons.forEach((button) => button.addEventListener('click', () => setOpen(false)));
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && !navigation.hidden) {
-                setOpen(false);
-            }
-
-            if (event.key === 'Tab' && !navigation.hidden) {
-                const focusable = Array.from(navigation.querySelectorAll('a, button, select'))
-                    .filter((element) => !element.disabled && element.offsetParent !== null);
-                if (!focusable.length) return;
-                const first = focusable[0];
-                const last = focusable[focusable.length - 1];
-                if (event.shiftKey && document.activeElement === first) {
-                    event.preventDefault();
-                    last.focus();
-                } else if (!event.shiftKey && document.activeElement === last) {
-                    event.preventDefault();
-                    first.focus();
-                }
-            }
-        });
-        navigation.querySelectorAll('a').forEach((link) => link.addEventListener('click', () => setOpen(false)));
-    })();
-</script>
 <main class="editorial-main" id="main-content">
     
 <div class="article-mobile-toolbar" aria-label="文章阅读工具">
@@ -259,120 +210,7 @@
 <article class="main-article has-lead">
     <header class="article-header">
 
-    
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
-
-<script>
-class CodeCopyManager {
-    constructor() {
-        this.addCopyButtons();
-    }
-
-    addCopyButtons() {
-        document.querySelectorAll('pre code').forEach((block) => {
-            
-            
-            if (window.hljs && !block.dataset.highlighted && !block.classList.contains('nohighlight')) {
-                window.hljs.highlightElement(block);
-            }
-            this.createCopyButton(block);
-        });
-    }
-
-    createCopyButton(codeBlock) {
-        const preElement = codeBlock.parentNode;
-        
-        
-        if (preElement.parentNode.classList.contains('code-container')) {
-            return;
-        }
-
-        const container = this.createContainer(preElement);
-        const button = this.createButton();
-        
-        container.appendChild(button);
-        
-        button.addEventListener('click', () => this.handleCopy(button, codeBlock));
-    }
-
-    createContainer(preElement) {
-        const container = document.createElement('div');
-        container.classList.add('code-container');
-        
-        preElement.parentNode.insertBefore(container, preElement);
-        container.appendChild(preElement);
-        
-        return container;
-    }
-
-    createButton() {
-        const button = document.createElement('button');
-        button.classList.add('copy-btn');
-        button.innerText = '复制代码';
-        button.setAttribute('aria-label', '复制代码到剪贴板');
-        return button;
-    }
-
-    async handleCopy(button, codeBlock) {
-        try {
-            const code = codeBlock.innerText;
-            await navigator.clipboard.writeText(code);
-            this.showCopySuccess(button);
-        } catch (error) {
-            console.error('复制失败:', error);
-            this.showCopyError(button);
-        }
-    }
-
-    showCopySuccess(button) {
-        const originalText = button.innerText;
-        button.innerText = '已复制';
-        button.classList.add('copied');
-        
-        setTimeout(() => {
-            button.innerText = originalText;
-            button.classList.remove('copied');
-        }, 2000);
-    }
-
-    showCopyError(button) {
-        const originalText = button.innerText;
-        button.innerText = '复制失败';
-        
-        setTimeout(() => {
-            button.innerText = originalText;
-        }, 2000);
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    new CodeCopyManager();
-
-    
-    const progressBar = document.getElementById('reading-progress');
-    const article = document.querySelector('.main-article');
-
-    if (progressBar && article) {
-        const updateProgress = () => {
-            const articleTop = article.offsetTop;
-            const articleHeight = article.offsetHeight;
-            const windowHeight = window.innerHeight;
-            const scrollY = window.scrollY;
-
-            const start = articleTop - windowHeight;
-            const end = articleTop + articleHeight - windowHeight;
-            const progress = Math.min(Math.max((scrollY - start) / (end - start) * 100, 0), 100);
-
-            progressBar.style.width = progress + '%';
-        };
-
-        window.addEventListener('scroll', updateProgress, { passive: true });
-        updateProgress();
-    }
-});
-</script>
-
-<div class="article-details"><div class="article-origin">
+    <div class="article-details"><div class="article-origin">
         <span class="content-source content-source--author">作者写作</span>
         
     </div>
@@ -520,20 +358,19 @@ document.addEventListener('DOMContentLoaded', () => {
     <p>高性能な行情サービスや分散型キャッシュを構築する際に、プログラマーはしばしば「異変」に遭遇します。それは、Keyを使用して <code>std::unordered_map</code> からオブジェクトを明確に見つけ出すにもかかわらず、その内部フィールドを読み取ると、別のKeyのデータになっているという現象です。この「身分誤認」は、隠れたC++の罠を指しています：**static lambdaとライフサイクルキャプチャの競合による未定義動作（UB）**です。</p>
 <h2 id="故障パターン長久保存の短寿命引用">故障パターン：「長久保存」の短寿命引用
 </h2><p>パフォーマンスを最適化する際、一部の開発者は関数内で <code>static lambda</code> を定義してクロージャー作成のオーバーヘッドを削減することがあります。しかし、暗黙的なキャプチャによる参照捕獲 <code>[&amp;]</code> と組み合わせると、爆発的な問題が発生します：</p>
-<pre><code class="language-cpp">void UpdateCache(std::unordered_map&lt;std::string, Tick&gt;&amp; cache, Tick&amp; current_input) {
-    // 危険：static は lambda のライフサイクルをプロセスレベルまで延長する
-    // [&amp;] はスタック上のローカル参照 current_input をキャプチャする
-    static auto patch_func = [&amp;](auto it) {
-        it-&gt;second.price = current_input.price; // 2回目実行時、この参照は無効になっている
-    };
-
-    auto it = cache.find(current_input.symbol);
-    if (it != cache.end()) {
-        patch_func(it);
-    }
-}
-</code></pre>
-<h2 id="技術原理の剖析">技術原理の剖析
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">UpdateCache</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unordered_map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span> <span class="n">Tick</span><span class="o">&gt;&amp;</span> <span class="n">cache</span><span class="p">,</span> <span class="n">Tick</span><span class="o">&amp;</span> <span class="n">current_input</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// 危険：static は lambda のライフサイクルをプロセスレベルまで延長する
+</span></span></span><span class="line"><span class="cl">    <span class="c1">// [&amp;] はスタック上のローカル参照 current_input をキャプチャする
+</span></span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="k">auto</span> <span class="n">patch_func</span> <span class="o">=</span> <span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">auto</span> <span class="n">it</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">price</span> <span class="o">=</span> <span class="n">current_input</span><span class="p">.</span><span class="n">price</span><span class="p">;</span> <span class="c1">// 2回目実行時、この参照は無効になっている
+</span></span></span><span class="line"><span class="cl">    <span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">it</span> <span class="o">=</span> <span class="n">cache</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">current_input</span><span class="p">.</span><span class="n">symbol</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="n">it</span> <span class="o">!=</span> <span class="n">cache</span><span class="p">.</span><span class="n">end</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">patch_func</span><span class="p">(</span><span class="n">it</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="技術原理の剖析">技術原理の剖析
 </h2><ol>
 <li><strong>ライフサイクルズのずれ</strong>: <code>static</code> 変数はプログラムがその行に到達した際に初期化され、プロセス全体で一度だけ実行されます。つまり、<code>patch_func</code> 内でキャプチャされた <code>current_input</code> の参照は、<strong>最初の呼び出し時に</strong>スタックフレーム上のメモリのアドレスに固定されます。</li>
 <li><strong>幽霊参照 (Dangling Reference)</strong>: 最初の <code>UpdateCache</code> が完了すると、元のスタックフレームが破棄されます。その結果、<code>patch_func</code> はすでに無効になったアドレスを読み書きしようとします。</li>
@@ -542,13 +379,12 @@ document.addEventListener('DOMContentLoaded', () => {
 <h2 id="ソリューションとエンジニアリングプラクティス">ソリューションとエンジニアリングプラクティス
 </h2><h3 id="1-隐式捕获消除改用显式参数传递">1. 隐式捕获消除，改用显式参数传递
 </h3><p>最稳妥的方法是让 Lambda 保持“无状态”（Stateless），将所有依赖的对象通过参数传递。</p>
-<pre><code class="language-cpp">// 推荐做法：无状态 lambda，显式传递 src
-auto patch = [&amp;](auto it, const Tick&amp; src) {
-    it-&gt;second.price = src.price;
-};
-patch(it, current_input);
-</code></pre>
-<h3 id="2-静的修飾閉包の慎重な使用">2. 静的修飾閉包の慎重な使用
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// 推荐做法：无状态 lambda，显式传递 src
+</span></span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">patch</span> <span class="o">=</span> <span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">auto</span> <span class="n">it</span><span class="p">,</span> <span class="k">const</span> <span class="n">Tick</span><span class="o">&amp;</span> <span class="n">src</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">.</span><span class="n">price</span> <span class="o">=</span> <span class="n">src</span><span class="p">.</span><span class="n">price</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl"><span class="n">patch</span><span class="p">(</span><span class="n">it</span><span class="p">,</span> <span class="n">current_input</span><span class="p">);</span>
+</span></span></code></pre></div><h3 id="2-静的修飾閉包の慎重な使用">2. 静的修飾閉包の慎重な使用
 </h3><p>関数内部で、閉包がローカル変数をキャプチャしていない限り、<code>static</code> を使用しない方が良いです。現代のコンパイラは非 <code>static</code> lambda の最適化に非常に優れており、盲目的に <code>static</code> を使用しても得られるパフォーマンス向上はほとんど無視できる程度でありながら、大きな安全リスクをもたらします。</p>
 <h3 id="3-強化学制と動的検出">3. 強化学制と動的検出
 </h3><ul>
@@ -650,126 +486,7 @@ patch(it, current_input);
     
 
     
-</article>
-
-<script>
-    (() => {
-        const toolbar = document.querySelector('.article-mobile-toolbar');
-        const toc = document.getElementById('article-toc');
-        const tocToggle = toolbar?.querySelector('[data-article-toc-toggle]');
-        const settings = document.getElementById('article-reading-settings');
-        const settingsToggle = toolbar?.querySelector('[data-reading-settings-toggle]');
-        const sizeButtons = toolbar ? Array.from(toolbar.querySelectorAll('[data-reading-size]')) : [];
-        const rail = document.querySelector('[data-article-toc-rail]');
-        const railToggle = rail?.querySelector('[data-article-toc-rail-toggle]');
-        const railPanel = rail?.querySelector('[data-article-toc-rail-panel]');
-        const railProgress = rail?.querySelector('[data-article-toc-progress]');
-        const railProgressLabel = rail?.querySelector('[data-article-toc-progress-label]');
-        const article = document.querySelector('.main-article');
-        if (!toolbar && !rail) return;
-        const storageKey = 'mobile-reading-font-size';
-
-        const setRailOpen = (open) => {
-            if (!rail || !railToggle || !railPanel) return;
-            railPanel.hidden = !open;
-            railToggle.setAttribute('aria-expanded', String(open));
-            rail.classList.toggle('is-open', open);
-        };
-
-        railToggle?.addEventListener('click', () => {
-            setRailOpen(railPanel.hidden);
-        });
-
-        const railLinks = rail ? Array.from(rail.querySelectorAll('a[href^="#"]')) : [];
-        const headings = article ? Array.from(article.querySelectorAll('.article-content h2[id], .article-content h3[id], .article-content h4[id]')) : [];
-        const headingLinks = headings.map((heading) => ({
-            heading,
-            link: railLinks.find((candidate) => candidate.getAttribute('href') === `#${heading.id}`)
-        })).filter((item) => item.link);
-
-        const setActiveHeading = (headingId) => {
-            const active = headingLinks.find((item) => item.heading.id === headingId);
-            headingLinks.forEach(({ link }) => {
-                const isActive = link === active?.link;
-                link.classList.toggle('is-active', isActive);
-                if (isActive) link.setAttribute('aria-current', 'location');
-                else link.removeAttribute('aria-current');
-            });
-        };
-
-        if (headingLinks.length) {
-            const observer = new IntersectionObserver((entries) => {
-                const visible = entries
-                    .filter((entry) => entry.isIntersecting)
-                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-                if (visible[0]) setActiveHeading(visible[0].target.id);
-            }, { rootMargin: '-18% 0px -68% 0px', threshold: [0, 1] });
-            headingLinks.forEach(({ heading }) => observer.observe(heading));
-
-            const initialCandidates = headingLinks
-                .filter(({ heading }) => heading.getBoundingClientRect().top <= window.innerHeight * 0.22);
-            const initialHeading = initialCandidates[initialCandidates.length - 1] || headingLinks[0];
-            setActiveHeading(initialHeading.heading.id);
-        }
-
-        const updateRailProgress = () => {
-            if (!article || !railProgress) return;
-            const articleTop = window.scrollY + article.getBoundingClientRect().top;
-            const articleEnd = articleTop + article.offsetHeight - window.innerHeight;
-            const progress = articleEnd <= articleTop
-                ? 100
-                : Math.min(Math.max((window.scrollY - articleTop) / (articleEnd - articleTop) * 100, 0), 100);
-            railProgress.style.height = `${progress}%`;
-            railProgressLabel?.replaceChildren(document.createTextNode(`${Math.round(progress)}%`));
-            railProgress.parentElement?.setAttribute('aria-valuenow', String(Math.round(progress)));
-        };
-
-        window.addEventListener('scroll', updateRailProgress, { passive: true });
-        window.addEventListener('resize', updateRailProgress);
-        updateRailProgress();
-
-        tocToggle?.addEventListener('click', () => {
-            if (!toc) return;
-            toc.open = !toc.open;
-            tocToggle.setAttribute('aria-expanded', String(toc.open));
-            if (toc.open) toc.scrollIntoView({ block: 'nearest' });
-        });
-
-        settingsToggle?.addEventListener('click', () => {
-            const open = settings.hidden;
-            settings.hidden = !open;
-            settingsToggle.setAttribute('aria-expanded', String(open));
-        });
-
-        const applyReadingSize = (size) => {
-            const validSize = ['small', 'default', 'large'].includes(size) ? size : 'default';
-            document.documentElement.dataset.mobileReadingSize = validSize;
-            sizeButtons.forEach((button) => {
-                button.setAttribute('aria-pressed', String(button.dataset.readingSize === validSize));
-            });
-        };
-
-        let savedSize = 'default';
-        try {
-            savedSize = localStorage.getItem(storageKey) || 'default';
-        } catch (error) {
-            savedSize = 'default';
-        }
-        applyReadingSize(savedSize);
-
-        sizeButtons.forEach((button) => {
-            button.addEventListener('click', () => {
-                const size = button.dataset.readingSize;
-                applyReadingSize(size);
-                try {
-                    localStorage.setItem(storageKey, size);
-                } catch (error) {
-                    
-                }
-            });
-        });
-    })();
-</script>
+</article><script src="/ts/article-tools.e2a3fd23d22acc7fe6c3f7f29a5c7c8745762b517d418acafef21c8006093a9f.js" integrity="sha256-4qP9I9IqzH/mw/fymlx8h0V2K1F9QYrK/vIcgAYJOp8=" defer></script>
 
 
     
@@ -982,37 +699,6 @@ patch(it, current_input);
         <path d="m5 14 7-7 7 7" />
     </svg>
 </button>
-
-<script>
-(() => {
-    const button = document.querySelector('[data-back-to-top]');
-    if (!button) return;
-
-    const visibilityThreshold = 320;
-    let ticking = false;
-
-    const updateVisibility = () => {
-        button.hidden = window.scrollY < visibilityThreshold;
-        ticking = false;
-    };
-
-    window.addEventListener('scroll', () => {
-        if (!ticking) {
-            window.requestAnimationFrame(updateVisibility);
-            ticking = true;
-        }
-    }, { passive: true });
-
-    button.addEventListener('click', () => {
-        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-            ? 'auto'
-            : 'smooth';
-        window.scrollTo({ top: 0, behavior });
-    });
-
-    updateVisibility();
-})();
-</script>
 <script
                 src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
                 integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
@@ -1030,5 +716,6 @@ patch(it, current_input);
         document.head.appendChild(customFont);
     }());
 </script>
+<script src="/ts/site-shell.b0c7d091a4dd3194be4e347bfc2179a52cf3ca25830fbbcac798ce7b793123ed.js" integrity="sha256-sMfQkaTdMZS&#43;TjR7/CF5pSzzyiWDD7vKx5jOe3kxI&#43;0=" defer></script>
 </body>
 </html>
