@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>LLM on Uncle Xiang&#39;s Notebook</title>
+        <link>https://ttf248.life/en/tags/llm/</link>
+        <description>Recent content in LLM on Uncle Xiang&#39;s Notebook</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>en</language>
+        <lastBuildDate>Wed, 15 Jul 2026 09:48:26 +0800</lastBuildDate><atom:link href="https://ttf248.life/en/tags/llm/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>Feed several code anchors to the encoding model</title>
+        <link>https://ttf248.life/en/p/code-anchors-for-llm-requirements/</link>
+        <pubDate>Sun, 05 Jul 2026 23:04:15 +0800</pubDate>
+        
+        <guid>https://ttf248.life/en/p/code-anchors-for-llm-requirements/</guid>
+        <description>&lt;p&gt;When writing requirements for coding models, I increasingly tend to include a few names that can be searched in the repository: function names, component names, CSS class names, or interface paths. Without these terms, the model may still be able to complete the task, but it often has to spend an extra round guessing &amp;ldquo;which piece of code does this sentence correspond to.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;For example, just write:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Adjust the disabled state of the login button, prevent repeated clicks while submitting, and also gray out the style.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;A human can identify where the &amp;ldquo;login button&amp;rdquo; is based on the visual impression of a page, but a coding model may be confronted with dozens of buttons, multiple login entry points, and implementations scattered across components, state management, and style files. It must first map the phrase &amp;ldquo;login button&amp;rdquo; from natural language to the specific symbols in the repository, and only then can it determine whether to modify the event handler, state variables, or CSS.&lt;/p&gt;
+&lt;p&gt;If the requirements are modified as follows, the search space will be much smaller:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Adjust the submission state of &lt;code&gt;handleSubmit&lt;/code&gt; in &lt;code&gt;LoginForm&lt;/code&gt;. Disable &lt;code&gt;.login-submit&lt;/code&gt; during submission to prevent duplicate requests; the existing error notification behavior remains unchanged. Acceptance: clicking again before the request completes will not send a second request, the button appears in a disabled style, and it is restored after the request finishes.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;What&amp;rsquo;s truly useful here is not that the prompts become longer, but that there are a few more anchors that can be landed on in code.&lt;/p&gt;
+&lt;h2 id=&#34;the-model-is-making-predictions-but-the-agent-still-needs-to-find-the-code-first&#34;&gt;The Model Is Making Predictions, But the Agent Still Needs to Find the Code First
+&lt;/h2&gt;&lt;p&gt;Current mainstream large language models typically split input into tokens and progressively predict subsequent tokens based on existing context. Transformer&amp;rsquo;s self-attention mechanism allows tokens in a sequence to establish connections with each other; after large-scale pre-training and subsequent alignment, the model can follow instructions, explain code, and generate modification plans. However, &amp;ldquo;being able to generate based on context&amp;rdquo; is not the same as &amp;ldquo;naturally knowing where the login button is placed in your current repository.&amp;rdquo;&lt;/p&gt;
+&lt;p&gt;The coding agent has an additional layer of work: it invokes file search, text retrieval, read, and test tools to bring the relevant code from the repository into the model&amp;rsquo;s context. At this stage, the function name &lt;code&gt;handleSubmit&lt;/code&gt; and the class name &lt;code&gt;.login-submit&lt;/code&gt; serve a dual purpose.&lt;/p&gt;
+&lt;p&gt;The first layer is &lt;strong&gt;retrieval anchors&lt;/strong&gt;. A phrase like &amp;ldquo;login button&amp;rdquo; in natural language can match copy, comments, tests, and multiple components; precise symbols can be handed directly to text-search tools to quickly locate definitions, references, and adjacent tests. Reading fewer irrelevant files not only saves time and tokens, but also reduces the chance of unrelated code cluttering your judgment.&lt;/p&gt;
+&lt;p&gt;The second layer is &lt;strong&gt;semantic constraints&lt;/strong&gt;. &lt;code&gt;handleSubmit&lt;/code&gt; suggests that the change is related to the submission flow, &lt;code&gt;.login-submit&lt;/code&gt; narrows the visual state to a specific selector, and &lt;code&gt;LoginForm&lt;/code&gt; further provides the component boundary. Together, they reduce the ambiguity around &amp;ldquo;which button exactly, and which layer should hold the state.&amp;rdquo; The model is still doing probabilistic generation, but there are fewer plausible interpretations, making it easier for the next step to unfold along the correct code path.&lt;/p&gt;
+&lt;p&gt;That&amp;rsquo;s also why I&amp;rsquo;d rather call this approach &amp;ldquo;providing coordinates&amp;rdquo; than a &amp;ldquo;prompting trick.&amp;rdquo; It helps both the model and the toolchain around the model. Even if you switch to a different coding model, as long as it also needs to search the repository, these coordinates remain valuable.&lt;/p&gt;
+&lt;h2 id=&#34;a-good-requirement-is-more-than-just-a-string-of-keywords&#34;&gt;A Good Requirement Is More Than Just a String of Keywords
+&lt;/h2&gt;&lt;p&gt;Having only the symbol name is not enough. Although the following writing style is easy to search for, it still doesn&amp;rsquo;t tell you what to change it to:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;code&gt;LoginForm&lt;/code&gt;, &lt;code&gt;handleSubmit&lt;/code&gt;, &lt;code&gt;.login-submit&lt;/code&gt;, optimize it.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;The format I use more often now includes four categories of information:&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;Information&lt;/th&gt;
+					&lt;th&gt;Purpose&lt;/th&gt;
+					&lt;th&gt;Example&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Code Anchors&lt;/td&gt;
+					&lt;td&gt;Narrow down the search scope&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;LoginForm&lt;/code&gt;, &lt;code&gt;handleSubmit&lt;/code&gt;, &lt;code&gt;.login-submit&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Target Behavior&lt;/td&gt;
+					&lt;td&gt;Explain what happens after the change&lt;/td&gt;
+					&lt;td&gt;Prevent duplicate requests during submission&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Preservation Items&lt;/td&gt;
+					&lt;td&gt;Prevent accidental changes to adjacent behaviors&lt;/td&gt;
+					&lt;td&gt;Existing error messages remain unchanged&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Acceptance Criteria&lt;/td&gt;
+					&lt;td&gt;Provide an endpoint for implementation and testing&lt;/td&gt;
+					&lt;td&gt;The second click does not send a request, and the request state is restored after it ends&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;File paths, test names, interface names, and error message text can also serve as anchors. Prioritize names you have personally verified and that are highly recognizable; you don&amp;rsquo;t need to pile in every related symbol just to appear specific. Usually one or two entry functions, a component, or a style name is already enough to let the agent start searching; the remaining call relationships should be verified by it from the code, rather than being filled in from memory by the requirement writer.&lt;/p&gt;
+&lt;p&gt;Also be wary of incorrect coordinates. When functions have been renamed, class names are reused in multiple places, or the requirement actually points to a different page, precise yet wrong keywords will lead the model astray faster. A safer approach is to add a sentence like &amp;ldquo;the name may have changed, please search to confirm first,&amp;rdquo; or provide both the page behavior and visible text so the agent can cross-verify.&lt;/p&gt;
+&lt;p&gt;So the more practical conclusion is not &amp;ldquo;stuff more keywords into the requirements,&amp;rdquo; but rather: &lt;strong&gt;translate the human&amp;rsquo;s impression of the page into coordinates that the repository can search, then constrain modification outcomes with behavior and acceptance criteria.&lt;/strong&gt; The former reduces the cost of finding code; the latter reduces the room for writing incorrect code. When both parts are present simultaneously, the efficiency gains of coding models become more stable.&lt;/p&gt;
+&lt;h2 id=&#34;references&#34;&gt;References
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/1706.03762&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Attention Is All You Need&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/2005.14165&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Language Models are Few-Shot Learners&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/academy/what-is-ai/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenAI Academy：AI fundamentals&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/index/why-language-models-hallucinate/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenAI：Why language models hallucinate&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;details class=&#34;article-notes&#34;&gt;
+    &lt;summary&gt;写作附记&lt;/summary&gt;
+    &lt;div class=&#34;article-notes__content&#34;&gt;
+        &lt;h3 id=&#34;original-prompt&#34;&gt;Original Prompt
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;When writing requirements with large models, if you can include some keywords, such as: associated function names, associated frontend style names, it can make the model more efficient. Briefly explain the principles of LLM, explain the principles of current large models, and explain why what I do is better.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;This piece preserves the on-site judgment that &amp;ldquo;function names and style names can boost coding efficiency,&amp;rdquo; and adds the distinction between language model generation and coding agent retrieval. It trims out full Transformer tutorials, model generation comparisons, and generalization prompt checklists, preventing mechanism introductions from overshadowing the main thread of engineering questions.&lt;/p&gt;
+
+    &lt;/div&gt;
+&lt;/details&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

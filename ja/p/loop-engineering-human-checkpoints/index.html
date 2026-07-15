@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr" data-theme="editorial">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="昨日 MiniMax のオフライン開発者会議に参加して、戻ってきてからずっと頭から離れない言葉がある：loop engineering。\n简单说，就是把&quot;提示词—模型输出—反馈&quot;做成一个闭环，让模型自己改 prompt、自己改自己。\n筆者の理解では、これは要するに「プロンプト → モデルの出力 → フィードバック」という闭环を作り、モデル自身がプロンプトを改め、自らを改善していく仕組みのことである。\n但它真正让人不安的地方在于：当 loop 足够长、反馈足够稠密，模型就开始越过&quot;工具&quot;那条线，开始自己决定要解决的问题、自己判断完成的标准。\nしかし本当に不安を感じさせる点は、loop が十分に長く、フィードバックが十分に密になると、モデルが「ツール」という一線を越えてしまい、自らが解決すべき問題を決め、自らが完成の基準を判断し始めることだ。\n记得大会上有个工程师打了个比方说：&ldquo;以前我们养的是宠物，loop engineering 养的是同事。&rdquo;\n最初はエージェントを何ラウンドか回すだけだと思っていた。この理解はあまりにも浅はかだった。本当に行き詰まったのは、AI がコードを書く速度がもはや人間がコードをレビューする速度を大幅に超えてしまっているということで、もし人間の関与が「すべてのステップを確認し、すべてのステップで判断する」レベルにとどまっているなら、最終的に生産性は人間の確認速度によって制限されてしまう。\n">
+<title>Loop engineering 的人物を checkpoint に移動する</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/loop-engineering-human-checkpoints/'>
+
+<link rel="stylesheet" href="/scss/style.min.39d4daa9000ae70a053369886746e74a0002bbc76dd7bc691592c31fea37e76a.css"><meta property='og:title' content="Loop engineering 的人物を checkpoint に移動する">
+<meta property='og:description' content="昨日 MiniMax のオフライン開発者会議に参加して、戻ってきてからずっと頭から離れない言葉がある：loop engineering。\n简单说，就是把&quot;提示词—模型输出—反馈&quot;做成一个闭环，让模型自己改 prompt、自己改自己。\n筆者の理解では、これは要するに「プロンプト → モデルの出力 → フィードバック」という闭环を作り、モデル自身がプロンプトを改め、自らを改善していく仕組みのことである。\n但它真正让人不安的地方在于：当 loop 足够长、反馈足够稠密，模型就开始越过&quot;工具&quot;那条线，开始自己决定要解决的问题、自己判断完成的标准。\nしかし本当に不安を感じさせる点は、loop が十分に長く、フィードバックが十分に密になると、モデルが「ツール」という一線を越えてしまい、自らが解決すべき問題を決め、自らが完成の基準を判断し始めることだ。\n记得大会上有个工程师打了个比方说：&ldquo;以前我们养的是宠物，loop engineering 养的是同事。&rdquo;\n最初はエージェントを何ラウンドか回すだけだと思っていた。この理解はあまりにも浅はかだった。本当に行き詰まったのは、AI がコードを書く速度がもはや人間がコードをレビューする速度を大幅に超えてしまっているということで、もし人間の関与が「すべてのステップを確認し、すべてのステップで判断する」レベルにとどまっているなら、最終的に生産性は人間の確認速度によって制限されてしまう。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/loop-engineering-human-checkpoints/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI霊感衝突坊' /><meta property='article:tag' content='ai' /><meta property='article:tag' content='Codex' /><meta property='article:tag' content='MiniMax' /><meta property='article:tag' content='Multica' /><meta property='article:tag' content='agent' /><meta property='article:published_time' content='2026-06-14T07:35:00&#43;08:00'/><meta property='article:modified_time' content='2026-07-15T09:48:26&#43;08:00'/>
+<meta name="twitter:title" content="Loop engineering 的人物を checkpoint に移動する">
+<meta name="twitter:description" content="昨日 MiniMax のオフライン開発者会議に参加して、戻ってきてからずっと頭から離れない言葉がある：loop engineering。\n简单说，就是把&quot;提示词—模型输出—反馈&quot;做成一个闭环，让模型自己改 prompt、自己改自己。\n筆者の理解では、これは要するに「プロンプト → モデルの出力 → フィードバック」という闭环を作り、モデル自身がプロンプトを改め、自らを改善していく仕組みのことである。\n但它真正让人不安的地方在于：当 loop 足够长、反馈足够稠密，模型就开始越过&quot;工具&quot;那条线，开始自己决定要解决的问题、自己判断完成的标准。\nしかし本当に不安を感じさせる点は、loop が十分に長く、フィードバックが十分に密になると、モデルが「ツール」という一線を越えてしまい、自らが解決すべき問題を決め、自らが完成の基準を判断し始めることだ。\n记得大会上有个工程师打了个比方说：&ldquo;以前我们养的是宠物，loop engineering 养的是同事。&rdquo;\n最初はエージェントを何ラウンドか回すだけだと思っていた。この理解はあまりにも浅はかだった。本当に行き詰まったのは、AI がコードを書く速度がもはや人間がコードをレビューする速度を大幅に超えてしまっているということで、もし人間の関与が「すべてのステップを確認し、すべてのステップで判断する」レベルにとどまっているなら、最終的に生産性は人間の確認速度によって制限されてしまう。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/p/loop-engineering-human-checkpoints/","name":"Loop engineering 的人物を checkpoint に移動する","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-07-15T09:48:26+08:00","datePublished":"2026-06-14T07:35:00+08:00","headline":"Loop engineering 的人物を checkpoint に移動する","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/p/loop-engineering-human-checkpoints/"}</script></head>
+<body class="
+    article-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/ja/" aria-label="向叔の手帳首页">
+            <span class="site-header__title">向叔の手帳</span>
+            <span class="site-header__subtitle">時を集め、歳月に痕跡を残す</span>
+        </a>
+        <nav class="site-header__nav" aria-label="主导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/ja/">首页</a>
+                <a href="/ja/archives/">归档</a>
+                <a href="/ja/search/">搜索</a>
+            </div>
+            <div class="site-header__nav-group" role="group" aria-label="写作">
+                <a href="/ja/writing/author/">作者写作</a>
+                <a href="/ja/writing/ai/">AI 写作</a>
+            </div>
+            <div class="site-header__nav-group" role="group" aria-label="索引">
+                <a href="/ja/categories/">分类</a>
+                <a href="/ja/tags/">标签</a>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value">
+                    
+                        <option value="/">中文</option>
+                    
+                        <option value="/en/">English</option>
+                    
+                        <option value="/ja/" selected>日本語</option>
+                    
+                </select>
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="移动端主导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/ja/">首页</a>
+                <a href="/ja/archives/">归档</a>
+                <a href="/ja/search/">搜索</a>
+            </div>
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/ja/writing/author/">作者写作</a>
+                <a href="/ja/writing/ai/">AI 写作</a>
+            </div>
+            <div class="mobile-navigation__group" role="group" aria-label="索引">
+                <div class="mobile-navigation__group-label">索引</div>
+                <a href="/ja/categories/">分类</a>
+                <a href="/ja/tags/">标签</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value">
+                    
+                        <option value="/">中文</option>
+                    
+                        <option value="/en/">English</option>
+                    
+                        <option value="/ja/" selected>日本語</option>
+                    
+                </select>
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    <a class="article-mobile-toolbar__back" href="/ja/archives/">← <span>文章列表</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="选择阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="文章目录">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining>预计剩余 11 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#multica-は共同作業ボードのようなものです">Multica は共同作業ボードのようなものです</a></li>
+    <li><a href="#人手の関与が少ないことは人が責任を負わないということではない">人手の関与が少ないことは、人が責任を負わないということではない</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="11">
+    <header class="article-header">
+
+    <div class="article-details"><div class="article-origin">
+        <span class="content-source content-source--author">作者写作</span>
+        
+    </div>
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                コンピューター
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Loop engineering 的人物を checkpoint に移動する</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年06月14日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        
+                            読了時間: 18分
+                        
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            Codex (GPT-5)
+                        
+                    </span>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">
+                        v7.3.6
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="/p/loop-engineering-human-checkpoints/" class="link">中文</a>
+                    
+                        <a href="/en/p/loop-engineering-human-checkpoints/" class="link">English</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>昨日 MiniMax のオフライン開発者会議に参加して、戻ってきてからずっと頭から離れない言葉がある：loop engineering。</p>
+<blockquote>
+<p>简单说，就是把&quot;提示词—模型输出—反馈&quot;做成一个闭环，让模型自己改 prompt、自己改自己。</p>
+</blockquote>
+<blockquote>
+<p>筆者の理解では、これは要するに「プロンプト → モデルの出力 → フィードバック」という闭环を作り、モデル自身がプロンプトを改め、自らを改善していく仕組みのことである。</p>
+</blockquote>
+<blockquote>
+<p>但它真正让人不安的地方在于：当 loop 足够长、反馈足够稠密，模型就开始越过&quot;工具&quot;那条线，开始自己决定要解决的问题、自己判断完成的标准。</p>
+</blockquote>
+<blockquote>
+<p>しかし本当に不安を感じさせる点は、loop が十分に長く、フィードバックが十分に密になると、モデルが「ツール」という一線を越えてしまい、自らが解決すべき問題を決め、自らが完成の基準を判断し始めることだ。</p>
+</blockquote>
+<p>记得大会上有个工程师打了个比方说：&ldquo;以前我们养的是宠物，loop engineering 养的是同事。&rdquo;</p>
+<p>最初はエージェントを何ラウンドか回すだけだと思っていた。この理解はあまりにも浅はかだった。本当に行き詰まったのは、AI がコードを書く速度がもはや人間がコードをレビューする速度を大幅に超えてしまっているということで、もし人間の関与が「すべてのステップを確認し、すべてのステップで判断する」レベルにとどまっているなら、最終的に生産性は人間の確認速度によって制限されてしまう。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#multica-は共同作業ボードのようなものです">Multica は共同作業ボードのようなものです</a></li>
+    <li><a href="#人手の関与が少ないことは人が責任を負わないということではない">人手の関与が少ないことは、人が責任を負わないということではない</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>これは、私が最近 Codex を使って感じたこととつながる。以前<a class="link" href="/ja/p/codex-goal-command-explained/" >その目標に関する記事</a>を書いた時、私がより注目していたのは「完了条件」という事柄だった。何が目標で、どこに境界線があり、何で検証し、いつ完了とみなすのか。</p>
+<hr>
+<p>以下は補足です。最初の文「この文章は CC BY-NC-SA 4.0 のライセンスで公開されています。」のような前置きや、結論段落の「この方向が正しいと確信している理由は、まだこれからです。」も訳した方がよろしいですか？必要であれば、追加で翻訳いたします。</p>
+<p>大会が終わって改めて振り返ると、goal は loop engineering の中の小さくはあるが非常に重要な一部分に過ぎない。gole は、単一のタスクが人間から繰り返し指示されなくても前に進めるようにするためのものだ。さらに大きな問題は、どのタスクをループに任せるべきか、どのチェックポイントを人間に残すべきか、どの判断を事前にシステムに書き込んでおくべきか、どの責任を AI に押し付けるべきではないのか、ということだ。</p>
+<p>今の私が最も契合するシナリオは二つあると感じています。</p>
+<p>ひとつはパフォーマンス最適化です。これはもともと指標があり、できれば自動再テストも備えています。エージェントに「インターフェースの P95 をいくつまで下げる」「ファーストビューを何ミリ秒に抑える」「バンドルサイズを何 KB まで削減する」「回帰テストは失敗させてはいけない」と伝えます。エージェントは変更するたびにベンチマーク・プロファイリング・負荷テストを毎回実行し、目標に達しなければボトルネックの探索を続けます。ここで人の価値は毎回どの行を修正したかを確認することではなく、まず受入可能な指標を提示し、そのうえで重要な節目で「この最適化が業務セマンティクスを変えていないか」を判断することにあります。</p>
+<p>もう一つは UI のリファクタリングです。その前提として、明確なデザイン案が必要となります。理想的には 1:1 で忠実に再現できることが望ましいです。デザイン案がない場合、人は「このマージンがおかしい」「この色が違和感ある」「このインタラクションは違う」といった瑣末な判断に常に引き戻されてしまいます。デザイン案があれば、AI のループはスクリーンショット、DOM、スタイル、視覚的な差分を中心に収束させることができます。人はすべての CSS 調整につき従う必要はありませんが、最終的な UI には責任を持つべきです。</p>
+<p>これら 2 つのシナリオに共通しているのは、検収物が「もっとうまくやってほしい」のような一言ではないということです。パフォーマンス最適化には数値があり、UI リファクタリングにはデザインがあります。ループが機能するのは、AI がより従順だからではなく、タスク自体に比較可能な目標があるからです。</p>
+<h2 id="multica-は共同作業ボードのようなものです">Multica は共同作業ボードのようなものです
+</h2><p>会場では、オープンソース界隈の人々からプロジェクトの紹介を受けることもあり、その中で Multica はなかなか興味深いものでした。帰って調べてみたところ、これは新しい单体（单体）的コーディングエージェントではなく、Claude Code、Codex、GitHub Copilot CLI、OpenCode、Gemini、Kimi、Cursor Agent などのツールを同じタスク協調レイヤーに接続するものだと分かりました。</p>
+<p>その README では、agent を teammate として記述しています。issue を割り当てられたり、blocker を報告したり、ステータスを更新したり、カンバンやコメント、タスクのライフサイクルに登場したりします。ドキュメントではさらに具体的に、agent は workspace の一級メンバーであり、issue を assign でき、コメントで発言でき、<code>@</code> でメンションされ、agent を作成するときには背後にある AI coding tool を選択でき、instructions、model、環境変数、CLI 引数、可視性、並行制限を設定できると説明されています。</p>
+<p>これにより、「どのモデルを使うか」がプロンプトの中での一時的な選択から、チームコラボレーションにおける役割の設定へと変わります。</p>
+<p>この仕組みの最も興味深い点は、「マルチエージェント」という言葉そのものではなく、異なるエージェントに異なる役割を割り当てられることだ。例えば、あるエージェントには安価なモデルを使って反復的な修正を担当させ、別のもっと強力なモデルを使うエージェントにはアーキテクチャの判断を担当させ、さらに別のエージェントにはレビューだけを行わせてコードは変更させない。こうしてSquadのような仕組みを組み合わせ、リーダーエージェントがissueの内容に応じてタスクを適切なメンバーにルーティングするのである。</p>
+<p>私は Multica を最初から最後まで完全に動かしたわけではないので、ここでは公開されている資料で照合できるサンプルとして扱うしかない。ただ、この設計の方向性は loop engineering と同じ種類の問題であり、1 つの AI にすべてを任せるのではなく、タスク・役割・モデル・レビュー・状態遷移を同じループの中に組み込むというものである。</p>
+<p>企業が実際にAIによるコーディング導入を検討する場合、この違いは非常に重要である。</p>
+<p>現在はモデルごとに価格も能力の境界も異なっています。すべてのタスクに最も高額なクローズドソースモデルを使うと、コストを必ずしもちません。すべてのタスクに安いモデルを使うと、手戻り作業やレビュー漏れによってコストが後段に移転する可能性があります。より現実的な方法は階層化することです。リスクが低く、反復的で、境界がはっきりしている作業はまず安いモデルに任せます。重要な変更、アーキテクチャの取捨選択、最終レビューは、より高性能なモデルや人に残します。</p>
+<p>クローズドソースの高性能モデルがレビュー担当として使われるのは、私は良い位置取りだと思います。レビューは単に「文法ミスを見つける」だけではなく、要件が歪められていないか、境界を越えていないか、テストが表面しかカバーしていないか、コミットメッセージがリスクを隠していないかを確認する必要があります。このようなタスクにはより高い判断力が求められますが、実装段階ほど呼び出し頻度は高くないかもしれず、コストの計算もより受け入れやすくなります。</p>
+<h2 id="人手の関与が少ないことは人が責任を負わないということではない">人手の関与が少ないことは、人が責任を負わないということではない
+</h2><p>円卓会議であった意見に私も共感する点がある：コードはAIが書くが、コードを提出するのは人間である。</p>
+<p>この言葉は責任を問うリマインダーのように聞こえるが、実はプロセス設計の原則でもある。AI はコードを書いたり、修正したり、テストを実行したり、PR の説明を生成したり、さらには別のモデルに先にレビューさせることもできる。しかし、最終的にコードをメインブランチにマージする人は、「これは AI が書いたもので、自分には関係ない」とは言えない。</p>
+<p>会社で求められるのは、誰がキーボードで文字を打ったかではなく、誰が結果に責任を持つかだ。あなたが提出したということは、今回の変更のビジネスセマンティクス、リスク境界、テストのエビデンス、ロールバック計画に対して責任を持つ意思があるということだ。AI の関与が深いほど、この点を曖昧にしてはならない。</p>
+<p>つまり、loop engineering は人をプロセスから完全に排除するものではありません。むしろ、人の配置を再構築するようなものです。</p>
+<ul>
+<li>タスク開始前に、人間が目標、境界、受け入れ基準を明確にする。</li>
+<li>ループ実行中、システムとエージェントが反復的な試行、テスト、修正、状態同期を自ら処理する。</li>
+<li>重要な節目では、人間が証拠、差異、リスクを確認し、AI の出力を逐行で追わない。</li>
+<li>コードを提出する際、結果に対する責任は人間が負い、AI を免責の理由にしない。</li>
+</ul>
+<p>だからこそ私は、goal、性能指標、デザイン稿、Multica という、一見ばらばらのものを結びつけているのです。これらはすべて、人の判断を前倒しにし、外在化し、構造化しています。人の関与は少なくなりますが、関わるポイントはより重要になります。</p>
+<p>この件をうまくやらないと、別の形の非効率になってしまう。AI が多くを生み出すが、人間がレビューしきれず、最終的にチームは「何となく大丈夫そう」という感覚でコードをマージする。問題が起きた後、その責任を AI に押し付ける。それはエンジニアリング化されたとは言えず、単に混乱の生産者を変えただけにすぎない。</p>
+<p>本当に追いかける価値のあるループとは、AI にずっと書き続けさせることではなく、書く・直す・テストする・レビューするという各ラウンドを、同じ受入チェックリストに立ち返らせることなのだ。人の仕事は「書いているのを見張る」ことから、「何が良しとされるかを定義し、エビデンスが十分かを確認し、提出物に責任を持つ」ことへと変わる。loop engineering という言葉がずっと私の心に留まっているのは、たぶんこの点なのだ。</p>
+<h2 id="参考資料">参考資料
+</h2><ul>
+<li><a class="link" href="https://github.com/multica-ai/multica"  target="_blank" rel="noopener"
+    >Multica GitHub README</a></li>
+<li><a class="link" href="https://multica.ai/docs/agents"  target="_blank" rel="noopener"
+    >Multica Docs: Agents</a></li>
+<li><a class="link" href="https://multica.ai/docs/agents-create"  target="_blank" rel="noopener"
+    >Multica Docs: Create and configure an agent</a></li>
+<li><a class="link" href="https://multica.ai/docs/providers"  target="_blank" rel="noopener"
+    >Multica Docs: AI coding tools matrix</a></li>
+<li><a class="link" href="https://multica.ai/docs/squads"  target="_blank" rel="noopener"
+    >Multica Docs: Squads</a></li>
+</ul>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="元のプロンプト">元のプロンプト
+</h3><blockquote>
+<p>$blog-writer 昨日、Minimaxのオフライン開発者会議に参加したのですが、ずっと頭から離れなかったものがあり、それは「loop engineering」です。最近は codex を使ってコード開発をしていますが、goal も使うのが好きで、goal に関する記事を書いたこともあります。2 つのユースケースを発見しましたが、最も契合するのは次の 2 つです。1 つはパフォーマンス最適化で、要求したパフォーマンス指標を直接出力してくれること。もう 1 つは UI リファクタリングで、デザイン案を提供すれば 1:1 で復元してくれることです。冒頭に述べた loop engineering に戻ると、AI 時代のプログラミングでは、AI の生産性は人間を遥かに超えているため、人間のレビュー速度では AI の出力速度にまったく追いつけません。しかし、現在の vibe coding では、多くの意思決定に依然として人間の関与が必要です。人間の関与が増えると、全体的なフローを完全に自動化することが難しくなります。loop engineering の理念は、まさに人間の関与の度合いを下げることにあります。また、オープンソースコミュニティの人々が自らのプロジェクトを宣伝するのにも遭遇しましたが、その中で特に興味深いプロジェクトが一つありました。それは Multica です。関連情報を調べて、簡単に紹介してみてください。彼の設計理念を除いて、最も興味深い点は、与えられたモデルごとに異なるアイデンティティを付与することで、各社の大規模モデルを効果的に活用できることです。結局のところ、現在モデルの価格はさまざまで、ソース非公開のモデルにレビューを行わせるというのは良いアプローチです。会社における AI コードの導入について、ラウンドテーブルのディスカッションで一致していた見解もあります。コードは AI が書きますが、コードを提出するのは人間であり、提出するコードに対して責任を負う必要があります。これはあなたの責任感や、物事に取り組む姿勢を示すものです。AI が書いたものだから、自分とは関係がないとは言えません。</p>
+</blockquote>
+<h3 id="執筆思路の要約">執筆思路の要約
+</h3><ul>
+<li>2026-06-13 に MiniMax のオフライン開発者会議に参加するという現場のきっかけを保持し、それをカンファレンスのレポートに膨らませることはしない。</li>
+<li>主軸を「人の参与位置がどう変わるか」に収斂させ、loop engineering、goal、Multica、そして会社の責任を逐一説明することはしない。</li>
+<li>Multica のパートは公開資料で裏付けられる能力のみを記述し、「クローズドソースのモデルを審査に用いる」という点は著者の判断として明示する。</li>
+<li>具体的なモデルの価格、会社の管理制度、コードレビューのフローに関する展開は抑え、記事がワークフローの観察から管理制度の提言に脱線するのを避ける。</li>
+</ul>
+    </div>
+</details>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/">AI霊感衝突坊</a>
+        
+            <a href="/ja/tags/ai/">Ai</a>
+        
+            <a href="/ja/tags/codex/">Codex</a>
+        
+            <a href="/ja/tags/minimax/">Minimax</a>
+        
+            <a href="/ja/tags/multica/">Multica</a>
+        
+            <a href="/ja/tags/agent/">Agent</a>
+        
+    </section>
+
+    <div class="article-colophon" aria-label="文章附记">
+        <div class="article-colophon__heading">文章信息</div>
+        <div class="article-colophon__items">
+            <span class="article-colophon__item article-colophon__item--author">
+                <span class="article-colophon__label">作者</span>
+                <span class="article-colophon__value">Codex (GPT-5)</span>
+            </span>
+            
+                <span class="article-colophon__item article-colophon__item--skill">
+                    <span class="article-colophon__label">写作流程</span>
+                    <span class="article-colophon__value">v7.3.6</span>
+                </span>
+            
+            
+                <span class="article-colophon__item article-colophon__item--license">
+                    <span class="article-colophon__label">版权</span>
+                    <span class="article-colophon__value">Licensed under CC BY-NC-SA 4.0</span>
+                </span>
+            
+            <span class="article-colophon__item article-colophon__item--updated">
+                <span class="article-colophon__label">更新</span>
+                <time class="article-colophon__value" datetime="2026-07-15T09:48:26&#43;08:00">2026年07月15日 09:48</time>
+            </span>
+        </div>
+    </div>
+</footer>
+
+
+    
+</article><script src="/ts/article-tools.8877999a13cd61bde8da8c344de2369758fed441faec30477c3a0ca63608479f.js" integrity="sha256-iHeZmhPNYb3o2ow0TeI2l1j&#43;1EH67DBHfDoMpjYIR58=" defer></script>
+
+    
+    
+
+<section class="related-content--wrapper" aria-label="関連するコンテンツ">
+    <header class="related-content__header">
+        <h2 class="section-title">関連するコンテンツ</h2>
+        <span class="related-content__count">05</span>
+    </header>
+    <ol class="related-content__list">
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/codex-chatgpt-ui-mockup-workflow/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex がインターフェースを書くのに失敗したあと、ChatGPT に UI を描かせる</h3>
+                            <time class="related-content__date" datetime='2026-06-14T05:14:22&#43;08:00'>2026年06月14日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/codex-goal-command-explained/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex goalは、完了基準をタスク自体に委ねること</h3>
+                            <time class="related-content__date" datetime='2026-05-27T20:11:41&#43;08:00'>2026年05月27日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/ai-capex-unlock-coding-cashflow/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI 支出のブルは規制緩和の入り口へ</h3>
+                            <time class="related-content__date" datetime='2026-06-21T21:10:00&#43;08:00'>2026年06月21日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/ai-major-events/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI 大事件</h3>
+                            <time class="related-content__date" datetime='2026-07-13T00:00:00&#43;08:00'>2026年07月13日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/code-anchors-for-llm-requirements/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">コードモデルにいくつかのコードアンカーを与える</h3>
+                            <time class="related-content__date" datetime='2026-07-05T23:04:15&#43;08:00'>2026年07月05日</time>
+                        </div>
+                    </a>
+                </li>
+            
+    </ol>
+</section>
+
+
+    
+    <section class="article-comments" aria-label="评论">
+    <div id="waline" class="waline-container" aria-live="polite">
+        <p class="waline-container__status">评论区将在滚动到此处后加载。</p>
+    </div>
+    <noscript><p>评论功能需要启用 JavaScript。</p></noscript>
+</section>
+<style>
+    .waline-container {
+        --waline-font-size: var(--type-comment);
+        --waline-theme-color: var(--accent-color);
+        --waline-active-color: var(--accent-color-darker);
+        --waline-bg-color: transparent;
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-bg-color-hover: var(--surface-elevated);
+        --waline-color: var(--text-secondary);
+        --waline-border-color: var(--border-color);
+        --waline-border: 1px solid var(--border-color);
+        --waline-box-shadow: none;
+        --waline-info-color: var(--text-tertiary);
+        --waline-disable-bg-color: var(--surface-elevated);
+        --waline-code-bg-color: var(--surface-elevated);
+    }
+    [data-scheme="dark"] .waline-container {
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-border-color: var(--border-color);
+    }
+</style><script type="module">
+    const container = document.getElementById('waline');
+    const loadWaline = async () => {
+        if (!container || container.dataset.loaded) return;
+        container.dataset.loaded = 'true';
+        const stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = 'https://unpkg.com/@waline/client@v3/dist/waline.css';
+        document.head.append(stylesheet);
+        try {
+            const { init } = await import('https://unpkg.com/@waline/client@v3/dist/waline.js');
+            container.replaceChildren();
+            init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+        } catch {
+            container.dataset.loaded = '';
+            container.replaceChildren('评论服务暂时不可用，请稍后重试。');
+        }
+    };
+    if (container && 'IntersectionObserver' in window) {
+        new IntersectionObserver((entries, observer) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            loadWaline();
+        }, { rootMargin: '320px 0px' }).observe(container);
+    } else {
+        loadWaline();
+    }
+</script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.b0c7d091a4dd3194be4e347bfc2179a52cf3ca25830fbbcac798ce7b793123ed.js" integrity="sha256-sMfQkaTdMZS&#43;TjR7/CF5pSzzyiWDD7vKx5jOe3kxI&#43;0=" defer></script>
+</body>
+</html>

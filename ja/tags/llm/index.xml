@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>LLM on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/llm/</link>
+        <description>Recent content in LLM on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Wed, 15 Jul 2026 09:48:26 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/llm/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>コードモデルにいくつかのコードアンカーを与える</title>
+        <link>https://ttf248.life/ja/p/code-anchors-for-llm-requirements/</link>
+        <pubDate>Sun, 05 Jul 2026 23:04:15 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/code-anchors-for-llm-requirements/</guid>
+        <description>&lt;p&gt;エンコーディングモデルに要件を書くとき、私はますます、リポジトリで検索できる名前をいくつか添える傾向があります。関数名、コンポーネント名、CSSクラス名、あるいはインターフェースパスなど。これらの言葉がなければ、モデルが対応できないわけではありませんが、たいていはまず「この文章はどのコードに対応するのか」を推測する時間を一回費やすことになります。&lt;/p&gt;
+&lt;p&gt;例えば、次のように書きます。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;ログインボタンの無効化状態を調整し、送信中に繰り返しクリックされないようにし、スタイルもグレーにする。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;人間はページ全体の印象から「ログインボタン」がどこにあるかを理解できるが、コーディングモデルは数十個のボタン、複数のログインエントリーポイント、コンポーネント・状態管理・スタイルファイルに散らばった実装に直面する可能性がある。まず自然言語の「ログインボタン」をリポジトリ内の具体的なシンボルにマッピングし、その上でイベント処理・状態変数・CSS のどれを修正すべきかを判断しなければならない。&lt;/p&gt;
+&lt;p&gt;要件を以下のように変更すると、検索範囲はかなり小さくなります。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;code&gt;LoginForm&lt;/code&gt; の &lt;code&gt;handleSubmit&lt;/code&gt; における送信状態を調整します。送信中は &lt;code&gt;.login-submit&lt;/code&gt; を無効化し、重複リクエストを防ぎます。既存のエラー表示の動作は変更しません。受け入れ基準: リクエストが完了していない状態で再度クリックしても 2 件目のリクエストは送信されず、ボタンは無効化されたスタイルになります。また、リクエスト完了後は元の状態に戻ります。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;ここで本当に役立つのはプロンプトが長くなることではなく、コード上に落とせるアンカーが数枚増えることである。&lt;/p&gt;
+&lt;h2 id=&#34;モデルが予測中エージェントはまずコードを探す&#34;&gt;モデルが予測中、エージェントはまずコードを探す
+&lt;/h2&gt;&lt;p&gt;現在の主流大規模言語モデルは、通常、入力をトークンに分割し、既存の文脈に基づいて後続のトークンを段階的に予測します。Transformer の自己注意機構により、シーケンス内のトークン同士が関連付けられるようになります。大規模な事前学習とそれに続くアラインメントを経ることで、モデルは指示に従い、コードを解釈し、修正案を生成することができるようになります。しかし、「文脈に基づいて生成できる」ということと、「現在のあなたのリポジトリ内のログインボタンの配置を自然に把握している」ということは同義ではありません。&lt;/p&gt;
+&lt;p&gt;コーディングエージェントにはもう一つの層があります。ファイル検索、テキスト検索、読み取り、テストツールを呼び出して、リポジトリから関連コードをモデルのコンテキストに取り込みます。関数名 &lt;code&gt;handleSubmit&lt;/code&gt; やクラス名 &lt;code&gt;.login-submit&lt;/code&gt; はこの段階で二重の役割を果たします。&lt;/p&gt;
+&lt;p&gt;第一の層は&lt;strong&gt;検索アンカー&lt;/strong&gt;です。自然言語における「ログインボタン」は、文言、コメント、テスト、複数のコンポーネントと一致する可能性があります。正確なシンボルはテキスト検索ツールに直接渡すことができ、定義や参照、関連するテストを素早く見つけることができます。関連のないファイルを少し読む手間を省くことで、時間とトークンを節約できるだけでなく、無関係なコードが判断を妨げるのも軽減されます。&lt;/p&gt;
+&lt;p&gt;第二の層は&lt;strong&gt;意味的な制約&lt;/strong&gt;です。&lt;code&gt;handleSubmit&lt;/code&gt; は変更が送信ロジックに関連することを示唆し、&lt;code&gt;.login-submit&lt;/code&gt; は視覚的状態を特定のセレクタに限定し、&lt;code&gt;LoginForm&lt;/code&gt; はコンポーネントの境界を提供します。これらが一体となって、「そもそもどのボタンなのか、状態はどの層に置くべきなのか」という曖昧さを減らします。モデルは依然として確率的に生成していますが、選択可能な解釈が減り、次のステップが正しいコードパスに沿って展開しやすくなります。&lt;/p&gt;
+&lt;p&gt;だからこそ、私はこの書き方を「プロンプトのテクニック」ではなく「座標を提供する」と呼びたいのです。座標はモデルだけでなく、モデル外部のツールチェーンにも役立ってくれます。別のコーディングモデルに置き換えたとしても、リポジトリの検索が必要である限り、これらの座標は価値を持ち続けます。&lt;/p&gt;
+&lt;h2 id=&#34;優れた要件は単なるキーワードの羅列ではない&#34;&gt;優れた要件は単なるキーワードの羅列ではない
+&lt;/h2&gt;&lt;p&gt;シンボル名だけでは不十分です。以下のような記述は検索しやすいものの、何に変更すべきか分かりません。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;code&gt;LoginForm&lt;/code&gt;、&lt;code&gt;handleSubmit&lt;/code&gt;、&lt;code&gt;.login-submit&lt;/code&gt; を最適化してください。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;私が現在よく使っている書き方には、4種類の情報が含まれています。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;情報&lt;/th&gt;
+					&lt;th&gt;役割&lt;/th&gt;
+					&lt;th&gt;例&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;コードアンカー&lt;/td&gt;
+					&lt;td&gt;検索範囲を絞り込む&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;LoginForm&lt;/code&gt;、&lt;code&gt;handleSubmit&lt;/code&gt;、&lt;code&gt;.login-submit&lt;/code&gt;&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;目標とする挙動&lt;/td&gt;
+					&lt;td&gt;変更後に何が起こるかを説明する&lt;/td&gt;
+					&lt;td&gt;送信中は重複リクエストを禁止する&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;保持する項目&lt;/td&gt;
+					&lt;td&gt;隣接する挙動の偶発的な変更を防ぐ&lt;/td&gt;
+					&lt;td&gt;既存のエラー表示を変更しない&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;受入条件&lt;/td&gt;
+					&lt;td&gt;実装とテストの終了点を提供する&lt;/td&gt;
+					&lt;td&gt;2 回目のクリックではリクエストを送信せず、リクエスト終了後に復旧する&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;ファイルパスやテスト名、インターフェース名、エラーメッセージもアンカーとして機能します。自分が確認した、識別性の高い名前を優先し、具体的に見せるためにすべての関連シンボルを詰め込む必要はありません。通常、一二つのエントリ関数や一つのコンポーネント、スタイル名で、エージェントが検索を始めるには十分です。その他の呼び出し関係は、エージェントにコードから検証させるべきであり、要件作成者が記憶から補完するべきではありません。&lt;/p&gt;
+&lt;p&gt;誤った座標にも警戒が必要です。関数の名称が変更されていたり、クラス名が複数の場所で再利用されていたり、あるいは要件が実際には別のページを指しているような場合、精密だが間違ったキーワードは、モデルをより速く誤った方向へと導いてしまいます。安全な表現としては、「名称が変更されている可能性があるため、まず検索して確認してください」という一文を追加するか、ページの動作と表示されるテキストの両方を提供して、エージェントに相互検証させるといった方法が挙げられます。&lt;/p&gt;
+&lt;p&gt;したがって、より実用的な結論は「要件にキーワードを多く詰め込む」ことではなく、&lt;strong&gt;人のページに対する印象をリポジトリで检索可能な座標に翻訳し、さらに行動と受け入れ条件によって修正結果を制約すること&lt;/strong&gt;である。前者はコードを探すコストを減らし、後者は誤ったコードを書く余地を減らす。この両方が同時に存在して初めて、コーディングモデルの効率向上はより安定したものとなる。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/1706.03762&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Attention Is All You Need&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/2005.14165&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Language Models are Few-Shot Learners&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/academy/what-is-ai/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenAI Academy：AI fundamentals&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://openai.com/index/why-language-models-hallucinate/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;OpenAI：Why language models hallucinate&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;details class=&#34;article-notes&#34;&gt;
+    &lt;summary&gt;写作附记&lt;/summary&gt;
+    &lt;div class=&#34;article-notes__content&#34;&gt;
+        &lt;h3 id=&#34;元のプロンプト&#34;&gt;元のプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;大規模モデルでコーディングの要件を書く際に、関連する関数名やフロントエンドに関連するスタイル名などのキーワードを含めると、モデルの効率が向上します。LLMの原理を少し説明し、現在の 대규모モデルの原則を解説し、なぜこのようにする方がより優れているのかについて説明します。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;ここでは「関数名やスタイル名を覚えればコーディング効率が上がる」という現場の判断をそのまま残しつつ、言語モデルによる生成とコーディングエージェントによる検索の違いを補足しました。Transformer の完全なチュートリアル、モデルの世代間比較、汎化的なプロンプト一覧は省いており、仕組みの説明が本来扱いたいエンジニアリング上の論点から目を逸らさないようにしました。&lt;/p&gt;
+
+    &lt;/div&gt;
+&lt;/details&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
