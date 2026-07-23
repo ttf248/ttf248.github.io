@@ -6,11 +6,11 @@
 
 <link rel='canonical' href='https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 
-<link rel="stylesheet" href="/scss/style.min.c7bd1f85c4f05d89e918887b3cd8d7a7ba150c2ce27320bcd2ae450a03978e64.css"><meta property='og:title' content="unordered_map 查得到却取错值，一次静态 lambda 的内存事故">
+<link rel="stylesheet" href="/scss/style.min.a48b623a5c71b33f953547f263d5b1889b9cb95ccb164ba7e38a9b4fd7ccb74b.css"><meta property='og:title' content="unordered_map 查得到却取错值，一次静态 lambda 的内存事故">
 <meta property='og:description' content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，就是函数内部的 static lambda 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。\n">
 <meta property='og:url' content='https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI 灵感碰撞坊' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='问题排查' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2026-03-16T20:18:18&#43;08:00'/><meta property='article:modified_time' content='2026-07-12T11:35:02&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='问题排查' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2026-03-16T20:18:18&#43;08:00'/><meta property='article:modified_time' content='2026-07-23T10:52:57&#43;08:00'/>
 <meta name="twitter:title" content="unordered_map 查得到却取错值，一次静态 lambda 的内存事故">
 <meta name="twitter:description" content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，就是函数内部的 static lambda 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/","name":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-07-12T11:35:02+08:00","datePublished":"2026-03-16T20:18:18+08:00","headline":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/","name":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-07-23T10:52:57+08:00","datePublished":"2026-03-16T20:18:18+08:00","headline":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -63,15 +63,13 @@
             <div class="site-header__nav-group" role="group" aria-label="浏览">
                 <a href="/">首页</a>
                 <a href="/archives/">归档</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
                 <a href="/search/">搜索</a>
             </div>
             <div class="site-header__nav-group" role="group" aria-label="写作">
                 <a href="/writing/author/">作者写作</a>
                 <a href="/writing/ai/">AI 写作</a>
-            </div>
-            <div class="site-header__nav-group" role="group" aria-label="索引">
-                <a href="/categories/">分类</a>
-                <a href="/tags/">标签</a>
             </div>
         </nav>
         <div class="site-header__tools">
@@ -121,17 +119,14 @@
                 <div class="mobile-navigation__group-label">浏览</div>
                 <a href="/">首页</a>
                 <a href="/archives/">归档</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
                 <a href="/search/">搜索</a>
             </div>
             <div class="mobile-navigation__group" role="group" aria-label="写作">
                 <div class="mobile-navigation__group-label">写作</div>
                 <a href="/writing/author/">作者写作</a>
                 <a href="/writing/ai/">AI 写作</a>
-            </div>
-            <div class="mobile-navigation__group" role="group" aria-label="索引">
-                <div class="mobile-navigation__group-label">索引</div>
-                <a href="/categories/">分类</a>
-                <a href="/tags/">标签</a>
             </div>
         </div>
         
@@ -199,8 +194,12 @@
     
     <header class="article-category">
         
-            <a href="/categories/computer/" >
-                计算机
+            <a href="/categories/ai-%E7%AC%94%E8%AE%B0/" >
+                AI 笔记
+            </a>
+        
+            <a href="/categories/ai-%E5%B7%A5%E7%A8%8B/" >
+                AI 工程
             </a>
         
     </header>
@@ -444,8 +443,6 @@
     
     <section class="article-tags">
         
-            <a href="/tags/ai-inspiration-hub/">AI 灵感碰撞坊</a>
-        
             <a href="/tags/cpp/">c&#43;&#43;</a>
         
             <a href="/tags/troubleshooting/">问题排查</a>
@@ -470,7 +467,7 @@
             
             <span class="article-colophon__item article-colophon__item--updated">
                 <span class="article-colophon__label">最后更新于</span>
-                <time class="article-colophon__value" datetime="2026-07-12T11:35:02&#43;08:00">2026年07月12日 11:35</time>
+                <time class="article-colophon__value" datetime="2026-07-23T10:52:57&#43;08:00">2026年07月23日 10:52</time>
             </span>
         </div>
     </div>
