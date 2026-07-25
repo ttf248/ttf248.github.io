@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
+<title>C&#43;&#43; 单例：一行 static 背后的初始化保证</title>
+
+<link rel='canonical' href='https://ttf248.life/p/cpp-singleton-static-initialization/'>
+
+<link rel="stylesheet" href="/scss/style.min.a48b623a5c71b33f953547f263d5b1889b9cb95ccb164ba7e38a9b4fd7ccb74b.css"><meta property='og:title' content="C++ 单例：一行 static 背后的初始化保证">
+<meta property='og:description' content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
+<meta property='og:url' content='https://ttf248.life/p/cpp-singleton-static-initialization/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='单例' /><meta property='article:tag' content='static' /><meta property='article:tag' content='C&#43;&#43;11' /><meta property='article:tag' content='C&#43;&#43;98' /><meta property='article:tag' content='线程安全' /><meta property='article:published_time' content='2026-07-24T23:32:22&#43;08:00'/><meta property='article:modified_time' content='2026-07-24T23:36:13&#43;08:00'/>
+<meta name="twitter:title" content="C++ 单例：一行 static 背后的初始化保证">
+<meta name="twitter:description" content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/cpp-singleton-static-initialization/","name":"C++ 单例：一行 static 背后的初始化保证","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"向叔"},"dateModified":"2026-07-24T23:36:13+08:00","datePublished":"2026-07-24T23:32:22+08:00","headline":"C++ 单例：一行 static 背后的初始化保证","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/cpp-singleton-static-initialization/"}</script></head>
+<body class="
+    article-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+        <nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            <div class="site-header__nav-group" role="group" aria-label="写作">
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/cpp-singleton-static-initialization/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/cpp-singleton-static-initialization/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    <a class="article-mobile-toolbar__back" href="/archives/">← <span>文章列表</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 6 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#两个-static-不是一回事">两个 <code>static</code> 不是一回事</a></li>
+    <li><a href="#t-到底做了什么"><code>T&amp;</code> 到底做了什么</a></li>
+    <li><a href="#第一次调用时编译器实际要解决什么">第一次调用时，编译器实际要解决什么</a></li>
+    <li><a href="#c98-为什么不能把它当成线程安全">C++98 为什么不能把它当成线程安全</a></li>
+    <li><a href="#c11-改变的是语义不是这行语法">C++11 改变的是语义，不是这行语法</a></li>
+    <li><a href="#c11-写法还有几个边界">C++11 写法还有几个边界</a></li>
+    <li><a href="#结尾记住这句区分">结尾：记住这句区分</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="6">
+    <header class="article-header">
+
+    <div class="article-details"><div class="article-origin">
+        <span class="content-source content-source--ai">AI 写作</span>
+        
+    </div>
+    
+    <header class="article-category">
+        
+            <a href="/categories/ai-%E7%AC%94%E8%AE%B0/" >
+                AI 笔记
+            </a>
+        
+            <a href="/categories/ai-%E5%B7%A5%E7%A8%8B/" >
+                AI 工程
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">C&#43;&#43; 单例：一行 static 背后的初始化保证</h1>
+        
+    
+        
+        
+        <h3 class="article-subtitle">
+            语法早就存在，C&#43;&#43;11 新增的是并发初始化的可移植保证
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年07月24日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        阅读时长: 10 分钟
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            向叔
+                        
+                    </span>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">
+                        v8.2.0
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>很多 C++ 单例实现最后都缩成这样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// C++11 guarantees thread-safe initialization of function-local static objects.
+</span></span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。</p>
+<p>先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 <code>T&amp;</code> 这套语法根本不是 C 代码。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#两个-static-不是一回事">两个 <code>static</code> 不是一回事</a></li>
+    <li><a href="#t-到底做了什么"><code>T&amp;</code> 到底做了什么</a></li>
+    <li><a href="#第一次调用时编译器实际要解决什么">第一次调用时，编译器实际要解决什么</a></li>
+    <li><a href="#c98-为什么不能把它当成线程安全">C++98 为什么不能把它当成线程安全</a></li>
+    <li><a href="#c11-改变的是语义不是这行语法">C++11 改变的是语义，不是这行语法</a></li>
+    <li><a href="#c11-写法还有几个边界">C++11 写法还有几个边界</a></li>
+    <li><a href="#结尾记住这句区分">结尾：记住这句区分</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="两个-static-不是一回事">两个 <code>static</code> 不是一回事
+</h2><p>完整的单例类通常写成这样：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Singleton</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">Singleton</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">static</span> <span class="n">Singleton</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="p">(</span><span class="k">const</span> <span class="n">Singleton</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Singleton</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">~</span><span class="n">Singleton</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>外层的 <code>static</code> 出现在类成员函数声明里，表示 <code>Instance</code> 是静态成员函数。它没有 <code>this</code> 指针，可以直接用 <code>Singleton::Instance()</code> 调用。</p>
+<p>内层的 <code>static</code> 修饰的是函数体里的局部变量 <code>instance</code>。它仍然只在这段函数体内可见，但存储期不是“每次进入函数就新建一次”的自动存储期，而是静态存储期：程序运行期间一直保留同一个对象。它的初始化时机是控制流第一次经过这条声明，而不是每次调用函数都重新构造。</p>
+<p>所以这里的“单例”来自几个条件的叠加：</p>
+<ul>
+<li><code>instance</code> 的名字被局限在 <code>Instance</code> 函数里，外部不能直接拿到另一个同名对象；</li>
+<li><code>static</code> 让它在多次调用之间保留同一个对象；</li>
+<li>构造函数私有，外部不能随意 <code>Singleton s</code>；</li>
+<li>删除拷贝构造和拷贝赋值，避免通过复制制造第二个对象；</li>
+<li>返回 <code>Singleton&amp;</code>，把同一个对象的引用交给调用者，不返回副本。</li>
+</ul>
+<p>最后两项是 C++11 写法。C++98 没有 <code>= delete</code> 和 <code>= default</code>，只能把拷贝构造、赋值运算符和构造函数声明在 <code>private</code> 区域而不定义它们。</p>
+<h2 id="t-到底做了什么"><code>T&amp;</code> 到底做了什么
+</h2><p><code>T&amp;</code> 可以从右往左读成“一个引用，引用的对象类型是 <code>T</code>”。因此：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span>
+</span></span></code></pre></div><p>表示 <code>Instance</code> 返回的是 <code>T</code> 对象的引用，不是一个 <code>T</code> 对象。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>这里返回的是局部名字 <code>instance</code> 所指向的那个静态对象。因为它的生命周期覆盖整个程序运行期，函数返回后引用仍然有效；如果它是普通局部变量，这样返回引用就会变成悬空引用。</p>
+<p>返回引用还有两个直接效果：调用者拿到的是原对象，可以修改它；同时没有额外的对象复制。若只允许读取，可以把接口写成 <code>const T&amp;</code>，但这不会自动让 <code>T</code> 内部的其他共享状态具备并发安全性。</p>
+<h2 id="第一次调用时编译器实际要解决什么">第一次调用时，编译器实际要解决什么
+</h2><p>把调用过程拆成三个场景最清楚。</p>
+<p>第一次调用时，控制流到达：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>如果对象还没有完成初始化，就调用 <code>T</code> 的默认构造函数。构造完成后执行 <code>return instance</code>。</p>
+<p>之后再次调用时，<code>instance</code> 已经初始化完成，构造函数不会再次执行，代码直接返回同一个对象。</p>
+<p>两个线程同时第一次调用时，问题就出现了：它们都可能同时发现对象“还没有初始化”。如果没有额外同步，可能发生两次构造、一个线程读到半构造对象，或者初始化标记先于对象内容对另一个线程可见。</p>
+<p>实现通常会为局部 static 隐藏一个 guard 状态。下面只是帮助理解的伪代码，不是标准要求的真实 ABI：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">guard_is_complete</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">lock_guard_for_this_static</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">guard_is_complete</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">construct</span><span class="p">(</span><span class="n">instance</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">mark_guard_complete</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">unlock_guard_for_this_static</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>关键不在于有没有一个叫 <code>guard</code> 的变量，而在于“检查、构造、标记完成”这一整段必须由实现用符合标准的同步机制保护。初始化完成前，竞争线程要等待；初始化完成后，它们才能拿到这个对象。</p>
+<h2 id="c98-为什么不能把它当成线程安全">C++98 为什么不能把它当成线程安全
+</h2><p>这里有一个容易误解的地方：C++98 不是不能写这段代码。局部 <code>static</code> 的语法和“只初始化一次”的顺序语义在 C++98 就已经存在。</p>
+<p>差别在于，C++98 只描述了单线程抽象机里的执行过程，没有 C++11 那套标准化的多线程执行、数据竞争和内存可见性规则。它没有承诺两个线程同时第一次经过声明时，必须由一个线程完成初始化、其他线程等待。</p>
+<p>因此，C++98 下这段代码的正确说法是：单线程时可以实现懒加载单例；多线程下是否安全，取决于编译器、运行库和平台实现，不能从 C++98 标准本身推出保证。</p>
+<p>下面这种 C++98 版本尤其不能因为“判断指针再分配”就变安全：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">*</span> <span class="n">instance</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">instance</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">instance</span> <span class="o">=</span> <span class="k">new</span> <span class="n">T</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">return</span> <span class="o">*</span><span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>两个线程可能同时通过 <code>instance == 0</code>，分别创建两个 <code>T</code>。即使再加一个“先检查、加锁、锁内再检查”的双重检查结构，C++98 也缺少足够的内存模型来保证发布指针时，另一个线程一定能按正确顺序看到完整对象。<code>volatile</code> 不是线程同步工具，也不能修复这个问题。</p>
+<p>C++98 项目如果确实需要这个保证，只能把同步交给标准之外的平台或库，例如 POSIX 的一次性初始化、Windows 同步原语，或当时可用的线程库；也可以让所有访问都经过一把互斥锁。那是“用外部同步补上保证”，不是 C++98 的这行 <code>static</code> 自己提供了保证。</p>
+<h2 id="c11-改变的是语义不是这行语法">C++11 改变的是语义，不是这行语法
+</h2><p>C++11 的关键变化不是发明了：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>这条声明早就能写。C++11 把并发初始化规则正式写进了语言标准：函数局部、具有静态存储期的变量，在控制流第一次经过声明时进行动态初始化；如果多个线程并发进入，而变量正在初始化，其他执行应等待初始化完成。</p>
+<p>这就是注释里“thread-safe initialization”的准确含义。它保证的是初始化阶段：<code>T</code> 的构造函数只成功执行一次，竞争线程不会越过未完成的构造直接使用对象。</p>
+<p>它不保证下面的业务代码天然安全：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">Singleton</span><span class="o">::</span><span class="n">Instance</span><span class="p">().</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">);</span>  <span class="c1">// 多线程修改同一个对象，仍可能有数据竞争
+</span></span></span></code></pre></div><p>如果 <code>append</code> 修改共享容器，仍然需要在 <code>T</code> 内部使用互斥锁、原子变量或其他正确的并发设计。单例只解决了“对象何时、如何只构造一次”，没有解决“对象内部的每个操作如何并发执行”。</p>
+<h2 id="c11-写法还有几个边界">C++11 写法还有几个边界
+</h2><p>第一，<code>static T instance;</code> 需要 <code>T</code> 可以默认构造，并且构造函数和析构函数在这里可访问。若构造函数抛出异常，这次初始化不算完成；下一次控制流再次到达声明时，会重新尝试初始化，而不是留下一个半成品。</p>
+<p>第二，初始化函数不能递归地再次进入同一局部 static 的初始化过程。比如 <code>T</code> 的构造函数又调用了 <code>Instance()</code>，就进入了标准明确禁止的递归初始化场景，不能把它当成普通的重入。</p>
+<p>第三，<code>instance</code> 如果真的被构造，就会在程序结束阶段析构。这个特性通常比手写 <code>new</code> 后故意泄漏更健康，但也意味着它可能依赖其他全局对象的析构顺序。单例的构造函数里最好不要偷偷依赖一堆跨文件的全局状态。</p>
+<p>最后，单例的“全局唯一”主要是语言层面的一个对象。跨动态库、插件或不同运行时边界时，是否真的是整个进程唯一，还要看链接和加载边界；不能仅凭类名就假定所有模块共享同一个实例。</p>
+<h2 id="结尾记住这句区分">结尾：记住这句区分
+</h2><p>C++98 与 C++11 都能写局部 static 单例；C++11 才把并发初始化时“只初始化一次、其他线程等待”的保证写进标准。</p>
+<p>所以看到这段代码时，最好分三层检查：<code>static</code> 让对象活得久，函数作用域让入口收得窄，C++11 的语言规则才让第一次并发初始化有了可移植保证。至于对象构造完成以后，里面的数据能不能被多个线程同时改，那是另一道题。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://timsong-cpp.github.io/cppwp/n3337/stmt.dcl"  target="_blank" rel="noopener"
+    >C++11 工作草案 N3337：6.7 Declaration statement</a></li>
+<li><a class="link" href="https://eel.is/c&#43;&#43;draft/stmt.dcl"  target="_blank" rel="noopener"
+    >当前 C++ 工作草案：[stmt.dcl]</a></li>
+<li><a class="link" href="https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1875.html"  target="_blank" rel="noopener"
+    >WG21 N1875：C++ Threads</a></li>
+<li><a class="link" href="https://learn.microsoft.com/en-us/cpp/build/reference/zc-threadsafeinit-thread-safe-local-static-initialization?view=msvc-170"  target="_blank" rel="noopener"
+    >Microsoft：/Zc:threadSafeInit（线程安全的局部 static 初始化）</a></li>
+</ul>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="原始提示词">原始提示词
+</h3><blockquote>
+<p>$blog-writer C++ 单例，详细解释下，这个原理，语法层面怎么支持的 static T &amp;Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; }，为什么 C98 不能这样做，为什么C11可以这样做。</p>
+</blockquote>
+    </div>
+</details>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+    <section class="article-tags">
+        
+            <a href="/tags/cpp/">c&#43;&#43;</a>
+        
+            <a href="/tags/%E5%8D%95%E4%BE%8B/">单例</a>
+        
+            <a href="/tags/static/">Static</a>
+        
+            <a href="/tags/c-11/">C&#43;&#43;11</a>
+        
+            <a href="/tags/c-98/">C&#43;&#43;98</a>
+        
+            <a href="/tags/%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8/">线程安全</a>
+        
+    </section>
+
+    <div class="article-colophon" aria-label="文章阅读工具">
+        <div class="article-colophon__heading">文章阅读工具</div>
+        <div class="article-colophon__items">
+            <span class="article-colophon__item article-colophon__item--author">
+                <span class="article-colophon__label">作者</span>
+                <span class="article-colophon__value">向叔</span>
+            </span>
+            
+                <span class="article-colophon__item article-colophon__item--skill">
+                    <span class="article-colophon__label">写作</span>
+                    <span class="article-colophon__value">v8.2.0</span>
+                </span>
+            
+            
+                <span class="article-colophon__item article-colophon__item--license">
+                    <span class="article-colophon__label">License</span>
+                    <span class="article-colophon__value">Licensed under CC BY-NC-SA 4.0</span>
+                </span>
+            
+            <span class="article-colophon__item article-colophon__item--updated">
+                <span class="article-colophon__label">最后更新于</span>
+                <time class="article-colophon__value" datetime="2026-07-24T23:36:13&#43;08:00">2026年07月24日 23:36</time>
+            </span>
+        </div>
+    </div>
+</footer>
+
+
+    
+</article><script src="/ts/article-tools.d57ca69e116ea3bdfe331b2f09e283f66476e5cd18b2e369484b9928f1604be2.js" integrity="sha256-1XymnhFuo73&#43;MxsvCeKD9mR25c0YsuNpSEuZKPFgS&#43;I=" defer></script>
+
+    
+    
+
+<section class="related-content--wrapper" aria-label="相关文章">
+    <header class="related-content__header">
+        <h2 class="section-title">相关文章</h2>
+        <span class="related-content__count">05</span>
+    </header>
+    <ol class="related-content__list">
+            
+                <li class="related-content__item">
+                    <a href="/p/ai-demo-fast-rework-faster/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">让 AI 写 Demo，检查点要比代码更小</h3>
+                            <time class="related-content__date" datetime='2026-04-10T15:39:51&#43;08:00'>2026年04月10日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/vera-rubin-tokens-per-megawatt-ai-price/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Vera Rubin 的十倍每兆瓦 Tokens，会把 AI 价格打下来吗？</h3>
+                            <time class="related-content__date" datetime='2026-07-22T21:13:54&#43;08:00'>2026年07月22日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/code-anchors-for-llm-requirements/" class="related-content__link">
+                        <span class="related-content__index">03</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">给编码模型几个代码锚点</h3>
+                            <time class="related-content__date" datetime='2026-07-05T23:04:15&#43;08:00'>2026年07月05日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/hermes-searxng-mihomo-proxy/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Hermes 搜索不稳：SearXNG 出站交给 Mihomo</h3>
+                            <time class="related-content__date" datetime='2026-06-21T20:33:01&#43;08:00'>2026年06月21日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/loop-engineering-human-checkpoints/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Loop engineering 把人挪到检查点</h3>
+                            <time class="related-content__date" datetime='2026-06-14T07:35:00&#43;08:00'>2026年06月14日</time>
+                        </div>
+                    </a>
+                </li>
+            
+    </ol>
+</section>
+
+
+    
+    <section class="article-comments" aria-label="评论">
+    <div id="waline" class="waline-container" aria-live="polite">
+        <p class="waline-container__status">评论区将在滚动到此处后加载。</p>
+    </div>
+    <noscript><p>评论功能需要启用 JavaScript。</p></noscript>
+</section>
+<style>
+    .waline-container {
+        --waline-font-size: var(--type-comment);
+        --waline-theme-color: var(--accent-color);
+        --waline-active-color: var(--accent-color-darker);
+        --waline-bg-color: transparent;
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-bg-color-hover: var(--surface-elevated);
+        --waline-color: var(--text-secondary);
+        --waline-border-color: var(--border-color);
+        --waline-border: 1px solid var(--border-color);
+        --waline-box-shadow: none;
+        --waline-info-color: var(--text-tertiary);
+        --waline-disable-bg-color: var(--surface-elevated);
+        --waline-code-bg-color: var(--surface-elevated);
+    }
+    [data-scheme="dark"] .waline-container {
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-border-color: var(--border-color);
+    }
+</style><script type="module">
+    const container = document.getElementById('waline');
+    const loadWaline = async () => {
+        if (!container || container.dataset.loaded) return;
+        container.dataset.loaded = 'true';
+        const stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = 'https://unpkg.com/@waline/client@v3/dist/waline.css';
+        document.head.append(stylesheet);
+        try {
+            const { init } = await import('https://unpkg.com/@waline/client@v3/dist/waline.js');
+            container.replaceChildren();
+            init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":null,"locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+        } catch {
+            container.dataset.loaded = '';
+            container.replaceChildren('评论服务暂时不可用，请稍后重试。');
+        }
+    };
+    if (container && 'IntersectionObserver' in window) {
+        new IntersectionObserver((entries, observer) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            loadWaline();
+        }, { rootMargin: '320px 0px' }).observe(container);
+    } else {
+        loadWaline();
+    }
+</script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.b0c7d091a4dd3194be4e347bfc2179a52cf3ca25830fbbcac798ce7b793123ed.js" integrity="sha256-sMfQkaTdMZS&#43;TjR7/CF5pSzzyiWDD7vKx5jOe3kxI&#43;0=" defer></script>
+</body>
+</html>

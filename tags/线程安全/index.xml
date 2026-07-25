@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>线程安全 on 向叔记事簿</title>
+        <link>https://ttf248.life/tags/%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8/</link>
+        <description>Recent content in 线程安全 on 向叔记事簿</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>zh-cn</language>
+        <lastBuildDate>Fri, 24 Jul 2026 23:36:13 +0800</lastBuildDate><atom:link href="https://ttf248.life/tags/%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>C&#43;&#43; 单例：一行 static 背后的初始化保证</title>
+        <link>https://ttf248.life/p/cpp-singleton-static-initialization/</link>
+        <pubDate>Fri, 24 Jul 2026 23:32:22 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/cpp-singleton-static-initialization/</guid>
+        <description>&lt;p&gt;很多 C++ 单例实现最后都缩成这样：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;c1&#34;&gt;// C++11 guarantees thread-safe initialization of function-local static objects.
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。&lt;/p&gt;
+&lt;p&gt;先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 &lt;code&gt;T&amp;amp;&lt;/code&gt; 这套语法根本不是 C 代码。&lt;/p&gt;
+&lt;h2 id=&#34;两个-static-不是一回事&#34;&gt;两个 &lt;code&gt;static&lt;/code&gt; 不是一回事
+&lt;/h2&gt;&lt;p&gt;完整的单例类通常写成这样：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;class&lt;/span&gt; &lt;span class=&#34;nc&#34;&gt;Singleton&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;public&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;delete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;operator&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;delete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;private&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;default&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;~&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;default&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;};&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;外层的 &lt;code&gt;static&lt;/code&gt; 出现在类成员函数声明里，表示 &lt;code&gt;Instance&lt;/code&gt; 是静态成员函数。它没有 &lt;code&gt;this&lt;/code&gt; 指针，可以直接用 &lt;code&gt;Singleton::Instance()&lt;/code&gt; 调用。&lt;/p&gt;
+&lt;p&gt;内层的 &lt;code&gt;static&lt;/code&gt; 修饰的是函数体里的局部变量 &lt;code&gt;instance&lt;/code&gt;。它仍然只在这段函数体内可见，但存储期不是“每次进入函数就新建一次”的自动存储期，而是静态存储期：程序运行期间一直保留同一个对象。它的初始化时机是控制流第一次经过这条声明，而不是每次调用函数都重新构造。&lt;/p&gt;
+&lt;p&gt;所以这里的“单例”来自几个条件的叠加：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;instance&lt;/code&gt; 的名字被局限在 &lt;code&gt;Instance&lt;/code&gt; 函数里，外部不能直接拿到另一个同名对象；&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;static&lt;/code&gt; 让它在多次调用之间保留同一个对象；&lt;/li&gt;
+&lt;li&gt;构造函数私有，外部不能随意 &lt;code&gt;Singleton s&lt;/code&gt;；&lt;/li&gt;
+&lt;li&gt;删除拷贝构造和拷贝赋值，避免通过复制制造第二个对象；&lt;/li&gt;
+&lt;li&gt;返回 &lt;code&gt;Singleton&amp;amp;&lt;/code&gt;，把同一个对象的引用交给调用者，不返回副本。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;最后两项是 C++11 写法。C++98 没有 &lt;code&gt;= delete&lt;/code&gt; 和 &lt;code&gt;= default&lt;/code&gt;，只能把拷贝构造、赋值运算符和构造函数声明在 &lt;code&gt;private&lt;/code&gt; 区域而不定义它们。&lt;/p&gt;
+&lt;h2 id=&#34;t-到底做了什么&#34;&gt;&lt;code&gt;T&amp;amp;&lt;/code&gt; 到底做了什么
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;T&amp;amp;&lt;/code&gt; 可以从右往左读成“一个引用，引用的对象类型是 &lt;code&gt;T&lt;/code&gt;”。因此：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;表示 &lt;code&gt;Instance&lt;/code&gt; 返回的是 &lt;code&gt;T&lt;/code&gt; 对象的引用，不是一个 &lt;code&gt;T&lt;/code&gt; 对象。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;这里返回的是局部名字 &lt;code&gt;instance&lt;/code&gt; 所指向的那个静态对象。因为它的生命周期覆盖整个程序运行期，函数返回后引用仍然有效；如果它是普通局部变量，这样返回引用就会变成悬空引用。&lt;/p&gt;
+&lt;p&gt;返回引用还有两个直接效果：调用者拿到的是原对象，可以修改它；同时没有额外的对象复制。若只允许读取，可以把接口写成 &lt;code&gt;const T&amp;amp;&lt;/code&gt;，但这不会自动让 &lt;code&gt;T&lt;/code&gt; 内部的其他共享状态具备并发安全性。&lt;/p&gt;
+&lt;h2 id=&#34;第一次调用时编译器实际要解决什么&#34;&gt;第一次调用时，编译器实际要解决什么
+&lt;/h2&gt;&lt;p&gt;把调用过程拆成三个场景最清楚。&lt;/p&gt;
+&lt;p&gt;第一次调用时，控制流到达：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;如果对象还没有完成初始化，就调用 &lt;code&gt;T&lt;/code&gt; 的默认构造函数。构造完成后执行 &lt;code&gt;return instance&lt;/code&gt;。&lt;/p&gt;
+&lt;p&gt;之后再次调用时，&lt;code&gt;instance&lt;/code&gt; 已经初始化完成，构造函数不会再次执行，代码直接返回同一个对象。&lt;/p&gt;
+&lt;p&gt;两个线程同时第一次调用时，问题就出现了：它们都可能同时发现对象“还没有初始化”。如果没有额外同步，可能发生两次构造、一个线程读到半构造对象，或者初始化标记先于对象内容对另一个线程可见。&lt;/p&gt;
+&lt;p&gt;实现通常会为局部 static 隐藏一个 guard 状态。下面只是帮助理解的伪代码，不是标准要求的真实 ABI：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;!&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;guard_is_complete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;())&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;lock_guard_for_this_static&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;!&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;guard_is_complete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;())&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;n&#34;&gt;construct&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;n&#34;&gt;mark_guard_complete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;unlock_guard_for_this_static&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;关键不在于有没有一个叫 &lt;code&gt;guard&lt;/code&gt; 的变量，而在于“检查、构造、标记完成”这一整段必须由实现用符合标准的同步机制保护。初始化完成前，竞争线程要等待；初始化完成后，它们才能拿到这个对象。&lt;/p&gt;
+&lt;h2 id=&#34;c98-为什么不能把它当成线程安全&#34;&gt;C++98 为什么不能把它当成线程安全
+&lt;/h2&gt;&lt;p&gt;这里有一个容易误解的地方：C++98 不是不能写这段代码。局部 &lt;code&gt;static&lt;/code&gt; 的语法和“只初始化一次”的顺序语义在 C++98 就已经存在。&lt;/p&gt;
+&lt;p&gt;差别在于，C++98 只描述了单线程抽象机里的执行过程，没有 C++11 那套标准化的多线程执行、数据竞争和内存可见性规则。它没有承诺两个线程同时第一次经过声明时，必须由一个线程完成初始化、其他线程等待。&lt;/p&gt;
+&lt;p&gt;因此，C++98 下这段代码的正确说法是：单线程时可以实现懒加载单例；多线程下是否安全，取决于编译器、运行库和平台实现，不能从 C++98 标准本身推出保证。&lt;/p&gt;
+&lt;p&gt;下面这种 C++98 版本尤其不能因为“判断指针再分配”就变安全：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;==&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;new&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;两个线程可能同时通过 &lt;code&gt;instance == 0&lt;/code&gt;，分别创建两个 &lt;code&gt;T&lt;/code&gt;。即使再加一个“先检查、加锁、锁内再检查”的双重检查结构，C++98 也缺少足够的内存模型来保证发布指针时，另一个线程一定能按正确顺序看到完整对象。&lt;code&gt;volatile&lt;/code&gt; 不是线程同步工具，也不能修复这个问题。&lt;/p&gt;
+&lt;p&gt;C++98 项目如果确实需要这个保证，只能把同步交给标准之外的平台或库，例如 POSIX 的一次性初始化、Windows 同步原语，或当时可用的线程库；也可以让所有访问都经过一把互斥锁。那是“用外部同步补上保证”，不是 C++98 的这行 &lt;code&gt;static&lt;/code&gt; 自己提供了保证。&lt;/p&gt;
+&lt;h2 id=&#34;c11-改变的是语义不是这行语法&#34;&gt;C++11 改变的是语义，不是这行语法
+&lt;/h2&gt;&lt;p&gt;C++11 的关键变化不是发明了：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;这条声明早就能写。C++11 把并发初始化规则正式写进了语言标准：函数局部、具有静态存储期的变量，在控制流第一次经过声明时进行动态初始化；如果多个线程并发进入，而变量正在初始化，其他执行应等待初始化完成。&lt;/p&gt;
+&lt;p&gt;这就是注释里“thread-safe initialization”的准确含义。它保证的是初始化阶段：&lt;code&gt;T&lt;/code&gt; 的构造函数只成功执行一次，竞争线程不会越过未完成的构造直接使用对象。&lt;/p&gt;
+&lt;p&gt;它不保证下面的业务代码天然安全：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;().&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;append&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;data&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;  &lt;span class=&#34;c1&#34;&gt;// 多线程修改同一个对象，仍可能有数据竞争
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;如果 &lt;code&gt;append&lt;/code&gt; 修改共享容器，仍然需要在 &lt;code&gt;T&lt;/code&gt; 内部使用互斥锁、原子变量或其他正确的并发设计。单例只解决了“对象何时、如何只构造一次”，没有解决“对象内部的每个操作如何并发执行”。&lt;/p&gt;
+&lt;h2 id=&#34;c11-写法还有几个边界&#34;&gt;C++11 写法还有几个边界
+&lt;/h2&gt;&lt;p&gt;第一，&lt;code&gt;static T instance;&lt;/code&gt; 需要 &lt;code&gt;T&lt;/code&gt; 可以默认构造，并且构造函数和析构函数在这里可访问。若构造函数抛出异常，这次初始化不算完成；下一次控制流再次到达声明时，会重新尝试初始化，而不是留下一个半成品。&lt;/p&gt;
+&lt;p&gt;第二，初始化函数不能递归地再次进入同一局部 static 的初始化过程。比如 &lt;code&gt;T&lt;/code&gt; 的构造函数又调用了 &lt;code&gt;Instance()&lt;/code&gt;，就进入了标准明确禁止的递归初始化场景，不能把它当成普通的重入。&lt;/p&gt;
+&lt;p&gt;第三，&lt;code&gt;instance&lt;/code&gt; 如果真的被构造，就会在程序结束阶段析构。这个特性通常比手写 &lt;code&gt;new&lt;/code&gt; 后故意泄漏更健康，但也意味着它可能依赖其他全局对象的析构顺序。单例的构造函数里最好不要偷偷依赖一堆跨文件的全局状态。&lt;/p&gt;
+&lt;p&gt;最后，单例的“全局唯一”主要是语言层面的一个对象。跨动态库、插件或不同运行时边界时，是否真的是整个进程唯一，还要看链接和加载边界；不能仅凭类名就假定所有模块共享同一个实例。&lt;/p&gt;
+&lt;h2 id=&#34;结尾记住这句区分&#34;&gt;结尾：记住这句区分
+&lt;/h2&gt;&lt;p&gt;C++98 与 C++11 都能写局部 static 单例；C++11 才把并发初始化时“只初始化一次、其他线程等待”的保证写进标准。&lt;/p&gt;
+&lt;p&gt;所以看到这段代码时，最好分三层检查：&lt;code&gt;static&lt;/code&gt; 让对象活得久，函数作用域让入口收得窄，C++11 的语言规则才让第一次并发初始化有了可移植保证。至于对象构造完成以后，里面的数据能不能被多个线程同时改，那是另一道题。&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://timsong-cpp.github.io/cppwp/n3337/stmt.dcl&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;C++11 工作草案 N3337：6.7 Declaration statement&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://eel.is/c&amp;#43;&amp;#43;draft/stmt.dcl&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;当前 C++ 工作草案：[stmt.dcl]&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1875.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;WG21 N1875：C++ Threads&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/en-us/cpp/build/reference/zc-threadsafeinit-thread-safe-local-static-initialization?view=msvc-170&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Microsoft：/Zc:threadSafeInit（线程安全的局部 static 初始化）&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;details class=&#34;article-notes&#34;&gt;
+    &lt;summary&gt;写作附记&lt;/summary&gt;
+    &lt;div class=&#34;article-notes__content&#34;&gt;
+        &lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;$blog-writer C++ 单例，详细解释下，这个原理，语法层面怎么支持的 static T &amp;amp;Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; }，为什么 C98 不能这样做，为什么C11可以这样做。&lt;/p&gt;
+&lt;/blockquote&gt;
+    &lt;/div&gt;
+&lt;/details&gt;</description>
+        </item>
+        
+    </channel>
+</rss>
