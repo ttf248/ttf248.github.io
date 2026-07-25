@@ -11,7 +11,7 @@
         <pubDate>Mon, 16 Mar 2026 20:18:18 +0800</pubDate>
         
         <guid>https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/</guid>
-        <description>&lt;p&gt;有一种 C++ 问题特别容易把人带偏：&lt;code&gt;unordered_map::find&lt;/code&gt; 明明命中了，&lt;code&gt;it-&amp;gt;first&lt;/code&gt; 也对，可你再看 &lt;code&gt;it-&amp;gt;second&lt;/code&gt; 里面的字段，像是变成了另一个 key 的数据。&lt;/p&gt;
+        <description>&lt;p&gt;有一种 C++ 问题特别容易把人带偏：&lt;code&gt;unordered_map::find&lt;/code&gt; 明明命中了，&lt;code&gt;it-&amp;gt;first&lt;/code&gt; 也对，可你再看 &lt;code&gt;it-&amp;gt;second&lt;/code&gt; 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。&lt;/p&gt;
 &lt;p&gt;第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 &lt;code&gt;unordered_map&lt;/code&gt; 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。&lt;/p&gt;
 &lt;p&gt;这篇记录的坑，就是函数内部的 &lt;code&gt;static lambda&lt;/code&gt; 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。&lt;/p&gt;
 &lt;h2 id=&#34;先看那个很像优化的小动作&#34;&gt;先看那个很像优化的小动作
@@ -125,14 +125,14 @@
         
         <guid>https://ttf248.life/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/</guid>
         <description>&lt;p&gt;在软件开发的日常工作中，我们时常会遇到一些棘手的“小问题”，它们看似简单，却能耗费我们数小时的宝贵时间。其中，在 Windows 系统上删除特定文件（尤其是那些由开发工具链意外生成的文件）无疑是“重灾区”之一。&lt;/p&gt;
-&lt;p&gt;我就遇到了这样一个“地狱级”的难题：在本地开发时，项目中莫名其妙地出现了一个名为 &lt;code&gt;nul&lt;/code&gt; 的文件。我尝试了 Windows 资源管理器、CMD 命令行，但系统都提示“找不到文件”或“无法删除”。这个文件就像一个幽灵，顽固地盘踞在我的项目目录中。&lt;/p&gt;
+&lt;p&gt;我就遇到了这样一个“地狱级”的难题：在本地开发时，项目中莫名其妙地出现了一个名为 &lt;code&gt;nul&lt;/code&gt; 的文件。我尝试了 Windows 资源管理器、CMD 命令行，但系统都提示&amp;quot;找不到文件&amp;quot;或&amp;quot;无法删除&amp;quot;。这个文件就像一个幽灵，顽固地盘踞在我的项目目录中。&lt;/p&gt;
 &lt;h2 id=&#34;阶段一常规尝试与标准的无效解法&#34;&gt;阶段一：常规尝试与“标准”的无效解法
 &lt;/h2&gt;&lt;p&gt;当我遇到这个问题时，我的第一反应是“&lt;code&gt;nul&lt;/code&gt; 文件”。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;为什么 &lt;code&gt;nul&lt;/code&gt; 特殊？&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;熟悉 Windows 历史的开发者可能知道，&lt;code&gt;nul&lt;/code&gt; 是一个“天坑”。在 Windows (及更早的 DOS) 系统中，&lt;code&gt;NUL&lt;/code&gt;、&lt;code&gt;CON&lt;/code&gt;、&lt;code&gt;PRN&lt;/code&gt;、&lt;code&gt;AUX&lt;/code&gt; 等是保留的设备名称。&lt;code&gt;NUL&lt;/code&gt; 代表“空设备”（类似于 Unix/Linux 中的 &lt;code&gt;/dev/null&lt;/code&gt;）。&lt;/p&gt;
 &lt;p&gt;当 Windows 的文件系统 API 看到你试图操作一个名为 &lt;code&gt;nul&lt;/code&gt; 的“文件”时，它会认为你是在尝试操作这个“空设备”，而不是一个同名的物理文件。因此，所有常规的文件操作（如删除、重命名）都会失败。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;如何产生 &lt;code&gt;nul&lt;/code&gt; 文件的？&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;这通常是跨平台开发工具（如 Git、Node.js 脚本、Python 脚本等）的“锅”。这些工具可能基于 POSIX (Unix-like) 标准，在它们的眼中，&lt;code&gt;nul&lt;/code&gt; 只是一个普通的文件名。它们在 Windows 上运行时，有时会绕过常规的API，直接创建出这种 Windows “消化不良”的文件。&lt;/p&gt;
+&lt;p&gt;这通常是跨平台开发工具（如 Git、Node.js 脚本、Python 脚本等）的&amp;quot;锅&amp;quot;。这些工具基于 POSIX (Unix-like) 标准，在它们的眼中，&lt;code&gt;nul&lt;/code&gt; 只是一个普通的文件名。它们在 Windows 上运行时，有时会绕过常规的 API，直接创建出这种 Windows&amp;quot;消化不良&amp;quot;的文件。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;网上推荐的“标准解法”&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;我迅速在网上搜索，发现我不是第一个遇到这个问题的人。社区提供了几种公认的“高级”解决方案：&lt;/p&gt;
 &lt;ol&gt;
@@ -199,7 +199,7 @@
         <pubDate>Wed, 24 Sep 2025 21:25:37 +0800</pubDate>
         
         <guid>https://ttf248.life/p/desktop-boot-loader-failure/</guid>
-        <description>&lt;p&gt;七月份的时候，心血来潮，周末没事干，想着给台式机清理下灰尘，四五年没有清理，灰尘也确实挺多的。弄完重启系统一切都是好好地，平常电脑不关机，长期开着，也就关下显示器，凑巧夫人过来常住，晚上她见得不各种光源，顺手就给电脑关机了。&lt;/p&gt;
+        <description>&lt;p&gt;七月份的时候，心血来潮，周末没事干，想着给台式机清理下灰尘，四五年没有清理，灰尘也确实挺多的。弄完重启系统一切都是好好的，平常电脑不关机，长期开着，也就关下显示器，凑巧夫人过来常住，晚上她见不得各种光源，顺手就给电脑关机了。&lt;/p&gt;
 &lt;h2 id=&#34;散热器&#34;&gt;散热器
 &lt;/h2&gt;&lt;p&gt;原本当天就应该写稿子，重装系统各种事情掺杂进来，忘记了，人脑有时候就是这么神奇，今天突然想起来了。&lt;/p&gt;
 &lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/desktop-boot-loader-failure/%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87_20250717180011_438_45.jpg&#34;
@@ -249,7 +249,7 @@
         <pubDate>Tue, 22 Jul 2025 01:10:10 +0800</pubDate>
         
         <guid>https://ttf248.life/p/win11-pro-professional-remote-desktop-login-error-login-failed/</guid>
-        <description>&lt;p&gt;主机莫名奇妙蓝屏无法启动，UEFI格式的引导，系统一直无法正常加载，切换到老的MBR格式的引导后，系统可以正常启动了。&lt;/p&gt;
+        <description>&lt;p&gt;主机莫名其妙蓝屏无法启动，UEFI 格式的引导，系统一直无法正常加载，切换到老的 MBR 格式的引导后，系统可以正常启动了。&lt;/p&gt;
 &lt;p&gt;常规操作，开启系统的远程桌面，另外一台机器测试，网络什么的都是正常。登录和以前一样，用了微软的账户登录系统。&lt;/p&gt;
 &lt;p&gt;远程桌面登录的时候，报错：&lt;strong&gt;登录失败&lt;/strong&gt;，没有其他的任何信息。&lt;/p&gt;
 &lt;h2 id=&#34;解决方法&#34;&gt;解决方法
@@ -281,7 +281,7 @@
         
         <guid>https://ttf248.life/p/wechat-backup-tool-local-network-recognition-failed/</guid>
         <description>&lt;p&gt;隔段时间就会清理手机上的资料，相册、微信聊天记录都会备份到电脑，手机上仅保留部分需要的聊天记录。&lt;/p&gt;
-&lt;p&gt;以前都好好地，能轻松识别到手机和台式机在同一局域网内，直接备份聊天记录到电脑上，今天是各种失败。&lt;/p&gt;
+&lt;p&gt;以前都好好的，能轻松识别到手机和台式机在同一局域网内，直接备份聊天记录到电脑上，今天是各种失败。&lt;/p&gt;
 &lt;h2 id=&#34;尝试过的解决方法&#34;&gt;尝试过的解决方法
 &lt;/h2&gt;&lt;ol&gt;
 &lt;li&gt;电脑连接WIFI、手机连接WIFI，电脑和手机都在同一局域网内，依然无法识别。&lt;/li&gt;
@@ -301,7 +301,7 @@
         <pubDate>Fri, 06 Jun 2025 18:46:55 +0800</pubDate>
         
         <guid>https://ttf248.life/p/102435268-also-belongs-to-the-local-area-network/</guid>
-        <description>&lt;p&gt;紧接上文，今天继续聊聊局域网的 IP 地址。上次为了同步代码，服务器配置了代理，服务器和家里的台式机打通了网络，在一个局域网里面，代理程序部署在台式机上，服务器通过代理访问外网。同步代码很慢，扔那边就没管了，隔了半个月，到服务器验证代码，发现&lt;code&gt;Git&lt;/code&gt;代码同步失败，网络错误，也没太过脑子，细看报错信息。&lt;/p&gt;
+        <description>&lt;p&gt;紧接上文，今天继续聊聊局域网的 IP 地址。上次为了同步代码，服务器配置了代理，服务器和家里的台式机打通了网络，在一个局域网里面，代理程序部署在台式机上，服务器通过代理访问外网。同步代码很慢，扔那边就没管了，隔了半个月，到服务器验证代码，发现 &lt;code&gt;Git&lt;/code&gt; 代码同步失败，网络错误，也没太过脑子，细看报错信息。&lt;/p&gt;
 &lt;h2 id=&#34;案发现场&#34;&gt;案发现场
 &lt;/h2&gt;&lt;blockquote&gt;
 &lt;p&gt;fatal: unable to access &amp;lsquo;&lt;a class=&#34;link&#34; href=&#34;https://cnb.cool/ttf248/learn/cpp.git/%27&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
@@ -414,7 +414,7 @@
         <guid>https://ttf248.life/p/git-submodule-merge-history-lost/</guid>
         <description>&lt;p&gt;本地有一个 Git 仓库，其中的子模块在拉取时处于一个临时分支。我在该临时分支上提交了一些代码，随后将子模块切换回了 &lt;code&gt;main&lt;/code&gt; 分支。然而，这些提交的代码似乎丢失了，无法在 &lt;code&gt;main&lt;/code&gt; 分支中找到。我也找不到那个临时分支的记录。&lt;/p&gt;
 &lt;h2 id=&#34;解决方案&#34;&gt;解决方案
-&lt;/h2&gt;&lt;p&gt;在Git子模块中提交到了临时分支，切换回&lt;code&gt;main&lt;/code&gt;分支后找不到这些提交。这种情况可以通过以下步骤解决：&lt;/p&gt;
+&lt;/h2&gt;&lt;p&gt;在 Git 子模块中提交到了临时分支，切换回 &lt;code&gt;main&lt;/code&gt; 分支后找不到这些提交。这种情况可以通过以下步骤解决：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;确认提交记录&lt;/strong&gt;：进入子模块目录，查看reflog找到丢失的提交&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;创建新分支保存提交&lt;/strong&gt;：基于丢失的提交创建新分支&lt;/li&gt;
@@ -468,7 +468,7 @@
         <description>&lt;p&gt;业务模型：后台服务借助 TCP 与集团的行情网关建立连接。每次连接时，需先行发送一个授权请求，随后持续发送心跳包以维持连接状态。
 然而，某一天，收到了服务断开连接的告警信息。通过仔细排查日志后发现，后台服务一直在持续发送心跳包，但对方却毫无回应，可连接却始终未断开。&lt;/p&gt;
 &lt;h2 id=&#34;现场简述&#34;&gt;现场简述
-&lt;/h2&gt;&lt;p&gt;原本正在公司加班推进项目进度，工作群里突然弹出告警信息。乍一看，我还以为是老毛病，大概率是网络超时致使心跳发送失败，进而导致服务断开连接。可在仔细排查日志后，却发现实际情况并非如此。后台已发送了授权登录消息，然而一直未收到应答，与此同时，心跳包仍在持续不断地发送，对方却始终未回复任何心跳数据。经过对日志的深入分析，暴露出了以下几个关键问题：&lt;/p&gt;
+&lt;/h2&gt;&lt;p&gt;原本正在公司加班推进项目进度，工作群里突然弹出告警信息。乍一看，我还以为是老毛病，大概率是网络超时致使心跳发送失败，进而导致服务断开连接。可在仔细排查日志后，却发现实际情况并非如此。后台已发送了授权登录消息，然而一直未收到应答，与此同时，心跳包仍在持续不断地发送，对方却始终未回复任何心跳数据。经过对日志的深入分析，暴露出以下几个关键问题：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;授权消息无应答：极有可能是对方系统正在重启，使得授权消息未能得到及时处理。&lt;/li&gt;
 &lt;li&gt;未成功授权却发送心跳数据：经排查，发现这是程序逻辑上的漏洞。心跳发送函数的判断逻辑存在缺陷，仅仅校验了连接状态，却遗漏了对授权状态的校验。&lt;/li&gt;
@@ -603,7 +603,7 @@
         <pubDate>Sat, 04 Jan 2025 18:29:25 +0800</pubDate>
         
         <guid>https://ttf248.life/p/docker-domestic-image-proxy-failure/</guid>
-        <description>&lt;p&gt;国内服务器部署docker，部署以后，如果公司没有提供镜像中心，开发首先要做的就是配置一个国内的镜像加速地址。巧了今天有台服务器，配置了镜像加速地址，但是发现拉取镜像的时候，一直拉取不到。&lt;/p&gt;
+        <description>&lt;p&gt;国内服务器部署 Docker，部署以后，如果公司没有提供镜像中心，开发首先要做的就是配置一个国内的镜像加速地址。巧了今天有台服务器，配置了镜像加速地址，但是发现拉取镜像的时候，一直拉取不到。&lt;/p&gt;
 &lt;p&gt;报错信息：&lt;code&gt;Error response from daemon: Get &amp;quot;https://registry-1.docker.io/v2/&amp;quot;: net/http: request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)&lt;/code&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;20250106 时隔两天，所有的服务器都恢复了，这事居然不上热搜，国内所有的镜像代理都挂了&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;问题排查与修复尝试&#34;&gt;问题排查与修复尝试
@@ -880,10 +880,10 @@
         <guid>https://ttf248.life/p/win11-logitech-g431-headphone-driver-installation/</guid>
         <description>&lt;p&gt;书接上回，回来发现 Ghub 有更新，有点小开心，客服说的问题驱动无法正常加载的问题能搞定了，结果折腾一圈，重装卸载，还是不能正常使用。&lt;/p&gt;
 &lt;h2 id=&#34;背景&#34;&gt;背景
-&lt;/h2&gt;&lt;p&gt;继续联系客服咨询处理处理方案，结果被告知，能有工程师远程协助，但是工程师的上班时间和我自己的上班时间一模一样，无奈下只能放弃，翻看上次排查问题留下的资料，准备尝试手动安装驱动。&lt;/p&gt;
+&lt;/h2&gt;&lt;p&gt;继续联系客服咨询处理方案，结果被告知，能有工程师远程协助，但是工程师的上班时间和我自己的上班时间一模一样，无奈下只能放弃，翻看上次排查问题留下的资料，准备尝试手动安装驱动。&lt;/p&gt;
 &lt;h2 id=&#34;获取驱动安装包&#34;&gt;获取驱动安装包
 &lt;/h2&gt;&lt;p&gt;罗技官方并没有单独提供设备的驱动安装包，我如何才能拿到驱动文件呢？&lt;/p&gt;
-&lt;p&gt;配合上次重装系统留下的系统镜像安装包，我们可以在本地虚拟机中重装一次系统，再纯净的系统中，我们单独部署一份Ghub，将耳机设备介入到虚拟机中，找到驱动的路径，拷贝出来即可。&lt;/p&gt;
+&lt;p&gt;配合上次重装系统留下的系统镜像安装包，我们可以在本地虚拟机中重装一次系统，在纯净的系统中，我们单独部署一份Ghub，将耳机设备介入到虚拟机中，找到驱动的路径，拷贝出来即可。&lt;/p&gt;
 &lt;p&gt;相关的路径：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;C:\ProgramData\LGHUB&lt;/li&gt;
@@ -907,7 +907,7 @@
 	
 &gt;&lt;/p&gt;
 &lt;hr&gt;
-&lt;p&gt;上图中的第二个驱动，是由罗技提供的，我们分析设备现在的驱动程序，再虚拟机里面翻找所有的驱动路径，当然你首先需要找到 logi 开头的文件，然后进行文件的对比，你就能定位到驱动的文件件，拷贝整个文件夹，你就拿到了驱动安装包&lt;/p&gt;
+&lt;p&gt;上图中的第二个驱动，是由罗技提供的，我们分析设备现在的驱动程序，在虚拟机里面翻找所有的驱动路径，当然你首先需要找到 logi 开头的文件，然后进行文件的对比，你就能定位到驱动的文件夹，拷贝整个文件夹，你就拿到了驱动安装包&lt;/p&gt;
 &lt;hr&gt;
 &lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-headphone-driver-installation/20240605073933.png&#34;
 	width=&#34;946&#34;
@@ -925,7 +925,7 @@
 &gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;安装驱动&#34;&gt;安装驱动
-&lt;/h2&gt;&lt;p&gt;还在在设备管理器的界面，点击：更新驱动，点击：浏览我的电脑查找驱动，进入到如下界面：&lt;/p&gt;
+&lt;/h2&gt;&lt;p&gt;在设备管理器的界面，点击：更新驱动，点击：浏览我的电脑查找驱动，进入到如下界面：&lt;/p&gt;
 &lt;hr&gt;
 &lt;p&gt;&lt;img src=&#34;https://ttf248.life/p/win11-logitech-g431-headphone-driver-installation/20240605074130.png&#34;
 	width=&#34;528&#34;
@@ -1083,7 +1083,7 @@
 &lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;kt&#34;&gt;void&lt;/span&gt; &lt;span class=&#34;nf&#34;&gt;infiniteLoop&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;while&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nb&#34;&gt;true&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;c1&#34;&gt;// 主线程进入死循环
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;c1&#34;&gt;// 子线程进入死循环
 &lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
@@ -1107,7 +1107,7 @@
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#0  0x00007eff36eaa6cd in __pthread_timedjoin_ex () from /lib64/libpthread.so.0&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#1  0x00007eff36bceda7 in std::thread::join() () from /lib64/libstdc++.so.6&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;c1&#34;&gt;#2  0x00000000004029d2 in main () at /root/pstack/main.cpp:13&lt;/span&gt;
-&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;可以看到，进程假死的原因是死循环，主线程进入死循环，子线程无法退出，导致进程假死。&lt;/p&gt;</description>
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;可以看到，进程假死的原因是死循环，子线程进入死循环无法退出，主线程在join中等待，导致进程假死。&lt;/p&gt;</description>
         </item>
         <item>
         <title>办公室迁移，服务器无法访问了</title>

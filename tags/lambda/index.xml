@@ -11,7 +11,7 @@
         <pubDate>Mon, 16 Mar 2026 20:18:18 +0800</pubDate>
         
         <guid>https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/</guid>
-        <description>&lt;p&gt;有一种 C++ 问题特别容易把人带偏：&lt;code&gt;unordered_map::find&lt;/code&gt; 明明命中了，&lt;code&gt;it-&amp;gt;first&lt;/code&gt; 也对，可你再看 &lt;code&gt;it-&amp;gt;second&lt;/code&gt; 里面的字段，像是变成了另一个 key 的数据。&lt;/p&gt;
+        <description>&lt;p&gt;有一种 C++ 问题特别容易把人带偏：&lt;code&gt;unordered_map::find&lt;/code&gt; 明明命中了，&lt;code&gt;it-&amp;gt;first&lt;/code&gt; 也对，可你再看 &lt;code&gt;it-&amp;gt;second&lt;/code&gt; 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。&lt;/p&gt;
 &lt;p&gt;第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 &lt;code&gt;unordered_map&lt;/code&gt; 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。&lt;/p&gt;
 &lt;p&gt;这篇记录的坑，就是函数内部的 &lt;code&gt;static lambda&lt;/code&gt; 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。&lt;/p&gt;
 &lt;h2 id=&#34;先看那个很像优化的小动作&#34;&gt;先看那个很像优化的小动作
@@ -124,7 +124,7 @@
         <pubDate>Wed, 13 Nov 2024 19:23:02 +0800</pubDate>
         
         <guid>https://ttf248.life/p/cpp-lambda-parameter-lifetime/</guid>
-        <description>&lt;p&gt;在C++中，lambda表达式是一种方便的匿名函数，可以捕获外部变量并在其体内使用。这使得lambda成为一种灵活的编程工具。不过，lambda表达式的参数生命周期是一个需要特别关注的方面，尤其是在捕获和传递参数时&lt;/p&gt;
+        <description>&lt;p&gt;在C++中，lambda表达式是一种方便的匿名函数，可以捕获外部变量并在其体内使用。这使得lambda成为一种灵活的编程工具。不过，lambda表达式的参数生命周期是一个需要特别关注的方面，尤其是在捕获和传递参数时。&lt;/p&gt;
 &lt;h3 id=&#34;1-lambda表达式的参数生命周期&#34;&gt;1. Lambda表达式的参数生命周期
 &lt;/h3&gt;&lt;p&gt;Lambda表达式的参数生命周期通常与其他C++函数一样。函数的参数在函数调用时存在，函数调用结束时，参数生命周期结束。然而，由于lambda表达式可能会捕获外部变量，因此参数的生命周期也受到捕获方式的影响。&lt;/p&gt;
 &lt;h3 id=&#34;2-捕获与参数生命周期的关系&#34;&gt;2. 捕获与参数生命周期的关系
@@ -178,7 +178,7 @@
         <pubDate>Wed, 24 Jan 2024 14:11:33 +0800</pubDate>
         
         <guid>https://ttf248.life/p/cpp-function-call-timing/</guid>
-        <description>&lt;p&gt;设计行情 SDK，针对不同的回调函数实现方式，进行了一次耗时的测试。近期在看 C++ 函数编程，当函数变成了一等公民，在程序内部流转，耗时有什么不同？&lt;/p&gt;
+        <description>&lt;p&gt;设计行情 SDK，针对不同的回调函数实现方式，进行了一次耗时的测试。近期在看 C++ 函数式编程，当函数变成了一等公民，在程序内部流转，耗时有什么不同？&lt;/p&gt;
 &lt;p&gt;前文链接：&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/compiler-callback-performance-testing/&#34; &gt;编译器、回调函数、性能测试&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;&lt;code&gt;leimao&lt;/code&gt; 大佬刚好也做了类似的测试，借代码一用。&lt;/p&gt;
 &lt;h2 id=&#34;正文&#34;&gt;正文
@@ -414,7 +414,7 @@
         
         <guid>https://ttf248.life/p/compiler-callback-performance-testing/</guid>
         <description>&lt;p&gt;去年设计了一个&lt;code&gt;SDK&lt;/code&gt;，负责处理封装一些事件，对外提供一个类接口，服务初始化的时候，调用方实现对应的类，并将对象指针传给模块。
-接触过&lt;code&gt;C11&lt;/code&gt;，好奇心害死猫，就想着这些接口都用&lt;code&gt;lambda&lt;/code&gt;函数对象回调来实现会是什么结果，和纯虚函数的接口定义方法比较，更加灵活。
+接触过&lt;code&gt;C++11&lt;/code&gt;，好奇心害死猫，就想着这些接口都用&lt;code&gt;lambda&lt;/code&gt;函数对象回调来实现会是什么结果，和纯虚函数的接口定义方法比较，更加灵活。
 疑问就出现了，两种不同的语法，从性能角度来说，哪个更快一些？不懂编译原理，弄段代码试试看。&lt;/p&gt;
 &lt;h2 id=&#34;前言&#34;&gt;前言
 &lt;/h2&gt;&lt;p&gt;在线网址，能选择不同编译器，编译参数，在&lt;code&gt;linux&lt;/code&gt;平台运行代码，亦或者查看对应的汇编代码。&lt;/p&gt;
@@ -430,7 +430,7 @@
 &lt;li&gt;&lt;code&gt;windows&lt;/code&gt;平台，两者性能接近，没有太多的差异&lt;/li&gt;
 &lt;li&gt;&lt;code&gt;linux&lt;/code&gt;平台，虚函数和&lt;code&gt;lambda&lt;/code&gt;比较，单次多了1.35ns&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;常规的业务系统开发中，此级别的性能损耗可以忽略，引入&lt;code&gt;lambda&lt;/code&gt;，在设计的上，能带来更多的便捷。在设计多信号处理时，尤为明显，底层有事件触发，如果需要落地日志，出入日志对象的的处理函数。当需要更多的业务处理接口时，底层用&lt;code&gt;vector&lt;/code&gt;保存&lt;code&gt;lambda&lt;/code&gt;对象，事件触发时，依次遍历调用，类似于&lt;code&gt;QT&lt;/code&gt;中的信号和槽，日志、监控、业务1、业务2，互相之间完全解耦。&lt;/p&gt;
+&lt;p&gt;常规的业务系统开发中，此级别的性能损耗可以忽略，引入&lt;code&gt;lambda&lt;/code&gt;，在设计的上，能带来更多的便捷。在设计多信号处理时，尤为明显，底层有事件触发，如果需要落地日志，出入日志对象的处理函数。当需要更多的业务处理接口时，底层用&lt;code&gt;vector&lt;/code&gt;保存&lt;code&gt;lambda&lt;/code&gt;对象，事件触发时，依次遍历调用，类似于&lt;code&gt;QT&lt;/code&gt;中的信号和槽，日志、监控、业务1、业务2，互相之间完全解耦。&lt;/p&gt;
 &lt;h2 id=&#34;代码&#34;&gt;代码
 &lt;/h2&gt;&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-shell&#34; data-lang=&#34;shell&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Counter: &lt;span class=&#34;m&#34;&gt;1000000&lt;/span&gt;
 &lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;Time: 3966us

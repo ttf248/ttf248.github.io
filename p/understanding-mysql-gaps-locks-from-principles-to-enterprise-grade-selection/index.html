@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁，同事排查后，发现是由于间隙锁导致，MySQL 用的不多，记录下。\n">
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。\n">
 <title>搞懂 MySQL 间隙锁：从原理到金融级选型</title>
 
 <link rel='canonical' href='https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/'>
 
 <link rel="stylesheet" href="/scss/style.min.a48b623a5c71b33f953547f263d5b1889b9cb95ccb164ba7e38a9b4fd7ccb74b.css"><meta property='og:title' content="搞懂 MySQL 间隙锁：从原理到金融级选型">
-<meta property='og:description' content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁，同事排查后，发现是由于间隙锁导致，MySQL 用的不多，记录下。\n">
+<meta property='og:description' content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。\n">
 <meta property='og:url' content='https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:tag' content='数据库' /><meta property='article:tag' content='锁' /><meta property='article:published_time' content='2025-11-18T22:29:25&#43;08:00'/><meta property='article:modified_time' content='2026-07-23T10:52:57&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:tag' content='数据库' /><meta property='article:tag' content='锁' /><meta property='article:published_time' content='2025-11-18T22:29:25&#43;08:00'/><meta property='article:modified_time' content='2026-07-25T13:57:25&#43;08:00'/>
 <meta name="twitter:title" content="搞懂 MySQL 间隙锁：从原理到金融级选型">
-<meta name="twitter:description" content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁，同事排查后，发现是由于间隙锁导致，MySQL 用的不多，记录下。\n">
+<meta name="twitter:description" content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/","name":"搞懂 MySQL 间隙锁：从原理到金融级选型","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2026-07-23T10:52:57+08:00","datePublished":"2025-11-18T22:29:25+08:00","headline":"搞懂 MySQL 间隙锁：从原理到金融级选型","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/","name":"搞懂 MySQL 间隙锁：从原理到金融级选型","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2026-07-25T13:57:25+08:00","datePublished":"2025-11-18T22:29:25+08:00","headline":"搞懂 MySQL 间隙锁：从原理到金融级选型","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -311,7 +311,7 @@
 
     
     <div class="article-lead article-prose">
-        <p>系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁，同事排查后，发现是由于间隙锁导致，MySQL 用的不多，记录下。</p>
+        <p>系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。</p>
     </div>
     
 </div>
@@ -461,7 +461,7 @@ MySQL 在 <strong>RR（可重复读）</strong> 隔离级别下，为了解决�
             
             <span class="article-colophon__item article-colophon__item--updated">
                 <span class="article-colophon__label">最后更新于</span>
-                <time class="article-colophon__value" datetime="2026-07-23T10:52:57&#43;08:00">2026年07月23日 10:52</time>
+                <time class="article-colophon__value" datetime="2026-07-25T13:57:25&#43;08:00">2026年07月25日 13:57</time>
             </span>
         </div>
     </div>

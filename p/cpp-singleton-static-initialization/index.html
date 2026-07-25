@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是把对象藏进函数里，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
 <title>C&#43;&#43; 单例：一行 static 背后的初始化保证</title>
 
 <link rel='canonical' href='https://ttf248.life/p/cpp-singleton-static-initialization/'>
 
 <link rel="stylesheet" href="/scss/style.min.a48b623a5c71b33f953547f263d5b1889b9cb95ccb164ba7e38a9b4fd7ccb74b.css"><meta property='og:title' content="C++ 单例：一行 static 背后的初始化保证">
-<meta property='og:description' content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
+<meta property='og:description' content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是把对象藏进函数里，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
 <meta property='og:url' content='https://ttf248.life/p/cpp-singleton-static-initialization/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='单例' /><meta property='article:tag' content='static' /><meta property='article:tag' content='C&#43;&#43;11' /><meta property='article:tag' content='C&#43;&#43;98' /><meta property='article:tag' content='线程安全' /><meta property='article:published_time' content='2026-07-24T23:32:22&#43;08:00'/><meta property='article:modified_time' content='2026-07-24T23:36:13&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='单例' /><meta property='article:tag' content='static' /><meta property='article:tag' content='C&#43;&#43;11' /><meta property='article:tag' content='C&#43;&#43;98' /><meta property='article:tag' content='线程安全' /><meta property='article:published_time' content='2026-07-24T23:32:22&#43;08:00'/><meta property='article:modified_time' content='2026-07-25T14:06:40&#43;08:00'/>
 <meta name="twitter:title" content="C++ 单例：一行 static 背后的初始化保证">
-<meta name="twitter:description" content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
+<meta name="twitter:description" content="很多 C++ 单例实现最后都缩成这样：\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } 它看起来像是把对象藏进函数里，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。\n先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 T&amp; 这套语法根本不是 C 代码。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/cpp-singleton-static-initialization/","name":"C++ 单例：一行 static 背后的初始化保证","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"向叔"},"dateModified":"2026-07-24T23:36:13+08:00","datePublished":"2026-07-24T23:32:22+08:00","headline":"C++ 单例：一行 static 背后的初始化保证","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/cpp-singleton-static-initialization/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/cpp-singleton-static-initialization/","name":"C++ 单例：一行 static 背后的初始化保证","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"向叔"},"dateModified":"2026-07-25T14:06:40+08:00","datePublished":"2026-07-24T23:32:22+08:00","headline":"C++ 单例：一行 static 背后的初始化保证","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/cpp-singleton-static-initialization/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -308,7 +308,7 @@
 </span></span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
 </span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre></div><p>它看起来像是“把对象藏进函数里”，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。</p>
+</span></span></code></pre></div><p>它看起来像是把对象藏进函数里，再用一个引用把对象取出来。真正值得讲的却不是单例模式本身，而是这段代码同时碰到了 C++ 的存储期、作用域、引用、延迟初始化，以及 C++11 才补齐的并发语义。</p>
 <p>先纠正一个叫法：上下文里说的“C98”应当是“C++98”。如果严格说 C 语言，C98 并不存在这个版本；更重要的是，C 语言没有 C++ 的类、引用和成员函数，因此 <code>T&amp;</code> 这套语法根本不是 C 代码。</p>
     </div>
     
@@ -485,7 +485,7 @@
             
             <span class="article-colophon__item article-colophon__item--updated">
                 <span class="article-colophon__label">最后更新于</span>
-                <time class="article-colophon__value" datetime="2026-07-24T23:36:13&#43;08:00">2026年07月24日 23:36</time>
+                <time class="article-colophon__value" datetime="2026-07-25T14:06:40&#43;08:00">2026年07月25日 14:06</time>
             </span>
         </div>
     </div>
