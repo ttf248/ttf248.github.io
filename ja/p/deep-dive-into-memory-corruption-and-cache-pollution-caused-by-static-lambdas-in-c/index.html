@@ -10,7 +10,7 @@
 <meta property='og:description' content="本記事では、C++開発における unordered_map::find がヒットした後にオブジェクトフィールドが一致しないという奇妙な現象を分析しています。原因は、関数内部で static lambda を定義し、参照キャプチャによってローカル変数を捕捉することです。これにより、最初の呼び出し後には幽霊参照が発生し、その後の呼び出しで未定義動作（UB）を引き起こし、キャッシュデータを汚染します。この問題を解決するには、明示的なパラメータの渡しを介して暗黙のキャプチャを置き換え、ライフサイクルの管理を標準化し、Sanitizerツールを使用することを推奨します。\n">
 <meta property='og:url' content='https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 <meta property='og:site_name' content='向叔の手帳'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI霊感衝突坊' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2026-03-16T20:18:18&#43;08:00'/><meta property='article:modified_time' content='2026-06-05T18:40:34&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='トラブルシューティング' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2026-03-16T20:18:18&#43;08:00'/><meta property='article:modified_time' content='2026-07-26T22:50:29&#43;08:00'/>
 <meta name="twitter:title" content="深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染">
 <meta name="twitter:description" content="本記事では、C++開発における unordered_map::find がヒットした後にオブジェクトフィールドが一致しないという奇妙な現象を分析しています。原因は、関数内部で static lambda を定義し、参照キャプチャによってローカル変数を捕捉することです。これにより、最初の呼び出し後には幽霊参照が発生し、その後の呼び出しで未定義動作（UB）を引き起こし、キャッシュデータを汚染します。この問題を解決するには、明示的なパラメータの渡しを介して暗黙のキャプチャを置き換え、ライフサイクルの管理を標準化し、Sanitizerツールを使用することを推奨します。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/","name":"深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"codex-5.4 \u0026\u0026 gemini-3-flash"},"dateModified":"2026-06-05T18:40:34+08:00","datePublished":"2026-03-16T20:18:18+08:00","headline":"深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/","name":"深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"codex-5.4 \u0026\u0026 gemini-3-flash"},"dateModified":"2026-07-26T22:50:29+08:00","datePublished":"2026-03-16T20:18:18+08:00","headline":"深層解析：C++ における `static lambda` が引き起こすメモリリークとキャッシュ汚染","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -192,14 +192,14 @@
     <header class="article-header">
 
     <div class="article-details"><div class="article-origin">
-        <span class="content-source content-source--author">著者執筆</span>
+        <span class="content-source content-source--ai">AI 執筆</span>
         
     </div>
     
     <header class="article-category">
         
-            <a href="/ja/categories/%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
-                コンピューター
+            <a href="/ja/categories/ai-%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF%E3%83%BC/" >
+                AI コンピューター
             </a>
         
     </header>
@@ -380,8 +380,6 @@
     
     <section class="article-tags">
         
-            <a href="/ja/tags/ai%E9%9C%8A%E6%84%9F%E8%A1%9D%E7%AA%81%E5%9D%8A/">AI霊感衝突坊</a>
-        
             <a href="/ja/tags/c/">C&#43;&#43;</a>
         
             <a href="/ja/tags/%E3%83%88%E3%83%A9%E3%83%96%E3%83%AB%E3%82%B7%E3%83%A5%E3%83%BC%E3%83%86%E3%82%A3%E3%83%B3%E3%82%B0/">トラブルシューティング</a>
@@ -406,7 +404,7 @@
             
             <span class="article-colophon__item article-colophon__item--updated">
                 <span class="article-colophon__label">最終更新</span>
-                <time class="article-colophon__value" datetime="2026-06-05T18:40:34&#43;08:00">2026年06月05日 18:40</time>
+                <time class="article-colophon__value" datetime="2026-07-26T22:50:29&#43;08:00">2026年07月26日 22:50</time>
             </span>
         </div>
     </div>
@@ -427,28 +425,8 @@
     <ol class="related-content__list">
             
                 <li class="related-content__item">
-                    <a href="/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/" class="related-content__link">
-                        <span class="related-content__index">01</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。</h3>
-                            <time class="related-content__date" datetime='2026-04-09T19:21:36&#43;08:00'>2026年04月09日</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
-                    <a href="/ja/p/cpp-folder-namespace-what-is-it-called/" class="related-content__link">
-                        <span class="related-content__index">02</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">フォルダの階層構造に名前空間を重ねる、これは一体何と呼ばれますか？</h3>
-                            <time class="related-content__date" datetime='2026-04-09T02:31:07&#43;08:00'>2026年04月09日</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
                     <a href="/ja/p/cross-machine-computation-time-difference/" class="related-content__link">
-                        <span class="related-content__index">03</span>
+                        <span class="related-content__index">01</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">マシン間計算の時間差 (Mashinkan tenkiho no jikanusa)</h3>
                             <time class="related-content__date" datetime='2025-06-19T09:45:36&#43;08:00'>2025年06月19日</time>
@@ -458,7 +436,7 @@
             
                 <li class="related-content__item">
                     <a href="/ja/p/memory-layout-and-binary-compatibility/" class="related-content__link">
-                        <span class="related-content__index">04</span>
+                        <span class="related-content__index">02</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">メモリレイアウトとバイナリ互換性</h3>
                             <time class="related-content__date" datetime='2025-06-10T18:53:02&#43;08:00'>2025年06月10日</time>
@@ -468,10 +446,30 @@
             
                 <li class="related-content__item">
                     <a href="/ja/p/linux-backend-slow-string-processing/" class="related-content__link">
-                        <span class="related-content__index">05</span>
+                        <span class="related-content__index">03</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">Linuxバックエンドサービスの大量文字列データの処理 - 効率が悪い</h3>
                             <time class="related-content__date" datetime='2024-11-13T19:42:59&#43;08:00'>2024年11月13日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/cpp-lambda-parameter-lifetime/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">C&#43;&#43;におけるラムダ式のパラメータのライフタイムについて</h3>
+                            <time class="related-content__date" datetime='2024-11-13T19:23:02&#43;08:00'>2024年11月13日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/gcc-upgrade-causes-program-crash-code-irregularities/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">GCCバージョンをアップグレードした結果、プログラムがクラッシュしました：コードの非規整性による問題点</h3>
+                            <time class="related-content__date" datetime='2024-03-10T23:19:06&#43;08:00'>2024年03月10日</time>
                         </div>
                     </a>
                 </li>
