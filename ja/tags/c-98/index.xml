@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+    <channel>
+        <title>C&#43;&#43;98 on 向叔の手帳</title>
+        <link>https://ttf248.life/ja/tags/c-98/</link>
+        <description>Recent content in C&#43;&#43;98 on 向叔の手帳</description>
+        <generator>Hugo -- gohugo.io</generator>
+        <language>ja</language>
+        <lastBuildDate>Fri, 14 Aug 2026 20:08:34 +0800</lastBuildDate><atom:link href="https://ttf248.life/ja/tags/c-98/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>C&#43;&#43; シングルトン：1行の static が提供する初期化保証</title>
+        <link>https://ttf248.life/ja/p/cpp-singleton-static-initialization/</link>
+        <pubDate>Fri, 24 Jul 2026 23:32:22 +0800</pubDate>
+        
+        <guid>https://ttf248.life/ja/p/cpp-singleton-static-initialization/</guid>
+        <description>&lt;p&gt;多くの C++ シングルトン実装は、最終的に次のような形に縮小されます。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;c1&#34;&gt;// C++11 は関数内 static オブジェクトのスレッドセーフな初期化を保証する。
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;オブジェクトを関数の中に隠しておき、参照を使って取り出しているように見えます。本当にお伝えしたいのはシングルトンパターンそのものというより、このコードが C++ のストレージ期間、スコープ、参照、遅延初期化、そして C++11 でようやく整った並行性に関するセマンティクスに同時に触れているという点です。&lt;/p&gt;
+&lt;p&gt;まず呼び名を一つ訂正します：文脈で触れられている「C98」は「C++98」のことを指しているはずです。厳密にC言語について言うなら、C98というバージョンは存在しません。さらに重要なのは、C言語にはC++にあるクラス、参照、メンバ関数がないため、&lt;code&gt;T&amp;amp;&lt;/code&gt; という構文はそもそもCのコードではないということです。&lt;/p&gt;
+&lt;h2 id=&#34;二つの-static-は同じものではない&#34;&gt;二つの &lt;code&gt;static&lt;/code&gt; は同じものではない
+&lt;/h2&gt;&lt;p&gt;完全なシングルトンクラスは通常次のように書かれます：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;class&lt;/span&gt; &lt;span class=&#34;nc&#34;&gt;Singleton&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;public&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;delete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;operator&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;k&#34;&gt;const&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;delete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;private&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;:&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;default&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;o&#34;&gt;~&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;default&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;};&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;外側の &lt;code&gt;static&lt;/code&gt; はクラスメンバー関数の宣言に現れ、&lt;code&gt;Instance&lt;/code&gt; が静的メンバー関数であることを示しています。これは &lt;code&gt;this&lt;/code&gt; ポインターを持たず、&lt;code&gt;Singleton::Instance()&lt;/code&gt; で直接呼び出すことができます。&lt;/p&gt;
+&lt;p&gt;内側の &lt;code&gt;static&lt;/code&gt; が修飾しているのは、関数本体の中にある局所変数 &lt;code&gt;instance&lt;/code&gt; です。この変数は依然としてその関数本体内でのみ見えますが、記憶域期間（ストレージ期間）は「関数が呼ばれるたびに新しく作られる」という自動的記憶域期間ではなく、静的記憶域期間となります。つまり、プログラムの実行中ずっと同じオブジェクトが保持され続けます。初期化のタイミングは、関数が呼ばれるたびに新しく構築し直されるのではなく、制御の流れが初めてこの宣言を通過したときです。&lt;/p&gt;
+&lt;p&gt;したがって、ここでの「シングルトン」は、いくつかの条件が重なり合うことから生じています。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;instance&lt;/code&gt; という名前は &lt;code&gt;Instance&lt;/code&gt; 関数内に限定されているため、外部から直接同じ名前の別のオブジェクトを取得することはできません。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;static&lt;/code&gt; により、複数回の呼び出しにわたって同じオブジェクトが保持されます。&lt;/li&gt;
+&lt;li&gt;コンストラクタは private であり、外部で勝手に &lt;code&gt;Singleton s&lt;/code&gt; と書くことはできません。&lt;/li&gt;
+&lt;li&gt;コピーコンストラクタとコピー代入演算子を削除し、コピーによって2つ目のオブジェクトが作られるのを防ぎます。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;Singleton&amp;amp;&lt;/code&gt; を返すことで、同じオブジェクトの参照を呼び出し側に渡し、コピーは返しません。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;最後の 2 つは C++11 の書き方です。C++98 には &lt;code&gt;= delete&lt;/code&gt; も &lt;code&gt;= default&lt;/code&gt; も存在しないため、コピーコンストラクタ、代入演算子、コンストラクタを &lt;code&gt;private&lt;/code&gt; 領域で宣言するだけで定義しないという方法を取るしかありません。&lt;/p&gt;
+&lt;h2 id=&#34;t-とは実際には何をするのか&#34;&gt;&lt;code&gt;T&amp;amp;&lt;/code&gt; とは実際には何をするのか
+&lt;/h2&gt;&lt;p&gt;&lt;code&gt;T&amp;amp;&lt;/code&gt; は右から左へ読むと「型が &lt;code&gt;T&lt;/code&gt; であるものへの参照」となります。したがって：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;()&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;code&gt;Instance&lt;/code&gt; が返すのは &lt;code&gt;T&lt;/code&gt; オブジェクトの参照であり、&lt;code&gt;T&lt;/code&gt; オブジェクトそのものではないことを示します。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;ここで返されるのは、静的オブジェクトを指すローカル名 &lt;code&gt;instance&lt;/code&gt; の値です。その生存期間はプログラム全体の実行期間をカバーしているため、関数の返後も参照は有効です。もしそれが通常のローカル変数であったなら、このように参照を返すとダングリング参照になってしまいます。&lt;/p&gt;
+&lt;p&gt;参照返しにはもう2つの直接的な効果があります。呼び出し側は元のオブジェクトを取得し、それを変更できます。同時に、余分なオブジェクトのコピーは発生しません。読み取りのみを許可したい場合は、インターフェースを &lt;code&gt;const T&amp;amp;&lt;/code&gt; として記述することができますが、これによって &lt;code&gt;T&lt;/code&gt; 内部の他の共有状態が自動的に並行処理に対して安全になるわけではありません。&lt;/p&gt;
+&lt;h2 id=&#34;初めての呼び出し時コンパイラは実際に何を解決するのか&#34;&gt;初めての呼び出し時、コンパイラは実際に何を解決するのか
+&lt;/h2&gt;&lt;p&gt;呼び出しプロセスを3つのシナリオに分けるのが最も分かりやすい。&lt;/p&gt;
+&lt;p&gt;最初の呼び出し時に、制御フローは次へ進みます。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;オブジェクトがまだ初期化されていない場合は、&lt;code&gt;T&lt;/code&gt; のデフォルトコンストラクタを呼び出します。構築が完了したら &lt;code&gt;return instance&lt;/code&gt; を実行します。&lt;/p&gt;
+&lt;p&gt;再度呼び出された時点では、&lt;code&gt;instance&lt;/code&gt; はすでに初期化済みのため、コンストラクタは再実行されず、コードは同じオブジェクトを直接返します。&lt;/p&gt;
+&lt;p&gt;2 つのスレッドが初めて同時に呼び出したときに問題が発生します。どちらもオブジェクトが「まだ初期化されていない」と同時に判定する可能性があります。追加の同期がなければ、二重に構築されたり、あるスレッドが半分だけ構築されたオブジェクトを読み取ったり、初期化フラグがオブジェクトの内容より先に別のスレッドから見えるといったことが起こり得ます。&lt;/p&gt;
+&lt;p&gt;実装では通常、ローカルの static のためにガード状態を1つ隠しておきます。下記はあくまで理解を助けるための擬似コードであり、標準で要求されている実際の ABI ではありません。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;!&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;guard_is_complete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;())&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;lock_guard_for_this_static&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;!&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;guard_is_complete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;())&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;n&#34;&gt;construct&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;        &lt;span class=&#34;n&#34;&gt;mark_guard_complete&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;unlock_guard_for_this_static&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;();&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;要点は &lt;code&gt;guard&lt;/code&gt; という名前の変数があるかどうかではなく、「チェック、構築、完了フラグの設定」という一連の処理全体が、実装側で標準準拠の同期機構によって保護されなければならないという点である。初期化が完了するまで、競合するスレッドは待機しなければならず、初期化が完了して初めて、それらのスレッドはそのオブジェクトを取得できる。&lt;/p&gt;
+&lt;h2 id=&#34;c98-がスレッドセーフにできない理由&#34;&gt;C++98 がスレッドセーフにできない理由
+&lt;/h2&gt;&lt;p&gt;ここで誤解されやすい点があります。C++98 ではこのコードを書けなかったわけではありません。ローカル &lt;code&gt;static&lt;/code&gt; の構文と「一度だけ初期化される」という順序意味論は、すでに C++98 の時点で存在していました。&lt;/p&gt;
+&lt;p&gt;違いは、C++98 がシングルスレッドの抽象機械における実行のみを記述しており、C++11 のように標準化されたマルチスレッド実行、データ競合、メモリの可視性に関する規則を持たない点である。2 つのスレッドが同時に宣言を初めて通過する際に、一方のスレッドが初期化を完了し、他のスレッドが待機しなければならないことを保証していない。&lt;/p&gt;
+&lt;p&gt;したがって、C++98 におけるこのコードについては次のように言うのが正確です。シングルスレッドでは遅延初期化シングルトンを実現できます。マルチスレッドでの安全性は、コンパイラ、ランタイムライブラリ、プラットフォームの実装に依存し、C++98 標準自体から保証を導くことはできません。&lt;/p&gt;
+&lt;p&gt;次のような C++98 版は、特に「ポインターの再割り当てを判定する」という理由だけで安全にするべきではありません。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;*&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;==&lt;/span&gt; &lt;span class=&#34;mi&#34;&gt;0&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;    &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;new&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;return&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;*&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;2 つのスレッドが同時に &lt;code&gt;instance == 0&lt;/code&gt; を通過し、それぞれが &lt;code&gt;T&lt;/code&gt; を 2 つ生成する可能性があります。「先にチェック、ロックし、ロック内で再チェック」というダブルチェック構造を追加したとしても、C++98 には、ポインタを公開する際に、別スレッドが常に正しい順序で完全なオブジェクトを確実に参照できることを保証する十分なメモリモデルがありません。&lt;code&gt;volatile&lt;/code&gt; はスレッド同期ツールではなく、この問題を修正することもできません。&lt;/p&gt;
+&lt;p&gt;C++98 プロジェクトでこの保証が本当に必要になる場合、たとえば POSIX の one-time initialization、Windows の同期プリミティブ、当時利用可能だったスレッドライブラリなど、標準外のプラットフォームやライブラリに同期処理を委ねるしかなかった。または、すべてのアクセスを 1 つのミューテックス経由にするしかなかった。これは「外部の同期で保証を補う」ことであって、C++98 のこの &lt;code&gt;static&lt;/code&gt; 行自体が保証を提供しているわけではない。&lt;/p&gt;
+&lt;h2 id=&#34;c11-が変えるのはセマンティクスでありこの行の構文ではない&#34;&gt;C++11 が変えるのはセマンティクスであり、この行の構文ではない
+&lt;/h2&gt;&lt;p&gt;C++11 の重要な変化は、以下のものを発明したことではありません：&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;k&#34;&gt;static&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;T&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;;&lt;/span&gt;
+&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;この声明はずっと前から書けた。C++11 は並行初期化ルールを正式に言語標準に組み込んだ。関数ローカルで静的記憶期間を持つ変数は、制御フローが初めて宣言を通過する際に動的初期化が行われる。複数のスレッドが並行して進入し、変数が初期化中の場合、他の実行はその初期化の完了を待つべきである。&lt;/p&gt;
+&lt;p&gt;これがコメントにある「thread-safe initialization」の正確な意味です。保証されるのは初期化段階で、&lt;code&gt;T&lt;/code&gt; のコンストラクタが一度だけ成功して実行され、競合するスレッドが未完成の構築中のオブジェクトをまたいで使用することはないということです。&lt;/p&gt;
+&lt;p&gt;下記の業務コードが本質的に安全であることを保証するものではありません。&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre tabindex=&#34;0&#34; class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-cpp&#34; data-lang=&#34;cpp&#34;&gt;&lt;span class=&#34;line&#34;&gt;&lt;span class=&#34;cl&#34;&gt;&lt;span class=&#34;n&#34;&gt;Singleton&lt;/span&gt;&lt;span class=&#34;o&#34;&gt;::&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Instance&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;().&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;append&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;data&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;);&lt;/span&gt;  &lt;span class=&#34;c1&#34;&gt;// 複数スレッドが同じオブジェクトを変更する場合、データ競合が発生する可能性がある
+&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;p&gt;&lt;code&gt;append&lt;/code&gt; が共有コンテナを変更する場合でも、&lt;code&gt;T&lt;/code&gt; 内部でミューテックスやアトミック変数などの適切な並行設計を引き続き使用する必要があります。シングルトンは「オブジェクトがいつ、どのように一度だけ構築されるか」という問題を解決するだけであり、「オブジェクト内部の各操作が並行してどのように実行されるか」という問題を解決するものではありません。&lt;/p&gt;
+&lt;h2 id=&#34;c11-にはまだいくつかの境界がある&#34;&gt;C++11 にはまだいくつかの境界がある
+&lt;/h2&gt;&lt;p&gt;まず、&lt;code&gt;static T instance;&lt;/code&gt; は &lt;code&gt;T&lt;/code&gt; がデフォルト構築可能であり、コンストラクタとデストラクタがここでアクセス可能である必要があります。コンストラクタが例外を投げた場合、その初期化は完了したとは見なされません。次回の制御フローが宣言に到達したとき、半完成状態のままではなく、初期化が再試行されます。&lt;/p&gt;
+&lt;p&gt;第二に、初期化関数は同じローカル static の初期化プロセスに再帰的に再入することはできない。例えば &lt;code&gt;T&lt;/code&gt; のコンストラクタが &lt;code&gt;Instance()&lt;/code&gt; を再度呼び出した場合、規格で明確に禁止されている再帰的な初期化シナリオに入ることになり、それを通常のリエントラントとして扱ってはならない。&lt;/p&gt;
+&lt;p&gt;第三に、もし &lt;code&gt;instance&lt;/code&gt; が実際に構築されれば、プログラムの終了段階でデストラクタが実行される。この特性は、通常 &lt;code&gt;new&lt;/code&gt; を手書きで書いて意図的にリークするより健全だが、他のグローバルオブジェクトのデストラクト順序に依存する可能性もある。シングルトンのコンストラクタでは、別のファイルにまたがるグローバル状態にこっそり依存しないほうがよい。&lt;/p&gt;
+&lt;p&gt;最後に、シングルトンの「グローバルに一意」というのは、主に言語レベルでの一つのオブジェクトを指します。動的ライブラリ、プラグイン、または異なるランタイム境界をまたぐ場合、本当にプロセス全体で唯一かどうかは、リンクや読み込みの境界に依存します。クラス名だけで、すべてのモジュールが同じインスタンスを共有していると決めつけることはできません。&lt;/p&gt;
+&lt;h2 id=&#34;最後にこの区別を覚えておきましょう&#34;&gt;最後に：この区別を覚えておきましょう
+&lt;/h2&gt;&lt;p&gt;C++98 と C++11 のどちらでもローカル static シングルトンを記述することができますが、「一度だけ初期化され、他のスレッドはそれを待機する」という並行初期化の保証が標準化されるのは C++11 からです。&lt;/p&gt;
+&lt;p&gt;したがって、このコードを目にしたときは、3つの層でチェックするのが最善である。&lt;code&gt;static&lt;/code&gt; によってオブジェクトの寿命が長くなり、関数スコープによって入り口が狭くなり、C++11の言語規則によって、移植性を保証された上での初めての並行初期化が可能になる。オブジェクトの構築が完了した後、その内部のデータを複数のスレッドが同時に変更できるかどうかについては、それは別の問題である。&lt;/p&gt;
+&lt;h2 id=&#34;参考資料&#34;&gt;参考資料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://timsong-cpp.github.io/cppwp/n3337/stmt.dcl&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;C++11 作業草案 N3337:6.7 宣言文&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://eel.is/c&amp;#43;&amp;#43;draft/stmt.dcl&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;現行 C++ 作業草案:[stmt.dcl]&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1875.html&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;WG21 N1875:C++ Threads&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://learn.microsoft.com/en-us/cpp/build/reference/zc-threadsafeinit-thread-safe-local-static-initialization?view=msvc-170&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Microsoft:/Zc:threadSafeInit(スレッドセーフなローカル static 初期化)&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;details class=&#34;article-notes&#34;&gt;
+    &lt;summary&gt;写作附记&lt;/summary&gt;
+    &lt;div class=&#34;article-notes__content&#34;&gt;
+        &lt;h3 id=&#34;オリジナルプロンプト&#34;&gt;オリジナルプロンプト
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;$blog-writer C++ シングルトンについて、詳しく解説してほしい。この原理、および構文レベルでどのようにサポートされているのか、&lt;code&gt;static T &amp;amp;Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; }&lt;/code&gt; について、なぜ C98 ではこのようにすることができないのか、なぜ C11 ではこのようにすることができるのかを説明してほしい。&lt;/p&gt;
+&lt;/blockquote&gt;
+    &lt;/div&gt;
+&lt;/details&gt;</description>
+        </item>
+        
+    </channel>
+</rss>

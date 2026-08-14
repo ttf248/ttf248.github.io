@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="editorial" data-code-copy="Copy code" data-code-copied="Copied" data-code-expand="Expand all" data-code-collapse="Collapse code">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="Many C++ singleton implementations eventually shrink to this:\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } It looks like hiding an object inside a function, and using a reference to retrieve it. What is truly worth discussing is not the singleton pattern itself, but the fact that this code simultaneously touches upon C++ storage duration, scope, references, deferred initialization, and the concurrency semantics that were only completed in C++11.\nFirst, a correction on the terminology: the &ldquo;C98&rdquo; mentioned in the context should be &ldquo;C++98&rdquo;. Strictly speaking, C has no version called C98; more importantly, C does not have C++&rsquo;s classes, references, or member functions, so the T&amp; syntax is not C code at all.\n">
+<title>C&#43;&#43; Singleton: Initialization Guarantees Behind a Single `static` Line</title>
+
+<link rel='canonical' href='https://ttf248.life/en/p/cpp-singleton-static-initialization/'>
+
+<link rel="stylesheet" href="/scss/style.min.31fb1c20203b8ae4cda08f58886c2c2dcec556c168d6cfa7d593a04cf912b21b.css"><meta property='og:title' content="C++ Singleton: Initialization Guarantees Behind a Single `static` Line">
+<meta property='og:description' content="Many C++ singleton implementations eventually shrink to this:\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } It looks like hiding an object inside a function, and using a reference to retrieve it. What is truly worth discussing is not the singleton pattern itself, but the fact that this code simultaneously touches upon C++ storage duration, scope, references, deferred initialization, and the concurrency semantics that were only completed in C++11.\nFirst, a correction on the terminology: the &ldquo;C98&rdquo; mentioned in the context should be &ldquo;C++98&rdquo;. Strictly speaking, C has no version called C98; more importantly, C does not have C++&rsquo;s classes, references, or member functions, so the T&amp; syntax is not C code at all.\n">
+<meta property='og:url' content='https://ttf248.life/en/p/cpp-singleton-static-initialization/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='Singleton' /><meta property='article:tag' content='static' /><meta property='article:tag' content='C&#43;&#43;11' /><meta property='article:tag' content='C&#43;&#43;98' /><meta property='article:tag' content='Thread Safety' /><meta property='article:published_time' content='2026-07-24T23:32:22&#43;08:00'/><meta property='article:modified_time' content='2026-08-14T20:08:34&#43;08:00'/>
+<meta name="twitter:title" content="C++ Singleton: Initialization Guarantees Behind a Single `static` Line">
+<meta name="twitter:description" content="Many C++ singleton implementations eventually shrink to this:\nstatic T&amp; Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; } It looks like hiding an object inside a function, and using a reference to retrieve it. What is truly worth discussing is not the singleton pattern itself, but the fact that this code simultaneously touches upon C++ storage duration, scope, references, deferred initialization, and the concurrency semantics that were only completed in C++11.\nFirst, a correction on the terminology: the &ldquo;C98&rdquo; mentioned in the context should be &ldquo;C++98&rdquo;. Strictly speaking, C has no version called C98; more importantly, C does not have C++&rsquo;s classes, references, or member functions, so the T&amp; syntax is not C code at all.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/en/","name":"Uncle Xiang's Notebook","position":1},{"@type":"ListItem","item":"https://ttf248.life/en/p/cpp-singleton-static-initialization/","name":"C++ Singleton: Initialization Guarantees Behind a Single `static` Line","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"向叔"},"dateModified":"2026-08-14T20:08:34+08:00","datePublished":"2026-07-24T23:32:22+08:00","headline":"C++ Singleton: Initialization Guarantees Behind a Single `static` Line","inLanguage":"en","mainEntityOfPage":"https://ttf248.life/en/p/cpp-singleton-static-initialization/"}</script></head>
+<body class="
+    article-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/en/" aria-label="Uncle Xiang&#39;s Notebook Home">
+            <span class="site-header__title">Uncle Xiang&#39;s Notebook</span>
+            <span class="site-header__subtitle">Collecting Moments, Marking Time</span>
+        </a>
+        <nav class="site-header__nav" aria-label="Navigation">
+            <div class="site-header__nav-group" role="group" aria-label="Browse">
+                <a href="/en/">Home</a>
+                
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            <div class="site-header__nav-group" role="group" aria-label="Writing">
+                <a href="/en/writing/author/">Author writing</a>
+                <a href="/en/writing/ai/">AI writing</a>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/cpp-singleton-static-initialization/">中文</option><option value="/en/p/cpp-singleton-static-initialization/" selected>English</option><option value="/ja/p/cpp-singleton-static-initialization/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="Switch color mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open navigation menu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="Navigation">
+        <div class="mobile-navigation__header">
+            <span>Navigation</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="Close navigation menu">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="Browse">
+                <div class="mobile-navigation__group-label">Browse</div>
+                <a href="/en/">Home</a>
+                
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            <div class="mobile-navigation__group" role="group" aria-label="Writing">
+                <div class="mobile-navigation__group-label">Writing</div>
+                <a href="/en/writing/author/">Author writing</a>
+                <a href="/en/writing/ai/">AI writing</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>Language</span>
+                <select aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/cpp-singleton-static-initialization/">中文</option><option value="/en/p/cpp-singleton-static-initialization/" selected>English</option><option value="/ja/p/cpp-singleton-static-initialization/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="Article reading tools">
+    <a class="article-mobile-toolbar__back" href="/en/archives/">← <span>Article list</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">Table of contents</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">Font size</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">Reading font size</span>
+        <div class="article-reading-settings__options" role="group" aria-label="Reading font size">
+            <button type="button" data-reading-size="small" aria-pressed="false">Small</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">Default</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">Large</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="Table of contents">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">Table of contents</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>On this page</span>
+            <small data-article-reading-remaining data-template="About #MINUTES min left">About 4 min left</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#the-two-static-are-not-the-same-thing">The Two <code>static</code> Are Not the Same Thing</a></li>
+    <li><a href="#what-does-t-actually-do">What does <code>T&amp;</code> actually do</a></li>
+    <li><a href="#what-the-compiler-actually-needs-to-resolve-on-the-first-call">What the compiler actually needs to resolve on the first call</a></li>
+    <li><a href="#why-c98-cannot-be-considered-thread-safe">Why C++98 cannot be considered thread-safe</a></li>
+    <li><a href="#c11-changed-the-semantics-not-this-line-of-syntax">C++11 Changed the Semantics, Not This Line of Syntax</a></li>
+    <li><a href="#a-few-corner-cases-in-the-c11-approach">A few corner cases in the C++11 approach</a></li>
+    <li><a href="#conclusion-remember-this-distinction">Conclusion: Remember This Distinction</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="4">
+    <header class="article-header">
+
+    <div class="article-details"><div class="article-origin">
+        <span class="content-source content-source--ai">AI writing</span>
+        
+    </div>
+    
+    <header class="article-category">
+        
+            <a href="/en/categories/ai-computer/" >
+                AI Computer
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">C&#43;&#43; Singleton: Initialization Guarantees Behind a Single `static` Line</h1>
+        
+    
+        
+        
+        <h3 class="article-subtitle">
+            语法早就存在，C&#43;&#43;11 新增的是并发初始化的可移植保证
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Jul 24, 2026</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        6 minute read
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            向叔
+                        
+                    </span>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">
+                        v8.2.0
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="/p/cpp-singleton-static-initialization/" class="link">中文</a>
+                    
+                        <a href="/ja/p/cpp-singleton-static-initialization/" class="link">日本語</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>Many C++ singleton implementations eventually shrink to this:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// C++11 guarantees thread-safe initialization of function-local static objects.
+</span></span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>It looks like hiding an object inside a function, and using a reference to retrieve it. What is truly worth discussing is not the singleton pattern itself, but the fact that this code simultaneously touches upon C++ storage duration, scope, references, deferred initialization, and the concurrency semantics that were only completed in C++11.</p>
+<p>First, a correction on the terminology: the &ldquo;C98&rdquo; mentioned in the context should be &ldquo;C++98&rdquo;. Strictly speaking, C has no version called C98; more importantly, C does not have C++&rsquo;s classes, references, or member functions, so the <code>T&amp;</code> syntax is not C code at all.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>On this page</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#the-two-static-are-not-the-same-thing">The Two <code>static</code> Are Not the Same Thing</a></li>
+    <li><a href="#what-does-t-actually-do">What does <code>T&amp;</code> actually do</a></li>
+    <li><a href="#what-the-compiler-actually-needs-to-resolve-on-the-first-call">What the compiler actually needs to resolve on the first call</a></li>
+    <li><a href="#why-c98-cannot-be-considered-thread-safe">Why C++98 cannot be considered thread-safe</a></li>
+    <li><a href="#c11-changed-the-semantics-not-this-line-of-syntax">C++11 Changed the Semantics, Not This Line of Syntax</a></li>
+    <li><a href="#a-few-corner-cases-in-the-c11-approach">A few corner cases in the C++11 approach</a></li>
+    <li><a href="#conclusion-remember-this-distinction">Conclusion: Remember This Distinction</a></li>
+    <li><a href="#references">References</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="the-two-static-are-not-the-same-thing">The Two <code>static</code> Are Not the Same Thing
+</h2><p>A typical complete singleton class is usually written like this:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Singleton</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">Singleton</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">static</span> <span class="n">Singleton</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="p">(</span><span class="k">const</span> <span class="n">Singleton</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Singleton</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">~</span><span class="n">Singleton</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>The outer <code>static</code> appears in the class member function declaration, indicating that <code>Instance</code> is a static member function. It has no <code>this</code> pointer and can be called directly via <code>Singleton::Instance()</code>.</p>
+<p>The <code>static</code> keyword inside the function modifies the local variable <code>instance</code> within the function body. It is still only visible within this function body, but its storage duration is not the automatic storage duration of &ldquo;creating a new one each time the function is entered&rdquo;; instead, it has static storage duration: the same object is retained throughout the program&rsquo;s execution. Its initialization timing is when the control flow first passes through this declaration, rather than being reconstructed each time the function is called.</p>
+<p>So the &ldquo;singleton&rdquo; here comes from the combination of several conditions:</p>
+<ul>
+<li>The name of <code>instance</code> is scoped within the <code>Instance</code> function, so the outside cannot directly obtain another object with the same name;</li>
+<li><code>static</code> makes it retain the same object across multiple calls;</li>
+<li>The constructor is private, so the outside cannot casually use <code>Singleton s</code>;</li>
+<li>The copy constructor and copy assignment are deleted to avoid creating a second object through copying;</li>
+<li>It returns <code>Singleton&amp;</code>, handing a reference to the same object to the caller, not returning a copy.</li>
+</ul>
+<p>The last two items are C++11 syntax. C++98 does not have <code>= delete</code> and <code>= default</code>; you can only declare the copy constructor, assignment operator, and constructor in the <code>private</code> section without defining them.</p>
+<h2 id="what-does-t-actually-do">What does <code>T&amp;</code> actually do
+</h2><p><code>T&amp;</code> can be read from right to left as &ldquo;a reference to something of type <code>T</code>&rdquo;. Therefore:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span>
+</span></span></code></pre></div><p>It means <code>Instance</code> returns a reference to a <code>T</code> object, not a <code>T</code> object.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>What is returned here is the static object pointed to by the local name <code>instance</code>. Because its lifetime spans the entire execution of the program, the reference remains valid after the function returns; if it were a regular local variable, returning a reference this way would result in a dangling reference.</p>
+<p>Returning a reference has two direct effects: the caller receives the original object and can modify it; meanwhile, no additional object copy is made. If read-only access is the only intent, the interface can be written as <code>const T&amp;</code>, but this will not automatically make other shared state inside <code>T</code> concurrency-safe.</p>
+<h2 id="what-the-compiler-actually-needs-to-resolve-on-the-first-call">What the compiler actually needs to resolve on the first call
+</h2><p>Breaking down the invocation process into three scenarios makes it clearest.</p>
+<p>On the first call, control flow reaches:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>If the object has not finished initialization, call the default constructor of <code>T</code>. After construction is complete, execute <code>return instance</code>.</p>
+<p>On subsequent calls, <code>instance</code> has already been initialized, so the constructor does not execute again, and the code directly returns the same object.</p>
+<p>The problem arises when two threads simultaneously make their first call: they may both find the object &ldquo;not yet initialized&rdquo; at the same time. Without additional synchronization, the object may be constructed twice, one thread may read a half-constructed object, or the initialization flag may become visible to another thread before the object&rsquo;s contents do.</p>
+<p>Implementations typically hide a guard state for the local static. The following is just pseudocode to aid understanding, not the real ABI required by the standard:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">guard_is_complete</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">lock_guard_for_this_static</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">guard_is_complete</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">construct</span><span class="p">(</span><span class="n">instance</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">mark_guard_complete</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">unlock_guard_for_this_static</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>The key point is not whether there is a variable named <code>guard</code>, but rather that the entire sequence of &ldquo;checking, constructing, and marking complete&rdquo; must be protected by the implementation using a synchronization mechanism that conforms to the standard. Before initialization is complete, competing threads must wait; only after initialization is complete can they acquire the object.</p>
+<h2 id="why-c98-cannot-be-considered-thread-safe">Why C++98 cannot be considered thread-safe
+</h2><p>There&rsquo;s a common misconception here: C++98 is not incapable of writing this code. The local <code>static</code> syntax and the &ldquo;initialize only once&rdquo; sequencing semantics already existed in C++98.</p>
+<p>The difference is that C++98 only describes the execution process in a single-threaded abstract machine; it lacks the standardized multi-threading execution, data race, and memory visibility rules introduced in C++11. It makes no guarantee that when two threads simultaneously pass the declaration point for the first time, the initialization must be performed by one thread while the others wait.</p>
+<p>Therefore, the correct statement for this code under C++98 is: lazy-initialized singleton can be implemented in a single-threaded scenario; whether it is safe in a multi-threaded scenario depends on the compiler, runtime library, and platform implementation, and no guarantee can be derived from the C++98 standard itself.</p>
+<p>This kind of C++98 version is especially not made safe by &ldquo;checking the pointer before reallocating&rdquo;:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">*</span> <span class="n">instance</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">instance</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">instance</span> <span class="o">=</span> <span class="k">new</span> <span class="n">T</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">return</span> <span class="o">*</span><span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>Two threads may both pass through <code>instance == 0</code> at the same time, and create two <code>T</code> objects separately. Even if you add a double-checked locking pattern — &ldquo;check first, acquire the lock, then check again inside the lock&rdquo; — C++98 lacks a sufficient memory model to guarantee that when the pointer is published, another thread will necessarily see the fully constructed object in the correct order. <code>volatile</code> is not a thread synchronization tool and cannot fix this problem either.</p>
+<p>If a C++98 project genuinely needs this guarantee, it can only offload the synchronization to platforms or libraries outside the standard, such as POSIX one-time initialization, Windows synchronization primitives, or thread libraries available at the time; alternatively, all accesses can be funneled through a mutex. That&rsquo;s &ldquo;patching in the guarantee with external synchronization,&rdquo; not something this <code>static</code> line in C++98 provides on its own.</p>
+<h2 id="c11-changed-the-semantics-not-this-line-of-syntax">C++11 Changed the Semantics, Not This Line of Syntax
+</h2><p>The key changes in C++11 are not inventions of:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>This statement could have been written long ago. C++11 formally incorporated the concurrent initialization rules into the language standard: function-local variables with static storage duration are dynamically initialized when the control flow first passes through the declaration; if multiple threads enter concurrently while the variable is being initialized, other executions should wait for the initialization to complete.</p>
+<p>This is precisely what &ldquo;thread-safe initialization&rdquo; means in the comment. What it guarantees is the initialization phase: <code>T</code>&rsquo;s constructor only successfully executes once, and competing threads will not bypass the unfinished construction to directly use the object.</p>
+<p>It does not guarantee that the business code below is inherently secure:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">Singleton</span><span class="o">::</span><span class="n">Instance</span><span class="p">().</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">);</span>  <span class="c1">// Multiple threads modifying the same object can still cause data races
+</span></span></span></code></pre></div><p>If <code>append</code> modifies a shared container, you still need to use mutexes, atomic variables, or other proper concurrency design inside <code>T</code>. A singleton only addresses &ldquo;when and how the object is constructed exactly once&rdquo;; it does not address &ldquo;how each operation inside the object is executed concurrently.&rdquo;</p>
+<h2 id="a-few-corner-cases-in-the-c11-approach">A few corner cases in the C++11 approach
+</h2><p>First, <code>static T instance;</code> requires <code>T</code> to be default-constructible, with the constructor and destructor accessible here. If the constructor throws, the initialization is considered incomplete; the next time control flow reaches the declaration, initialization will be retried, rather than leaving a half-constructed object behind.</p>
+<p>Second, the initialization function must not recursively re-enter the initialization process of the same function-local static. For example, if the constructor of <code>T</code> calls <code>Instance()</code>, this enters a recursive initialization scenario that the standard explicitly prohibits, and cannot be treated as ordinary reentrance.</p>
+<p>Third, if the <code>instance</code> is actually constructed, it will be destructed during the program&rsquo;s termination phase. This characteristic is usually healthier than deliberately leaking memory after manually writing <code>new</code>, but it also means it may depend on the destruction order of other global objects. It&rsquo;s best not to covertly rely on a bunch of cross-file global state inside the singleton&rsquo;s constructor.</p>
+<p>Finally, the &ldquo;globally unique&rdquo; nature of a singleton is mainly a single object at the language level. When crossing dynamic library, plugin, or different runtime boundaries, whether it is truly unique to the entire process also depends on the linking and loading boundaries; you cannot assume that all modules share the same instance based solely on the class name.</p>
+<h2 id="conclusion-remember-this-distinction">Conclusion: Remember This Distinction
+</h2><p>Both C++98 and C++11 can write local static singletons; only C++11 codified the guarantee in the standard that, during concurrent initialization, the initialization happens only once while other threads wait.</p>
+<p>So when you see code like this, it&rsquo;s best to check it in three layers: <code>static</code> keeps the object alive for a long time, the function scope narrows the entry point, and the C++11 language rules are what give the first concurrent initialization a portable guarantee. As for whether the data inside the object can be modified simultaneously by multiple threads after construction completes—that&rsquo;s a different question.</p>
+<h2 id="references">References
+</h2><ul>
+<li><a class="link" href="https://timsong-cpp.github.io/cppwp/n3337/stmt.dcl"  target="_blank" rel="noopener"
+    >C++11 Working Draft N3337: 6.7 Declaration statement</a></li>
+<li><a class="link" href="https://eel.is/c&#43;&#43;draft/stmt.dcl"  target="_blank" rel="noopener"
+    >Current C++ Working Draft: [stmt.dcl]</a></li>
+<li><a class="link" href="https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1875.html"  target="_blank" rel="noopener"
+    >WG21 N1875: C++ Threads</a></li>
+<li><a class="link" href="https://learn.microsoft.com/en-us/cpp/build/reference/zc-threadsafeinit-thread-safe-local-static-initialization?view=msvc-170"  target="_blank" rel="noopener"
+    >Microsoft: /Zc:threadSafeInit (Thread-safe local static initialization)</a></li>
+</ul>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="original-prompt">Original Prompt
+</h3><blockquote>
+<p>$blog-writer C++ Singleton, please explain in detail the principle behind this. How is it supported at the language syntax level? <code>static T &amp;Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; }</code> Why couldn&rsquo;t this be done in C++98? Why can it be done in C++11?</p>
+</blockquote>
+    </div>
+</details>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+    <section class="article-tags">
+        
+            <a href="/en/tags/c/">C&#43;&#43;</a>
+        
+            <a href="/en/tags/singleton/">Singleton</a>
+        
+            <a href="/en/tags/static/">Static</a>
+        
+            <a href="/en/tags/c-11/">C&#43;&#43;11</a>
+        
+            <a href="/en/tags/c-98/">C&#43;&#43;98</a>
+        
+            <a href="/en/tags/thread-safety/">Thread Safety</a>
+        
+    </section>
+
+    <div class="article-colophon" aria-label="Article reading tools">
+        <div class="article-colophon__heading">Article reading tools</div>
+        <div class="article-colophon__items">
+            <span class="article-colophon__item article-colophon__item--author">
+                <span class="article-colophon__label">Author</span>
+                <span class="article-colophon__value">向叔</span>
+            </span>
+            
+                <span class="article-colophon__item article-colophon__item--skill">
+                    <span class="article-colophon__label">Writing</span>
+                    <span class="article-colophon__value">v8.2.0</span>
+                </span>
+            
+            
+                <span class="article-colophon__item article-colophon__item--license">
+                    <span class="article-colophon__label">License</span>
+                    <span class="article-colophon__value">Licensed under CC BY-NC-SA 4.0</span>
+                </span>
+            
+            <span class="article-colophon__item article-colophon__item--updated">
+                <span class="article-colophon__label">Last updated on</span>
+                <time class="article-colophon__value" datetime="2026-08-14T20:08:34&#43;08:00">Aug 14, 2026 20:08</time>
+            </span>
+        </div>
+    </div>
+</footer>
+
+
+    
+</article><script src="/ts/article-tools.4d3ffe6ff37122833544a2d4a65fb3d9d08ed00a334ef4aab3919c6d21e62994.js" integrity="sha256-TT/&#43;b/NxIoM1RKLUpl&#43;z2dCO0AozTvSqs5GcbSHmKZQ=" defer></script>
+
+    
+    
+
+<section class="related-content--wrapper" aria-label="Related content">
+    <header class="related-content__header">
+        <h2 class="section-title">Related content</h2>
+        <span class="related-content__count">01</span>
+    </header>
+    <ol class="related-content__list">
+            
+                <li class="related-content__item">
+                    <a href="/en/p/ai-demo-fast-rework-faster/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI writes demos quickly, and revisions are also really fast.</h3>
+                            <time class="related-content__date" datetime='2026-04-10T15:39:51&#43;08:00'>Apr 10, 2026</time>
+                        </div>
+                    </a>
+                </li>
+            
+    </ol>
+</section>
+
+
+    
+    <section class="article-comments" aria-label="Comments">
+    <div id="waline" class="waline-container" aria-live="polite">
+        <p class="waline-container__status">Comments will load when you scroll here.</p>
+    </div>
+    <noscript><p>Comments require JavaScript.</p></noscript>
+</section>
+<style>
+    .waline-container {
+        --waline-font-size: var(--type-comment);
+        --waline-theme-color: var(--accent-color);
+        --waline-active-color: var(--accent-color-darker);
+        --waline-bg-color: transparent;
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-bg-color-hover: var(--surface-elevated);
+        --waline-color: var(--text-secondary);
+        --waline-border-color: var(--border-color);
+        --waline-border: 1px solid var(--border-color);
+        --waline-box-shadow: none;
+        --waline-info-color: var(--text-tertiary);
+        --waline-disable-bg-color: var(--surface-elevated);
+        --waline-code-bg-color: var(--surface-elevated);
+    }
+    [data-scheme="dark"] .waline-container {
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-border-color: var(--border-color);
+    }
+</style><script type="module">
+    const container = document.getElementById('waline');
+    const loadWaline = async () => {
+        if (!container || container.dataset.loaded) return;
+        container.dataset.loaded = 'true';
+        const stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = 'https://unpkg.com/@waline/client@v3/dist/waline.css';
+        document.head.append(stylesheet);
+        try {
+            const { init } = await import('https://unpkg.com/@waline/client@v3/dist/waline.js');
+            container.replaceChildren();
+            init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":null,"locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+        } catch {
+            container.dataset.loaded = '';
+            container.replaceChildren('Comment service is temporarily unavailable. Please try again later.');
+        }
+    };
+    if (container && 'IntersectionObserver' in window) {
+        new IntersectionObserver((entries, observer) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            loadWaline();
+        }, { rootMargin: '320px 0px' }).observe(container);
+    } else {
+        loadWaline();
+    }
+</script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="Back to top"
+    title="Back to top"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.b0c7d091a4dd3194be4e347bfc2179a52cf3ca25830fbbcac798ce7b793123ed.js" integrity="sha256-sMfQkaTdMZS&#43;TjR7/CF5pSzzyiWDD7vKx5jOe3kxI&#43;0=" defer></script>
+</body>
+</html>

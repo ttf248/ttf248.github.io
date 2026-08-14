@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr" data-theme="editorial" data-code-copy="コードをコピー" data-code-copied="コピーしました" data-code-expand="すべて展開" data-code-collapse="コードを折りたたむ">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="多くの C++ シングルトン実装は、最終的に次のような形に縮小されます。\nstatic T&amp; Instance() { // C++11 は関数内 static オブジェクトのスレッドセーフな初期化を保証する。 static T instance; return instance; } オブジェクトを関数の中に隠しておき、参照を使って取り出しているように見えます。本当にお伝えしたいのはシングルトンパターンそのものというより、このコードが C++ のストレージ期間、スコープ、参照、遅延初期化、そして C++11 でようやく整った並行性に関するセマンティクスに同時に触れているという点です。\nまず呼び名を一つ訂正します：文脈で触れられている「C98」は「C++98」のことを指しているはずです。厳密にC言語について言うなら、C98というバージョンは存在しません。さらに重要なのは、C言語にはC++にあるクラス、参照、メンバ関数がないため、T&amp; という構文はそもそもCのコードではないということです。\n">
+<title>C&#43;&#43; シングルトン：1行の static が提供する初期化保証</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/p/cpp-singleton-static-initialization/'>
+
+<link rel="stylesheet" href="/scss/style.min.31fb1c20203b8ae4cda08f58886c2c2dcec556c168d6cfa7d593a04cf912b21b.css"><meta property='og:title' content="C++ シングルトン：1行の static が提供する初期化保証">
+<meta property='og:description' content="多くの C++ シングルトン実装は、最終的に次のような形に縮小されます。\nstatic T&amp; Instance() { // C++11 は関数内 static オブジェクトのスレッドセーフな初期化を保証する。 static T instance; return instance; } オブジェクトを関数の中に隠しておき、参照を使って取り出しているように見えます。本当にお伝えしたいのはシングルトンパターンそのものというより、このコードが C++ のストレージ期間、スコープ、参照、遅延初期化、そして C++11 でようやく整った並行性に関するセマンティクスに同時に触れているという点です。\nまず呼び名を一つ訂正します：文脈で触れられている「C98」は「C++98」のことを指しているはずです。厳密にC言語について言うなら、C98というバージョンは存在しません。さらに重要なのは、C言語にはC++にあるクラス、参照、メンバ関数がないため、T&amp; という構文はそもそもCのコードではないということです。\n">
+<meta property='og:url' content='https://ttf248.life/ja/p/cpp-singleton-static-initialization/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='シングルトン' /><meta property='article:tag' content='static' /><meta property='article:tag' content='C&#43;&#43;11' /><meta property='article:tag' content='C&#43;&#43;98' /><meta property='article:tag' content='スレッドセーフ' /><meta property='article:published_time' content='2026-07-24T23:32:22&#43;08:00'/><meta property='article:modified_time' content='2026-08-14T20:08:34&#43;08:00'/>
+<meta name="twitter:title" content="C++ シングルトン：1行の static が提供する初期化保証">
+<meta name="twitter:description" content="多くの C++ シングルトン実装は、最終的に次のような形に縮小されます。\nstatic T&amp; Instance() { // C++11 は関数内 static オブジェクトのスレッドセーフな初期化を保証する。 static T instance; return instance; } オブジェクトを関数の中に隠しておき、参照を使って取り出しているように見えます。本当にお伝えしたいのはシングルトンパターンそのものというより、このコードが C++ のストレージ期間、スコープ、参照、遅延初期化、そして C++11 でようやく整った並行性に関するセマンティクスに同時に触れているという点です。\nまず呼び名を一つ訂正します：文脈で触れられている「C98」は「C++98」のことを指しているはずです。厳密にC言語について言うなら、C98というバージョンは存在しません。さらに重要なのは、C言語にはC++にあるクラス、参照、メンバ関数がないため、T&amp; という構文はそもそもCのコードではないということです。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/p/cpp-singleton-static-initialization/","name":"C++ シングルトン：1行の static が提供する初期化保証","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"向叔"},"dateModified":"2026-08-14T20:08:34+08:00","datePublished":"2026-07-24T23:32:22+08:00","headline":"C++ シングルトン：1行の static が提供する初期化保証","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/p/cpp-singleton-static-initialization/"}</script></head>
+<body class="
+    article-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/ja/" aria-label="向叔の手帳 ホーム">
+            <span class="site-header__title">向叔の手帳</span>
+            <span class="site-header__subtitle">時を集め、歳月に痕跡を残す</span>
+        </a>
+        <nav class="site-header__nav" aria-label="ナビゲーション">
+            <div class="site-header__nav-group" role="group" aria-label="閲覧">
+                <a href="/ja/">ホーム</a>
+                
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            <div class="site-header__nav-group" role="group" aria-label="執筆">
+                <a href="/ja/writing/author/">著者執筆</a>
+                <a href="/ja/writing/ai/">AI 執筆</a>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/cpp-singleton-static-initialization/">中文</option><option value="/en/p/cpp-singleton-static-initialization/">English</option><option value="/ja/p/cpp-singleton-static-initialization/" selected>日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="カラーモードを切り替え">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="ナビゲーションメニューを開く">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="ナビゲーション">
+        <div class="mobile-navigation__header">
+            <span>ナビゲーション</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="ナビゲーションメニューを閉じる">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="閲覧">
+                <div class="mobile-navigation__group-label">閲覧</div>
+                <a href="/ja/">ホーム</a>
+                
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            <div class="mobile-navigation__group" role="group" aria-label="執筆">
+                <div class="mobile-navigation__group-label">執筆</div>
+                <a href="/ja/writing/author/">著者執筆</a>
+                <a href="/ja/writing/ai/">AI 執筆</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>言語</span>
+                <select aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/cpp-singleton-static-initialization/">中文</option><option value="/en/p/cpp-singleton-static-initialization/">English</option><option value="/ja/p/cpp-singleton-static-initialization/" selected>日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="記事閲覧ツール">
+    <a class="article-mobile-toolbar__back" href="/ja/archives/">← <span>記事一覧</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目次</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">文字サイズ</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">閲覧時の文字サイズ</span>
+        <div class="article-reading-settings__options" role="group" aria-label="閲覧時の文字サイズ">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">標準</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目次">
+    <button type="button" class="article-toc-rail__toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目次</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="閲覧進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>この記事の目次</span>
+            <small data-article-reading-remaining data-template="残り約 #MINUTES 分">残り約 10 分</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#二つの-static-は同じものではない">二つの <code>static</code> は同じものではない</a></li>
+    <li><a href="#t-とは実際には何をするのか"><code>T&amp;</code> とは実際には何をするのか</a></li>
+    <li><a href="#初めての呼び出し時コンパイラは実際に何を解決するのか">初めての呼び出し時、コンパイラは実際に何を解決するのか</a></li>
+    <li><a href="#c98-がスレッドセーフにできない理由">C++98 がスレッドセーフにできない理由</a></li>
+    <li><a href="#c11-が変えるのはセマンティクスでありこの行の構文ではない">C++11 が変えるのはセマンティクスであり、この行の構文ではない</a></li>
+    <li><a href="#c11-にはまだいくつかの境界がある">C++11 にはまだいくつかの境界がある</a></li>
+    <li><a href="#最後にこの区別を覚えておきましょう">最後に：この区別を覚えておきましょう</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="10">
+    <header class="article-header">
+
+    <div class="article-details"><div class="article-origin">
+        <span class="content-source content-source--ai">AI 執筆</span>
+        
+    </div>
+    
+    <header class="article-category">
+        
+            <a href="/ja/categories/ai-%E3%82%B3%E3%83%B3%E3%83%94%E3%83%A5%E3%83%BC%E3%82%BF/" >
+                AI コンピュータ
+            </a>
+        
+    </header>
+    
+
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">C&#43;&#43; シングルトン：1行の static が提供する初期化保証</h1>
+        
+    
+        
+        
+        <h3 class="article-subtitle">
+            语法早就存在，C&#43;&#43;11 新增的是并发初始化的可移植保证
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time">
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年07月24日</time>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">
+                        
+                        
+                            
+                        
+                        
+                        
+                        
+                        読了時間: 16分
+                    </time>
+                </div>
+            
+
+            
+                <div>
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">
+                        
+                            向叔
+                        
+                    </span>
+                </div>
+            
+
+            
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">
+                        v8.2.0
+                    </span>
+                </div>
+            
+        </footer>
+        
+
+        
+            <footer class="article-translations">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-language" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+  <path d="M4 5h7" />
+  <path d="M9 3v2c0 4.418 -2.239 8 -5 8" />
+  <path d="M5 9c-.003 2.144 2.952 3.908 6.7 4" />
+  <path d="M12 20l4 -9l4 9" />
+  <path d="M19.1 18h-6.2" />
+</svg>
+
+
+
+                <div>
+                    
+                        <a href="/p/cpp-singleton-static-initialization/" class="link">中文</a>
+                    
+                        <a href="/en/p/cpp-singleton-static-initialization/" class="link">English</a>
+                    
+                </div>
+            </footer>
+        
+    </div>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>多くの C++ シングルトン実装は、最終的に次のような形に縮小されます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="c1">// C++11 は関数内 static オブジェクトのスレッドセーフな初期化を保証する。
+</span></span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>オブジェクトを関数の中に隠しておき、参照を使って取り出しているように見えます。本当にお伝えしたいのはシングルトンパターンそのものというより、このコードが C++ のストレージ期間、スコープ、参照、遅延初期化、そして C++11 でようやく整った並行性に関するセマンティクスに同時に触れているという点です。</p>
+<p>まず呼び名を一つ訂正します：文脈で触れられている「C98」は「C++98」のことを指しているはずです。厳密にC言語について言うなら、C98というバージョンは存在しません。さらに重要なのは、C言語にはC++にあるクラス、参照、メンバ関数がないため、<code>T&amp;</code> という構文はそもそもCのコードではないということです。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>この記事の目次</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#二つの-static-は同じものではない">二つの <code>static</code> は同じものではない</a></li>
+    <li><a href="#t-とは実際には何をするのか"><code>T&amp;</code> とは実際には何をするのか</a></li>
+    <li><a href="#初めての呼び出し時コンパイラは実際に何を解決するのか">初めての呼び出し時、コンパイラは実際に何を解決するのか</a></li>
+    <li><a href="#c98-がスレッドセーフにできない理由">C++98 がスレッドセーフにできない理由</a></li>
+    <li><a href="#c11-が変えるのはセマンティクスでありこの行の構文ではない">C++11 が変えるのはセマンティクスであり、この行の構文ではない</a></li>
+    <li><a href="#c11-にはまだいくつかの境界がある">C++11 にはまだいくつかの境界がある</a></li>
+    <li><a href="#最後にこの区別を覚えておきましょう">最後に：この区別を覚えておきましょう</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="二つの-static-は同じものではない">二つの <code>static</code> は同じものではない
+</h2><p>完全なシングルトンクラスは通常次のように書かれます：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">Singleton</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">public</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">Singleton</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">static</span> <span class="n">Singleton</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="p">(</span><span class="k">const</span> <span class="n">Singleton</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Singleton</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">private</span><span class="o">:</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Singleton</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="o">~</span><span class="n">Singleton</span><span class="p">()</span> <span class="o">=</span> <span class="k">default</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><p>外側の <code>static</code> はクラスメンバー関数の宣言に現れ、<code>Instance</code> が静的メンバー関数であることを示しています。これは <code>this</code> ポインターを持たず、<code>Singleton::Instance()</code> で直接呼び出すことができます。</p>
+<p>内側の <code>static</code> が修飾しているのは、関数本体の中にある局所変数 <code>instance</code> です。この変数は依然としてその関数本体内でのみ見えますが、記憶域期間（ストレージ期間）は「関数が呼ばれるたびに新しく作られる」という自動的記憶域期間ではなく、静的記憶域期間となります。つまり、プログラムの実行中ずっと同じオブジェクトが保持され続けます。初期化のタイミングは、関数が呼ばれるたびに新しく構築し直されるのではなく、制御の流れが初めてこの宣言を通過したときです。</p>
+<p>したがって、ここでの「シングルトン」は、いくつかの条件が重なり合うことから生じています。</p>
+<ul>
+<li><code>instance</code> という名前は <code>Instance</code> 関数内に限定されているため、外部から直接同じ名前の別のオブジェクトを取得することはできません。</li>
+<li><code>static</code> により、複数回の呼び出しにわたって同じオブジェクトが保持されます。</li>
+<li>コンストラクタは private であり、外部で勝手に <code>Singleton s</code> と書くことはできません。</li>
+<li>コピーコンストラクタとコピー代入演算子を削除し、コピーによって2つ目のオブジェクトが作られるのを防ぎます。</li>
+<li><code>Singleton&amp;</code> を返すことで、同じオブジェクトの参照を呼び出し側に渡し、コピーは返しません。</li>
+</ul>
+<p>最後の 2 つは C++11 の書き方です。C++98 には <code>= delete</code> も <code>= default</code> も存在しないため、コピーコンストラクタ、代入演算子、コンストラクタを <code>private</code> 領域で宣言するだけで定義しないという方法を取るしかありません。</p>
+<h2 id="t-とは実際には何をするのか"><code>T&amp;</code> とは実際には何をするのか
+</h2><p><code>T&amp;</code> は右から左へ読むと「型が <code>T</code> であるものへの参照」となります。したがって：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">&amp;</span> <span class="n">Instance</span><span class="p">()</span>
+</span></span></code></pre></div><p><code>Instance</code> が返すのは <code>T</code> オブジェクトの参照であり、<code>T</code> オブジェクトそのものではないことを示します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>ここで返されるのは、静的オブジェクトを指すローカル名 <code>instance</code> の値です。その生存期間はプログラム全体の実行期間をカバーしているため、関数の返後も参照は有効です。もしそれが通常のローカル変数であったなら、このように参照を返すとダングリング参照になってしまいます。</p>
+<p>参照返しにはもう2つの直接的な効果があります。呼び出し側は元のオブジェクトを取得し、それを変更できます。同時に、余分なオブジェクトのコピーは発生しません。読み取りのみを許可したい場合は、インターフェースを <code>const T&amp;</code> として記述することができますが、これによって <code>T</code> 内部の他の共有状態が自動的に並行処理に対して安全になるわけではありません。</p>
+<h2 id="初めての呼び出し時コンパイラは実際に何を解決するのか">初めての呼び出し時、コンパイラは実際に何を解決するのか
+</h2><p>呼び出しプロセスを3つのシナリオに分けるのが最も分かりやすい。</p>
+<p>最初の呼び出し時に、制御フローは次へ進みます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>オブジェクトがまだ初期化されていない場合は、<code>T</code> のデフォルトコンストラクタを呼び出します。構築が完了したら <code>return instance</code> を実行します。</p>
+<p>再度呼び出された時点では、<code>instance</code> はすでに初期化済みのため、コンストラクタは再実行されず、コードは同じオブジェクトを直接返します。</p>
+<p>2 つのスレッドが初めて同時に呼び出したときに問題が発生します。どちらもオブジェクトが「まだ初期化されていない」と同時に判定する可能性があります。追加の同期がなければ、二重に構築されたり、あるスレッドが半分だけ構築されたオブジェクトを読み取ったり、初期化フラグがオブジェクトの内容より先に別のスレッドから見えるといったことが起こり得ます。</p>
+<p>実装では通常、ローカルの static のためにガード状態を1つ隠しておきます。下記はあくまで理解を助けるための擬似コードであり、標準で要求されている実際の ABI ではありません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">guard_is_complete</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">lock_guard_for_this_static</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">guard_is_complete</span><span class="p">())</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">construct</span><span class="p">(</span><span class="n">instance</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">        <span class="n">mark_guard_complete</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">unlock_guard_for_this_static</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">return</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>要点は <code>guard</code> という名前の変数があるかどうかではなく、「チェック、構築、完了フラグの設定」という一連の処理全体が、実装側で標準準拠の同期機構によって保護されなければならないという点である。初期化が完了するまで、競合するスレッドは待機しなければならず、初期化が完了して初めて、それらのスレッドはそのオブジェクトを取得できる。</p>
+<h2 id="c98-がスレッドセーフにできない理由">C++98 がスレッドセーフにできない理由
+</h2><p>ここで誤解されやすい点があります。C++98 ではこのコードを書けなかったわけではありません。ローカル <code>static</code> の構文と「一度だけ初期化される」という順序意味論は、すでに C++98 の時点で存在していました。</p>
+<p>違いは、C++98 がシングルスレッドの抽象機械における実行のみを記述しており、C++11 のように標準化されたマルチスレッド実行、データ競合、メモリの可視性に関する規則を持たない点である。2 つのスレッドが同時に宣言を初めて通過する際に、一方のスレッドが初期化を完了し、他のスレッドが待機しなければならないことを保証していない。</p>
+<p>したがって、C++98 におけるこのコードについては次のように言うのが正確です。シングルスレッドでは遅延初期化シングルトンを実現できます。マルチスレッドでの安全性は、コンパイラ、ランタイムライブラリ、プラットフォームの実装に依存し、C++98 標準自体から保証を導くことはできません。</p>
+<p>次のような C++98 版は、特に「ポインターの再割り当てを判定する」という理由だけで安全にするべきではありません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span><span class="o">*</span> <span class="n">instance</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="p">(</span><span class="n">instance</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">instance</span> <span class="o">=</span> <span class="k">new</span> <span class="n">T</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">return</span> <span class="o">*</span><span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>2 つのスレッドが同時に <code>instance == 0</code> を通過し、それぞれが <code>T</code> を 2 つ生成する可能性があります。「先にチェック、ロックし、ロック内で再チェック」というダブルチェック構造を追加したとしても、C++98 には、ポインタを公開する際に、別スレッドが常に正しい順序で完全なオブジェクトを確実に参照できることを保証する十分なメモリモデルがありません。<code>volatile</code> はスレッド同期ツールではなく、この問題を修正することもできません。</p>
+<p>C++98 プロジェクトでこの保証が本当に必要になる場合、たとえば POSIX の one-time initialization、Windows の同期プリミティブ、当時利用可能だったスレッドライブラリなど、標準外のプラットフォームやライブラリに同期処理を委ねるしかなかった。または、すべてのアクセスを 1 つのミューテックス経由にするしかなかった。これは「外部の同期で保証を補う」ことであって、C++98 のこの <code>static</code> 行自体が保証を提供しているわけではない。</p>
+<h2 id="c11-が変えるのはセマンティクスでありこの行の構文ではない">C++11 が変えるのはセマンティクスであり、この行の構文ではない
+</h2><p>C++11 の重要な変化は、以下のものを発明したことではありません：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">static</span> <span class="n">T</span> <span class="n">instance</span><span class="p">;</span>
+</span></span></code></pre></div><p>この声明はずっと前から書けた。C++11 は並行初期化ルールを正式に言語標準に組み込んだ。関数ローカルで静的記憶期間を持つ変数は、制御フローが初めて宣言を通過する際に動的初期化が行われる。複数のスレッドが並行して進入し、変数が初期化中の場合、他の実行はその初期化の完了を待つべきである。</p>
+<p>これがコメントにある「thread-safe initialization」の正確な意味です。保証されるのは初期化段階で、<code>T</code> のコンストラクタが一度だけ成功して実行され、競合するスレッドが未完成の構築中のオブジェクトをまたいで使用することはないということです。</p>
+<p>下記の業務コードが本質的に安全であることを保証するものではありません。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="n">Singleton</span><span class="o">::</span><span class="n">Instance</span><span class="p">().</span><span class="n">append</span><span class="p">(</span><span class="n">data</span><span class="p">);</span>  <span class="c1">// 複数スレッドが同じオブジェクトを変更する場合、データ競合が発生する可能性がある
+</span></span></span></code></pre></div><p><code>append</code> が共有コンテナを変更する場合でも、<code>T</code> 内部でミューテックスやアトミック変数などの適切な並行設計を引き続き使用する必要があります。シングルトンは「オブジェクトがいつ、どのように一度だけ構築されるか」という問題を解決するだけであり、「オブジェクト内部の各操作が並行してどのように実行されるか」という問題を解決するものではありません。</p>
+<h2 id="c11-にはまだいくつかの境界がある">C++11 にはまだいくつかの境界がある
+</h2><p>まず、<code>static T instance;</code> は <code>T</code> がデフォルト構築可能であり、コンストラクタとデストラクタがここでアクセス可能である必要があります。コンストラクタが例外を投げた場合、その初期化は完了したとは見なされません。次回の制御フローが宣言に到達したとき、半完成状態のままではなく、初期化が再試行されます。</p>
+<p>第二に、初期化関数は同じローカル static の初期化プロセスに再帰的に再入することはできない。例えば <code>T</code> のコンストラクタが <code>Instance()</code> を再度呼び出した場合、規格で明確に禁止されている再帰的な初期化シナリオに入ることになり、それを通常のリエントラントとして扱ってはならない。</p>
+<p>第三に、もし <code>instance</code> が実際に構築されれば、プログラムの終了段階でデストラクタが実行される。この特性は、通常 <code>new</code> を手書きで書いて意図的にリークするより健全だが、他のグローバルオブジェクトのデストラクト順序に依存する可能性もある。シングルトンのコンストラクタでは、別のファイルにまたがるグローバル状態にこっそり依存しないほうがよい。</p>
+<p>最後に、シングルトンの「グローバルに一意」というのは、主に言語レベルでの一つのオブジェクトを指します。動的ライブラリ、プラグイン、または異なるランタイム境界をまたぐ場合、本当にプロセス全体で唯一かどうかは、リンクや読み込みの境界に依存します。クラス名だけで、すべてのモジュールが同じインスタンスを共有していると決めつけることはできません。</p>
+<h2 id="最後にこの区別を覚えておきましょう">最後に：この区別を覚えておきましょう
+</h2><p>C++98 と C++11 のどちらでもローカル static シングルトンを記述することができますが、「一度だけ初期化され、他のスレッドはそれを待機する」という並行初期化の保証が標準化されるのは C++11 からです。</p>
+<p>したがって、このコードを目にしたときは、3つの層でチェックするのが最善である。<code>static</code> によってオブジェクトの寿命が長くなり、関数スコープによって入り口が狭くなり、C++11の言語規則によって、移植性を保証された上での初めての並行初期化が可能になる。オブジェクトの構築が完了した後、その内部のデータを複数のスレッドが同時に変更できるかどうかについては、それは別の問題である。</p>
+<h2 id="参考資料">参考資料
+</h2><ul>
+<li><a class="link" href="https://timsong-cpp.github.io/cppwp/n3337/stmt.dcl"  target="_blank" rel="noopener"
+    >C++11 作業草案 N3337:6.7 宣言文</a></li>
+<li><a class="link" href="https://eel.is/c&#43;&#43;draft/stmt.dcl"  target="_blank" rel="noopener"
+    >現行 C++ 作業草案:[stmt.dcl]</a></li>
+<li><a class="link" href="https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1875.html"  target="_blank" rel="noopener"
+    >WG21 N1875:C++ Threads</a></li>
+<li><a class="link" href="https://learn.microsoft.com/en-us/cpp/build/reference/zc-threadsafeinit-thread-safe-local-static-initialization?view=msvc-170"  target="_blank" rel="noopener"
+    >Microsoft:/Zc:threadSafeInit(スレッドセーフなローカル static 初期化)</a></li>
+</ul>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="オリジナルプロンプト">オリジナルプロンプト
+</h3><blockquote>
+<p>$blog-writer C++ シングルトンについて、詳しく解説してほしい。この原理、および構文レベルでどのようにサポートされているのか、<code>static T &amp;Instance() { // C++11 guarantees thread-safe initialization of function-local static objects. static T instance; return instance; }</code> について、なぜ C98 ではこのようにすることができないのか、なぜ C11 ではこのようにすることができるのかを説明してほしい。</p>
+</blockquote>
+    </div>
+</details>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+    <section class="article-tags">
+        
+            <a href="/ja/tags/c/">C&#43;&#43;</a>
+        
+            <a href="/ja/tags/%E3%82%B7%E3%83%B3%E3%82%B0%E3%83%AB%E3%83%88%E3%83%B3/">シングルトン</a>
+        
+            <a href="/ja/tags/static/">Static</a>
+        
+            <a href="/ja/tags/c-11/">C&#43;&#43;11</a>
+        
+            <a href="/ja/tags/c-98/">C&#43;&#43;98</a>
+        
+            <a href="/ja/tags/%E3%82%B9%E3%83%AC%E3%83%83%E3%83%89%E3%82%BB%E3%83%BC%E3%83%95/">スレッドセーフ</a>
+        
+    </section>
+
+    <div class="article-colophon" aria-label="記事閲覧ツール">
+        <div class="article-colophon__heading">記事閲覧ツール</div>
+        <div class="article-colophon__items">
+            <span class="article-colophon__item article-colophon__item--author">
+                <span class="article-colophon__label">著者</span>
+                <span class="article-colophon__value">向叔</span>
+            </span>
+            
+                <span class="article-colophon__item article-colophon__item--skill">
+                    <span class="article-colophon__label">執筆</span>
+                    <span class="article-colophon__value">v8.2.0</span>
+                </span>
+            
+            
+                <span class="article-colophon__item article-colophon__item--license">
+                    <span class="article-colophon__label">License</span>
+                    <span class="article-colophon__value">Licensed under CC BY-NC-SA 4.0</span>
+                </span>
+            
+            <span class="article-colophon__item article-colophon__item--updated">
+                <span class="article-colophon__label">最終更新</span>
+                <time class="article-colophon__value" datetime="2026-08-14T20:08:34&#43;08:00">2026年08月14日 20:08</time>
+            </span>
+        </div>
+    </div>
+</footer>
+
+
+    
+</article><script src="/ts/article-tools.4d3ffe6ff37122833544a2d4a65fb3d9d08ed00a334ef4aab3919c6d21e62994.js" integrity="sha256-TT/&#43;b/NxIoM1RKLUpl&#43;z2dCO0AozTvSqs5GcbSHmKZQ=" defer></script>
+
+    
+    
+
+<section class="related-content--wrapper" aria-label="関連するコンテンツ">
+    <header class="related-content__header">
+        <h2 class="section-title">関連するコンテンツ</h2>
+        <span class="related-content__count">01</span>
+    </header>
+    <ol class="related-content__list">
+            
+                <li class="related-content__item">
+                    <a href="/ja/p/ai-demo-fast-rework-faster/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI はデモの作成が速く、修正作業も本当に速いです。</h3>
+                            <time class="related-content__date" datetime='2026-04-10T15:39:51&#43;08:00'>2026年04月10日</time>
+                        </div>
+                    </a>
+                </li>
+            
+    </ol>
+</section>
+
+
+    
+    <section class="article-comments" aria-label="コメント">
+    <div id="waline" class="waline-container" aria-live="polite">
+        <p class="waline-container__status">この位置までスクロールするとコメントを読み込みます。</p>
+    </div>
+    <noscript><p>コメント機能を利用するには JavaScript を有効にしてください。</p></noscript>
+</section>
+<style>
+    .waline-container {
+        --waline-font-size: var(--type-comment);
+        --waline-theme-color: var(--accent-color);
+        --waline-active-color: var(--accent-color-darker);
+        --waline-bg-color: transparent;
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-bg-color-hover: var(--surface-elevated);
+        --waline-color: var(--text-secondary);
+        --waline-border-color: var(--border-color);
+        --waline-border: 1px solid var(--border-color);
+        --waline-box-shadow: none;
+        --waline-info-color: var(--text-tertiary);
+        --waline-disable-bg-color: var(--surface-elevated);
+        --waline-code-bg-color: var(--surface-elevated);
+    }
+    [data-scheme="dark"] .waline-container {
+        --waline-bg-color-light: var(--surface-elevated);
+        --waline-border-color: var(--border-color);
+    }
+</style><script type="module">
+    const container = document.getElementById('waline');
+    const loadWaline = async () => {
+        if (!container || container.dataset.loaded) return;
+        container.dataset.loaded = 'true';
+        const stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = 'https://unpkg.com/@waline/client@v3/dist/waline.css';
+        document.head.append(stylesheet);
+        try {
+            const { init } = await import('https://unpkg.com/@waline/client@v3/dist/waline.js');
+            container.replaceChildren();
+            init({"avatar":"","comment":"true","dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":null,"locale":{"admin":"ttf248"},"pageview":"true","placeholder":"","requiredMeta":["name","email","url"],"serverURL":"https://waline.ttf248.life/","visitor":"true"});
+        } catch {
+            container.dataset.loaded = '';
+            container.replaceChildren('コメントサービスは一時的に利用できません。後でもう一度お試しください。');
+        }
+    };
+    if (container && 'IntersectionObserver' in window) {
+        new IntersectionObserver((entries, observer) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            loadWaline();
+        }, { rootMargin: '320px 0px' }).observe(container);
+    } else {
+        loadWaline();
+    }
+</script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="トップへ戻る"
+    title="トップへ戻る"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.b0c7d091a4dd3194be4e347bfc2179a52cf3ca25830fbbcac798ce7b793123ed.js" integrity="sha256-sMfQkaTdMZS&#43;TjR7/CF5pSzzyiWDD7vKx5jOe3kxI&#43;0=" defer></script>
+</body>
+</html>
