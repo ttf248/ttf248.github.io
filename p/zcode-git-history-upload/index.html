@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="一个 AI 编程工具把代码发到云端，并不自动等于丑闻。用户主动把文件作为上下文交给模型，服务器当然会收到；真正应该被说明的是：传了什么、什么时候传、谁能解密、用户能不能拒绝。\nZCode 这次把争议推到了另一个层级。技术博主 Ferstar 对客户端进行逆向分析后，在自己的机器上发现了一个待上传的 313 MB 加密快照：清单里有 42,411 个文件，.git 目录占了 86.6%。这看起来不像“模型看了我刚刚打开的几个文件”，而像是桌面 Agent 把整个仓库的历史打成包，送进了云端。原始排查记录\n">
+<title>ZCode 把 Git 历史传上云，智谱解释不了的是什么</title>
+
+<link rel='canonical' href='https://ttf248.life/p/zcode-git-history-upload/'>
+
+<link rel="stylesheet" href="/scss/style.min.3620bc27547f93d23ecbba1d186dfd2bcf8c8eba081f2a154dc3624bca6ae14a.css"><meta property='og:title' content="ZCode 把 Git 历史传上云，智谱解释不了的是什么">
+<meta property='og:description' content="一个 AI 编程工具把代码发到云端，并不自动等于丑闻。用户主动把文件作为上下文交给模型，服务器当然会收到；真正应该被说明的是：传了什么、什么时候传、谁能解密、用户能不能拒绝。\nZCode 这次把争议推到了另一个层级。技术博主 Ferstar 对客户端进行逆向分析后，在自己的机器上发现了一个待上传的 313 MB 加密快照：清单里有 42,411 个文件，.git 目录占了 86.6%。这看起来不像“模型看了我刚刚打开的几个文件”，而像是桌面 Agent 把整个仓库的历史打成包，送进了云端。原始排查记录\n">
+<meta property='og:url' content='https://ttf248.life/p/zcode-git-history-upload/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='ZCode' /><meta property='article:tag' content='智谱' /><meta property='article:tag' content='AI 编程' /><meta property='article:tag' content='Git' /><meta property='article:tag' content='数据隐私' /><meta property='article:tag' content='强化学习' /><meta property='article:published_time' content='2026-09-18T22:41:24&#43;08:00'/><meta property='article:modified_time' content='2026-09-18T22:49:22&#43;08:00'/>
+<meta name="twitter:title" content="ZCode 把 Git 历史传上云，智谱解释不了的是什么">
+<meta name="twitter:description" content="一个 AI 编程工具把代码发到云端，并不自动等于丑闻。用户主动把文件作为上下文交给模型，服务器当然会收到；真正应该被说明的是：传了什么、什么时候传、谁能解密、用户能不能拒绝。\nZCode 这次把争议推到了另一个层级。技术博主 Ferstar 对客户端进行逆向分析后，在自己的机器上发现了一个待上传的 313 MB 加密快照：清单里有 42,411 个文件，.git 目录占了 86.6%。这看起来不像“模型看了我刚刚打开的几个文件”，而像是桌面 Agent 把整个仓库的历史打成包，送进了云端。原始排查记录\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/zcode-git-history-upload/","name":"ZCode 把 Git 历史传上云，智谱解释不了的是什么","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2026-09-18T22:49:22+08:00","datePublished":"2026-09-18T22:41:24+08:00","headline":"ZCode 把 Git 历史传上云，智谱解释不了的是什么","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/zcode-git-history-upload/"}</script></head>
+<body class="
+    article-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/zcode-git-history-upload/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/zcode-git-history-upload/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    <a class="article-mobile-toolbar__back" href="/archives/">← <span>文章列表</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 8 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#先把上传说清楚">先把“上传”说清楚</a></li>
+    <li><a href="#git-不是一个藏起来的当前目录"><code>.git</code> 不是一个藏起来的当前目录</a></li>
+    <li><a href="#智谱的解释只解释了触发点">智谱的解释只解释了触发点</a></li>
+    <li><a href="#为了训练目前不能写成事实但训练价值确实很大">“为了训练”目前不能写成事实，但训练价值确实很大</a></li>
+    <li><a href="#真正塌掉的是信任边界">真正塌掉的是信任边界</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="8">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">ZCode 把 Git 历史传上云，智谱解释不了的是什么</h1>
+        
+    
+        
+        
+        <h3 class="article-subtitle">
+            问题不只是代码有没有被上传，而是上传边界、解密权和训练价值都没有被用户真正看见
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年09月18日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 14 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">v8.8.0</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+    
+    <footer class="article-meta-tags" aria-label="文章元数据标签">
+        
+        <div class="article-meta-tags__group article-meta-tags__group--categories">
+            <span class="article-meta-tags__label">分类</span>
+            <ul class="article-meta-tags__chips">
+                
+                    <li><a class="article-tag article-tag--category" href="/categories/ai-%E8%AE%A1%E7%AE%97%E6%9C%BA/">AI 计算机</a></li>
+                
+            </ul>
+        </div>
+        
+
+        <div class="article-meta-tags__group article-meta-tags__group--source">
+            
+            <span class="article-tag article-tag--source article-tag--source--ai">AI 写作</span>
+        </div>
+    </footer>
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>一个 AI 编程工具把代码发到云端，并不自动等于丑闻。用户主动把文件作为上下文交给模型，服务器当然会收到；真正应该被说明的是：<strong>传了什么、什么时候传、谁能解密、用户能不能拒绝</strong>。</p>
+<p>ZCode 这次把争议推到了另一个层级。技术博主 Ferstar 对客户端进行逆向分析后，在自己的机器上发现了一个待上传的 313 MB 加密快照：清单里有 42,411 个文件，<code>.git</code> 目录占了 86.6%。这看起来不像“模型看了我刚刚打开的几个文件”，而像是桌面 Agent 把整个仓库的历史打成包，送进了云端。<a class="link" href="https://blog.ferstar.org/posts/zcode-silent-workspace-snapshot-upload/"  target="_blank" rel="noopener"
+    >原始排查记录</a></p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#先把上传说清楚">先把“上传”说清楚</a></li>
+    <li><a href="#git-不是一个藏起来的当前目录"><code>.git</code> 不是一个藏起来的当前目录</a></li>
+    <li><a href="#智谱的解释只解释了触发点">智谱的解释只解释了触发点</a></li>
+    <li><a href="#为了训练目前不能写成事实但训练价值确实很大">“为了训练”目前不能写成事实，但训练价值确实很大</a></li>
+    <li><a href="#真正塌掉的是信任边界">真正塌掉的是信任边界</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="先把上传说清楚">先把“上传”说清楚
+</h2><p>这次最容易被一句“AI 编程工具本来就要上传代码”带过去。但这句话把几种完全不同的行为揉成了一件事。</p>
+<div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>数据层次</th>
+					<th>用户通常以为自己交出去的</th>
+					<th>逆向分析所见</th>
+					<th>失控后的后果</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>对话上下文</td>
+					<td>当前问题中主动引用的文件</td>
+					<td>工作区快照可以在发 Prompt 前被捕获</td>
+					<td>没有明确动作，也可能触发上传</td>
+			</tr>
+			<tr>
+					<td>当前代码</td>
+					<td>工作区里现在能看到的文件</td>
+					<td>快照还包含 <code>.git</code>、LFS 和本地状态</td>
+					<td>被删除、未提交或未推送的内容也可能在里面</td>
+			</tr>
+			<tr>
+					<td>Git 历史</td>
+					<td>当前分支最近的版本</td>
+					<td><code>.git/objects</code>、分支操作记录和其他仓库元数据</td>
+					<td>云端拿到的是一条研发时间线，而非一个文件</td>
+			</tr>
+			<tr>
+					<td>加密控制</td>
+					<td>用户至少应该能够检查或控制</td>
+					<td>研究者重建的链路中，临时密钥由服务端公钥封装，私钥只在云端</td>
+					<td>用户本地的密文无法独立审计，必须相信服务端的留存和删除</td>
+			</tr>
+	</tbody>
+</table></div>
+<p>这里有一个重要的证据边界：313 MB、42,411 个文件和 86.6% 的 <code>.git</code> 占比，是研究者对自己设备上一个项目快照的统计，不是所有用户的总量统计；<code>failureCount: 564</code> 也只说明该快照记录了 564 次失败重试，不能反过来证明它成功上传了 564 次。</p>
+<p>但样本不需要代表所有用户，才足以说明设计问题。如果一个程序在用户没有明确选择“上传整个仓库”的情况下，具备了打包整个仓库并向云端发送的能力，风险就已经成立了。它到底影响了多少人，是后续需要补充的事实，不是判断这条产品边界是否越过的前提。</p>
+<h2 id="git-不是一个藏起来的当前目录"><code>.git</code> 不是一个藏起来的当前目录
+</h2><p>很多非开发者会把 <code>.git</code> 理解成 Git 的缓存目录，仿佛删掉也只是丢失几个版本按钮。实际上，Git 的官方数据模型把提交、目录树、文件内容和标签都存成对象；提交对象还带着父提交、作者、时间和提交说明。Git 官方文档直接把 <code>.git</code> 描述为包含项目完整历史的压缩对象数据库。<a class="link" href="https://git-scm.com/docs/gitdatamodel"  target="_blank" rel="noopener"
+    >Git 数据模型</a></p>
+<p>这意味着，工作区里当前看不见的东西，未必在 <code>.git</code> 里消失了：</p>
+<ul>
+<li>后来删掉的配置和密钥，可能仍存在于尚未被回收的历史对象中；</li>
+<li>没有推到远端的分支名，可能暴露正在开发的产品方向；</li>
+<li><code>.git/config</code> 可能带出内部 Git 服务的域名、仓库路径和账号线索；</li>
+<li><code>reflog</code> 记录本地分支和 <code>HEAD</code> 指针的变化，包含远端仓库通常看不到的操作痕迹。</li>
+</ul>
+<p>Ferstar 给出的那份清单里，<code>.git/lfs</code> 约 196.1 MB，<code>.git/objects</code> 约 102.2 MB，<code>.git/logs</code> 约 0.6 MB，三者合计已经占了绝大部分体积。Git 官方也提醒，reflog 是本地仓库的记录，不会随远端分支自动共享；它恰恰因此更像开发者自己的内部草稿，而不是公开代码。<a class="link" href="https://git-scm.com/docs/git-reflog"  target="_blank" rel="noopener"
+    >Git reflog 说明</a></p>
+<p>所以，“上传了代码”这个说法太轻了。<strong>上传当前工作树，是把一张照片交出去；上传 <code>.git</code>，是把拍摄过程、废片、草稿和删掉后仍留在底片里的内容一起交出去。</strong></p>
+<h2 id="智谱的解释只解释了触发点">智谱的解释只解释了触发点
+</h2><p>智谱 9 月 18 日的说明把问题归因于“代码库索引”功能，具体说是 Repo Wiki 生成时可能触发仓库数据上传，Wiki 在云端生成后相关数据会立即销毁；公司称该功能上线初期默认开启，问题已经修复，并承诺开源 ZCode、邀请第三方审查，同时给用户重置一次周额度。<a class="link" href="https://finance.sina.com.cn/tech/roll/2026-09-18/doc-inisfyex3550493.shtml"  target="_blank" rel="noopener"
+    >公开转述的官方说明</a></p>
+<p>这个解释不是完全没有道理。要生成仓库 Wiki，产品确实需要读取代码；检查点恢复、版本回退也确实需要保存某种状态。问题是，<strong>产品意图不能自动替实现结果背书</strong>。</p>
+<p>我在当天核验到的 ZCode Wiki 文档，已经把边界写得更清楚：它声称只按安全规则过滤、按需读取代码上下文，并把 <code>.git</code>、依赖目录、构建产物、缓存和本地运行状态排除在外。<a class="link" href="https://zcode.z.ai/cn/docs/repo-wiki"  target="_blank" rel="noopener"
+    >现行 Wiki 文档</a> 这至少说明修复后的目标是什么，却不能单独证明旧版本从未把这些内容打包。</p>
+<p>官方说明仍然留下了几处关键空白：</p>
+<ol>
+<li>如果上传链路只是为 Wiki 服务，为什么旧客户端快照中会出现完整 <code>.git</code>、LFS 和 reflog，而不是 Wiki 所需的筛选后代码？</li>
+<li>如果“优化体验”和“仓库快照索引”两个设置只影响训练授权或服务端索引，却不阻止本地捕获和上传，那么用户看到的开关就没有覆盖真正的风险点。</li>
+<li>“生成后立即销毁”具体指 OSS 对象、业务数据库、备份、副本还是解密后的临时文件？保存多久、谁能查到、有没有日志或第三方审计？</li>
+<li>受影响的是哪些版本、多少工作区、哪些上传已经成功？为什么用户需要从本地 <code>checkpoints</code> 目录反向推测自己的状态？</li>
+</ol>
+<p>这些问题没有被“这是 Repo Wiki 的默认设置”回答。它最多解释了<strong>为什么产品团队可能想读仓库</strong>，没有解释<strong>为什么客户端把数据边界扩大到了整个 Git 仓库</strong>。</p>
+<h2 id="为了训练目前不能写成事实但训练价值确实很大">“为了训练”目前不能写成事实，但训练价值确实很大
+</h2><p>这里需要把情绪和证据分开。<strong>目前没有公开证据证明 ZCode 这批快照已经被送进了智谱的 RL 后训练数据集</strong>。把“未经说明的上传”直接写成“智谱正在偷拿代码训练模型”，在事实层面跨了一步。</p>
+<p>但反过来，把完整 Git 仓库说成“对训练没什么用”，同样不诚实。智谱自己的 ZCode Agent 文档把 GLM-5.3 的 Agentic Coding 后训练描述为覆盖长轨迹、多轮工具调用、子任务分解和环境反馈。<a class="link" href="https://zcode.z.ai/cn/docs/agents"  target="_blank" rel="noopener"
+    >ZCode Agent 文档</a> 这至少说明，软件工程过程数据正是它想优化的对象。</p>
+<p>一份完整仓库能提供什么，取决于它有没有和会话、工具调用及执行结果关联起来：</p>
+<div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>已获得的内容</th>
+					<th>它能提供的训练原料</th>
+					<th>还缺什么才能成为可靠的后训练数据</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>.git/objects</code></td>
+					<td>同一项目在不同时间的代码状态、重构路径和真实改动</td>
+					<td>用户意图、修改原因和最终正确性标签</td>
+			</tr>
+			<tr>
+					<td>分支与 reflog</td>
+					<td>探索、回退、合并和失败尝试的痕迹</td>
+					<td>哪一步是有效动作，哪一步只是个人操作噪声</td>
+			</tr>
+			<tr>
+					<td>工作区与配置</td>
+					<td>真实依赖、模块边界、构建方式和工程约束</td>
+					<td>可复现的环境、清理后的敏感信息</td>
+			</tr>
+			<tr>
+					<td>LFS 与测试资产</td>
+					<td>大文件、测试数据和更接近生产的运行场景</td>
+					<td>运行结果、测试通过与否、奖励定义</td>
+			</tr>
+	</tbody>
+</table></div>
+<p>这也是为什么“完整仓库”比“当前文件”更有价值：它不只是更多 Token，而是包含了<strong>状态变化</strong>。如果再把用户 Prompt、Agent 的工具调用、补丁、测试输出和最终结果串起来，就能形成一条接近真实软件工程的轨迹。相关研究已经把仓库级上下文、可执行反馈和编码轨迹视为代码 Agent 自我演化的重要证据；另一项代码修复研究也使用真实仓库和构建验证来做 RL，并报告 RL 在匹配环境下带来明显收益。<a class="link" href="https://arxiv.org/abs/2608.03392"  target="_blank" rel="noopener"
+    >Self-Evolving Coding Agents</a>、<a class="link" href="https://arxiv.org/abs/2510.22075"  target="_blank" rel="noopener"
+    >Agentic Reinforcement Learning for Real-World Code Repair</a></p>
+<p>不过，<strong>一份快照本身不是 RL 数据集</strong>。它更像训练环境的状态和原料，离“知道用户想完成什么、Agent 做了哪些动作、哪个结果应该得到奖励”还差几步。正因为训练价值需要通过这些关联才能兑现，数据的用途、留存和是否进入训练，就更应该在采集之前说清楚，而不是等用户发现加密包之后再用“生成 Wiki”概括过去。</p>
+<p>我的判断是：不能据此认定智谱已经拿这些仓库做了后训练；但完全可以认定，<strong>这不是一批没有价值的误上传数据</strong>。它潜在地覆盖了模型最缺、也最昂贵的真实工程过程。对用户来说，是否已经训练只是一个问题；厂商是否在没有明确授权的情况下建立了获取这类数据的能力，是更早、更确定的问题。</p>
+<h2 id="真正塌掉的是信任边界">真正塌掉的是信任边界
+</h2><p>这件事还暴露了一个经常被“开源模型”四个字遮住的区别：模型权重开放，不等于包裹模型的桌面端、Agent Harness、更新机制和数据通道都开放。</p>
+<p>用户可以在本地运行一个开放权重模型，却把整个工作区交给一个闭源运行时；模型可能没有主动上传工具，桌面端的 sidecar 仍然可以在模型调用之外打包文件。此时“我用的是本地模型”并不能推出“代码没有离开电脑”。</p>
+<p>一个合格的仓库索引功能当然可以存在，但至少应该做到：</p>
+<ul>
+<li>第一次启用时明确说明上传对象、目的、留存时间和接收方；</li>
+<li>打包前展示可读的文件清单，并把 <code>.git</code>、密钥、依赖和构建产物在打包层硬排除；</li>
+<li>“是否上传”“是否建索引”“是否用于改进模型”是三个独立、可验证的开关；</li>
+<li>用户拥有停止上传、删除云端数据和查看处理记录的入口；</li>
+<li>客户端、服务端协议和删除流程接受独立审计，而不是只承诺“近期会开源”。</li>
+</ul>
+<p>对已经使用过 ZCode 的人，最现实的动作也不是等一句“我们不会保存”：先升级到明确修复后的版本，检查 <code>~/.zcode/v2/checkpoints</code>（Windows 通常对应 <code>%USERPROFILE%\.zcode\v2\checkpoints</code>）里是否还有待上传快照；如果仓库历史中曾经出现过密钥、令牌或内部凭据，就按已经暴露过来处理并轮换，而不要只检查当前工作树。删除本地待上传文件，也不能证明云端曾经没有收到副本。</p>
+<p>智谱现在最需要补的不是额度，而是证据。开源主程序、公布受影响版本和用户范围、解释开关与上传链路的对应关系、提供删除和留存审计，才能回答这次争议真正的问题：<strong>用户交给它的是一次明确的代码调用，还是一座自己并不知道已经被搬走的仓库矿山。</strong></p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://blog.ferstar.org/posts/zcode-silent-workspace-snapshot-upload/"  target="_blank" rel="noopener"
+    >Ferstar：扒一扒 ZCode 静默上传全量 Git 历史的骚操作</a>，2026 年 9 月 18 日。本文关于快照体积、文件清单、加密和触发逻辑的主要技术材料。</li>
+<li><a class="link" href="https://zcode.z.ai/cn/docs/repo-wiki"  target="_blank" rel="noopener"
+    >ZCode 官方 Wiki 文档</a>，2026 年 9 月 18 日核验。用于对照修复后文档声称的读取范围与排除规则。</li>
+<li><a class="link" href="https://zcode.z.ai/cn/docs/agents"  target="_blank" rel="noopener"
+    >ZCode Agent 官方文档</a>，2026 年 9 月 18 日核验。用于说明官方对长轨迹、工具调用和环境反馈后训练的产品表述。</li>
+<li><a class="link" href="https://finance.sina.com.cn/tech/roll/2026-09-18/doc-inisfyex3550493.shtml"  target="_blank" rel="noopener"
+    >新浪科技转述的智谱 ZCode 说明</a>，2026 年 9 月 18 日。用于核对官方回应、修复、开源和额度重置说法。</li>
+<li><a class="link" href="https://git-scm.com/docs/gitdatamodel"  target="_blank" rel="noopener"
+    >Git 官方数据模型文档</a> 与 <a class="link" href="https://git-scm.com/docs/git-reflog"  target="_blank" rel="noopener"
+    >git-reflog 文档</a>，2026 年 9 月 18 日核验。用于说明 <code>.git</code>、Git 对象和 reflog 的数据含义。</li>
+<li><a class="link" href="https://arxiv.org/abs/2608.03392"  target="_blank" rel="noopener"
+    >Self-Evolving Coding Agents</a>，2026 年 8 月。用于说明仓库级上下文、可执行反馈和编码轨迹在代码 Agent 研究中的位置。</li>
+<li><a class="link" href="https://arxiv.org/abs/2510.22075"  target="_blank" rel="noopener"
+    >Agentic Reinforcement Learning for Real-World Code Repair</a>，2025 年 10 月。用于说明真实仓库、构建验证和 RL 后训练之间的关系。</li>
+</ul>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="原始提示词">原始提示词
+</h3><blockquote>
+<p>$blog-writer 智谱 zcode 偷偷上传整个 git 仓库的详细来龙去脉，知乎上已经有博主逆向分析了 zcode 代码，智谱现在的解释很牵强，RL 后训练，有完整的 git 仓库，对训练的帮助很大。</p>
+</blockquote>
+    </div>
+</details>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+    
+    <section class="article-footer-tags" aria-label="标签">
+        
+            <a class="article-tag article-tag--category" href="/tags/zcode/">ZCode</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/zhipu/">智谱</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/ai-programming/">AI 编程</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/git/">git</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/%E6%95%B0%E6%8D%AE%E9%9A%90%E7%A7%81/">数据隐私</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">强化学习</a>
+        
+    </section>
+
+
+    
+</footer>
+
+
+    
+</article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.4c35364eec12d66ac1867f5198fe073923ab2518f12a4d783acef1590840c734.js" integrity="sha256-TDU2TuwS1mrBhn9RmP4HOSOrJRjxKk14Os7xWQhAxzQ=" defer></script>
+
+    
+    
+
+<section class="related-content--wrapper" aria-label="相关文章">
+    <header class="related-content__header">
+        <h2 class="section-title">相关文章</h2>
+        <span class="related-content__count">02</span>
+    </header>
+    <ol class="related-content__list">
+            
+                <li class="related-content__item">
+                    <a href="/p/code-anchors-for-llm-requirements/" class="related-content__link">
+                        <span class="related-content__index">01</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">给编码模型几个代码锚点</h3>
+                            <time class="related-content__date" datetime='2026-07-05T23:04:15&#43;08:00'>2026年07月05日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/ai-capex-unlock-coding-cashflow/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">AI 开支牛走到解禁口</h3>
+                            <time class="related-content__date" datetime='2026-06-21T21:10:00&#43;08:00'>2026年06月21日</time>
+                        </div>
+                    </a>
+                </li>
+            
+    </ol>
+</section>
+
+
+    <section class="article-comments" aria-labelledby="article-comments-title">
+    <header class="article-comments__header">
+        <h2 id="article-comments-title" class="article-comments__title">评论</h2>
+    </header>
+    <div id="waline" class="waline-container" aria-live="polite" aria-busy="true">
+        <p class="waline-container__status">评论区将在滚动到此处后加载。</p>
+    </div>
+    <noscript><p>评论功能需要启用 JavaScript。</p></noscript>
+</section>
+<style>
+    .waline-container {
+        --waline-font-size: var(--type-comment);
+        --waline-white: var(--color-on-accent);
+        --waline-light-grey: var(--color-text-subtle);
+        --waline-dark-grey: var(--color-text-primary);
+        --waline-theme-color: var(--color-accent);
+        --waline-active-color: var(--color-accent-strong);
+        --waline-badge-color: var(--color-accent);
+        --waline-bg-color: var(--color-bg-surface);
+        --waline-bg-color-light: var(--color-bg-muted);
+        --waline-bg-color-hover: var(--color-bg-muted);
+        --waline-color: var(--color-text-secondary);
+        --waline-border-color: var(--color-border-default);
+        --waline-border: 1px solid var(--color-border-default);
+        --waline-box-shadow: var(--shadow-none);
+        --waline-info-bg-color: var(--color-bg-muted);
+        --waline-info-color: var(--color-text-subtle);
+        --waline-disable-bg-color: var(--color-bg-muted);
+        --waline-disable-color: var(--color-text-subtle);
+        --waline-code-bg-color: var(--color-code-bg);
+        --waline-bq-color: var(--color-quote-bg);
+    }
+</style><script type="module">
+    const container = document.getElementById('waline');
+    const unavailableMessage = "评论服务暂时不可用，请稍后重试。";
+    const loadWaline = async () => {
+        if (!container || container.dataset.loaded) return;
+        container.dataset.loaded = 'true';
+        const stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = 'https://unpkg.com/@waline/client@v3/dist/waline.css';
+        document.head.append(stylesheet);
+        try {
+            const { init } = await import('https://unpkg.com/@waline/client@v3/dist/waline.js');
+            container.replaceChildren();
+            init({"avatar":"","comment":true,"dark":"html[data-scheme=\"dark\"]","el":"#waline","emoji":["https://cdn.jsdelivr.net/gh/walinejs/emojis/weibo","https://cdn.jsdelivr.net/gh/walinejs/emojis@1.0.0/tieba","https://cdn.jsdelivr.net/gh/walinejs/emojis/qq"],"lang":"zh-CN","locale":{"admin":"ttf248"},"pageview":true,"placeholder":"","requiredMeta":["nick","mail"],"serverURL":"https://waline.ttf248.life/"});
+            container.setAttribute('aria-busy', 'false');
+        } catch {
+            container.dataset.loaded = '';
+            container.setAttribute('aria-busy', 'false');
+            container.replaceChildren(unavailableMessage);
+        }
+    };
+    if (container && 'IntersectionObserver' in window) {
+        new IntersectionObserver((entries, observer) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            loadWaline();
+        }, { rootMargin: '320px 0px' }).observe(container);
+    } else {
+        loadWaline();
+    }
+</script>
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

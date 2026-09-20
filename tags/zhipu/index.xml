@@ -6,6 +6,164 @@
         <description>Recent content in 智谱 on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/zhipu/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>ZCode 把 Git 历史传上云，智谱解释不了的是什么</title>
+        <link>https://ttf248.life/p/zcode-git-history-upload/</link>
+        <pubDate>Fri, 18 Sep 2026 22:41:24 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/zcode-git-history-upload/</guid>
+        <description>&lt;p&gt;一个 AI 编程工具把代码发到云端，并不自动等于丑闻。用户主动把文件作为上下文交给模型，服务器当然会收到；真正应该被说明的是：&lt;strong&gt;传了什么、什么时候传、谁能解密、用户能不能拒绝&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;ZCode 这次把争议推到了另一个层级。技术博主 Ferstar 对客户端进行逆向分析后，在自己的机器上发现了一个待上传的 313 MB 加密快照：清单里有 42,411 个文件，&lt;code&gt;.git&lt;/code&gt; 目录占了 86.6%。这看起来不像“模型看了我刚刚打开的几个文件”，而像是桌面 Agent 把整个仓库的历史打成包，送进了云端。&lt;a class=&#34;link&#34; href=&#34;https://blog.ferstar.org/posts/zcode-silent-workspace-snapshot-upload/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;原始排查记录&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;先把上传说清楚&#34;&gt;先把“上传”说清楚
+&lt;/h2&gt;&lt;p&gt;这次最容易被一句“AI 编程工具本来就要上传代码”带过去。但这句话把几种完全不同的行为揉成了一件事。&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;数据层次&lt;/th&gt;
+					&lt;th&gt;用户通常以为自己交出去的&lt;/th&gt;
+					&lt;th&gt;逆向分析所见&lt;/th&gt;
+					&lt;th&gt;失控后的后果&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;对话上下文&lt;/td&gt;
+					&lt;td&gt;当前问题中主动引用的文件&lt;/td&gt;
+					&lt;td&gt;工作区快照可以在发 Prompt 前被捕获&lt;/td&gt;
+					&lt;td&gt;没有明确动作，也可能触发上传&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;当前代码&lt;/td&gt;
+					&lt;td&gt;工作区里现在能看到的文件&lt;/td&gt;
+					&lt;td&gt;快照还包含 &lt;code&gt;.git&lt;/code&gt;、LFS 和本地状态&lt;/td&gt;
+					&lt;td&gt;被删除、未提交或未推送的内容也可能在里面&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;Git 历史&lt;/td&gt;
+					&lt;td&gt;当前分支最近的版本&lt;/td&gt;
+					&lt;td&gt;&lt;code&gt;.git/objects&lt;/code&gt;、分支操作记录和其他仓库元数据&lt;/td&gt;
+					&lt;td&gt;云端拿到的是一条研发时间线，而非一个文件&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;加密控制&lt;/td&gt;
+					&lt;td&gt;用户至少应该能够检查或控制&lt;/td&gt;
+					&lt;td&gt;研究者重建的链路中，临时密钥由服务端公钥封装，私钥只在云端&lt;/td&gt;
+					&lt;td&gt;用户本地的密文无法独立审计，必须相信服务端的留存和删除&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;这里有一个重要的证据边界：313 MB、42,411 个文件和 86.6% 的 &lt;code&gt;.git&lt;/code&gt; 占比，是研究者对自己设备上一个项目快照的统计，不是所有用户的总量统计；&lt;code&gt;failureCount: 564&lt;/code&gt; 也只说明该快照记录了 564 次失败重试，不能反过来证明它成功上传了 564 次。&lt;/p&gt;
+&lt;p&gt;但样本不需要代表所有用户，才足以说明设计问题。如果一个程序在用户没有明确选择“上传整个仓库”的情况下，具备了打包整个仓库并向云端发送的能力，风险就已经成立了。它到底影响了多少人，是后续需要补充的事实，不是判断这条产品边界是否越过的前提。&lt;/p&gt;
+&lt;h2 id=&#34;git-不是一个藏起来的当前目录&#34;&gt;&lt;code&gt;.git&lt;/code&gt; 不是一个藏起来的当前目录
+&lt;/h2&gt;&lt;p&gt;很多非开发者会把 &lt;code&gt;.git&lt;/code&gt; 理解成 Git 的缓存目录，仿佛删掉也只是丢失几个版本按钮。实际上，Git 的官方数据模型把提交、目录树、文件内容和标签都存成对象；提交对象还带着父提交、作者、时间和提交说明。Git 官方文档直接把 &lt;code&gt;.git&lt;/code&gt; 描述为包含项目完整历史的压缩对象数据库。&lt;a class=&#34;link&#34; href=&#34;https://git-scm.com/docs/gitdatamodel&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Git 数据模型&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;这意味着，工作区里当前看不见的东西，未必在 &lt;code&gt;.git&lt;/code&gt; 里消失了：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;后来删掉的配置和密钥，可能仍存在于尚未被回收的历史对象中；&lt;/li&gt;
+&lt;li&gt;没有推到远端的分支名，可能暴露正在开发的产品方向；&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.git/config&lt;/code&gt; 可能带出内部 Git 服务的域名、仓库路径和账号线索；&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;reflog&lt;/code&gt; 记录本地分支和 &lt;code&gt;HEAD&lt;/code&gt; 指针的变化，包含远端仓库通常看不到的操作痕迹。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Ferstar 给出的那份清单里，&lt;code&gt;.git/lfs&lt;/code&gt; 约 196.1 MB，&lt;code&gt;.git/objects&lt;/code&gt; 约 102.2 MB，&lt;code&gt;.git/logs&lt;/code&gt; 约 0.6 MB，三者合计已经占了绝大部分体积。Git 官方也提醒，reflog 是本地仓库的记录，不会随远端分支自动共享；它恰恰因此更像开发者自己的内部草稿，而不是公开代码。&lt;a class=&#34;link&#34; href=&#34;https://git-scm.com/docs/git-reflog&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Git reflog 说明&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;所以，“上传了代码”这个说法太轻了。&lt;strong&gt;上传当前工作树，是把一张照片交出去；上传 &lt;code&gt;.git&lt;/code&gt;，是把拍摄过程、废片、草稿和删掉后仍留在底片里的内容一起交出去。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;智谱的解释只解释了触发点&#34;&gt;智谱的解释只解释了触发点
+&lt;/h2&gt;&lt;p&gt;智谱 9 月 18 日的说明把问题归因于“代码库索引”功能，具体说是 Repo Wiki 生成时可能触发仓库数据上传，Wiki 在云端生成后相关数据会立即销毁；公司称该功能上线初期默认开启，问题已经修复，并承诺开源 ZCode、邀请第三方审查，同时给用户重置一次周额度。&lt;a class=&#34;link&#34; href=&#34;https://finance.sina.com.cn/tech/roll/2026-09-18/doc-inisfyex3550493.shtml&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;公开转述的官方说明&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;这个解释不是完全没有道理。要生成仓库 Wiki，产品确实需要读取代码；检查点恢复、版本回退也确实需要保存某种状态。问题是，&lt;strong&gt;产品意图不能自动替实现结果背书&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;我在当天核验到的 ZCode Wiki 文档，已经把边界写得更清楚：它声称只按安全规则过滤、按需读取代码上下文，并把 &lt;code&gt;.git&lt;/code&gt;、依赖目录、构建产物、缓存和本地运行状态排除在外。&lt;a class=&#34;link&#34; href=&#34;https://zcode.z.ai/cn/docs/repo-wiki&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;现行 Wiki 文档&lt;/a&gt; 这至少说明修复后的目标是什么，却不能单独证明旧版本从未把这些内容打包。&lt;/p&gt;
+&lt;p&gt;官方说明仍然留下了几处关键空白：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;如果上传链路只是为 Wiki 服务，为什么旧客户端快照中会出现完整 &lt;code&gt;.git&lt;/code&gt;、LFS 和 reflog，而不是 Wiki 所需的筛选后代码？&lt;/li&gt;
+&lt;li&gt;如果“优化体验”和“仓库快照索引”两个设置只影响训练授权或服务端索引，却不阻止本地捕获和上传，那么用户看到的开关就没有覆盖真正的风险点。&lt;/li&gt;
+&lt;li&gt;“生成后立即销毁”具体指 OSS 对象、业务数据库、备份、副本还是解密后的临时文件？保存多久、谁能查到、有没有日志或第三方审计？&lt;/li&gt;
+&lt;li&gt;受影响的是哪些版本、多少工作区、哪些上传已经成功？为什么用户需要从本地 &lt;code&gt;checkpoints&lt;/code&gt; 目录反向推测自己的状态？&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这些问题没有被“这是 Repo Wiki 的默认设置”回答。它最多解释了&lt;strong&gt;为什么产品团队可能想读仓库&lt;/strong&gt;，没有解释&lt;strong&gt;为什么客户端把数据边界扩大到了整个 Git 仓库&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;为了训练目前不能写成事实但训练价值确实很大&#34;&gt;“为了训练”目前不能写成事实，但训练价值确实很大
+&lt;/h2&gt;&lt;p&gt;这里需要把情绪和证据分开。&lt;strong&gt;目前没有公开证据证明 ZCode 这批快照已经被送进了智谱的 RL 后训练数据集&lt;/strong&gt;。把“未经说明的上传”直接写成“智谱正在偷拿代码训练模型”，在事实层面跨了一步。&lt;/p&gt;
+&lt;p&gt;但反过来，把完整 Git 仓库说成“对训练没什么用”，同样不诚实。智谱自己的 ZCode Agent 文档把 GLM-5.3 的 Agentic Coding 后训练描述为覆盖长轨迹、多轮工具调用、子任务分解和环境反馈。&lt;a class=&#34;link&#34; href=&#34;https://zcode.z.ai/cn/docs/agents&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;ZCode Agent 文档&lt;/a&gt; 这至少说明，软件工程过程数据正是它想优化的对象。&lt;/p&gt;
+&lt;p&gt;一份完整仓库能提供什么，取决于它有没有和会话、工具调用及执行结果关联起来：&lt;/p&gt;
+&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;已获得的内容&lt;/th&gt;
+					&lt;th&gt;它能提供的训练原料&lt;/th&gt;
+					&lt;th&gt;还缺什么才能成为可靠的后训练数据&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;&lt;code&gt;.git/objects&lt;/code&gt;&lt;/td&gt;
+					&lt;td&gt;同一项目在不同时间的代码状态、重构路径和真实改动&lt;/td&gt;
+					&lt;td&gt;用户意图、修改原因和最终正确性标签&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;分支与 reflog&lt;/td&gt;
+					&lt;td&gt;探索、回退、合并和失败尝试的痕迹&lt;/td&gt;
+					&lt;td&gt;哪一步是有效动作，哪一步只是个人操作噪声&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;工作区与配置&lt;/td&gt;
+					&lt;td&gt;真实依赖、模块边界、构建方式和工程约束&lt;/td&gt;
+					&lt;td&gt;可复现的环境、清理后的敏感信息&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;LFS 与测试资产&lt;/td&gt;
+					&lt;td&gt;大文件、测试数据和更接近生产的运行场景&lt;/td&gt;
+					&lt;td&gt;运行结果、测试通过与否、奖励定义&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;这也是为什么“完整仓库”比“当前文件”更有价值：它不只是更多 Token，而是包含了&lt;strong&gt;状态变化&lt;/strong&gt;。如果再把用户 Prompt、Agent 的工具调用、补丁、测试输出和最终结果串起来，就能形成一条接近真实软件工程的轨迹。相关研究已经把仓库级上下文、可执行反馈和编码轨迹视为代码 Agent 自我演化的重要证据；另一项代码修复研究也使用真实仓库和构建验证来做 RL，并报告 RL 在匹配环境下带来明显收益。&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/2608.03392&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Self-Evolving Coding Agents&lt;/a&gt;、&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/2510.22075&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Agentic Reinforcement Learning for Real-World Code Repair&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;不过，&lt;strong&gt;一份快照本身不是 RL 数据集&lt;/strong&gt;。它更像训练环境的状态和原料，离“知道用户想完成什么、Agent 做了哪些动作、哪个结果应该得到奖励”还差几步。正因为训练价值需要通过这些关联才能兑现，数据的用途、留存和是否进入训练，就更应该在采集之前说清楚，而不是等用户发现加密包之后再用“生成 Wiki”概括过去。&lt;/p&gt;
+&lt;p&gt;我的判断是：不能据此认定智谱已经拿这些仓库做了后训练；但完全可以认定，&lt;strong&gt;这不是一批没有价值的误上传数据&lt;/strong&gt;。它潜在地覆盖了模型最缺、也最昂贵的真实工程过程。对用户来说，是否已经训练只是一个问题；厂商是否在没有明确授权的情况下建立了获取这类数据的能力，是更早、更确定的问题。&lt;/p&gt;
+&lt;h2 id=&#34;真正塌掉的是信任边界&#34;&gt;真正塌掉的是信任边界
+&lt;/h2&gt;&lt;p&gt;这件事还暴露了一个经常被“开源模型”四个字遮住的区别：模型权重开放，不等于包裹模型的桌面端、Agent Harness、更新机制和数据通道都开放。&lt;/p&gt;
+&lt;p&gt;用户可以在本地运行一个开放权重模型，却把整个工作区交给一个闭源运行时；模型可能没有主动上传工具，桌面端的 sidecar 仍然可以在模型调用之外打包文件。此时“我用的是本地模型”并不能推出“代码没有离开电脑”。&lt;/p&gt;
+&lt;p&gt;一个合格的仓库索引功能当然可以存在，但至少应该做到：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;第一次启用时明确说明上传对象、目的、留存时间和接收方；&lt;/li&gt;
+&lt;li&gt;打包前展示可读的文件清单，并把 &lt;code&gt;.git&lt;/code&gt;、密钥、依赖和构建产物在打包层硬排除；&lt;/li&gt;
+&lt;li&gt;“是否上传”“是否建索引”“是否用于改进模型”是三个独立、可验证的开关；&lt;/li&gt;
+&lt;li&gt;用户拥有停止上传、删除云端数据和查看处理记录的入口；&lt;/li&gt;
+&lt;li&gt;客户端、服务端协议和删除流程接受独立审计，而不是只承诺“近期会开源”。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;对已经使用过 ZCode 的人，最现实的动作也不是等一句“我们不会保存”：先升级到明确修复后的版本，检查 &lt;code&gt;~/.zcode/v2/checkpoints&lt;/code&gt;（Windows 通常对应 &lt;code&gt;%USERPROFILE%\.zcode\v2\checkpoints&lt;/code&gt;）里是否还有待上传快照；如果仓库历史中曾经出现过密钥、令牌或内部凭据，就按已经暴露过来处理并轮换，而不要只检查当前工作树。删除本地待上传文件，也不能证明云端曾经没有收到副本。&lt;/p&gt;
+&lt;p&gt;智谱现在最需要补的不是额度，而是证据。开源主程序、公布受影响版本和用户范围、解释开关与上传链路的对应关系、提供删除和留存审计，才能回答这次争议真正的问题：&lt;strong&gt;用户交给它的是一次明确的代码调用，还是一座自己并不知道已经被搬走的仓库矿山。&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;参考资料&#34;&gt;参考资料
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://blog.ferstar.org/posts/zcode-silent-workspace-snapshot-upload/&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Ferstar：扒一扒 ZCode 静默上传全量 Git 历史的骚操作&lt;/a&gt;，2026 年 9 月 18 日。本文关于快照体积、文件清单、加密和触发逻辑的主要技术材料。&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://zcode.z.ai/cn/docs/repo-wiki&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;ZCode 官方 Wiki 文档&lt;/a&gt;，2026 年 9 月 18 日核验。用于对照修复后文档声称的读取范围与排除规则。&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://zcode.z.ai/cn/docs/agents&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;ZCode Agent 官方文档&lt;/a&gt;，2026 年 9 月 18 日核验。用于说明官方对长轨迹、工具调用和环境反馈后训练的产品表述。&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://finance.sina.com.cn/tech/roll/2026-09-18/doc-inisfyex3550493.shtml&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;新浪科技转述的智谱 ZCode 说明&lt;/a&gt;，2026 年 9 月 18 日。用于核对官方回应、修复、开源和额度重置说法。&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://git-scm.com/docs/gitdatamodel&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Git 官方数据模型文档&lt;/a&gt; 与 &lt;a class=&#34;link&#34; href=&#34;https://git-scm.com/docs/git-reflog&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;git-reflog 文档&lt;/a&gt;，2026 年 9 月 18 日核验。用于说明 &lt;code&gt;.git&lt;/code&gt;、Git 对象和 reflog 的数据含义。&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/2608.03392&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Self-Evolving Coding Agents&lt;/a&gt;，2026 年 8 月。用于说明仓库级上下文、可执行反馈和编码轨迹在代码 Agent 研究中的位置。&lt;/li&gt;
+&lt;li&gt;&lt;a class=&#34;link&#34; href=&#34;https://arxiv.org/abs/2510.22075&#34;  target=&#34;_blank&#34; rel=&#34;noopener&#34;
+    &gt;Agentic Reinforcement Learning for Real-World Code Repair&lt;/a&gt;，2025 年 10 月。用于说明真实仓库、构建验证和 RL 后训练之间的关系。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;details class=&#34;article-notes&#34;&gt;
+    &lt;summary&gt;写作附记&lt;/summary&gt;
+    &lt;div class=&#34;article-notes__content&#34;&gt;
+        &lt;h3 id=&#34;原始提示词&#34;&gt;原始提示词
+&lt;/h3&gt;&lt;blockquote&gt;
+&lt;p&gt;$blog-writer 智谱 zcode 偷偷上传整个 git 仓库的详细来龙去脉，知乎上已经有博主逆向分析了 zcode 代码，智谱现在的解释很牵强，RL 后训练，有完整的 git 仓库，对训练的帮助很大。&lt;/p&gt;
+&lt;/blockquote&gt;
+    &lt;/div&gt;
+&lt;/details&gt;</description>
+        </item>
+        <item>
         <title>AI 开支牛走到解禁口</title>
         <link>https://ttf248.life/p/ai-capex-unlock-coding-cashflow/</link>
         <pubDate>Sun, 21 Jun 2026 21:10:00 +0800</pubDate>
