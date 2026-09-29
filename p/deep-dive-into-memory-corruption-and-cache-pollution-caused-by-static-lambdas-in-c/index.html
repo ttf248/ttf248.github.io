@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，就是函数内部的 static lambda 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。\n">
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，是函数内部的 static lambda 第一次初始化时，通过 [&amp;] 捕获了 current_input 所引用的对象。闭包会被后续调用复用，却不会重新绑定捕获；如果后续输入对象不同，它仍会读第一次调用的对象。对象还活着时会造成旧数据写入，对象已销毁后仍被访问才会形成悬空引用并触发未定义行为。\n">
 <title>unordered_map 查得到却取错值，一次静态 lambda 的内存事故</title>
 
 <link rel='canonical' href='https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 
 <link rel="stylesheet" href="/scss/style.min.3620bc27547f93d23ecbba1d186dfd2bcf8c8eba081f2a154dc3624bca6ae14a.css"><meta property='og:title' content="unordered_map 查得到却取错值，一次静态 lambda 的内存事故">
-<meta property='og:description' content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，就是函数内部的 static lambda 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。\n">
+<meta property='og:description' content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，是函数内部的 static lambda 第一次初始化时，通过 [&amp;] 捕获了 current_input 所引用的对象。闭包会被后续调用复用，却不会重新绑定捕获；如果后续输入对象不同，它仍会读第一次调用的对象。对象还活着时会造成旧数据写入，对象已销毁后仍被访问才会形成悬空引用并触发未定义行为。\n">
 <meta property='og:url' content='https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='c&#43;&#43;' /><meta property='article:tag' content='问题排查' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2026-03-16T20:18:18&#43;08:00'/><meta property='article:modified_time' content='2026-07-26T22:39:23&#43;08:00'/>
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='C&#43;&#43;' /><meta property='article:tag' content='问题排查' /><meta property='article:tag' content='lambda' /><meta property='article:published_time' content='2026-03-16T20:18:18&#43;08:00'/><meta property='article:modified_time' content='2026-09-29T10:32:36&#43;08:00'/>
 <meta name="twitter:title" content="unordered_map 查得到却取错值，一次静态 lambda 的内存事故">
-<meta name="twitter:description" content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，就是函数内部的 static lambda 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。\n">
+<meta name="twitter:description" content="有一种 C++ 问题特别容易把人带偏：unordered_map::find 明明命中了，it-&gt;first 也对，可你再看 it-&gt;second 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。\n第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 unordered_map 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。\n这篇记录的坑，是函数内部的 static lambda 第一次初始化时，通过 [&amp;] 捕获了 current_input 所引用的对象。闭包会被后续调用复用，却不会重新绑定捕获；如果后续输入对象不同，它仍会读第一次调用的对象。对象还活着时会造成旧数据写入，对象已销毁后仍被访问才会形成悬空引用并触发未定义行为。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/","name":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-07-26T22:39:23+08:00","datePublished":"2026-03-16T20:18:18+08:00","headline":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/","name":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-09-29T10:32:36+08:00","datePublished":"2026-03-16T20:18:18+08:00","headline":"unordered_map 查得到却取错值，一次静态 lambda 的内存事故","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/deep-dive-into-memory-corruption-and-cache-pollution-caused-by-static-lambdas-in-c/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -245,7 +245,7 @@
   <ol>
     <li><a href="#先看那个很像优化的小动作">先看那个很像优化的小动作</a></li>
     <li><a href="#为什么现象会像-map-查错了">为什么现象会像 map 查错了</a></li>
-    <li><a href="#不要用-static-保存带捕获的局部闭包">不要用 static 保存带捕获的局部闭包</a></li>
+    <li><a href="#不要让-static-闭包捕获当前调用的数据">不要让 static 闭包捕获当前调用的数据</a></li>
     <li><a href="#排查时先证明-key-和-value-的身份一致">排查时先证明 key 和 value 的身份一致</a></li>
     <li><a href="#真正的教训">真正的教训</a></li>
     <li><a href="#参考资料">参考资料</a></li>
@@ -296,7 +296,7 @@
 
 
 
-                    <time class="article-time--reading">阅读时长: 6 分钟</time>
+                    <time class="article-time--reading">阅读时长: 7 分钟</time>
                     
                 </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
                     <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
@@ -341,7 +341,7 @@
     <div class="article-lead article-prose">
         <p>有一种 C++ 问题特别容易把人带偏：<code>unordered_map::find</code> 明明命中了，<code>it-&gt;first</code> 也对，可你再看 <code>it-&gt;second</code> 里面的字段，像是变成了另一个 key 的数据——这种现象往往让人先怀疑容器本身。</p>
 <p>第一反应通常是怀疑 map 坏了，或者 hash 冲突把数据弄乱了。可 <code>unordered_map</code> 没那么玄。查找命中以后，key 和 value 对不上，更常见的原因不是容器失灵，而是你在更新 value 的时候已经写错了地方。</p>
-<p>这篇记录的坑，就是函数内部的 <code>static lambda</code> 捕获了局部引用。第一轮看不出来，后面再调用时，lambda 还握着第一次调用留下的引用，问题就开始变得像“缓存串号”。</p>
+<p>这篇记录的坑，是函数内部的 <code>static lambda</code> 第一次初始化时，通过 <code>[&amp;]</code> 捕获了 <code>current_input</code> 所引用的对象。闭包会被后续调用复用，却不会重新绑定捕获；如果后续输入对象不同，它仍会读第一次调用的对象。对象还活着时会造成旧数据写入，对象已销毁后仍被访问才会形成悬空引用并触发未定义行为。</p>
     </div>
     
 </div>
@@ -356,7 +356,7 @@
   <ol>
     <li><a href="#先看那个很像优化的小动作">先看那个很像优化的小动作</a></li>
     <li><a href="#为什么现象会像-map-查错了">为什么现象会像 map 查错了</a></li>
-    <li><a href="#不要用-static-保存带捕获的局部闭包">不要用 static 保存带捕获的局部闭包</a></li>
+    <li><a href="#不要让-static-闭包捕获当前调用的数据">不要让 static 闭包捕获当前调用的数据</a></li>
     <li><a href="#排查时先证明-key-和-value-的身份一致">排查时先证明 key 和 value 的身份一致</a></li>
     <li><a href="#真正的教训">真正的教训</a></li>
     <li><a href="#参考资料">参考资料</a></li>
@@ -385,13 +385,14 @@
 <p>真正危险的是这两个东西叠在一起：</p>
 <ul>
 <li><code>static</code> 让这个 lambda 只初始化一次，并且活到进程结束；</li>
-<li><code>[&amp;]</code> 让它捕获当前栈帧里的局部引用。</li>
+<li><code>[&amp;]</code> 让它捕获 <code>current_input</code> 所引用的实体；引用捕获不会延长该对象的生命周期。</li>
 </ul>
-<p>第一次调用 <code>UpdateCache</code> 时，<code>patch</code> 被初始化。它捕获到的 <code>current_input</code>，不是一个抽象名字，而是第一次调用时那块栈上的对象引用。</p>
-<p>函数返回以后，那块栈帧结束了。第二次再调用，<code>patch</code> 不会重新初始化，它还拿着第一次的引用。后面发生什么，就已经进入未定义行为。</p>
+<p>第一次调用 <code>UpdateCache</code> 时，<code>patch</code> 被初始化。按 C++ 的引用捕获规则，闭包里的 <code>current_input</code> 指向第一次调用时参数所引用的 <code>Tick</code> 对象，而不是把函数参数这个引用变量本身存进闭包；后续调用也不会重新绑定它。</p>
+<p>函数返回后，第一次传入的 <code>Tick</code> 对象是否仍然存活，取决于调用方的对象生命周期。第二次调用时，<code>patch</code> 仍会读取第一次传入的对象：若它还活着，更新会使用过期输入；若它已销毁，再访问才是未定义行为。C++ 工作草案明确规定，对按引用捕获的引用进行 odr-use 时，表达式指向的是该引用所绑定的实体。<a class="link" href="https://eel.is/c&#43;&#43;draft/expr.prim.lambda.capture"  target="_blank" rel="noopener"
+    >C++ 工作草案：Lambda captures</a></p>
 <h2 id="为什么现象会像-map-查错了">为什么现象会像 map 查错了
 </h2><p>这个 bug 迷惑人的地方在于，<code>find</code> 可能一直是对的。</p>
-<p>你用当前输入的 <code>symbol</code> 去查 map，查到了正确的 iterator。到这一步，容器没有错。错发生在后面的更新函数里：它读到的 <code>current_input.price</code>、<code>current_input.volume</code>，可能已经不是当前这次调用的输入。</p>
+<p>你用当前输入的 <code>symbol</code> 去查 map，查到了正确的 iterator。到这一步，容器没有错。错发生在后面的更新函数里：它读到的 <code>current_input.price</code>、<code>current_input.volume</code> 仍来自第一次调用的对象；若该对象已结束生命周期，读取还会触发未定义行为。</p>
 <p>如果那块失效栈内存刚好被复用了，你看到的现象就会很奇怪：</p>
 <ul>
 <li>key 是 A；</li>
@@ -399,10 +400,10 @@
 <li>但写进去的字段像来自 B；</li>
 <li>偶尔还会因为栈布局变化表现不稳定。</li>
 </ul>
-<p>这就很容易让人误判成“map 里缓存污染了”。其实污染不是 map 自己产生的，而是更新逻辑从一个悬空引用里拿了数据。</p>
+<p>这就很容易让人误判成“map 里缓存污染了”。问题不是 map 自己产生的，而是更新逻辑一直读取第一次调用的对象；对象失效后继续读取，才会变成悬空引用问题。</p>
 <p>更糟的是，这类问题不一定马上崩。它可能只是偶尔错字段、偶尔错价格、偶尔在高并发或不同编译优化下变得更明显。越不像崩溃，越容易被当成业务数据问题。</p>
-<h2 id="不要用-static-保存带捕获的局部闭包">不要用 static 保存带捕获的局部闭包
-</h2><p>这条经验可以说得很直接：函数内部的 <code>static lambda</code>，如果捕获局部变量，优先当成危险代码处理。</p>
+<h2 id="不要让-static-闭包捕获当前调用的数据">不要让 static 闭包捕获当前调用的数据
+</h2><p>这条经验可以说得很直接：不要把依赖当前调用输入的带引用捕获 lambda 保存为 <code>static</code>。如果要复用更新逻辑，就让闭包无状态，并通过参数传入依赖。</p>
 <p>安全写法是让 lambda 无状态，依赖都通过参数传进去：</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">UpdateCache</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">unordered_map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span> <span class="n">Tick</span><span class="o">&gt;&amp;</span> <span class="n">cache</span><span class="p">,</span> <span class="k">const</span> <span class="n">Tick</span><span class="o">&amp;</span> <span class="n">current_input</span><span class="p">)</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">    <span class="k">auto</span> <span class="n">patch</span> <span class="o">=</span> <span class="p">[](</span><span class="k">auto</span> <span class="n">it</span><span class="p">,</span> <span class="k">const</span> <span class="n">Tick</span><span class="o">&amp;</span> <span class="n">src</span><span class="p">)</span> <span class="p">{</span>
@@ -441,8 +442,8 @@
 <p>如果 sanitizer 一开就报 use-after-scope 或类似问题，就别再围着 hash、bucket、rehash 打转了。容器通常只是案发现场，不一定是凶手。</p>
 <h2 id="真正的教训">真正的教训
 </h2><p>这类问题的教训不只是“不要写 static lambda”。</p>
-<p>更准确地说，是不要让一个长生命周期对象，偷偷引用短生命周期数据。<code>static</code>、全局回调、缓存下来的函数对象、异步任务，都会把这个问题放大。</p>
-<p>C++ 里很多诡异现象，本质上不是语法难，而是生命周期边界没有写清楚。代码表面看起来像一次小优化，实际是在把第一次调用的栈帧钉到进程生命周期里。</p>
+<p>更准确地说，是不要让一个长生命周期对象，偷偷依赖调用期数据。<code>static</code>、全局回调、缓存下来的函数对象、异步任务，都会把这个问题放大。</p>
+<p>C++ 里很多诡异现象，本质上不是语法难，而是生命周期边界没有写清楚。代码表面看起来像一次小优化，实际可能把第一次调用的输入对象固定进进程级闭包里。</p>
 <p>所以以后再遇到 <code>unordered_map</code> 查到了但 value 像串号，我会先问一句：</p>
 <p>是不是有人在更新 value 的时候，拿了一个已经不该存在的引用？</p>
 <p>这比先怀疑容器本身靠谱得多。</p>
@@ -450,6 +451,8 @@
 </h2><ul>
 <li><a class="link" href="https://en.cppreference.com/w/cpp/language/lambda"  target="_blank" rel="noopener"
     >cppreference: Lambda expressions</a></li>
+<li><a class="link" href="https://eel.is/c&#43;&#43;draft/expr.prim.lambda.capture"  target="_blank" rel="noopener"
+    >C++ 工作草案：Lambda captures</a></li>
 <li><a class="link" href="https://en.cppreference.com/w/cpp/language/storage_duration"  target="_blank" rel="noopener"
     >cppreference: Storage duration</a></li>
 <li><a class="link" href="https://clang.llvm.org/docs/AddressSanitizer.html"  target="_blank" rel="noopener"
@@ -461,14 +464,9 @@
     <summary>写作附记</summary>
     <div class="article-notes__content">
         <h3 id="原始提示词">原始提示词
-</h3><h3 id="写作思路摘要">写作思路摘要
-</h3><ul>
-<li>原文没有保留原始提示词；本次重写只基于旧文中的问题描述、示例代码和修复方向。</li>
-<li>把旧稿的“深度解析”口吻改成排障记录，先让读者看到为什么像 <code>unordered_map</code> 查错了。</li>
-<li>保留核心技术判断：<code>static lambda</code> 配合引用捕获会把短生命周期引用带进长生命周期闭包。</li>
-<li>补充排查顺序和 sanitizer 工具，避免只停留在概念解释。</li>
-</ul>
-
+</h3><blockquote>
+<p>原始提示词未留存；本文依据现存的问题描述、示例代码和修复方向整理。</p>
+</blockquote>
     </div>
 </details>
 </section>
@@ -517,51 +515,51 @@
     <ol class="related-content__list">
             
                 <li class="related-content__item">
-                    <a href="/p/linux-backend-slow-string-processing/" class="related-content__link">
+                    <a href="/p/cpp-singleton-static-initialization/" class="related-content__link">
                         <span class="related-content__index">01</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">linux后端服务处理大量字符串数据-效率很慢</h3>
-                            <time class="related-content__date" datetime='2024-11-13T19:42:59&#43;08:00'>2024年11月13日</time>
+                            <h3 class="related-content__title">C&#43;&#43; 单例：一行 static 背后的初始化保证</h3>
+                            <time class="related-content__date" datetime='2026-07-24T23:32:22&#43;08:00'>2026年07月24日</time>
                         </div>
                     </a>
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/cpp-lambda-parameter-lifetime/" class="related-content__link">
+                    <a href="/p/ai-demo-fast-rework-faster/" class="related-content__link">
                         <span class="related-content__index">02</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">C&#43;&#43;中lambd表达式参数生命周期</h3>
-                            <time class="related-content__date" datetime='2024-11-13T19:23:02&#43;08:00'>2024年11月13日</time>
+                            <h3 class="related-content__title">让 AI 写 Demo，检查点要比代码更小</h3>
+                            <time class="related-content__date" datetime='2026-04-10T15:39:51&#43;08:00'>2026年04月10日</time>
                         </div>
                     </a>
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/pstack-troubleshooting-process-hangs/" class="related-content__link">
+                    <a href="/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/" class="related-content__link">
                         <span class="related-content__index">03</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">pstack排查进程假死</h3>
-                            <time class="related-content__date" datetime='2024-02-24T23:55:59&#43;08:00'>2024年02月24日</time>
+                            <h3 class="related-content__title">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</h3>
+                            <time class="related-content__date" datetime='2026-04-09T19:21:36&#43;08:00'>2026年04月09日</time>
                         </div>
                     </a>
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/cpp-function-call-timing/" class="related-content__link">
+                    <a href="/p/cpp-folder-namespace-what-is-it-called/" class="related-content__link">
                         <span class="related-content__index">04</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">C&#43;&#43;函数调用耗时</h3>
-                            <time class="related-content__date" datetime='2024-01-24T14:11:33&#43;08:00'>2024年01月24日</time>
+                            <h3 class="related-content__title">文件夹分层再套 namespace，这事到底叫什么</h3>
+                            <time class="related-content__date" datetime='2026-04-09T02:31:07&#43;08:00'>2026年04月09日</time>
                         </div>
                     </a>
                 </li>
             
                 <li class="related-content__item">
-                    <a href="/p/compiler-callback-performance-testing/" class="related-content__link">
+                    <a href="/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/" class="related-content__link">
                         <span class="related-content__index">05</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">编译器、回调函数、性能测试</h3>
-                            <time class="related-content__date" datetime='2023-02-15T13:59:25&#43;08:00'>2023年02月15日</time>
+                            <h3 class="related-content__title">本地开发之痛：为何 `nul` 文件删不掉？一个“复合型”文件系统难题的破解之道</h3>
+                            <time class="related-content__date" datetime='2025-11-08T16:37:46&#43;08:00'>2025年11月08日</time>
                         </div>
                     </a>
                 </li>
