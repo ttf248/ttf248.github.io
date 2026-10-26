@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+  <title>任务位置实验</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #fff; --fg: #253245; --muted: #526174; --line: #a4afbc; --accent: #1260b8; --soft: #f0f5fa; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #151d29; --fg: #e8edf6; --muted: #b5c1d1; --line: #66768b; --accent: #85bdff; --soft: #223044; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 15px/1.65 system-ui, sans-serif; }
+    h1 { margin: 0 0 8px; font-size: 18px; }
+    p { margin: 8px 0; }
+    .hint { color: var(--muted); font-size: 13px; }
+    svg { width: 100%; max-height: 330px; display: block; background: var(--soft); touch-action: none; user-select: none; cursor: crosshair; }
+    svg text { fill: var(--fg); font: 13px system-ui, sans-serif; pointer-events: none; }
+    .grid { stroke: var(--line); stroke-dasharray: 4 4; }
+    #point { fill: var(--accent); stroke: var(--bg); stroke-width: 3; cursor: grab; }
+    label { display: flex; justify-content: space-between; gap: 8px; }
+    input { width: 100%; min-height: 32px; accent-color: var(--accent); }
+    output { font-variant-numeric: tabular-nums; }
+    button { min-height: 44px; font: inherit; color: var(--fg); background: var(--soft); border: 1px solid var(--line); padding: 6px 16px; border-radius: 4px; }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>一项任务可以放在哪里</h1>
+  <p class="hint">教学坐标，不是真实任务评分。拖动圆点或图中任意位置，也可用下面的滑块。</p>
+  <svg id="board" viewBox="0 0 440 300" role="img" aria-labelledby="board-title board-desc">
+    <title id="board-title">紧迫度与影响程度示意图</title>
+    <desc id="board-desc">初始紧迫度 30、影响程度 70；左上区域。用紧迫度和影响程度滑块改变位置。</desc>
+    <rect x="45" y="30" width="360" height="220" fill="none" stroke="var(--line)"/>
+    <path d="M225 30V250 M45 140H405" class="grid"/>
+    <text x="55" y="52">低紧迫 / 高影响</text><text x="290" y="52">高紧迫 / 高影响</text>
+    <text x="55" y="235">低紧迫 / 低影响</text><text x="290" y="235">高紧迫 / 低影响</text>
+    <text x="225" y="282" text-anchor="middle">紧迫度 →</text>
+    <text x="16" y="140" transform="rotate(-90 16 140)" text-anchor="middle">影响程度 →</text>
+    <text x="45" y="268">0</text><text x="405" y="268" text-anchor="end">100</text>
+    <text x="37" y="35" text-anchor="end">100</text><text x="37" y="250" text-anchor="end">0</text>
+    <circle id="point" cx="153" cy="96" r="10"/>
+  </svg>
+  <p id="result" role="status">紧迫度 30，影响程度 70：低紧迫 / 高影响。</p>
+  <div id="controls" hidden>
+    <label for="urgency">紧迫度 <output id="urgency-value" for="urgency">30</output></label>
+    <input id="urgency" type="range" min="0" max="100" value="30">
+    <label for="impact">影响程度 <output id="impact-value" for="impact">70</output></label>
+    <input id="impact" type="range" min="0" max="100" value="70">
+    <button id="reset" type="button">恢复初始位置</button>
+  </div>
+  <noscript><p>当前显示初始坐标。启用 JavaScript 后可以拖动和调整。</p></noscript>
+  <p class="hint">50 只是演示分界；任务先后还要考虑依赖、成本和具体情境。</p>
+  <script>
+    // 所有状态留在沙箱内；滑块与拖动共用一次更新，避免文字和图点不一致。
+    const board = document.getElementById('board');
+    const urgency = document.getElementById('urgency');
+    const impact = document.getElementById('impact');
+    const result = document.getElementById('result');
+    function update() {
+      const x = Number(urgency.value), y = Number(impact.value);
+      document.getElementById('point').setAttribute('cx', 45 + x * 3.6);
+      document.getElementById('point').setAttribute('cy', 250 - y * 2.2);
+      document.getElementById('urgency-value').value = x;
+      document.getElementById('impact-value').value = y;
+      result.textContent = `紧迫度 ${x}，影响程度 ${y}：${x < 50 ? '低' : '高'}紧迫 / ${y < 50 ? '低' : '高'}影响。`;
+      document.getElementById('board-desc').textContent = result.textContent;
+    }
+    function move(event) {
+      // 用 SVG 坐标变换消除不同宽度与留白造成的鼠标/触摸偏移。
+      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(board.getScreenCTM().inverse());
+      const clamp = value => Math.max(0, Math.min(100, Math.round(value)));
+      urgency.value = clamp((point.x - 45) / 3.6);
+      impact.value = clamp((250 - point.y) / 2.2);
+      update();
+    }
+    let dragging;
+    board.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      event.preventDefault();
+      dragging = event.pointerId; board.setPointerCapture(dragging); move(event);
+    });
+    board.addEventListener('pointermove', event => { if (dragging === event.pointerId) move(event); });
+    for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) board.addEventListener(name, () => { dragging = undefined; });
+    urgency.addEventListener('input', update); impact.addEventListener('input', update);
+    document.getElementById('reset').addEventListener('click', () => { urgency.value = 30; impact.value = 70; update(); });
+    update(); document.getElementById('controls').hidden = false;
+  </script>
+</body>
+</html>
