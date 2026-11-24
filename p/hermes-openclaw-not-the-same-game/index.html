@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。\n它们当然都在做&quot;个人 AI 助手&quot;。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 hermes claw migrate，摆明了是知道自己会接到一批 OpenClaw 用户。\n但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 Gateway 往外长，一个是从 AIAgent 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。\n">
-<title>Hermes 不能按 OpenClaw 平替来估</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="把 Hermes 和 OpenClaw 放在一起比，很多人第一反应是问“Hermes 能不能平替 OpenClaw”。其实这个问题一开始就问偏了。\n它们确实都在做个人 AI 助手，甚至 Hermes 官方都内置了 hermes claw migrate 迁移命令，但两者的骨架完全不是一回事：OpenClaw 是从常驻通信网关（Gateway）往外长的个人助理系统，把上下文前置；Hermes 是从本地 Agent 内核（AIAgent）往外长的自托管平台，把上下文后置。 这个底层分叉，直接决定了它们的功能气质和 Token 账单。\n">
+<title>Hermes 与 OpenClaw 深度对比：架构分叉，以及 Token 账单差在哪</title>
 
 <link rel='canonical' href='https://ttf248.life/p/hermes-openclaw-not-the-same-game/'>
 
-<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="Hermes 不能按 OpenClaw 平替来估">
-<meta property='og:description' content="这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。\n它们当然都在做&quot;个人 AI 助手&quot;。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 hermes claw migrate，摆明了是知道自己会接到一批 OpenClaw 用户。\n但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 Gateway 往外长，一个是从 AIAgent 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。\n">
+<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="Hermes 与 OpenClaw 深度对比：架构分叉，以及 Token 账单差在哪">
+<meta property='og:description' content="把 Hermes 和 OpenClaw 放在一起比，很多人第一反应是问“Hermes 能不能平替 OpenClaw”。其实这个问题一开始就问偏了。\n它们确实都在做个人 AI 助手，甚至 Hermes 官方都内置了 hermes claw migrate 迁移命令，但两者的骨架完全不是一回事：OpenClaw 是从常驻通信网关（Gateway）往外长的个人助理系统，把上下文前置；Hermes 是从本地 Agent 内核（AIAgent）往外长的自托管平台，把上下文后置。 这个底层分叉，直接决定了它们的功能气质和 Token 账单。\n">
 <meta property='og:url' content='https://ttf248.life/p/hermes-openclaw-not-the-same-game/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI' /><meta property='article:tag' content='Hermes' /><meta property='article:tag' content='OpenClaw' /><meta property='article:published_time' content='2026-04-15T23:52:20&#43;08:00'/><meta property='article:modified_time' content='2026-09-29T10:38:47&#43;08:00'/>
-<meta name="twitter:title" content="Hermes 不能按 OpenClaw 平替来估">
-<meta name="twitter:description" content="这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。\n它们当然都在做&quot;个人 AI 助手&quot;。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 hermes claw migrate，摆明了是知道自己会接到一批 OpenClaw 用户。\n但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 Gateway 往外长，一个是从 AIAgent 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI' /><meta property='article:tag' content='Hermes' /><meta property='article:tag' content='OpenClaw' /><meta property='article:tag' content='Token' /><meta property='article:tag' content='Agent' /><meta property='article:published_time' content='2026-04-15T23:52:20&#43;08:00'/><meta property='article:modified_time' content='2026-11-25T02:44:21&#43;08:00'/>
+<meta name="twitter:title" content="Hermes 与 OpenClaw 深度对比：架构分叉，以及 Token 账单差在哪">
+<meta name="twitter:description" content="把 Hermes 和 OpenClaw 放在一起比，很多人第一反应是问“Hermes 能不能平替 OpenClaw”。其实这个问题一开始就问偏了。\n它们确实都在做个人 AI 助手，甚至 Hermes 官方都内置了 hermes claw migrate 迁移命令，但两者的骨架完全不是一回事：OpenClaw 是从常驻通信网关（Gateway）往外长的个人助理系统，把上下文前置；Hermes 是从本地 Agent 内核（AIAgent）往外长的自托管平台，把上下文后置。 这个底层分叉，直接决定了它们的功能气质和 Token 账单。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/hermes-openclaw-not-the-same-game/","name":"Hermes 不能按 OpenClaw 平替来估","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5.4)"},"dateModified":"2026-09-29T10:38:47+08:00","datePublished":"2026-04-15T23:52:20+08:00","headline":"Hermes 不能按 OpenClaw 平替来估","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/hermes-openclaw-not-the-same-game/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/hermes-openclaw-not-the-same-game/","name":"Hermes 与 OpenClaw 深度对比：架构分叉，以及 Token 账单差在哪","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Gemini 4"},"dateModified":"2026-11-25T02:44:21+08:00","datePublished":"2026-04-15T23:52:20+08:00","headline":"Hermes 与 OpenClaw 深度对比：架构分叉，以及 Token 账单差在哪","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/hermes-openclaw-not-the-same-game/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -239,33 +239,30 @@
     <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
         <div class="article-toc-rail__header">
             <span data-article-toc-current>本文目录</span>
-            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 7 分钟</small>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 3 分钟</small>
         </div>
         <nav id="article-toc-navigation">
   <ol>
-    <li><a href="#它们一开始就没打算长成一个东西">它们一开始就没打算长成一个东西</a></li>
-    <li><a href="#一个把-gateway-当主角一个把-agent-当主角">一个把 Gateway 当主角，一个把 Agent 当主角</a></li>
-    <li><a href="#记忆技能和扩展方式也不是一个味道">记忆、技能和扩展方式，也不是一个味道</a></li>
-    <li><a href="#生态为什么会越走越开">生态为什么会越走越开</a></li>
-    <li><a href="#我最后的判断">我最后的判断</a></li>
-    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#一架构分叉gateway-主角-vs-agent-core-主角">一、架构分叉：Gateway 主角 vs Agent Core 主角</a></li>
+    <li><a href="#二token-账单差在哪固定盘前置-vs-按需展开">二、Token 账单差在哪：固定盘前置 vs 按需展开</a></li>
+    <li><a href="#三怎么选别问平替问你在养什么">三、怎么选？别问平替，问你在养什么</a></li>
   </ol>
 </nav>
     </section>
 </aside>
 
-<article class="main-article has-lead" data-reading-minutes="7">
+<article class="main-article has-lead" data-reading-minutes="3">
     <header class="article-header">
     <div class="article-details">
     <div class="article-title-wrapper">
         
-            <h1 class="article-title">Hermes 不能按 OpenClaw 平替来估</h1>
+            <h1 class="article-title">Hermes 与 OpenClaw 深度对比：架构分叉，以及 Token 账单差在哪</h1>
         
     
         
         
         <h3 class="article-subtitle">
-            从 Gateway 与 Agent 架构看两个项目的差别
+            从 Gateway 与 Agent Core 的底层差异，看谁把上下文前置、谁把成本后置
         </h3>
         
     </div>
@@ -300,11 +297,21 @@
 
 
 
-                    <time class="article-time--reading">阅读时长: 11 分钟</time>
+                    <time class="article-time--reading">阅读时长: 5 分钟</time>
                     
                 </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
                     <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
-                    <span class="article-time--author">Codex (GPT-5.4)</span>
+                    <span class="article-time--author">Gemini 4</span>
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">blog-writer-free v1.2.0</span>
                 </span></footer>
         
 
@@ -343,9 +350,8 @@
 
     
     <div class="article-lead article-prose">
-        <p>这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。</p>
-<p>它们当然都在做&quot;个人 AI 助手&quot;。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 <code>hermes claw migrate</code>，摆明了是知道自己会接到一批 OpenClaw 用户。</p>
-<p>但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 <code>Gateway</code> 往外长，一个是从 <code>AIAgent</code> 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。</p>
+        <p>把 <strong>Hermes</strong> 和 <strong>OpenClaw</strong> 放在一起比，很多人第一反应是问“Hermes 能不能平替 OpenClaw”。其实这个问题一开始就问偏了。</p>
+<p>它们确实都在做个人 AI 助手，甚至 Hermes 官方都内置了 <code>hermes claw migrate</code> 迁移命令，但两者的骨架完全不是一回事：<strong>OpenClaw 是从常驻通信网关（Gateway）往外长的个人助理系统，把上下文前置；Hermes 是从本地 Agent 内核（<code>AIAgent</code>）往外长的自托管平台，把上下文后置。</strong> 这个底层分叉，直接决定了它们的功能气质和 Token 账单。</p>
     </div>
     
 </div>
@@ -358,12 +364,9 @@
         <summary>本文目录</summary>
         <nav id="TableOfContents">
   <ol>
-    <li><a href="#它们一开始就没打算长成一个东西">它们一开始就没打算长成一个东西</a></li>
-    <li><a href="#一个把-gateway-当主角一个把-agent-当主角">一个把 Gateway 当主角，一个把 Agent 当主角</a></li>
-    <li><a href="#记忆技能和扩展方式也不是一个味道">记忆、技能和扩展方式，也不是一个味道</a></li>
-    <li><a href="#生态为什么会越走越开">生态为什么会越走越开</a></li>
-    <li><a href="#我最后的判断">我最后的判断</a></li>
-    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#一架构分叉gateway-主角-vs-agent-core-主角">一、架构分叉：Gateway 主角 vs Agent Core 主角</a></li>
+    <li><a href="#二token-账单差在哪固定盘前置-vs-按需展开">二、Token 账单差在哪：固定盘前置 vs 按需展开</a></li>
+    <li><a href="#三怎么选别问平替问你在养什么">三、怎么选？别问平替，问你在养什么</a></li>
   </ol>
 </nav>
     </details>
@@ -372,82 +375,60 @@
     <section class="article-content">
     
     
-    <h2 id="它们一开始就没打算长成一个东西">它们一开始就没打算长成一个东西
-</h2><p>OpenClaw 官方文档把 <code>Gateway</code> 放在非常前的位置。它的定义很直接：一个长期运行的 Gateway 持有所有消息面，控制面客户端、Web UI、Node 设备都通过 WebSocket 连到这个 Gateway 上，而且一个 host 上只有一个 Gateway 去管核心消息连接，像 WhatsApp 这种会话也明确由它独占。</p>
-<p>这意味着什么？意味着 OpenClaw 的世界观不是“先有一个 agent，再给它接几个入口”，而是“先有一个常驻的通信和控制平面，再把 agent runtime、session、skills、delegate、sub-agent 都组织到这个平面里”。</p>
-<p>Hermes 就不是这个味道。它的架构图一上来写得很明白，CLI、Gateway、ACP、Batch Runner、API Server、Python Library 这些入口，最后都汇到同一个 <code>AIAgent</code> 核心。Session storage 是 SQLite + FTS5，工具后端、provider resolution、prompt builder 都是围着这个 core 组织的。</p>
-<p>所以从骨架上看，OpenClaw 更像一个“常驻型个人助理系统”；Hermes 更像一个“agent runtime 平台”，消息入口只是它的一个延伸面。</p>
-<h2 id="一个把-gateway-当主角一个把-agent-当主角">一个把 Gateway 当主角，一个把 Agent 当主角
-</h2><p>这个架构差异，最后会直接变成使用体验差异。</p>
-<p>OpenClaw 的强项，是把“我怎么在很多渠道上拥有一个长期在线、带身份、带边界、可路由的助手”这件事做得非常重。它有默认的 DM pairing、安全策略、按 channel/account/peer 做 routing、多 agent 绑定、delegate 模式，甚至连“代表谁发、用哪个账号收、在哪个群里出现”这种组织级问题都专门写成文档了。</p>
-<p>换句话说，OpenClaw 想先解决的是存在性问题。这个 agent 先得像个真的人，或者像个真的组织助理，活在 Telegram、Discord、Slack、WhatsApp、Signal、WebChat 这些面上，然后你再去谈它会不会写代码、会不会做任务分发。</p>
-<p>Hermes 的重心更偏“能力积累”。它当然也有 Gateway，也能接 Telegram、Discord、Slack、WhatsApp 这些平台，但官方叙事里最靠前的词不是路由和账号，而是 persistent memory、skills、MCP、sub-agents、toolsets，还有 batch processing、trajectory export、RL training。</p>
-<p>这就很关键了。Hermes 要解决的核心问题不是“怎么把一个 AI 接到尽可能多的消息面上”，而是“怎么让这个 agent 逐步长出自己的技能、记忆和可复用能力，甚至还能顺手拿去做训练数据和实验”。</p>
-<p>所以我更愿意这么概括：</p>
-<p>OpenClaw 是 communication-first 的 personal assistant system。</p>
-<p>Hermes 是 agent-core-first 的 self-hosted agent platform。</p>
-<h2 id="记忆技能和扩展方式也不是一个味道">记忆、技能和扩展方式，也不是一个味道
-</h2><p>很多人会说，这俩不都支持 skill、memory、plugin 吗。没错，都支持。但是落点不一样。</p>
-<p>OpenClaw 的 agent runtime 里，workspace 是很重的概念。<code>AGENTS.md</code>、<code>SOUL.md</code>、<code>TOOLS.md</code>、<code>BOOTSTRAP.md</code>、<code>IDENTITY.md</code>、<code>USER.md</code> 这些文件会在新 session 的第一轮直接注入上下文。技能加载也有一整套优先级：workspace 里的、项目里的、个人目录里的、<code>~/.openclaw/skills</code> 里的、bundled 的，都能往里叠。它本质上是在搭一个“人格 + 规则 + 工作区 + 通道”统一的长期助手环境。</p>
-<p>Hermes 的技能系统明显更偏“程序化记忆”。官方文档直接说，skills 是 on-demand knowledge documents，走 progressive disclosure，兼容 <code>agentskills.io</code> 的开放标准，统一放在 <code>~/.hermes/skills/</code> 下面，而且 agent 自己就能修改和删除 skill。这个味道就不是“给助手配几份说明书”了，而是“把做过的事沉淀成可以再次加载的能力块”。</p>
-<p>记忆也一样。Hermes 内置的是很克制的 <code>MEMORY.md</code> 和 <code>USER.md</code>，再配一个 SQLite + FTS5 的 session search，另外再往外挂 8 类 memory provider。这个设计挺有意思，它没有一上来把“长期人格环境”写得特别厚，而是把短记忆、检索式回忆、外挂式长期记忆拆开了。</p>
-<p>OpenClaw 不是没有记忆，也不是没有 sub-agent、多 agent、delegate 这些进阶能力。相反，它这些都不少。但从文档结构和默认心智模型看，它更像在经营一个持续在线的 assistant workspace；Hermes 更像在经营一个会持续进化的 agent capability graph。</p>
-<h2 id="生态为什么会越走越开">生态为什么会越走越开
-</h2><p>生态这块，表面看都是“开源 + 可扩展”，实际上也分叉得很明显。</p>
-<p>OpenClaw 的生态更宽，更偏外部接入层。官方插件可以扩 channels、model providers、tools、skills、speech、web fetch、web search、memory，社区插件和 ClawHub 也在围着“接更多平台、接更多账号、接更多工作流”长。它甚至明确兼容 <code>.codex-plugin</code>、<code>.claude-plugin</code>、<code>.cursor-plugin</code> 这类 bundle 形态。这个动作很聪明，说白了就是先把别家生态的壳也吃进来，先把入口做大。</p>
-<p>再看 OpenClaw 的文档，你会发现它对 sub-agent、delegate、组织代理、thread binding、DM pairing、group mention 这些东西写得非常细。说明它的生态目标，不只是单机玩家折腾，而是希望真的变成一个长期运行的 agent operating system。</p>
-<p>Hermes 的生态则更像“内核能力外接”。它有 Python plugin system，有 memory provider plugin，有 context engine plugin，有 MCP server 接入，也有 Skills Hub 和 <code>agentskills.io</code> 这种开放 skill 标准。再加上 batch runner、trajectory export、Atropos 这些训练相关接口，Hermes 的生态天然会吸引两类人。</p>
-<p>一类是把它当个人 agent 用的人。</p>
-<p>另一类是把它当研究、训练、实验、workflow substrate 用的人。</p>
-<p>这两类用户的需求差异很大，但 Hermes 的架构刚好都能兜住。所以你会感觉 Hermes 的生态虽然未必像 OpenClaw 那样先在“渠道数量”和“消息存在感”上铺开，但我会更倾向于觉得，它在 agent substrate 这块的后劲会更大。</p>
-<p>还有一个挺有意思的细节。Hermes 官方 README 里不光有 <code>hermes claw migrate</code>，还挂了一个社区项目 <code>HermesClaw</code>，用来在同一个 WeChat 账号上同时跑 Hermes Agent 和 OpenClaw。这个信号已经很明显了：Hermes 不是假装自己和 OpenClaw 没关系，它是在承认这条用户迁移链路存在，然后顺手把这条链路产品化了。</p>
-<h2 id="我最后的判断">我最后的判断
-</h2><p>如果你要的是一个“真的活在消息面上的个人助理系统”，要的是账号、渠道、路由、delegate、组织边界、长期在线、强控制面，那 OpenClaw 这条路更完整，也更像一个成熟的通信底座。</p>
-<p>如果你要的是一个“会越用越像自己工作台的 agent core”，看重的是 skill 沉淀、memory 组合、MCP、插件、sub-agent、训练数据和后续可塑性，那 Hermes 更顺手。</p>
-<p>所以别再简单问“Hermes 能不能替代 OpenClaw”了。这个问题问得有点糙。</p>
-<p>更准确的问法应该是：</p>
-<p>你到底想要一个长在消息网络里的 AI 助理，还是一个长在本地工作流和 agent runtime 里的 AI 平台？</p>
-<p>想清楚这个，选择就没那么拧巴了。</p>
-<h2 id="参考资料">参考资料
+    <h2 id="一架构分叉gateway-主角-vs-agent-core-主角">一、架构分叉：Gateway 主角 vs Agent Core 主角
 </h2><ul>
-<li><a class="link" href="https://github.com/NousResearch/hermes-agent"  target="_blank" rel="noopener"
-    >Hermes Agent GitHub README</a></li>
-<li><a class="link" href="https://hermes-agent.org/"  target="_blank" rel="noopener"
-    >Hermes Agent 官网 Features</a></li>
-<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/developer-guide/architecture"  target="_blank" rel="noopener"
-    >Hermes Agent Architecture</a></li>
-<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/skills"  target="_blank" rel="noopener"
-    >Hermes Agent Skills System</a></li>
-<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/memory"  target="_blank" rel="noopener"
-    >Hermes Agent Persistent Memory</a></li>
-<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp"  target="_blank" rel="noopener"
-    >Hermes Agent MCP</a></li>
-<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins"  target="_blank" rel="noopener"
-    >Hermes Agent Plugins</a></li>
-<li><a class="link" href="https://github.com/openclaw/openclaw"  target="_blank" rel="noopener"
-    >OpenClaw GitHub README</a></li>
-<li><a class="link" href="https://docs.openclaw.ai/concepts/architecture"  target="_blank" rel="noopener"
-    >OpenClaw Gateway Architecture</a></li>
-<li><a class="link" href="https://docs.openclaw.ai/concepts/agent"  target="_blank" rel="noopener"
-    >OpenClaw Agent Runtime</a></li>
-<li><a class="link" href="https://docs.openclaw.ai/concepts/multi-agent"  target="_blank" rel="noopener"
-    >OpenClaw Multi-Agent Routing</a></li>
-<li><a class="link" href="https://docs.openclaw.ai/concepts/delegate-architecture"  target="_blank" rel="noopener"
-    >OpenClaw Delegate Architecture</a></li>
-<li><a class="link" href="https://docs.openclaw.ai/tools/subagents"  target="_blank" rel="noopener"
-    >OpenClaw Sub-Agents</a></li>
-<li><a class="link" href="https://docs.openclaw.ai/tools/plugin"  target="_blank" rel="noopener"
-    >OpenClaw Plugins</a></li>
-<li><a class="link" href="https://docs.openclaw.ai/tools/skills-config"  target="_blank" rel="noopener"
-    >OpenClaw Skills Config</a></li>
+<li><strong>OpenClaw（Communication-first）</strong>：核心是一个长期在线的单一 <code>Gateway</code>，独占 Telegram、Discord、Slack、WhatsApp、Signal、WebChat 等消息面，控制面、Web UI 与节点全通过 WebSocket 接入。它优先解决“存在感与组织边界”——DM 配对、群聊路由、多账号身份、delegate 授权写得极其细致。</li>
+<li><strong>Hermes（Agent-core-first）</strong>：CLI、Gateway、ACP、Batch Runner、API Server、Python Library 全部只是入口，最终汇入同一个 <code>AIAgent</code> 内核（底层 SQLite + FTS5 存会话）。它的重心不在消息路由，而在<strong>能力沉淀</strong>——渐进式披露的 <code>skills</code>（兼容 <code>agentskills.io</code>，Agent 自己可增删改）、可插拔记忆后端、MCP 工具集，甚至顺手支持 trajectory 导出与 RL 训练。</li>
 </ul>
+<h2 id="二token-账单差在哪固定盘前置-vs-按需展开">二、Token 账单差在哪：固定盘前置 vs 按需展开
+</h2><p>架构差异落到账单上，就是两套完全不同的成本结构：</p>
+<div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>对比维度</th>
+					<th>OpenClaw</th>
+					<th>Hermes</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><strong>默认形态</strong></td>
+					<td>长期在线、多渠道个人助理工作台</td>
+					<td>本地工作流与自托管 Agent 内核</td>
+			</tr>
+			<tr>
+					<td><strong>上下文策略</strong></td>
+					<td><strong>前置注入</strong>：<code>AGENTS.md</code>、<code>SOUL.md</code>、<code>USER.md</code>、<code>IDENTITY.md</code>、<code>TOOLS.md</code>、<code>MEMORY.md</code> 随 session 在场</td>
+					<td><strong>后置按需</strong>：项目上下文按路径 <code>first match wins</code> 发现，Skill 先给轻量索引，用到再展开</td>
+			</tr>
+			<tr>
+					<td><strong>Prompt Cache 友好度</strong></td>
+					<td>固定底座偏厚，心跳（<code>HEARTBEAT.md</code>）与多渠道规则容易拉高基础消耗</td>
+					<td>起步极轻，系统提示词克制，更容易保住缓存命中</td>
+			</tr>
+			<tr>
+					<td><strong>隐藏风险</strong></td>
+					<td>固定盘不控制好会持续烧基础 Token</td>
+					<td>复杂任务一旦展开大量记忆、子 Agent 和长工具输出，照样烧钱</td>
+			</tr>
+	</tbody>
+</table></div>
+<p>所以“谁更省 Token”不能脱离场景硬答：如果你要养一个跨五个聊天软件、长期在线、有鲜明人格边界的助理，OpenClaw 把上下文前置是合理的产品代价；如果你主要在本地仓库跑代码、沉淀可复用 Skill、接 MCP 工具，Hermes 把“眼下用不到的东西先挡在上下文外面”的设计，起步账单确实更好控。</p>
+<h2 id="三怎么选别问平替问你在养什么">三、怎么选？别问平替，问你在养什么
+</h2><ul>
+<li>想要<strong>长在消息网络里的常驻 AI 助理</strong>（重渠道、账号、路由与组织边界）→ 选 <strong>OpenClaw</strong>；</li>
+<li>想要<strong>长在本地工作流里的可进化 Agent 平台</strong>（重 Skill 沉淀、按需上下文、MCP 与可扩展内核）→ 选 <strong>Hermes</strong>（如果在本地部署 Hermes 遇到搜索出站稳定性问题，可结合<a class="link" href="/p/hermes-searxng-mihomo-proxy/" >Hermes 搜索不稳：SearXNG 出站交给 Mihomo</a>）。</li>
+</ul>
+<p>真要算账，别靠体感——用 OpenClaw 的 <code>/context detail</code>、<code>/usage tokens</code> 或 Hermes 的实际 provider 账单盯紧真实消耗。决定账单厚薄的，往往不是框架名字，而是你写了多长的 <code>SOUL.md</code>、塞了多少冗余记忆、以及有没有把工具输出收住（长 Agent 缓存计价变化可对照<a class="link" href="/p/gpt-6-price-vs-claude/" >GPT-6 降价后 Claude 还值高价吗</a>）。</p>
 <details class="article-notes">
     <summary>写作附记</summary>
     <div class="article-notes__content">
-        <h3 id="原始提示词">原始提示词
-</h3><blockquote>
-<p>提示词：Hermes 和 OpenClaw 的不同，架构上的不同，设计理念上面的不同，生态的不同</p>
-</blockquote>
+        <h3 id="整合说明">整合说明
+</h3><ul>
+<li>本文合并重写了此前连续两天发布的两篇对比旧稿（原 <code>2026/04/15-Hermes-不能按-OpenClaw-平替来估</code> 与 <code>2026/04/16-Hermes-和-OpenClaw-的-token-账单差在哪</code>），后一篇旧稿已清理删除。</li>
+<li>重写方式：按 <code>blog-writer-free v1.2.0</code> 重写，统一从架构分叉推导出 Token 账单差异，并关联<a class="link" href="/p/hermes-searxng-mihomo-proxy/" >Hermes 搜索出站排错</a>与<a class="link" href="/p/gpt-6-price-vs-claude/" >大模型 API 价格战</a>。</li>
+</ul>
+
     </div>
 </details>
 </section>
@@ -464,6 +445,10 @@
             <a class="article-tag article-tag--category" href="/tags/hermes/">Hermes</a>
         
             <a class="article-tag article-tag--category" href="/tags/openclaw/">OpenClaw</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/token/">token</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/agent/">agent</a>
         
     </section>
 
@@ -495,20 +480,10 @@
     <ol class="related-content__list">
             
                 <li class="related-content__item">
-                    <a href="/p/hermes-openclaw-token-usage-diff/" class="related-content__link">
+                    <a href="/p/vera-rubin-tokens-per-megawatt-ai-price/" class="related-content__link">
                         <span class="related-content__index">01</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">Hermes 和 OpenClaw 的 token 账单差在哪</h3>
-                            <time class="related-content__date" datetime='2026-04-16T01:13:53&#43;08:00'>2026年04月16日</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
-                    <a href="/p/vera-rubin-tokens-per-megawatt-ai-price/" class="related-content__link">
-                        <span class="related-content__index">02</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">Vera Rubin 的十倍每兆瓦 Tokens，会把 AI 价格打下来吗？</h3>
+                            <h3 class="related-content__title">英伟达算力演进与能耗账：从 H100、中国特供版到 Vera Rubin 的十倍能效</h3>
                             <time class="related-content__date" datetime='2026-07-22T21:13:54&#43;08:00'>2026年07月22日</time>
                         </div>
                     </a>
@@ -516,7 +491,7 @@
             
                 <li class="related-content__item">
                     <a href="/p/code-anchors-for-llm-requirements/" class="related-content__link">
-                        <span class="related-content__index">03</span>
+                        <span class="related-content__index">02</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">给编码模型几个代码锚点</h3>
                             <time class="related-content__date" datetime='2026-07-05T23:04:15&#43;08:00'>2026年07月05日</time>
@@ -526,7 +501,7 @@
             
                 <li class="related-content__item">
                     <a href="/p/hermes-searxng-mihomo-proxy/" class="related-content__link">
-                        <span class="related-content__index">04</span>
+                        <span class="related-content__index">03</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">Hermes 搜索不稳：SearXNG 出站交给 Mihomo</h3>
                             <time class="related-content__date" datetime='2026-06-21T20:33:01&#43;08:00'>2026年06月21日</time>
@@ -536,10 +511,20 @@
             
                 <li class="related-content__item">
                     <a href="/p/loop-engineering-human-checkpoints/" class="related-content__link">
-                        <span class="related-content__index">05</span>
+                        <span class="related-content__index">04</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">Loop engineering 把人挪到检查点</h3>
                             <time class="related-content__date" datetime='2026-06-14T07:35:00&#43;08:00'>2026年06月14日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/codex-chatgpt-ui-mockup-workflow/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex 写界面扑街之后，让 ChatGPT 画 UI</h3>
+                            <time class="related-content__date" datetime='2026-06-14T05:14:22&#43;08:00'>2026年06月14日</time>
                         </div>
                     </a>
                 </li>

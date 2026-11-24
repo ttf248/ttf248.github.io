@@ -127,6 +127,99 @@
     &lt;/div&gt;
 &lt;/details&gt;</description>
         </item>
+        <item>
+        <title>一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</title>
+        <link>https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</link>
+        <pubDate>Tue, 18 Nov 2025 22:29:25 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/</guid>
+        <description>&lt;p&gt;系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 &lt;strong&gt;MySQL 的间隙锁（Gap Lock）&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。&lt;/p&gt;
+&lt;h2 id=&#34;间隙锁到底锁的是什么&#34;&gt;间隙锁到底锁的是什么？
+&lt;/h2&gt;&lt;p&gt;在 InnoDB 默认的隔离级别 &lt;strong&gt;RR（Repeatable Read，可重复读）&lt;/strong&gt; 下，行锁锁住的并不只是表里已经存在的记录。&lt;/p&gt;
+&lt;p&gt;假设一张表的主键或二级索引里目前只有 &lt;code&gt;id = 10&lt;/code&gt; 和 &lt;code&gt;id = 20&lt;/code&gt; 两条数据，中间 &lt;code&gt;(10, 20)&lt;/code&gt; 这个开区间其实是空的。如果你在 RR 模式下执行范围当前读（如 &lt;code&gt;WHERE id &amp;gt; 10 AND id &amp;lt; 20 FOR UPDATE&lt;/code&gt;），或者对一条&lt;strong&gt;根本不存在的记录&lt;/strong&gt;加锁（如 &lt;code&gt;WHERE id = 15 FOR UPDATE&lt;/code&gt;），InnoDB 会把 &lt;code&gt;(10, 20)&lt;/code&gt; 这段空档锁起来——这就是&lt;strong&gt;间隙锁（Gap Lock）&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;当行锁（Record Lock）与它前面的间隙锁合体，形成左开右闭区间 &lt;code&gt;(10, 20]&lt;/code&gt; 时，就是常说的 &lt;strong&gt;Next-Key Lock（临键锁）&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;为什么数据同步一并发就会因为间隙锁死锁&#34;&gt;为什么数据同步一并发，就会因为间隙锁死锁？
+&lt;/h2&gt;&lt;p&gt;间隙锁最反直觉的规则是：&lt;strong&gt;间隙锁之间是相互兼容的。&lt;/strong&gt; 两个事务可以同时拿到 &lt;code&gt;(10, 20)&lt;/code&gt; 的间隙锁，互不阻塞——因为间隙锁的唯一目的是“阻止别人往这个缝隙里插入新记录”，并不阻止别人也来守着这个缝隙。&lt;/p&gt;
+&lt;p&gt;但在数据同步最常见的“先查记录存不存在，不存在就插入”的逻辑里，这个兼容特性会直接制造经典的环路等待：&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code class=&#34;language-mermaid&#34; data-lang=&#34;mermaid&#34;&gt;sequenceDiagram
+    participant T1 as 事务 A
+    participant DB as InnoDB 间隙 (10,20)
+    participant T2 as 事务 B
+
+    T1-&amp;gt;&amp;gt;DB: 查询 id=15 FOR UPDATE（不存在）
+    Note right of DB: 获取间隙锁 (10,20)
+    T2-&amp;gt;&amp;gt;DB: 查询 id=15 FOR UPDATE（不存在）
+    Note right of DB: 同样获取间隙锁 (10,20)（兼容）
+    T1-&amp;gt;&amp;gt;DB: INSERT id=15（申请插入意向锁）
+    Note right of DB: 被 T2 间隙锁阻塞
+    T2-&amp;gt;&amp;gt;DB: INSERT id=15（申请插入意向锁）
+    Note right of DB: 被 T1 间隙锁阻塞，触发死锁
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;低并发时，两个同步任务很难撞在同一毫秒、同一个空区间里；一旦批量同步流量上来，死锁就会成片爆发。&lt;/p&gt;
+&lt;h2 id=&#34;mysql-为什么要设计这么麻烦的锁&#34;&gt;MySQL 为什么要设计这么“麻烦”的锁？
+&lt;/h2&gt;&lt;p&gt;既然这么容易诱发死锁，InnoDB 为什么默认在 RR 模式下开启间隙锁？核心原因有两个：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;防“当前读”的幻读（Phantom Read）&lt;/strong&gt;：普通 &lt;code&gt;SELECT&lt;/code&gt;（快照读）靠 MVCC 读取历史版本，不会受新插入数据干扰；但 &lt;code&gt;SELECT ... FOR UPDATE&lt;/code&gt;、&lt;code&gt;UPDATE&lt;/code&gt;、&lt;code&gt;DELETE&lt;/code&gt; 属于当前读，必须读最新提交的数据。如果不锁住间隙，事务 A 在同一事务内两次范围更新之间，事务 B 偷偷插进一条满足条件的新记录，事务 A 就会看到凭空多出来的“幻影行”。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;历史上的 Statement Binlog 主从一致&lt;/strong&gt;：早期 MySQL 主从同步默认用 Statement 格式（记录原始 SQL）。如果主库执行范围更新时不锁间隙，并发插入的新行先提交并写入 Binlog，传到从库重放时就会把新行也一并改掉，造成主从数据不一致。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&#34;怎么关闭间隙锁主流大厂为何偏爱-rc&#34;&gt;怎么关闭间隙锁？主流大厂为何偏爱 RC？
+&lt;/h2&gt;&lt;p&gt;关闭间隙锁最彻底的方式，是将事务隔离级别从 &lt;strong&gt;RR 调整为 RC（Read Committed，读已提交）&lt;/strong&gt;，并配合 &lt;code&gt;binlog_format = ROW&lt;/code&gt;（现代 MySQL 默认项）。&lt;/p&gt;
+&lt;p&gt;切到 RC 之后，会发生三个关键变化：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;InnoDB 取消了普通查询与更新中的间隙锁（仅在外键检查和唯一索引冲突校验等极少数场景保留），并发写入的死锁概率断崖式下降；&lt;/li&gt;
+&lt;li&gt;扫描过程中，不符合 &lt;code&gt;WHERE&lt;/code&gt; 条件的记录锁会尽快释放，而不必等到整个事务结束；&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;ROW&lt;/code&gt; 格式 Binlog 记录的是每行实际变更结果，主从同步不再依赖间隙锁保序。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;因此，国内绝大多数高并发互联网大厂的常规业务库，默认规范都是 &lt;strong&gt;RC + ROW Binlog&lt;/strong&gt;——大多数短事务接口根本不需要在同一个事务里反复读取两次全量快照，用放弃“可重复读”换取高并发与低死锁，是一笔非常划算的买卖。&lt;/p&gt;
+&lt;h2 id=&#34;金融与券商系统按链路拆开选不能一刀切&#34;&gt;金融与券商系统：按链路拆开选，不能一刀切
+&lt;/h2&gt;&lt;p&gt;但回到券商这类金融行业系统，架构选型不能简单照搬互联网的“全员 RC”，而应该按业务链路的真实一致性诉求拆开：&lt;/p&gt;
+&lt;div class=&#34;rich-cards rich-cards--columns-2&#34;&gt;
+&lt;section class=&#34;rich-card&#34;&gt;
+    &lt;strong class=&#34;rich-card__title&#34;&gt;高并发交易 / 资金 / 数据同步链路&lt;/strong&gt;
+    &lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;推荐方案&lt;/strong&gt;：&lt;strong&gt;RC + ROW Binlog&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;防错手段&lt;/strong&gt;：精准主键/唯一索引 + 悲观行锁或乐观锁（CAS 版本号）+ 唯一键防重幂等。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;原因&lt;/strong&gt;：资金扣减和同步写入最怕死锁和并发超卖，靠精确行锁和条件更新（如 &lt;code&gt;balance &amp;gt;= amount&lt;/code&gt;）比靠间隙锁更安全、吞吐也更高。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/section&gt;
+
+&lt;section class=&#34;rich-card&#34;&gt;
+    &lt;strong class=&#34;rich-card__title&#34;&gt;日终清算 / 对账 / 风控报表链路&lt;/strong&gt;
+    &lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;推荐方案&lt;/strong&gt;：&lt;strong&gt;RR（隔离于只读从库或独立快照库）&lt;/strong&gt;&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;防错手段&lt;/strong&gt;：一致性快照读，与在线交易写入链路物理隔离。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;原因&lt;/strong&gt;：清算与对账需要在一个批次内多次汇总的结果严格一致，不能前脚算完总账、后脚拉明细时因为中途插入新流水而对不上数。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/section&gt;
+
+&lt;/div&gt;
+
+&lt;h2 id=&#34;线上排查与改造的实用防线&#34;&gt;线上排查与改造的实用防线
+&lt;/h2&gt;&lt;p&gt;如果你正在处理类似的数据同步死锁，在决定是否全局切换 RC 之前，有四条工程动作可以立刻落地：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;消除空范围加锁&lt;/strong&gt;：能用单条幂等语句（或先按主键路由分片，确保同一批 key 只由固定消费者顺序处理）就不要并发“先查空再插”。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;把非数据库操作移出事务&lt;/strong&gt;：RPC 调用、序列化、外部接口校验全部放到事务外，缩短持锁窗口。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;核对执行计划&lt;/strong&gt;：通过 &lt;code&gt;EXPLAIN&lt;/code&gt; 确认同步 SQL 精准命中索引，防止索引失效导致锁升级为全表间隙锁。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;加上压测与重试&lt;/strong&gt;：高并发下的锁冲突很难靠代码审查完全看出来，上生产前最好用压测工具提前把锁竞争打出来（连接模型与压测工具选择可参考&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/&#34; &gt;wrk 与 JMeter 怎么选&lt;/a&gt;），同时为幂等同步任务配置有限次数的死锁退避重试。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;details class=&#34;article-notes&#34;&gt;
+    &lt;summary&gt;写作附记&lt;/summary&gt;
+    &lt;div class=&#34;article-notes__content&#34;&gt;
+        &lt;h3 id=&#34;原始背景与提示词&#34;&gt;原始背景与提示词
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;原始笔记：系统服务间数据同步接口数据量上去后频繁发生死锁，排查为 MySQL InnoDB 间隙锁所致。&lt;/li&gt;
+&lt;li&gt;原始提示词：
+&lt;blockquote&gt;
+&lt;p&gt;mysql 间隙锁，背景、原理，如何关闭间隙锁、关闭了会有什么问题；你是资深数据库 DBA，针对我的问题进行扩展分析补充。幻读是什么？主流大厂是选择 RC 还是 RR模式？我是金融行业，券商系统，你更建议我用什么方案？整理上述问题，输出文档。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;/li&gt;
+&lt;li&gt;重写说明：本次按 &lt;code&gt;blog-writer-free v1.2.0&lt;/code&gt; 重写，补充了间隙锁引发“查空再插”死锁的 Mermaid 时序图，并将原稿零散的问答体整合为从故障现场到金融分链路选型的连贯工程笔记。&lt;/li&gt;
+&lt;/ul&gt;
+    &lt;/div&gt;
+&lt;/details&gt;</description>
+        </item>
         
     </channel>
 </rss>

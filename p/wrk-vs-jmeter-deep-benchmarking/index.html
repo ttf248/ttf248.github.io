@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="在互联网系统的压力测试中，我们经常会遇到两款风格迥异的工具：一个是极其轻量、追求极致吞吐量的 wrk；另一个是功能大而全、模拟真实业务流的 JMeter。\n">
-<title>wrk 与 JMeter 的深度较量</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="在给 HTTP 服务做压力测试时，工程团队最常遇到的两款工具就是 wrk 和 JMeter。\n很多人对它们的印象很直观：wrk 偏向用一个线程扛多条连接猛轰接口，而 JMeter 更常见于短连接测试，当然也能通过配置改成长连接。这个直觉抓住了表象，但真到架构选型和排查发压瓶颈时，决定两者行为差异的其实是底层并发模型与设计目标。\n">
+<title>wrk 与 JMeter 怎么选：从连接模型到压测场景的底层差异</title>
 
 <link rel='canonical' href='https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/'>
 
-<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="wrk 与 JMeter 的深度较量">
-<meta property='og:description' content="在互联网系统的压力测试中，我们经常会遇到两款风格迥异的工具：一个是极其轻量、追求极致吞吐量的 wrk；另一个是功能大而全、模拟真实业务流的 JMeter。\n">
+<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="wrk 与 JMeter 怎么选：从连接模型到压测场景的底层差异">
+<meta property='og:description' content="在给 HTTP 服务做压力测试时，工程团队最常遇到的两款工具就是 wrk 和 JMeter。\n很多人对它们的印象很直观：wrk 偏向用一个线程扛多条连接猛轰接口，而 JMeter 更常见于短连接测试，当然也能通过配置改成长连接。这个直觉抓住了表象，但真到架构选型和排查发压瓶颈时，决定两者行为差异的其实是底层并发模型与设计目标。\n">
 <meta property='og:url' content='https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='压力测试' /><meta property='article:tag' content='性能' /><meta property='article:tag' content='工具' /><meta property='article:published_time' content='2025-12-19T01:14:49&#43;08:00'/><meta property='article:modified_time' content='2026-07-26T22:39:23&#43;08:00'/>
-<meta name="twitter:title" content="wrk 与 JMeter 的深度较量">
-<meta name="twitter:description" content="在互联网系统的压力测试中，我们经常会遇到两款风格迥异的工具：一个是极其轻量、追求极致吞吐量的 wrk；另一个是功能大而全、模拟真实业务流的 JMeter。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='压力测试' /><meta property='article:tag' content='性能' /><meta property='article:tag' content='工具' /><meta property='article:tag' content='HTTP' /><meta property='article:published_time' content='2025-12-19T01:14:49&#43;08:00'/><meta property='article:modified_time' content='2026-11-24T19:40:57&#43;08:00'/>
+<meta name="twitter:title" content="wrk 与 JMeter 怎么选：从连接模型到压测场景的底层差异">
+<meta name="twitter:description" content="在给 HTTP 服务做压力测试时，工程团队最常遇到的两款工具就是 wrk 和 JMeter。\n很多人对它们的印象很直观：wrk 偏向用一个线程扛多条连接猛轰接口，而 JMeter 更常见于短连接测试，当然也能通过配置改成长连接。这个直觉抓住了表象，但真到架构选型和排查发压瓶颈时，决定两者行为差异的其实是底层并发模型与设计目标。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/","name":"wrk 与 JMeter 的深度较量","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"gemini-3-pro"},"dateModified":"2026-07-26T22:39:23+08:00","datePublished":"2025-12-19T01:14:49+08:00","headline":"wrk 与 JMeter 的深度较量","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/","name":"wrk 与 JMeter 怎么选：从连接模型到压测场景的底层差异","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Gemini 4"},"dateModified":"2026-11-24T19:40:57+08:00","datePublished":"2025-12-19T01:14:49+08:00","headline":"wrk 与 JMeter 怎么选：从连接模型到压测场景的底层差异","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -239,40 +239,26 @@
     <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
         <div class="article-toc-rail__header">
             <span data-article-toc-current>本文目录</span>
-            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 3 分钟</small>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 4 分钟</small>
         </div>
         <nav id="article-toc-navigation">
   <ol>
-    <li><a href="#核心架构多线程-vs-事件驱动">核心架构：多线程 vs 事件驱动</a>
-      <ol>
-        <li><a href="#1-jmeter传统的一人一岗制-thread-per-request">1. JMeter：传统的“一人一岗”制 (Thread-per-Request)</a></li>
-        <li><a href="#2-wrk现代的多面手制-event-driven">2. wrk：现代的“多面手”制 (Event-driven)</a></li>
-      </ol>
-    </li>
-    <li><a href="#连接模型短连接-vs-长连接">连接模型：短连接 vs 长连接</a>
-      <ol>
-        <li><a href="#1-jmeter-的重与灵">1. JMeter 的“重”与“灵”</a></li>
-        <li><a href="#2-wrk-的快与狠">2. wrk 的“快”与“狠”</a></li>
-      </ol>
-    </li>
-    <li><a href="#深度对比表">深度对比表</a></li>
-    <li><a href="#总结我该选哪一个">总结：我该选哪一个？</a>
-      <ol>
-        <li><a href="#选-wrk">选 wrk</a></li>
-        <li><a href="#选-jmeter">选 JMeter</a></li>
-      </ol>
-    </li>
+    <li><a href="#底层架构事件驱动复用-vs-一用户一线程">底层架构：事件驱动复用 vs 一用户一线程</a></li>
+    <li><a href="#长连接还是短连接先破除一个常见误解">长连接还是短连接？先破除一个常见误解</a></li>
+    <li><a href="#核心维度对比">核心维度对比</a></li>
+    <li><a href="#选型怎么落两把工具各司其职">选型怎么落？两把工具各司其职</a></li>
+    <li><a href="#压测时最容易踩的两个坑">压测时最容易踩的两个坑</a></li>
   </ol>
 </nav>
     </section>
 </aside>
 
-<article class="main-article has-lead" data-reading-minutes="3">
+<article class="main-article has-lead" data-reading-minutes="4">
     <header class="article-header">
     <div class="article-details">
     <div class="article-title-wrapper">
         
-            <h1 class="article-title">wrk 与 JMeter 的深度较量</h1>
+            <h1 class="article-title">wrk 与 JMeter 怎么选：从连接模型到压测场景的底层差异</h1>
         
     
         
@@ -309,11 +295,21 @@
 
 
 
-                    <time class="article-time--reading">阅读时长: 5 分钟</time>
+                    <time class="article-time--reading">阅读时长: 7 分钟</time>
                     
                 </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
                     <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
-                    <span class="article-time--author">gemini-3-pro</span>
+                    <span class="article-time--author">Gemini 4</span>
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">blog-writer-free v1.2.0</span>
                 </span></footer>
         
 
@@ -352,7 +348,8 @@
 
     
     <div class="article-lead article-prose">
-        <p>在互联网系统的压力测试中，我们经常会遇到两款风格迥异的工具：一个是极其轻量、追求极致吞吐量的 wrk；另一个是功能大而全、模拟真实业务流的 JMeter。</p>
+        <p>在给 HTTP 服务做压力测试时，工程团队最常遇到的两款工具就是 <strong>wrk</strong> 和 <strong>JMeter</strong>。</p>
+<p>很多人对它们的印象很直观：<code>wrk</code> 偏向用一个线程扛多条连接猛轰接口，而 <code>JMeter</code> 更常见于短连接测试，当然也能通过配置改成长连接。这个直觉抓住了表象，但真到架构选型和排查发压瓶颈时，决定两者行为差异的其实是<strong>底层并发模型</strong>与<strong>设计目标</strong>。</p>
     </div>
     
 </div>
@@ -365,25 +362,11 @@
         <summary>本文目录</summary>
         <nav id="TableOfContents">
   <ol>
-    <li><a href="#核心架构多线程-vs-事件驱动">核心架构：多线程 vs 事件驱动</a>
-      <ol>
-        <li><a href="#1-jmeter传统的一人一岗制-thread-per-request">1. JMeter：传统的“一人一岗”制 (Thread-per-Request)</a></li>
-        <li><a href="#2-wrk现代的多面手制-event-driven">2. wrk：现代的“多面手”制 (Event-driven)</a></li>
-      </ol>
-    </li>
-    <li><a href="#连接模型短连接-vs-长连接">连接模型：短连接 vs 长连接</a>
-      <ol>
-        <li><a href="#1-jmeter-的重与灵">1. JMeter 的“重”与“灵”</a></li>
-        <li><a href="#2-wrk-的快与狠">2. wrk 的“快”与“狠”</a></li>
-      </ol>
-    </li>
-    <li><a href="#深度对比表">深度对比表</a></li>
-    <li><a href="#总结我该选哪一个">总结：我该选哪一个？</a>
-      <ol>
-        <li><a href="#选-wrk">选 wrk</a></li>
-        <li><a href="#选-jmeter">选 JMeter</a></li>
-      </ol>
-    </li>
+    <li><a href="#底层架构事件驱动复用-vs-一用户一线程">底层架构：事件驱动复用 vs 一用户一线程</a></li>
+    <li><a href="#长连接还是短连接先破除一个常见误解">长连接还是短连接？先破除一个常见误解</a></li>
+    <li><a href="#核心维度对比">核心维度对比</a></li>
+    <li><a href="#选型怎么落两把工具各司其职">选型怎么落？两把工具各司其职</a></li>
+    <li><a href="#压测时最容易踩的两个坑">压测时最容易踩的两个坑</a></li>
   </ol>
 </nav>
     </details>
@@ -392,96 +375,108 @@
     <section class="article-content">
     
     
-    <blockquote>
-<p>提示词：梳理核心思路，撰写科普文章：http 压力测试工具，wrk vs Jmeter 有什么不同，我了解到的，wrk 倾向于 一个线程多个 connect 进行测试，Jmeter 更多是短连接模式，能通过配置调整为长连接</p>
-</blockquote>
-<hr>
-<h2 id="核心架构多线程-vs-事件驱动">核心架构：多线程 vs 事件驱动
-</h2><p>这是两者性能差距的根本原因。</p>
-<h3 id="1-jmeter传统的一人一岗制-thread-per-request">1. JMeter：传统的“一人一岗”制 (Thread-per-Request)
-</h3><p>JMeter 基于 Java 开发，采用的是经典的<strong>多线程模型</strong>。</p>
+    <h2 id="底层架构事件驱动复用-vs-一用户一线程">底层架构：事件驱动复用 vs 一用户一线程
+</h2><p>为什么 <code>wrk</code> 开 4 个线程就能把被测服务器的网卡打满，而 <code>JMeter</code> 开几千个并发用户时，往往发压机自己先 CPU 飙红甚至内存溢出？根源在于并发模型的不同。</p>
 <ul>
-<li><strong>逻辑：</strong> 每一个并发用户（Virtual User）都对应 JVM 中的一个物理线程。</li>
-<li><strong>代价：</strong> 线程是非常昂贵的资源。当并发数达到几千时，上下文切换（Context Switch）和内存消耗会显著拖慢测试机本身，导致“压测机还没把服务器压死，自己先崩了”的现象。</li>
+<li><strong>wrk（C + LuaJIT + 事件驱动）</strong>：采用与 Nginx 类似的非阻塞 I/O 多路复用（Linux 下为 <code>epoll</code>，macOS/BSD 下为 <code>kqueue</code>）。只需开启与 CPU 核心数相当的少量线程，每个线程内部通过事件循环同时管理成百上千条 TCP Socket。几乎没有线程上下文切换开销，把发压机算力全部集中在发包与收包上。</li>
+<li><strong>JMeter（Java + 传统多线程模型）</strong>：采用“一个虚拟用户对应一个 JVM 线程”的阻塞式模型。模拟 2000 个并发用户，就需要创建 2000 个操作系统线程。线程栈占用大量内存，高频上下文切换叠加 JVM GC 停顿，导致单台发压机的吞吐上限远低于 <code>wrk</code>。</li>
 </ul>
-<h3 id="2-wrk现代的多面手制-event-driven">2. wrk：现代的“多面手”制 (Event-driven)
-</h3><p>wrk 采用 C 语言编写，核心逻辑基于 Redis 同款的 <code>ae</code> 事件循环框架（底层利用 <code>epoll/kqueue</code>）。</p>
-<ul>
-<li><strong>逻辑：</strong> wrk 并不为每个连接创建线程。它只启动极少数的线程（通常等于你的 CPU 核心数），每个线程内部通过<strong>非阻塞 I/O</strong> 同时管理成千上万个连接。</li>
-<li><strong>优势：</strong> 这就是你提到的“一个线程多个 connection”。它极大地减少了线程切换开销，单机即可跑出百万级别的 RPS（每秒请求数）。</li>
-</ul>
-<h2 id="连接模型短连接-vs-长连接">连接模型：短连接 vs 长连接
-</h2><p>关于你提到的连接模式，这里有更深层的细节：</p>
-<h3 id="1-jmeter-的重与灵">1. JMeter 的“重”与“灵”
-</h3><p>JMeter 默认确实更倾向于模拟真实用户的行为。</p>
-<ul>
-<li><strong>短连接倾向：</strong> 在默认配置下，JMeter 的某些旧版本或特定配置可能不会积极复用连接，导致大量的 TCP 握手。</li>
-<li><strong>可调校性：</strong> 你可以通过在 <code>HTTP Request</code> 中勾选 <strong>&ldquo;KeepAlive&rdquo;</strong>，或者在 <code>user.properties</code> 中调整连接池参数来开启长连接。但即便是长连接，受限于线程模型，它也难以维持数十万级别的并发长连接。</li>
-</ul>
-<h3 id="2-wrk-的快与狠">2. wrk 的“快”与“狠”
-</h3><p>wrk 设计的初衷就是为了测试 <strong>HTTP Keep-Alive</strong> 的性能。</p>
-<ul>
-<li><strong>长连接策略：</strong> wrk 在测试开始时会建立好指定的连接数（<code>-c</code> 参数），并在整个测试过程中尽可能复用这些连接。</li>
-<li><strong>应用场景：</strong> 它非常适合测试 Nginx、网关（Gateway）或高并发 API 在极端长连接压力下的吞吐极限。</li>
-</ul>
-<h2 id="深度对比表">深度对比表
+<h2 id="长连接还是短连接先破除一个常见误解">长连接还是短连接？先破除一个常见误解
+</h2><p>严格来说，<strong>JMeter 并不是默认强制走短连接</strong>。</p>
+<p>在 JMeter 的 <code>HTTP Request</code> 采样器中，<strong><code>Use KeepAlive</code> 默认是勾选的</strong>。只要服务端不主动断开，同一个线程在连续循环发请求时默认也会复用连接。</p>
+<p>之所以实战里很多人觉得“JMeter 跑起来像短连接”，通常来自三种情况：</p>
+<ol>
+<li><strong>高线程数、低循环次数的配置</strong>：开了很多线程，但每个线程只跑一两轮就结束，或者中间设置了较长的思考时间（Think Time）触发服务端 <code>keepalive_timeout</code>，实际效果就变成了高频 TCP 建连。</li>
+<li><strong>刻意取消 <code>Use KeepAlive</code></strong>：测试网关或负载均衡的新建连接能力（CPS）时，会主动关掉 KeepAlive，模拟海量独立用户的短连接风暴。</li>
+<li><strong>发压机端口耗尽</strong>：一旦切入高频短连接压测，Linux 客户端的临时端口很快会被大量 <code>TIME_WAIT</code> 连接占满，没等服务端撑不住，发压机自己先报错。</li>
+</ol>
+<p>反观 <code>wrk</code>，它天生就是为 <strong>HTTP/1.1 Keep-Alive 极致长连接复用</strong>设计的：启动后建立 <code>-c</code> 条连接，全程死死复用，压出的是被测接口在理想连接状态下的纯处理天花板。</p>
+<h2 id="核心维度对比">核心维度对比
 </h2><div class="table-wrapper"><table>
 	<thead>
 			<tr>
-					<th>特性</th>
+					<th>对比维度</th>
 					<th>wrk</th>
-					<th>Apache JMeter</th>
+					<th>JMeter</th>
 			</tr>
 	</thead>
 	<tbody>
 			<tr>
-					<td><strong>开发语言</strong></td>
-					<td>C / Lua (脚本)</td>
-					<td>Java (GUI)</td>
+					<td>底层实现</td>
+					<td>C + LuaJIT（<code>epoll</code> / <code>kqueue</code> 事件驱动）</td>
+					<td>Java（JVM 多线程，一虚拟用户一线程）</td>
 			</tr>
 			<tr>
-					<td><strong>并发模型</strong></td>
-					<td>事件驱动 (epoll/kqueue)</td>
-					<td>多线程 (Thread-per-user)</td>
+					<td>单机发压能力</td>
+					<td>极高，单机轻松打出数万至数十万 QPS</td>
+					<td>偏低，大并发需多机分布式压测（Master/Slave）</td>
 			</tr>
 			<tr>
-					<td><strong>资源消耗</strong></td>
-					<td>极低，单机吞吐量巨大</td>
-					<td>较高，大并发需分布式集群</td>
+					<td>连接模型偏好</td>
+					<td>天生极致长连接复用（Keep-Alive）</td>
+					<td>默认 Keep-Alive，可灵活切换短连接模拟建连风暴</td>
 			</tr>
 			<tr>
-					<td><strong>业务复杂度</strong></td>
-					<td>较低，主要针对单个 URL</td>
-					<td>极高，支持多步脚本、断言、提取器</td>
+					<td>业务编排能力</td>
+					<td>较弱，依赖 Lua 脚本做轻量动态参数化</td>
+					<td>极强，支持登录鉴权、关联提取、条件分支、复杂断言</td>
 			</tr>
 			<tr>
-					<td><strong>测试场景</strong></td>
-					<td>静态 API 压测、容量评估</td>
-					<td>复杂业务链路、功能回归压测</td>
+					<td>协议生态</td>
+					<td>专注 HTTP / HTTPS</td>
+					<td>HTTP、WebSocket、JDBC、TCP、Kafka、gRPC 等</td>
 			</tr>
 			<tr>
-					<td><strong>报表能力</strong></td>
-					<td>仅文本摘要</td>
-					<td>极丰富，支持各类图表和 HTML 报告</td>
+					<td>报告输出</td>
+					<td>简洁终端摘要（QPS、平均延迟、分位数）</td>
+					<td>完整 HTML 报告、趋势曲线与监控插件</td>
 			</tr>
 	</tbody>
 </table></div>
-<h2 id="总结我该选哪一个">总结：我该选哪一个？
-</h2><p>这两款工具并不是替代关系，而是互补关系：</p>
-<h3 id="选-wrk">选 wrk
-</h3><ul>
-<li>想要测试服务器的<strong>极限吞吐量</strong>（RPS）。</li>
-<li>测试对象是单一的 API 或静态资源。</li>
-<li>希望用最少的测试服务器压出最大的流量。</li>
-<li>熟悉 Lua 脚本来定制化请求。</li>
+<h2 id="选型怎么落两把工具各司其职">选型怎么落？两把工具各司其职
+</h2><div class="rich-cards rich-cards--columns-2">
+<section class="rich-card">
+    <strong class="rich-card__title">优先用 wrk 的场景</strong>
+    <ul>
+<li><strong>单接口极限摸底</strong>：测网关、缓存层、无状态微服务的纯 QPS 上限。</li>
+<li><strong>快速性能回归</strong>：对比某次代码改动或连接池调优前后的延迟与吞吐变化。</li>
+<li><strong>资源受限</strong>：只有一台普通发压机，不想搭复杂的分布式压测集群。</li>
 </ul>
-<h3 id="选-jmeter">选 JMeter
-</h3><ul>
-<li>需要模拟<strong>复杂的业务流程</strong>（如：登录 -&gt; 搜商品 -&gt; 下单 -&gt; 支付）。</li>
-<li>需要可视化的界面来观察响应时间分布、错误率等详细指标。</li>
-<li>测试需要处理动态参数（如从上一个接口提取 Token 传递给下一个接口）。</li>
-<li>团队更习惯使用图形化工具而非命令行。</li>
+
+</section>
+
+<section class="rich-card">
+    <strong class="rich-card__title">优先用 JMeter 的场景</strong>
+    <ul>
+<li><strong>复杂业务链路</strong>：登录拿 Token → 查余额 → 下单 → 校验状态的串行流程。</li>
+<li><strong>精细结果校验</strong>：需要对响应 JSON、业务错误码甚至数据库落库做严格断言。</li>
+<li><strong>真实流量模拟</strong>：需要模拟思考时间、阶梯加压或大量陌生用户的短连接建连。</li>
 </ul>
+
+</section>
+
+</div>
+
+<h2 id="压测时最容易踩的两个坑">压测时最容易踩的两个坑
+</h2><ul>
+<li><strong>把发压机瓶颈当成服务端上限</strong>：QPS 上不去时，先检查发压机自身的 CPU、内存、网卡和 <code>TIME_WAIT</code> 状态。使用 JMeter 正式发压时，务必切到<strong>非 GUI 命令行模式（<code>-n -t ... -l ...</code>）</strong>，开着图形界面跑压测会消耗掉大量本机资源。</li>
+<li><strong>忽视“协同遗漏（Coordinated Omission）”</strong>：原版 <code>wrk</code> 在服务端突然卡顿（如触发 Full GC 或锁等待）时，发压线程会等上一个请求返回再发下一个，导致报告里的 P99 延迟比真实用户体感乐观得多。若对长尾延迟高度敏感，建议改用恒定吞吐率发压的 <code>wrk2</code> 或 <code>k6</code>。</li>
+</ul>
+<p>压测的目的从来不是刷出一个好看的峰值数字，而是把隐蔽的并发短板——比如连接池打满、线程池饥饿，或是像<a class="link" href="/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/" >MySQL 间隙锁死锁</a>这类低并发下根本复现不了的故障——提前在上线前打出来。把 <code>wrk</code> 当手术刀测单点极限，把 <code>JMeter</code> 当沙盘演练完整业务流，配合着用才最稳妥。</p>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="原始背景与提示词">原始背景与提示词
+</h3><ul>
+<li>原始提示词：
+<blockquote>
+<p>梳理核心思路，撰写科普文章：http 压力测试工具，wrk vs Jmeter 有什么不同，我了解到的，wrk 倾向于 一个线程多个 connect 进行测试，Jmeter 更多是短连接模式，能通过配置调整为长连接</p>
+</blockquote>
+</li>
+<li>重写说明：本次按 <code>blog-writer-free v1.2.0</code> 重写，纠正了“JMeter 默认短连接”的常见误区并解释了实战中为何容易表现出短连接特征，补充了非 GUI 压测与“协同遗漏”两个关键工程细节。</li>
+</ul>
+    </div>
+</details>
 </section>
 
 
@@ -496,6 +491,8 @@
             <a class="article-tag article-tag--category" href="/tags/performance/">性能</a>
         
             <a class="article-tag article-tag--category" href="/tags/tool/">工具</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/http/">http</a>
         
     </section>
 

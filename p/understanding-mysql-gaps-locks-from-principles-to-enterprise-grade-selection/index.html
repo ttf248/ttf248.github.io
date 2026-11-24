@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。\n">
-<title>搞懂 MySQL 间隙锁：从原理到金融级选型</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
+<title>一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</title>
 
 <link rel='canonical' href='https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/'>
 
-<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="搞懂 MySQL 间隙锁：从原理到金融级选型">
-<meta property='og:description' content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。\n">
+<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型">
+<meta property='og:description' content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
 <meta property='og:url' content='https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:tag' content='数据库' /><meta property='article:tag' content='锁' /><meta property='article:published_time' content='2025-11-18T22:29:25&#43;08:00'/><meta property='article:modified_time' content='2026-07-26T22:39:23&#43;08:00'/>
-<meta name="twitter:title" content="搞懂 MySQL 间隙锁：从原理到金融级选型">
-<meta name="twitter:description" content="系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:tag' content='数据库' /><meta property='article:tag' content='锁' /><meta property='article:tag' content='架构设计' /><meta property='article:published_time' content='2025-11-18T22:29:25&#43;08:00'/><meta property='article:modified_time' content='2026-11-24T19:40:57&#43;08:00'/>
+<meta name="twitter:title" content="一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型">
+<meta name="twitter:description" content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/","name":"搞懂 MySQL 间隙锁：从原理到金融级选型","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2026-07-26T22:39:23+08:00","datePublished":"2025-11-18T22:29:25+08:00","headline":"搞懂 MySQL 间隙锁：从原理到金融级选型","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/","name":"一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Gemini 4"},"dateModified":"2026-11-24T19:40:57+08:00","datePublished":"2025-11-18T22:29:25+08:00","headline":"一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -239,35 +239,27 @@
     <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
         <div class="article-toc-rail__header">
             <span data-article-toc-current>本文目录</span>
-            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 3 分钟</small>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 5 分钟</small>
         </div>
         <nav id="article-toc-navigation">
   <ol>
-    <li><a href="#什么是间隙锁与幻读">什么是间隙锁与幻读？</a></li>
-    <li><a href="#如何关闭间隙锁">如何“关闭”间隙锁？</a>
-      <ol>
-        <li><a href="#-关闭的后果即-rc-级别的特性">⚠️ 关闭的后果（即 RC 级别的特性）</a></li>
-      </ol>
-    </li>
-    <li><a href="#主流大厂选择rc-还是-rr">主流大厂选择：RC 还是 RR？</a></li>
-    <li><a href="#金融行业券商如何选择">金融行业（券商）如何选择？</a>
-      <ol>
-        <li><a href="#方案一核心交易系统高并发低延迟">方案一：核心交易系统（高并发、低延迟）</a></li>
-        <li><a href="#方案二清算对账系统批处理高一致性">方案二：清算对账系统（批处理、高一致性）</a></li>
-      </ol>
-    </li>
-    <li><a href="#总结">总结</a></li>
+    <li><a href="#间隙锁到底锁的是什么">间隙锁到底锁的是什么？</a></li>
+    <li><a href="#为什么数据同步一并发就会因为间隙锁死锁">为什么数据同步一并发，就会因为间隙锁死锁？</a></li>
+    <li><a href="#mysql-为什么要设计这么麻烦的锁">MySQL 为什么要设计这么“麻烦”的锁？</a></li>
+    <li><a href="#怎么关闭间隙锁主流大厂为何偏爱-rc">怎么关闭间隙锁？主流大厂为何偏爱 RC？</a></li>
+    <li><a href="#金融与券商系统按链路拆开选不能一刀切">金融与券商系统：按链路拆开选，不能一刀切</a></li>
+    <li><a href="#线上排查与改造的实用防线">线上排查与改造的实用防线</a></li>
   </ol>
 </nav>
     </section>
 </aside>
 
-<article class="main-article has-lead" data-reading-minutes="3">
+<article class="main-article has-lead" data-reading-minutes="5">
     <header class="article-header">
     <div class="article-details">
     <div class="article-title-wrapper">
         
-            <h1 class="article-title">搞懂 MySQL 间隙锁：从原理到金融级选型</h1>
+            <h1 class="article-title">一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</h1>
         
     
         
@@ -304,11 +296,21 @@
 
 
 
-                    <time class="article-time--reading">阅读时长: 5 分钟</time>
+                    <time class="article-time--reading">阅读时长: 8 分钟</time>
                     
                 </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
                     <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
-                    <span class="article-time--author">tianlong.xiang</span>
+                    <span class="article-time--author">Gemini 4</span>
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">blog-writer-free v1.2.0</span>
                 </span></footer>
         
 
@@ -347,7 +349,8 @@
 
     
     <div class="article-lead article-prose">
-        <p>系统服务之间的数据同步，近期改动的时候，某个接口数据量上去，频繁发生死锁。同事排查后，发现是由于间隙锁导致的。MySQL 平时用得不多，记录一下。</p>
+        <p>系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 <strong>MySQL 的间隙锁（Gap Lock）</strong>。</p>
+<p>平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。</p>
     </div>
     
 </div>
@@ -360,20 +363,12 @@
         <summary>本文目录</summary>
         <nav id="TableOfContents">
   <ol>
-    <li><a href="#什么是间隙锁与幻读">什么是间隙锁与幻读？</a></li>
-    <li><a href="#如何关闭间隙锁">如何“关闭”间隙锁？</a>
-      <ol>
-        <li><a href="#-关闭的后果即-rc-级别的特性">⚠️ 关闭的后果（即 RC 级别的特性）</a></li>
-      </ol>
-    </li>
-    <li><a href="#主流大厂选择rc-还是-rr">主流大厂选择：RC 还是 RR？</a></li>
-    <li><a href="#金融行业券商如何选择">金融行业（券商）如何选择？</a>
-      <ol>
-        <li><a href="#方案一核心交易系统高并发低延迟">方案一：核心交易系统（高并发、低延迟）</a></li>
-        <li><a href="#方案二清算对账系统批处理高一致性">方案二：清算对账系统（批处理、高一致性）</a></li>
-      </ol>
-    </li>
-    <li><a href="#总结">总结</a></li>
+    <li><a href="#间隙锁到底锁的是什么">间隙锁到底锁的是什么？</a></li>
+    <li><a href="#为什么数据同步一并发就会因为间隙锁死锁">为什么数据同步一并发，就会因为间隙锁死锁？</a></li>
+    <li><a href="#mysql-为什么要设计这么麻烦的锁">MySQL 为什么要设计这么“麻烦”的锁？</a></li>
+    <li><a href="#怎么关闭间隙锁主流大厂为何偏爱-rc">怎么关闭间隙锁？主流大厂为何偏爱 RC？</a></li>
+    <li><a href="#金融与券商系统按链路拆开选不能一刀切">金融与券商系统：按链路拆开选，不能一刀切</a></li>
+    <li><a href="#线上排查与改造的实用防线">线上排查与改造的实用防线</a></li>
   </ol>
 </nav>
     </details>
@@ -382,89 +377,90 @@
     <section class="article-content">
     
     
-    <blockquote>
+    <h2 id="间隙锁到底锁的是什么">间隙锁到底锁的是什么？
+</h2><p>在 InnoDB 默认的隔离级别 <strong>RR（Repeatable Read，可重复读）</strong> 下，行锁锁住的并不只是表里已经存在的记录。</p>
+<p>假设一张表的主键或二级索引里目前只有 <code>id = 10</code> 和 <code>id = 20</code> 两条数据，中间 <code>(10, 20)</code> 这个开区间其实是空的。如果你在 RR 模式下执行范围当前读（如 <code>WHERE id &gt; 10 AND id &lt; 20 FOR UPDATE</code>），或者对一条<strong>根本不存在的记录</strong>加锁（如 <code>WHERE id = 15 FOR UPDATE</code>），InnoDB 会把 <code>(10, 20)</code> 这段空档锁起来——这就是<strong>间隙锁（Gap Lock）</strong>。</p>
+<p>当行锁（Record Lock）与它前面的间隙锁合体，形成左开右闭区间 <code>(10, 20]</code> 时，就是常说的 <strong>Next-Key Lock（临键锁）</strong>。</p>
+<h2 id="为什么数据同步一并发就会因为间隙锁死锁">为什么数据同步一并发，就会因为间隙锁死锁？
+</h2><p>间隙锁最反直觉的规则是：<strong>间隙锁之间是相互兼容的。</strong> 两个事务可以同时拿到 <code>(10, 20)</code> 的间隙锁，互不阻塞——因为间隙锁的唯一目的是“阻止别人往这个缝隙里插入新记录”，并不阻止别人也来守着这个缝隙。</p>
+<p>但在数据同步最常见的“先查记录存不存在，不存在就插入”的逻辑里，这个兼容特性会直接制造经典的环路等待：</p>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">sequenceDiagram
+    participant T1 as 事务 A
+    participant DB as InnoDB 间隙 (10,20)
+    participant T2 as 事务 B
+
+    T1-&gt;&gt;DB: 查询 id=15 FOR UPDATE（不存在）
+    Note right of DB: 获取间隙锁 (10,20)
+    T2-&gt;&gt;DB: 查询 id=15 FOR UPDATE（不存在）
+    Note right of DB: 同样获取间隙锁 (10,20)（兼容）
+    T1-&gt;&gt;DB: INSERT id=15（申请插入意向锁）
+    Note right of DB: 被 T2 间隙锁阻塞
+    T2-&gt;&gt;DB: INSERT id=15（申请插入意向锁）
+    Note right of DB: 被 T1 间隙锁阻塞，触发死锁
+</code></pre><p>低并发时，两个同步任务很难撞在同一毫秒、同一个空区间里；一旦批量同步流量上来，死锁就会成片爆发。</p>
+<h2 id="mysql-为什么要设计这么麻烦的锁">MySQL 为什么要设计这么“麻烦”的锁？
+</h2><p>既然这么容易诱发死锁，InnoDB 为什么默认在 RR 模式下开启间隙锁？核心原因有两个：</p>
+<ol>
+<li><strong>防“当前读”的幻读（Phantom Read）</strong>：普通 <code>SELECT</code>（快照读）靠 MVCC 读取历史版本，不会受新插入数据干扰；但 <code>SELECT ... FOR UPDATE</code>、<code>UPDATE</code>、<code>DELETE</code> 属于当前读，必须读最新提交的数据。如果不锁住间隙，事务 A 在同一事务内两次范围更新之间，事务 B 偷偷插进一条满足条件的新记录，事务 A 就会看到凭空多出来的“幻影行”。</li>
+<li><strong>历史上的 Statement Binlog 主从一致</strong>：早期 MySQL 主从同步默认用 Statement 格式（记录原始 SQL）。如果主库执行范围更新时不锁间隙，并发插入的新行先提交并写入 Binlog，传到从库重放时就会把新行也一并改掉，造成主从数据不一致。</li>
+</ol>
+<h2 id="怎么关闭间隙锁主流大厂为何偏爱-rc">怎么关闭间隙锁？主流大厂为何偏爱 RC？
+</h2><p>关闭间隙锁最彻底的方式，是将事务隔离级别从 <strong>RR 调整为 RC（Read Committed，读已提交）</strong>，并配合 <code>binlog_format = ROW</code>（现代 MySQL 默认项）。</p>
+<p>切到 RC 之后，会发生三个关键变化：</p>
+<ul>
+<li>InnoDB 取消了普通查询与更新中的间隙锁（仅在外键检查和唯一索引冲突校验等极少数场景保留），并发写入的死锁概率断崖式下降；</li>
+<li>扫描过程中，不符合 <code>WHERE</code> 条件的记录锁会尽快释放，而不必等到整个事务结束；</li>
+<li><code>ROW</code> 格式 Binlog 记录的是每行实际变更结果，主从同步不再依赖间隙锁保序。</li>
+</ul>
+<p>因此，国内绝大多数高并发互联网大厂的常规业务库，默认规范都是 <strong>RC + ROW Binlog</strong>——大多数短事务接口根本不需要在同一个事务里反复读取两次全量快照，用放弃“可重复读”换取高并发与低死锁，是一笔非常划算的买卖。</p>
+<h2 id="金融与券商系统按链路拆开选不能一刀切">金融与券商系统：按链路拆开选，不能一刀切
+</h2><p>但回到券商这类金融行业系统，架构选型不能简单照搬互联网的“全员 RC”，而应该按业务链路的真实一致性诉求拆开：</p>
+<div class="rich-cards rich-cards--columns-2">
+<section class="rich-card">
+    <strong class="rich-card__title">高并发交易 / 资金 / 数据同步链路</strong>
+    <ul>
+<li><strong>推荐方案</strong>：<strong>RC + ROW Binlog</strong></li>
+<li><strong>防错手段</strong>：精准主键/唯一索引 + 悲观行锁或乐观锁（CAS 版本号）+ 唯一键防重幂等。</li>
+<li><strong>原因</strong>：资金扣减和同步写入最怕死锁和并发超卖，靠精确行锁和条件更新（如 <code>balance &gt;= amount</code>）比靠间隙锁更安全、吞吐也更高。</li>
+</ul>
+
+</section>
+
+<section class="rich-card">
+    <strong class="rich-card__title">日终清算 / 对账 / 风控报表链路</strong>
+    <ul>
+<li><strong>推荐方案</strong>：<strong>RR（隔离于只读从库或独立快照库）</strong></li>
+<li><strong>防错手段</strong>：一致性快照读，与在线交易写入链路物理隔离。</li>
+<li><strong>原因</strong>：清算与对账需要在一个批次内多次汇总的结果严格一致，不能前脚算完总账、后脚拉明细时因为中途插入新流水而对不上数。</li>
+</ul>
+
+</section>
+
+</div>
+
+<h2 id="线上排查与改造的实用防线">线上排查与改造的实用防线
+</h2><p>如果你正在处理类似的数据同步死锁，在决定是否全局切换 RC 之前，有四条工程动作可以立刻落地：</p>
+<ul>
+<li><strong>消除空范围加锁</strong>：能用单条幂等语句（或先按主键路由分片，确保同一批 key 只由固定消费者顺序处理）就不要并发“先查空再插”。</li>
+<li><strong>把非数据库操作移出事务</strong>：RPC 调用、序列化、外部接口校验全部放到事务外，缩短持锁窗口。</li>
+<li><strong>核对执行计划</strong>：通过 <code>EXPLAIN</code> 确认同步 SQL 精准命中索引，防止索引失效导致锁升级为全表间隙锁。</li>
+<li><strong>加上压测与重试</strong>：高并发下的锁冲突很难靠代码审查完全看出来，上生产前最好用压测工具提前把锁竞争打出来（连接模型与压测工具选择可参考<a class="link" href="/p/wrk-vs-jmeter-deep-benchmarking/" >wrk 与 JMeter 怎么选</a>），同时为幂等同步任务配置有限次数的死锁退避重试。</li>
+</ul>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="原始背景与提示词">原始背景与提示词
+</h3><ul>
+<li>原始笔记：系统服务间数据同步接口数据量上去后频繁发生死锁，排查为 MySQL InnoDB 间隙锁所致。</li>
+<li>原始提示词：
+<blockquote>
 <p>mysql 间隙锁，背景、原理，如何关闭间隙锁、关闭了会有什么问题；你是资深数据库 DBA，针对我的问题进行扩展分析补充。幻读是什么？主流大厂是选择 RC 还是 RR模式？我是金融行业，券商系统，你更建议我用什么方案？整理上述问题，输出文档。</p>
 </blockquote>
-<p>在 MySQL 中，尤其是高并发场景下，“锁”是绕不过去的话题。间隙锁（Gap Lock）是 InnoDB 引擎中的一个核心特性，但也常常是性能瓶颈和死锁的根源。</p>
-<p>这篇文章将帮你快速梳理间隙锁的核心、利弊，并为你（特别是金融行业）提供清晰的架构选型建议。</p>
-<h2 id="什么是间隙锁与幻读">什么是间隙锁与幻读？
-</h2><ul>
-<li>
-<p><strong>幻读 (Phantom Read)：</strong>
-在一个事务中，你第一次查某范围（如 <code>ID &gt; 100</code>）有 10 条数据，别人插入一条 <code>ID=101</code> 并提交后，你第二次查，发现变成了 11 条。这条“多出来的”新数据就像幻觉，故称“幻读”。</p>
 </li>
-<li>
-<p><strong>间隙锁 (Gap Lock)：</strong>
-MySQL 在 <strong>RR（可重复读）</strong> 隔离级别下，为了解决“幻读”问题而发明的。它不锁数据行，而是<strong>锁住数据之间的“缝隙”</strong>。</p>
-<ul>
-<li><strong>作用：</strong> 防止其他事务在这个“缝隙”中 <code>INSERT</code> 新数据。</li>
-<li><strong>代价：</strong> 锁的范围变大，并发能力下降，容易死锁。</li>
+<li>重写说明：本次按 <code>blog-writer-free v1.2.0</code> 重写，补充了间隙锁引发“查空再插”死锁的 Mermaid 时序图，并将原稿零散的问答体整合为从故障现场到金融分链路选型的连贯工程笔记。</li>
 </ul>
-</li>
-</ul>
-<h2 id="如何关闭间隙锁">如何“关闭”间隙锁？
-</h2><p>最直接的方法是<strong>将数据库隔离级别从 RR (Repeatable Read) 降为 RC (Read Committed)</strong>。</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="c1">-- 将当前会话隔离级别设为 RC
-</span></span></span><span class="line"><span class="cl"><span class="k">SET</span><span class="w"> </span><span class="k">SESSION</span><span class="w"> </span><span class="n">transaction_isolation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;READ-COMMITTED&#39;</span><span class="p">;</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c1">-- 永久修改（需改 my.cnf 并重启）
-</span></span></span><span class="line"><span class="cl"><span class="c1">-- [mysqld]
-</span></span></span><span class="line"><span class="cl"><span class="c1">-- transaction-isolation = READ-COMMITTED
-</span></span></span></code></pre></div><h3 id="-关闭的后果即-rc-级别的特性">⚠️ 关闭的后果（即 RC 级别的特性）
-</h3><ol>
-<li><strong>性能提升：</strong> 没有了间隙锁，锁的粒度更小，并发吞吐量大幅提升。</li>
-<li><strong>死锁减少：</strong> 绝大多数由间隙锁导致的死锁都会消失。</li>
-<li><strong>出现幻读/不可重复读：</strong> 这是 RC 级别的“特性”，事务中两次查询的结果可能会不一致。</li>
-<li><strong>【核心要求】必须配合 ROW 格式 Binlog：</strong>
-如果使用 RC 级别，<strong>必须</strong>将 <code>binlog_format</code> 设置为 <code>ROW</code>。否则，在主从复制时会因为缺少间隙锁的保护而导致主从数据不一致。</li>
-</ol>
-<h2 id="主流大厂选择rc-还是-rr">主流大厂选择：RC 还是 RR？
-</h2><p><strong>答案：绝大多数一线互联网大厂都选择 RC (Read Committed) + ROW Binlog 模式。</strong></p>
-<ul>
-<li><strong>原因：</strong> 互联网业务（如电商、社交）极端追求高并发。它们无法忍受 RR 间隙锁带来的频繁锁等待和死锁。</li>
-<li><strong>权衡：</strong> 它们选择放弃数据库层面的“可重复读”，转而在<strong>应用层</strong>通过乐观锁（如版本号、CAS）等方式来保证关键业务（如库存、余额）的逻辑一致性。</li>
-</ul>
-<h2 id="金融行业券商如何选择">金融行业（券商）如何选择？
-</h2><p>对于数据一致性要求极高的券商系统，建议<strong>分场景治理</strong>：</p>
-<h3 id="方案一核心交易系统高并发低延迟">方案一：核心交易系统（高并发、低延迟）
-</h3><p><strong>建议：RC (Read Committed) + ROW Binlog + 应用层乐观锁</strong></p>
-<ul>
-<li><strong>场景：</strong> 订单撮合、下单、资金扣减。</li>
-<li><strong>理由：</strong> 交易系统的并发压力不亚于互联网秒杀。RR 的间隙锁会成为性能瓶颈，导致严重的锁竞争甚至死锁，这是交易系统无法接受的。</li>
-<li><strong>对策：</strong> 使用 RC 保证高性能，同时在应用代码中（如 Java）通过 <code>UPDATE ... WHERE balance &gt; ?</code> 或 CAS 版本号机制来保证资金安全，防止超卖。</li>
-</ul>
-<h3 id="方案二清算对账系统批处理高一致性">方案二：清算对账系统（批处理、高一致性）
-</h3><p><strong>建议：RR (Repeatable Read)</strong></p>
-<ul>
-<li><strong>场景：</strong> 盘后批量对账、生成报表、日终清算。</li>
-<li><strong>理由：</strong> 批处理任务需要在一个“绝对一致”的数据快照上运行。它需要 RR 级别提供的能力，保证在整个统计过程中，数据不会发生“幻读”，确保总账能对平。</li>
-</ul>
-<h2 id="总结">总结
-</h2><div class="table-wrapper"><table>
-	<thead>
-			<tr>
-					<th style="text-align: left">隔离级别</th>
-					<th style="text-align: left">优点</th>
-					<th style="text-align: left">缺点</th>
-					<th style="text-align: left">适用场景</th>
-			</tr>
-	</thead>
-	<tbody>
-			<tr>
-					<td style="text-align: left"><strong>RR (默认)</strong></td>
-					<td style="text-align: left">解决幻读，数据一致性高</td>
-					<td style="text-align: left">并发低，易死锁 (间隙锁)</td>
-					<td style="text-align: left">报表、清算、对数据一致性要求极高且并发不大的场景</td>
-			</tr>
-			<tr>
-					<td style="text-align: left"><strong>RC</strong></td>
-					<td style="text-align: left"><strong>并发高，死锁少</strong></td>
-					<td style="text-align: left">会幻读、不可重复读</td>
-					<td style="text-align: left"><strong>高并发核心业务</strong> (如电商、金融交易)，需配合 ROW Binlog</td>
-			</tr>
-	</tbody>
-</table></div>
-<p>对于券商核心系统，<strong>RC + ROW Binlog</strong> 是兼顾性能与一致性的主流架构方案，但它要求开发团队在应用层承担更多保障数据一致性的责任。</p>
+    </div>
+</details>
 </section>
 
 
@@ -480,6 +476,8 @@ MySQL 在 <strong>RR（可重复读）</strong> 隔离级别下，为了解决�
         
             <a class="article-tag article-tag--category" href="/tags/lock/">锁</a>
         
+            <a class="article-tag article-tag--category" href="/tags/architecture-design/">架构设计</a>
+        
     </section>
 
 
@@ -487,7 +485,9 @@ MySQL 在 <strong>RR（可重复读）</strong> 隔离级别下，为了解决�
 </footer>
 
 
-    </article>
+    <link rel="modulepreload" href="/ts/mermaid-render.58919d293298f993c4fdbadb418b556bdb7aa7da40efe43198e8f2b62c874c53.js">
+    <span hidden data-mermaid-runtime="/ts/mermaid-render.58919d293298f993c4fdbadb418b556bdb7aa7da40efe43198e8f2b62c874c53.js"></span><script src="/ts/diagram-viewer.a7eaa64400118c8f22785d20d7fc2a9b736654f266014a93512e0f620811466c.js" integrity="sha256-p&#43;qmRAARjI8ieF0g1/wqm3NmVPJmAUqTUS4PYggRRmw=" defer></script>
+</article>
 
 
 <dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
@@ -505,7 +505,7 @@ MySQL 在 <strong>RR（可重复读）</strong> 隔离级别下，为了解决�
 <section class="related-content--wrapper" aria-label="相关文章">
     <header class="related-content__header">
         <h2 class="section-title">相关文章</h2>
-        <span class="related-content__count">01</span>
+        <span class="related-content__count">02</span>
     </header>
     <ol class="related-content__list">
             
@@ -515,6 +515,16 @@ MySQL 在 <strong>RR（可重复读）</strong> 隔离级别下，为了解决�
                         <div class="related-content__body">
                             <h3 class="related-content__title">Linux服务器，重置Mysql密码</h3>
                             <time class="related-content__date" datetime='2022-09-20T14:27:35&#43;08:00'>2022年09月20日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/cpp-folder-namespace-what-is-it-called/" class="related-content__link">
+                        <span class="related-content__index">02</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">文件夹分层再套 namespace，这事到底叫什么</h3>
+                            <time class="related-content__date" datetime='2026-04-09T02:31:07&#43;08:00'>2026年04月09日</time>
                         </div>
                     </a>
                 </li>

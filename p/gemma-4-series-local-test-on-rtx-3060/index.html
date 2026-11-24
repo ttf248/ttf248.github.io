@@ -1,18 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
-<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="如果只看榜单，最容易心动的肯定是 31B。\n但真把机器搬出来，还是那台没升级的 RTX 3060 12GB，判断马上就会变。怎么说呢，本地部署这件事，最后拼的不是谁最风光，而是谁最像能长期相处的那个。对我来说，这次真正值得先跑的，不是 31B，而是 26B A4B。\n">
-<title>Gemma 4 开放以后（二）：3060 12GB 的本地实测账</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="2026 年 4 月 2 日谷歌发布 Gemma 4 当天，我本来只想找个和 Gemma 3 对得上的升级版拉下来跑。结果打开模型清单先愣了一下：熟悉的 4B / 12B / 27B 不见了，冒出来的是 E2B、E4B、26B A4B 和 31B。\n此前把型号与协议、3060 12GB 实测、显存断崖硬拆成了三篇，现在合回一篇紧凑的实测账，结论非常干脆：Apache 2.0 才是这次最值钱的更新；在消费级 12GB 显卡上，31B 值得看榜单，26B A4B 才是能天天用的主力；而决定本地体验生死的，从来不是算力，而是显存装不装得下。\n">
+<title>Gemma 4 本地部署实测：型号选型、3060 12GB 账本与显存带宽断崖</title>
 
 <link rel='canonical' href='https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/'>
 
-<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="Gemma 4 开放以后（二）：3060 12GB 的本地实测账">
-<meta property='og:description' content="如果只看榜单，最容易心动的肯定是 31B。\n但真把机器搬出来，还是那台没升级的 RTX 3060 12GB，判断马上就会变。怎么说呢，本地部署这件事，最后拼的不是谁最风光，而是谁最像能长期相处的那个。对我来说，这次真正值得先跑的，不是 31B，而是 26B A4B。\n">
+<link rel="stylesheet" href="/scss/style.min.e99605371b1fdea2abca248261ee70f1f9d061aa2ade31f12a7f2cb1f4429139.css"><meta property='og:title' content="Gemma 4 本地部署实测：型号选型、3060 12GB 账本与显存带宽断崖">
+<meta property='og:description' content="2026 年 4 月 2 日谷歌发布 Gemma 4 当天，我本来只想找个和 Gemma 3 对得上的升级版拉下来跑。结果打开模型清单先愣了一下：熟悉的 4B / 12B / 27B 不见了，冒出来的是 E2B、E4B、26B A4B 和 31B。\n此前把型号与协议、3060 12GB 实测、显存断崖硬拆成了三篇，现在合回一篇紧凑的实测账，结论非常干脆：Apache 2.0 才是这次最值钱的更新；在消费级 12GB 显卡上，31B 值得看榜单，26B A4B 才是能天天用的主力；而决定本地体验生死的，从来不是算力，而是显存装不装得下。\n">
 <meta property='og:url' content='https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI' /><meta property='article:tag' content='Gemma' /><meta property='article:tag' content='Google' /><meta property='article:tag' content='3060' /><meta property='article:published_time' content='2026-04-08T23:52:20&#43;08:00'/><meta property='article:modified_time' content='2026-09-29T10:38:47&#43;08:00'/>
-<meta name="twitter:title" content="Gemma 4 开放以后（二）：3060 12GB 的本地实测账">
-<meta name="twitter:description" content="如果只看榜单，最容易心动的肯定是 31B。\n但真把机器搬出来，还是那台没升级的 RTX 3060 12GB，判断马上就会变。怎么说呢，本地部署这件事，最后拼的不是谁最风光，而是谁最像能长期相处的那个。对我来说，这次真正值得先跑的，不是 31B，而是 26B A4B。\n">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='AI' /><meta property='article:tag' content='Gemma' /><meta property='article:tag' content='Google' /><meta property='article:tag' content='3060' /><meta property='article:tag' content='显存' /><meta property='article:tag' content='本地部署' /><meta property='article:published_time' content='2026-04-08T23:52:20&#43;08:00'/><meta property='article:modified_time' content='2026-11-25T02:41:56&#43;08:00'/>
+<meta name="twitter:title" content="Gemma 4 本地部署实测：型号选型、3060 12GB 账本与显存带宽断崖">
+<meta name="twitter:description" content="2026 年 4 月 2 日谷歌发布 Gemma 4 当天，我本来只想找个和 Gemma 3 对得上的升级版拉下来跑。结果打开模型清单先愣了一下：熟悉的 4B / 12B / 27B 不见了，冒出来的是 E2B、E4B、26B A4B 和 31B。\n此前把型号与协议、3060 12GB 实测、显存断崖硬拆成了三篇，现在合回一篇紧凑的实测账，结论非常干脆：Apache 2.0 才是这次最值钱的更新；在消费级 12GB 显卡上，31B 值得看榜单，26B A4B 才是能天天用的主力；而决定本地体验生死的，从来不是算力，而是显存装不装得下。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
       <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/","name":"Gemma 4 开放以后（二）：3060 12GB 的本地实测账","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5.4)"},"dateModified":"2026-09-29T10:38:47+08:00","datePublished":"2026-04-08T23:52:20+08:00","headline":"Gemma 4 开放以后（二）：3060 12GB 的本地实测账","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/","name":"Gemma 4 本地部署实测：型号选型、3060 12GB 账本与显存带宽断崖","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Gemini 4"},"dateModified":"2026-11-25T02:41:56+08:00","datePublished":"2026-04-08T23:52:20+08:00","headline":"Gemma 4 本地部署实测：型号选型、3060 12GB 账本与显存带宽断崖","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/gemma-4-series-local-test-on-rtx-3060/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -120,7 +120,7 @@
         </nav>
         <div class="site-header__tools">
             
-                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/gemma-4-series-local-test-on-rtx-3060/" selected>中文</option><option value="/en/p/gemma-4-series-local-test-on-rtx-3060/">English</option><option value="/ja/p/gemma-4-series-local-test-on-rtx-3060/">日本語</option></select>
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/gemma-4-series-local-test-on-rtx-3060/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
 
             
             
@@ -202,7 +202,7 @@
         
             <label class="mobile-navigation__language">
                 <span>语言</span>
-                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/gemma-4-series-local-test-on-rtx-3060/" selected>中文</option><option value="/en/p/gemma-4-series-local-test-on-rtx-3060/">English</option><option value="/ja/p/gemma-4-series-local-test-on-rtx-3060/">日本語</option></select>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/p/gemma-4-series-local-test-on-rtx-3060/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
 
             </label>
         
@@ -239,35 +239,30 @@
     <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
         <div class="article-toc-rail__header">
             <span data-article-toc-current>本文目录</span>
-            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 6 分钟</small>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 4 分钟</small>
         </div>
         <nav id="article-toc-navigation">
   <ol>
-    <li><a href="#为什么我先跑-26b-a4b">为什么我先跑 <code>26B A4B</code></a></li>
-    <li><a href="#五角星这题这次终于有人看懂我在挖坑">五角星这题，这次终于有人看懂我在挖坑</a></li>
-    <li><a href="#更让我意外的是它还能继续往下走">更让我意外的是，它还能继续往下走</a></li>
-    <li><a href="#这次-coding-提升不只是更聪明了">这次 coding 提升，不只是“更聪明了”</a></li>
-    <li><a href="#翻译这条线反而不能简单说gemma-4-全面接班">翻译这条线，反而不能简单说“Gemma 4 全面接班”</a></li>
-    <li><a href="#为什么我不想在第二篇里继续吹-31b">为什么我不想在第二篇里继续吹 <code>31B</code></a></li>
-    <li><a href="#我的本地第一结论">我的本地第一结论</a></li>
-    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#一先看懂命名与协议为什么这次谷歌终于想通了">一、先看懂命名与协议：为什么这次谷歌“终于想通了”</a></li>
+    <li><a href="#二rtx-3060-12gb-实测为什么留的是-26b-a4b-而不是-31b">二、RTX 3060 12GB 实测：为什么留的是 <code>26B A4B</code> 而不是 <code>31B</code></a></li>
+    <li><a href="#三显存断崖与-mac-统一内存本地推理为什么会突然卡死">三、显存断崖与 Mac 统一内存：本地推理为什么会突然卡死？</a></li>
   </ol>
 </nav>
     </section>
 </aside>
 
-<article class="main-article has-lead" data-reading-minutes="6">
+<article class="main-article has-lead" data-reading-minutes="4">
     <header class="article-header">
     <div class="article-details">
     <div class="article-title-wrapper">
         
-            <h1 class="article-title">Gemma 4 开放以后（二）：3060 12GB 的本地实测账</h1>
+            <h1 class="article-title">Gemma 4 本地部署实测：型号选型、3060 12GB 账本与显存带宽断崖</h1>
         
     
         
         
         <h3 class="article-subtitle">
-            3060 12GB 本地跑下来，26B A4B 才是更现实的那个
+            整合此前的三篇系列旧稿：Apache 2.0 落地，31B 适合看榜单，26B A4B 才是 12GB 显存主力
         </h3>
         
     </div>
@@ -302,23 +297,24 @@
 
 
 
-                    <time class="article-time--reading">阅读时长: 9 分钟</time>
+                    <time class="article-time--reading">阅读时长: 6 分钟</time>
                     
                 </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
                     <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
-                    <span class="article-time--author">Codex (GPT-5.4)</span>
+                    <span class="article-time--author">Gemini 4</span>
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-tag" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11 3L20 12a1.5 1.5 0 0 1 0 2L14 20a1.5 1.5 0 0 1 -2 0L3 11v-4a4 4 0 0 1 4 -4h4" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+
+
+
+                    <span class="article-time--skill">blog-writer-free v1.2.0</span>
                 </span></footer>
         
 
-        
-        
-        <footer class="article-translations">
-            
-                <a href="/en/p/gemma-4-series-local-test-on-rtx-3060/" class="link">English</a>
-            
-                <a href="/ja/p/gemma-4-series-local-test-on-rtx-3060/" class="link">日本語</a>
-            
-        </footer>
         
     </div>
     
@@ -345,8 +341,8 @@
 
     
     <div class="article-lead article-prose">
-        <p>如果只看榜单，最容易心动的肯定是 <code>31B</code>。</p>
-<p>但真把机器搬出来，还是那台没升级的 <code>RTX 3060 12GB</code>，判断马上就会变。怎么说呢，本地部署这件事，最后拼的不是谁最风光，而是谁最像能长期相处的那个。对我来说，这次真正值得先跑的，不是 <code>31B</code>，而是 <code>26B A4B</code>。</p>
+        <p>2026 年 4 月 2 日谷歌发布 <code>Gemma 4</code> 当天，我本来只想找个和 <code>Gemma 3</code> 对得上的升级版拉下来跑。结果打开模型清单先愣了一下：熟悉的 <code>4B / 12B / 27B</code> 不见了，冒出来的是 <code>E2B</code>、<code>E4B</code>、<code>26B A4B</code> 和 <code>31B</code>。</p>
+<p>此前把型号与协议、3060 12GB 实测、显存断崖硬拆成了三篇，现在合回一篇紧凑的实测账，结论非常干脆：<strong>Apache 2.0 才是这次最值钱的更新；在消费级 12GB 显卡上，<code>31B</code> 值得看榜单，<code>26B A4B</code> 才是能天天用的主力；而决定本地体验生死的，从来不是算力，而是显存装不装得下。</strong></p>
     </div>
     
 </div>
@@ -359,14 +355,9 @@
         <summary>本文目录</summary>
         <nav id="TableOfContents">
   <ol>
-    <li><a href="#为什么我先跑-26b-a4b">为什么我先跑 <code>26B A4B</code></a></li>
-    <li><a href="#五角星这题这次终于有人看懂我在挖坑">五角星这题，这次终于有人看懂我在挖坑</a></li>
-    <li><a href="#更让我意外的是它还能继续往下走">更让我意外的是，它还能继续往下走</a></li>
-    <li><a href="#这次-coding-提升不只是更聪明了">这次 coding 提升，不只是“更聪明了”</a></li>
-    <li><a href="#翻译这条线反而不能简单说gemma-4-全面接班">翻译这条线，反而不能简单说“Gemma 4 全面接班”</a></li>
-    <li><a href="#为什么我不想在第二篇里继续吹-31b">为什么我不想在第二篇里继续吹 <code>31B</code></a></li>
-    <li><a href="#我的本地第一结论">我的本地第一结论</a></li>
-    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#一先看懂命名与协议为什么这次谷歌终于想通了">一、先看懂命名与协议：为什么这次谷歌“终于想通了”</a></li>
+    <li><a href="#二rtx-3060-12gb-实测为什么留的是-26b-a4b-而不是-31b">二、RTX 3060 12GB 实测：为什么留的是 <code>26B A4B</code> 而不是 <code>31B</code></a></li>
+    <li><a href="#三显存断崖与-mac-统一内存本地推理为什么会突然卡死">三、显存断崖与 Mac 统一内存：本地推理为什么会突然卡死？</a></li>
   </ol>
 </nav>
     </details>
@@ -375,95 +366,78 @@
     <section class="article-content">
     
     
-    <p>上一篇 <a class="link" href="/p/gemma-4-series-models-and-license/" >谷歌这次把 Gemma 4 放开了（一）：先别急着跑本地，型号和协议得先看明白</a> 把发布和协议讲完了。当前这一篇就只说本地体验本身；最后一篇接着写 <a class="link" href="/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" >谷歌这次把 Gemma 4 放开了（三）：显存不够为什么会断崖，Mac 为什么能兜底却快不起来</a>。</p>
-<h2 id="为什么我先跑-26b-a4b">为什么我先跑 <code>26B A4B</code>
-</h2><p>原因其实很土，就是硬件现实。</p>
-<p><code>31B</code> 当然强，官方榜单和社区第一波反馈都挺猛。但你把它放到 <code>3060 12GB</code> 这种机器上，问题马上就不再是“它强不强”，而是“它值不值得你等”。一旦模型和 cache 往系统内存回退，速度很容易直接塌掉，这件事我放到第三篇详细讲。</p>
-<p><code>26B A4B</code> 不一样。</p>
-<p>它虽然总参数是 <code>25.2B</code>，但每个 token 真正激活的大约只有 <code>3.8B</code>。说白了，它就是这次 Gemma 4 里最像“专门留给本地玩家”的那档。</p>
-<p>所以如果你的机器和我差不多，还是消费级老卡，判断可以直接一点：</p>
-<ul>
-<li>想看榜单，上 <code>31B</code></li>
-<li>想真本地长期用，先看 <code>26B A4B</code></li>
+    <h2 id="一先看懂命名与协议为什么这次谷歌终于想通了">一、先看懂命名与协议：为什么这次谷歌“终于想通了”
+</h2><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>型号</th>
+					<th>架构</th>
+					<th>关键参数与上下文</th>
+					<th>对应定位</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>E2B</code> / <code>E4B</code></td>
+					<td>Dense（Per-Layer Embeddings）</td>
+					<td>2.3B / 4.5B 有效参数（含词嵌入 5.1B / 8B），128K</td>
+					<td>端侧与超轻量本地任务（接班旧 4B）</td>
+			</tr>
+			<tr>
+					<td><strong><code>26B A4B</code></strong></td>
+					<td><strong>MoE（混合专家）</strong></td>
+					<td>总参数 25.2B，单 Token 仅激活约 <strong>3.8B</strong>，256K</td>
+					<td><strong>消费级显卡本地部署甜点档</strong></td>
+			</tr>
+			<tr>
+					<td><code>31B</code></td>
+					<td>Dense</td>
+					<td>30.7B 全稠密参数，256K</td>
+					<td>追求榜单与质量上限（接班旧 27B）</td>
+			</tr>
+	</tbody>
+</table></div>
+<p>但比参数架构更值钱的，是 <strong>Gemma 4 全面改用 <code>Apache 2.0</code> 协议</strong>。老版本 Gemma 那套自带附加条款的协议，让想做商业部署、二次分发或蒸馏的开发者总是束手束脚；换成 Apache 2.0 后，商用、修改、再分发全部明明白白，开源落地的心理障碍彻底清零。</p>
+<h2 id="二rtx-3060-12gb-实测为什么留的是-26b-a4b-而不是-31b">二、RTX 3060 12GB 实测：为什么留的是 <code>26B A4B</code> 而不是 <code>31B</code>
+</h2><p>只看榜单，<code>31B</code> 在 Arena AI 文本榜和 LiveCodeBench v6 上确实亮眼。但真搬到那台没升级的 <strong>RTX 3060 12GB</strong> 上，<code>26B A4B</code> 才是现实解——总盘子大、每个 Token 仅激活约 3.8B，兼顾了知识面与生成速度。</p>
+<p>我拿自己最爱挖坑的土测试题测了它：<strong>“写一段 C++ 代码，在控制台输出一个五角星。”</strong></p>
+<p>去年绝大多数小参数本地模型都会直接掉进坑里——一上来就写三角函数、坐标系和循环，最后在字符网格里吐出一坨完全看不出形状的字符。而 <code>Gemma 4</code> 的第一反应直接让我高看一眼：它先识别了输出环境约束（纯文本控制台不是像素画布），直接用最稳妥的 ASCII Art 交卷；当我继续追问“必须用数学计算画出来”时，它又能顺着把几何关系映射到字符网格里算出来。</p>
+<p>这种<strong>先认清环境约束、再按需切换解法</strong>的边界感，比刷高几分 Benchmark 值钱得多。唯一需要注意的例外是纯翻译场景：谷歌在 2026 年 2 月单独发过基于 Gemma 3 的 <code>TranslateGemma</code>，如果已有跑顺的专用本地翻译流水线，不必急着一刀切替换。</p>
+<h2 id="三显存断崖与-mac-统一内存本地推理为什么会突然卡死">三、显存断崖与 Mac 统一内存：本地推理为什么会突然卡死？
+</h2><p>以前我总以为本地模型慢是“GPU 算力不够”，跑完这轮彻底明白了：<strong>本地推理（尤其是逐 Token 生成的 decode 阶段）本质是显存带宽密集型任务，核心工作集只有两块——模型权重 + 上下文 KV Cache。</strong></p>
+<p>只要这两块稳稳塞在 GPU 显存里，速度就能看；一旦模型太大或上下文拉长，工作集跨过 12GB 显存边界，推理框架被迫把权重或 KV Cache 卸载到系统主内存，每生成一个 Token 都要跨 PCIe 总线搬运数据——速度不是线性变慢，而是<strong>瞬间断崖式塌方</strong>。</p>
+<div class="rich-cards rich-cards--columns-2">
+<section class="rich-card">
+    <strong class="rich-card__title">Mac 统一内存：极好的兜底机，但未必快</strong>
+    <ul>
+<li><strong>优势</strong>：CPU 与 GPU 共享同一池大内存，很多 12GB 独显装不下的 31B+ 模型能安静塞进去跑起来。</li>
+<li><strong>局限</strong>：没有绕开内存带宽上限，也没改变 CUDA 生态的成熟度差距。</li>
 </ul>
-<h2 id="五角星这题这次终于有人看懂我在挖坑">五角星这题，这次终于有人看懂我在挖坑
-</h2><p>我自己一直有个很土的测试题，让模型写一段 <code>C++</code> 代码，在控制台输出五角星。</p>
-<p>这题看起来像玩笑，实际挺坏。因为很多模型会把它理解成一个纯数学绘图题，接着就开始上坐标、三角函数、循环，最后在纯文本控制台里输出一坨根本不能看的字符。</p>
-<p>去年很多小参数开源模型，基本都死在这里。</p>
-<p><code>Gemma 4</code> 这次第一反应，反而让我很意外。它没急着装懂，而是先识别约束，给出了这段判断：</p>
-<blockquote>
-<p>由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。</p>
-</blockquote>
-<p>说白了，它先看懂了题目背后的环境限制。控制台不是画布，字符网格也不是像素网格。你要先把“怎么稳定给出一个五角星”想明白，再谈数学绘制。</p>
-<p>然后它第一版直接给了一个硬编码的五角星字符串。</p>
-<p>这个动作特别对味。不是为了秀推导，而是先把题做对。</p>
-<h2 id="更让我意外的是它还能继续往下走">更让我意外的是，它还能继续往下走
-</h2><p>如果只是停在 ASCII Art，这题还只能算它识别了陷阱。</p>
-<p>真正让我高看一眼的是，后面我继续追着要求它用数学计算，它也没有露馅，而是能顺着往下做，把几何关系映射到字符网格，最后把五角星算出来。</p>
-<p>这说明的不是“它会写一段代码”，而是它知道这题其实分两层：</p>
-<ul>
-<li>第一层，控制台里最稳的答案是什么</li>
-<li>第二层，如果你非要做计算，怎么把几何问题降到字符网格上</li>
+
+</section>
+
+<section class="rich-card">
+    <strong class="rich-card__title">消费级 N 卡：显存内极速，超界即断崖</strong>
+    <ul>
+<li><strong>优势</strong>：只要模型选在显存甜点区（如 3060 12GB 配量化版 <code>26B A4B</code>），交互流畅度远胜跨总线硬扛。</li>
+<li><strong>代价</strong>：必须用量化换显存空间（量化与能力折损详见<a class="link" href="/p/is-ai-getting-dumber-uncovering-the-game-between-parameter-precision-and-inference-costs/" >AI 真的变“笨”了吗？</a>）。</li>
 </ul>
-<p>以前很多本地小模型一上来就冲第二层，最后第一层都没做好。<code>Gemma 4</code> 这次反过来了，先把边界认出来，再决定怎么解。</p>
-<p>我觉得这件事比单独一项 benchmark 分数更值钱。</p>
-<h2 id="这次-coding-提升不只是更聪明了">这次 coding 提升，不只是“更聪明了”
-</h2><p>五角星这题之所以好用，就是因为它不只是考语法。</p>
-<p>它真正考的是：</p>
-<ul>
-<li>能不能先理解输出环境</li>
-<li>能不能承认直觉解法不合适</li>
-<li>能不能在“最优展示效果”和“用户强制要求计算”之间切换</li>
-</ul>
-<p>这种题一旦能做对，说明模型开始更像一个会处理现实约束的开发助手，而不是只会补全代码片段。</p>
-<p>我对 <code>Gemma 4</code> 的第一印象会比去年那批小参数开源模型好很多。去年很多模型属于能聊天、能补全、能凑合，但一碰到这种稍微带点边界感的问题，就容易露底。</p>
-<p>这次谷歌起码把这个短板补上了。</p>
-<h2 id="翻译这条线反而不能简单说gemma-4-全面接班">翻译这条线，反而不能简单说“Gemma 4 全面接班”
-</h2><p>你前面提到一个点很关键，以前常拿 <code>Gemma</code> 跑本地翻译。</p>
-<p>这件事到 <code>Gemma 4</code> 这里，其实没那么线性。因为谷歌在 2026 年 2 月单独发了 <code>TranslateGemma</code>，而且还是建在 <code>Gemma 3</code> 那套尺寸上。</p>
-<p>这意味着什么？</p>
-<p>意味着如果你现成的本地翻译链路已经跑顺了，短期内不一定非要全部切到 <code>Gemma 4</code>。尤其是那种目标特别单一、只想稳定多语言转换的场景，专门的翻译模型还是有它的价值。</p>
-<p>但如果你想要的是一套本地模型，尽量兼顾翻译、问答、代码和一般文本任务，那 <code>26B A4B</code> 这种更全能的路线就很顺。</p>
-<p>它未必是最专的，但它更像现实世界里“只想先跑起来一个够用主力模型”的选择。</p>
-<h2 id="为什么我不想在第二篇里继续吹-31b">为什么我不想在第二篇里继续吹 <code>31B</code>
-</h2><p>不是因为 <code>31B</code> 不行，恰恰相反，它太行了，所以很容易把注意力带偏。</p>
-<p>你一旦一直盯着 <code>31B</code> 的榜单表现看，很容易把这篇写成“强模型真强”。但本地部署最怕的就是这种话。因为真正决定你每天会不会继续用它的，不是榜单，而是：</p>
-<ul>
-<li>启动是不是太慢</li>
-<li>回答是不是掉速严重</li>
-<li>长上下文是不是很快就拖垮体验</li>
-<li>自己机器到底撑不撑得住</li>
-</ul>
-<p>在 <code>3060 12GB</code> 这种机器上，这些现实问题比榜单重要多了。</p>
-<p>所以我对第二篇的收口很简单。</p>
-<p><code>31B</code> 值得看，<code>26B A4B</code> 值得用。对本地玩家来说，这两句话不是一回事。</p>
-<h2 id="我的本地第一结论">我的本地第一结论
-</h2><p>如果让我用一句话概括这次实测感受，那就是：</p>
-<p><code>Gemma 4</code> 终于开始像一个会看场景的本地模型了。</p>
-<p>尤其是 <code>26B A4B</code>。它不是那种最能拿来晒榜单的型号，但在老机器、消费级显卡、本地长期使用这些现实约束下，它反而更像真正的主力选择。</p>
-<p>至少这次五角星测试，谷歌是过关了。</p>
-<h2 id="参考资料">参考资料
-</h2><ul>
-<li><a class="link" href="https://blog.google/innovation-and-ai/technology/developers-tools/gemma-4/"  target="_blank" rel="noopener"
-    >Gemma 4: Byte for byte, the most capable open models</a></li>
-<li><a class="link" href="https://ai.google.dev/gemma/docs/core/model_card_4"  target="_blank" rel="noopener"
-    >Gemma 4 model card</a></li>
-<li><a class="link" href="https://huggingface.co/google/gemma-4-26B-A4B-it"  target="_blank" rel="noopener"
-    >google/gemma-4-26B-A4B-it on Hugging Face</a></li>
-<li><a class="link" href="https://developers.googleblog.com/introducing-gemma3/"  target="_blank" rel="noopener"
-    >Gemma 3: The Developer Guide</a></li>
-<li><a class="link" href="https://blog.google/innovation-and-ai/technology/developers-tools/translategemma/"  target="_blank" rel="noopener"
-    >TranslateGemma: A new family of open translation models</a></li>
-<li><a class="link" href="https://foodtruckbench.com/blog/gemma-4-31b"  target="_blank" rel="noopener"
-    >Gemma 4 31B on FoodTruck Bench</a></li>
-</ul>
+
+</section>
+
+</div>
+
+<p>归根结底，本地部署拼的不是谁的榜单最风光，而是谁能在你自己的显存里稳稳住下来、天天顺手用得起来；真遇到复杂长链路开发任务，再按需切回云端高阶 API（选型账本见<a class="link" href="/p/gpt-6-price-vs-claude/" >GPT-6 降价后 Claude 还值高价吗</a>）。</p>
 <details class="article-notes">
     <summary>写作附记</summary>
     <div class="article-notes__content">
-        <h3 id="原始提示词">原始提示词
-</h3><blockquote>
-<p>$blog-writer 谷歌时隔一年，发布了 Gemma4 模型，老规矩，尝试本地部署，还是那台没升级的台式 3060 12GB 英伟达显卡。这次赶上了首发，但是没找到以前常用 Gemma3 的升级版本，但是多有个类似的版本 GemmaE4b，你先搜索介绍下，本次发布了的所有型号，里面的缩写字母什么意思，然后搜索下网上关于 Gemma4 的评价，关键是，本次谷歌更新该了模型的协议，大家用起来的限制更少了。最大的惊喜，我常用的测试题：写一段 C++ 代码，在控制台输出五角星，去年的小参数开源模型都没搞定这个问题，谷歌这次搞定了，第一版给出答案，完全超出我的意料，它知道了我的陷阱，控制台输出五角星很麻烦，它直接硬编码了一个五角星的字符串，控制台直接输出。这是原文：由于在纯文本的控制台（Console）中通过数学逻辑直接绘制一个具有精确几何结构的五角星非常复杂（涉及到坐标系转换和像素填充），最经典且视觉效果最好的方法是使用 ASCII Art（字符艺术）。在我去强制要求进行计算以后，它也搞定了，通过数学计算，成功的绘制了五角星。以前常用 Gemma4 进行本地的翻译任务，当前博客很多历史文章的多语言版本就是这样来的。本地测试用的：gemma-4-26b-a4b 模型，31b 版本属实太慢了。但是看测评 31b 效果很不错，排行榜的成绩很好。同时刷论坛，我认知到了，显存如果不够，模型参数上去了，生成 token 的速度会断崖式下降，你解释下为什么？Mac 不会有这个问题，它走的是统一内存，解释下技术原因。还有就是，如果需要速度，那还是 英伟达大显存的显卡才行。Mac 的方案能兜底，但是速度上不去。本次的内容很多，你评估下是否拆成系列文章。</p>
-</blockquote>
+        <h3 id="整合说明与原始提示词">整合说明与原始提示词
+</h3><ul>
+<li>本文合并重写了此前同一天拆分的三篇 Gemma 4 系列旧稿（原 <code>Gemma 4 开放以后（一）（二）（三）</code>），第一、第三篇旧稿及过时多语译本已清理删除。</li>
+<li>原始背景：Gemma 4 发布后梳理型号命名（E2B/E4B/26B A4B/31B）与 Apache 2.0 协议，在 RTX 3060 12GB 上实测 <code>26B A4B</code> 的 C++ 控制台五角星测试题，并分析显存溢出断崖与 Mac 统一内存差异。</li>
+<li>重写方式：按 <code>blog-writer-free v1.2.0</code> 重写，并与<a class="link" href="/p/is-ai-getting-dumber-uncovering-the-game-between-parameter-precision-and-inference-costs/" >AI 降智与精度成本权衡</a>及<a class="link" href="/p/gpt-6-price-vs-claude/" >GPT-6 与 Claude 价格战</a>建立互链。</li>
+</ul>
+
     </div>
 </details>
 </section>
@@ -482,6 +456,10 @@
             <a class="article-tag article-tag--category" href="/tags/google/">google</a>
         
             <a class="article-tag article-tag--category" href="/tags/3060/">3060</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/vram-video-random-access-memory/">显存</a>
+        
+            <a class="article-tag article-tag--category" href="/tags/%E6%9C%AC%E5%9C%B0%E9%83%A8%E7%BD%B2/">本地部署</a>
         
     </section>
 
@@ -513,28 +491,8 @@
     <ol class="related-content__list">
             
                 <li class="related-content__item">
-                    <a href="/p/gemma-4-series-models-and-license/" class="related-content__link">
-                        <span class="related-content__index">01</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">Gemma 4 开放以后（一）：型号和许可证先落地</h3>
-                            <time class="related-content__date" datetime='2026-04-08T23:48:20&#43;08:00'>2026年04月08日</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
-                    <a href="/p/gemma-4-series-vram-cliff-and-mac-unified-memory/" class="related-content__link">
-                        <span class="related-content__index">02</span>
-                        <div class="related-content__body">
-                            <h3 class="related-content__title">Gemma 4 开放以后（三）：显存速度决定本地体验</h3>
-                            <time class="related-content__date" datetime='2026-04-08T23:56:20&#43;08:00'>2026年04月08日</time>
-                        </div>
-                    </a>
-                </li>
-            
-                <li class="related-content__item">
                     <a href="/p/weaker-models-shouldnt-do-frontier-work/" class="related-content__link">
-                        <span class="related-content__index">03</span>
+                        <span class="related-content__index">01</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">低成本模型该接的活：重复、脏活和边界清楚的任务</h3>
                             <time class="related-content__date" datetime='2026-04-02T22:05:00&#43;08:00'>2026年04月02日</time>
@@ -544,9 +502,9 @@
             
                 <li class="related-content__item">
                     <a href="/p/vera-rubin-tokens-per-megawatt-ai-price/" class="related-content__link">
-                        <span class="related-content__index">04</span>
+                        <span class="related-content__index">02</span>
                         <div class="related-content__body">
-                            <h3 class="related-content__title">Vera Rubin 的十倍每兆瓦 Tokens，会把 AI 价格打下来吗？</h3>
+                            <h3 class="related-content__title">英伟达算力演进与能耗账：从 H100、中国特供版到 Vera Rubin 的十倍能效</h3>
                             <time class="related-content__date" datetime='2026-07-22T21:13:54&#43;08:00'>2026年07月22日</time>
                         </div>
                     </a>
@@ -554,10 +512,30 @@
             
                 <li class="related-content__item">
                     <a href="/p/code-anchors-for-llm-requirements/" class="related-content__link">
-                        <span class="related-content__index">05</span>
+                        <span class="related-content__index">03</span>
                         <div class="related-content__body">
                             <h3 class="related-content__title">给编码模型几个代码锚点</h3>
                             <time class="related-content__date" datetime='2026-07-05T23:04:15&#43;08:00'>2026年07月05日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/loop-engineering-human-checkpoints/" class="related-content__link">
+                        <span class="related-content__index">04</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Loop engineering 把人挪到检查点</h3>
+                            <time class="related-content__date" datetime='2026-06-14T07:35:00&#43;08:00'>2026年06月14日</time>
+                        </div>
+                    </a>
+                </li>
+            
+                <li class="related-content__item">
+                    <a href="/p/codex-chatgpt-ui-mockup-workflow/" class="related-content__link">
+                        <span class="related-content__index">05</span>
+                        <div class="related-content__body">
+                            <h3 class="related-content__title">Codex 写界面扑街之后，让 ChatGPT 画 UI</h3>
+                            <time class="related-content__date" datetime='2026-06-14T05:14:22&#43;08:00'>2026年06月14日</time>
                         </div>
                     </a>
                 </li>

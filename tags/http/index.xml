@@ -6,6 +6,117 @@
         <description>Recent content in http on 向叔记事簿</description>
         <generator>Hugo -- gohugo.io</generator>
         <language>zh-cn</language><atom:link href="https://ttf248.life/tags/http/index.xml" rel="self" type="application/rss+xml" /><item>
+        <title>wrk 与 JMeter 怎么选：从连接模型到压测场景的底层差异</title>
+        <link>https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/</link>
+        <pubDate>Fri, 19 Dec 2025 01:14:49 +0800</pubDate>
+        
+        <guid>https://ttf248.life/p/wrk-vs-jmeter-deep-benchmarking/</guid>
+        <description>&lt;p&gt;在给 HTTP 服务做压力测试时，工程团队最常遇到的两款工具就是 &lt;strong&gt;wrk&lt;/strong&gt; 和 &lt;strong&gt;JMeter&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;很多人对它们的印象很直观：&lt;code&gt;wrk&lt;/code&gt; 偏向用一个线程扛多条连接猛轰接口，而 &lt;code&gt;JMeter&lt;/code&gt; 更常见于短连接测试，当然也能通过配置改成长连接。这个直觉抓住了表象，但真到架构选型和排查发压瓶颈时，决定两者行为差异的其实是&lt;strong&gt;底层并发模型&lt;/strong&gt;与&lt;strong&gt;设计目标&lt;/strong&gt;。&lt;/p&gt;
+&lt;h2 id=&#34;底层架构事件驱动复用-vs-一用户一线程&#34;&gt;底层架构：事件驱动复用 vs 一用户一线程
+&lt;/h2&gt;&lt;p&gt;为什么 &lt;code&gt;wrk&lt;/code&gt; 开 4 个线程就能把被测服务器的网卡打满，而 &lt;code&gt;JMeter&lt;/code&gt; 开几千个并发用户时，往往发压机自己先 CPU 飙红甚至内存溢出？根源在于并发模型的不同。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;wrk（C + LuaJIT + 事件驱动）&lt;/strong&gt;：采用与 Nginx 类似的非阻塞 I/O 多路复用（Linux 下为 &lt;code&gt;epoll&lt;/code&gt;，macOS/BSD 下为 &lt;code&gt;kqueue&lt;/code&gt;）。只需开启与 CPU 核心数相当的少量线程，每个线程内部通过事件循环同时管理成百上千条 TCP Socket。几乎没有线程上下文切换开销，把发压机算力全部集中在发包与收包上。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;JMeter（Java + 传统多线程模型）&lt;/strong&gt;：采用“一个虚拟用户对应一个 JVM 线程”的阻塞式模型。模拟 2000 个并发用户，就需要创建 2000 个操作系统线程。线程栈占用大量内存，高频上下文切换叠加 JVM GC 停顿，导致单台发压机的吞吐上限远低于 &lt;code&gt;wrk&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;长连接还是短连接先破除一个常见误解&#34;&gt;长连接还是短连接？先破除一个常见误解
+&lt;/h2&gt;&lt;p&gt;严格来说，&lt;strong&gt;JMeter 并不是默认强制走短连接&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;在 JMeter 的 &lt;code&gt;HTTP Request&lt;/code&gt; 采样器中，&lt;strong&gt;&lt;code&gt;Use KeepAlive&lt;/code&gt; 默认是勾选的&lt;/strong&gt;。只要服务端不主动断开，同一个线程在连续循环发请求时默认也会复用连接。&lt;/p&gt;
+&lt;p&gt;之所以实战里很多人觉得“JMeter 跑起来像短连接”，通常来自三种情况：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;高线程数、低循环次数的配置&lt;/strong&gt;：开了很多线程，但每个线程只跑一两轮就结束，或者中间设置了较长的思考时间（Think Time）触发服务端 &lt;code&gt;keepalive_timeout&lt;/code&gt;，实际效果就变成了高频 TCP 建连。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;刻意取消 &lt;code&gt;Use KeepAlive&lt;/code&gt;&lt;/strong&gt;：测试网关或负载均衡的新建连接能力（CPS）时，会主动关掉 KeepAlive，模拟海量独立用户的短连接风暴。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;发压机端口耗尽&lt;/strong&gt;：一旦切入高频短连接压测，Linux 客户端的临时端口很快会被大量 &lt;code&gt;TIME_WAIT&lt;/code&gt; 连接占满，没等服务端撑不住，发压机自己先报错。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;反观 &lt;code&gt;wrk&lt;/code&gt;，它天生就是为 &lt;strong&gt;HTTP/1.1 Keep-Alive 极致长连接复用&lt;/strong&gt;设计的：启动后建立 &lt;code&gt;-c&lt;/code&gt; 条连接，全程死死复用，压出的是被测接口在理想连接状态下的纯处理天花板。&lt;/p&gt;
+&lt;h2 id=&#34;核心维度对比&#34;&gt;核心维度对比
+&lt;/h2&gt;&lt;table&gt;
+	&lt;thead&gt;
+			&lt;tr&gt;
+					&lt;th&gt;对比维度&lt;/th&gt;
+					&lt;th&gt;wrk&lt;/th&gt;
+					&lt;th&gt;JMeter&lt;/th&gt;
+			&lt;/tr&gt;
+	&lt;/thead&gt;
+	&lt;tbody&gt;
+			&lt;tr&gt;
+					&lt;td&gt;底层实现&lt;/td&gt;
+					&lt;td&gt;C + LuaJIT（&lt;code&gt;epoll&lt;/code&gt; / &lt;code&gt;kqueue&lt;/code&gt; 事件驱动）&lt;/td&gt;
+					&lt;td&gt;Java（JVM 多线程，一虚拟用户一线程）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;单机发压能力&lt;/td&gt;
+					&lt;td&gt;极高，单机轻松打出数万至数十万 QPS&lt;/td&gt;
+					&lt;td&gt;偏低，大并发需多机分布式压测（Master/Slave）&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;连接模型偏好&lt;/td&gt;
+					&lt;td&gt;天生极致长连接复用（Keep-Alive）&lt;/td&gt;
+					&lt;td&gt;默认 Keep-Alive，可灵活切换短连接模拟建连风暴&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;业务编排能力&lt;/td&gt;
+					&lt;td&gt;较弱，依赖 Lua 脚本做轻量动态参数化&lt;/td&gt;
+					&lt;td&gt;极强，支持登录鉴权、关联提取、条件分支、复杂断言&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;协议生态&lt;/td&gt;
+					&lt;td&gt;专注 HTTP / HTTPS&lt;/td&gt;
+					&lt;td&gt;HTTP、WebSocket、JDBC、TCP、Kafka、gRPC 等&lt;/td&gt;
+			&lt;/tr&gt;
+			&lt;tr&gt;
+					&lt;td&gt;报告输出&lt;/td&gt;
+					&lt;td&gt;简洁终端摘要（QPS、平均延迟、分位数）&lt;/td&gt;
+					&lt;td&gt;完整 HTML 报告、趋势曲线与监控插件&lt;/td&gt;
+			&lt;/tr&gt;
+	&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h2 id=&#34;选型怎么落两把工具各司其职&#34;&gt;选型怎么落？两把工具各司其职
+&lt;/h2&gt;&lt;div class=&#34;rich-cards rich-cards--columns-2&#34;&gt;
+&lt;section class=&#34;rich-card&#34;&gt;
+    &lt;strong class=&#34;rich-card__title&#34;&gt;优先用 wrk 的场景&lt;/strong&gt;
+    &lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;单接口极限摸底&lt;/strong&gt;：测网关、缓存层、无状态微服务的纯 QPS 上限。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;快速性能回归&lt;/strong&gt;：对比某次代码改动或连接池调优前后的延迟与吞吐变化。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;资源受限&lt;/strong&gt;：只有一台普通发压机，不想搭复杂的分布式压测集群。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/section&gt;
+
+&lt;section class=&#34;rich-card&#34;&gt;
+    &lt;strong class=&#34;rich-card__title&#34;&gt;优先用 JMeter 的场景&lt;/strong&gt;
+    &lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;复杂业务链路&lt;/strong&gt;：登录拿 Token → 查余额 → 下单 → 校验状态的串行流程。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;精细结果校验&lt;/strong&gt;：需要对响应 JSON、业务错误码甚至数据库落库做严格断言。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;真实流量模拟&lt;/strong&gt;：需要模拟思考时间、阶梯加压或大量陌生用户的短连接建连。&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;/section&gt;
+
+&lt;/div&gt;
+
+&lt;h2 id=&#34;压测时最容易踩的两个坑&#34;&gt;压测时最容易踩的两个坑
+&lt;/h2&gt;&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;把发压机瓶颈当成服务端上限&lt;/strong&gt;：QPS 上不去时，先检查发压机自身的 CPU、内存、网卡和 &lt;code&gt;TIME_WAIT&lt;/code&gt; 状态。使用 JMeter 正式发压时，务必切到&lt;strong&gt;非 GUI 命令行模式（&lt;code&gt;-n -t ... -l ...&lt;/code&gt;）&lt;/strong&gt;，开着图形界面跑压测会消耗掉大量本机资源。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;忽视“协同遗漏（Coordinated Omission）”&lt;/strong&gt;：原版 &lt;code&gt;wrk&lt;/code&gt; 在服务端突然卡顿（如触发 Full GC 或锁等待）时，发压线程会等上一个请求返回再发下一个，导致报告里的 P99 延迟比真实用户体感乐观得多。若对长尾延迟高度敏感，建议改用恒定吞吐率发压的 &lt;code&gt;wrk2&lt;/code&gt; 或 &lt;code&gt;k6&lt;/code&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;压测的目的从来不是刷出一个好看的峰值数字，而是把隐蔽的并发短板——比如连接池打满、线程池饥饿，或是像&lt;a class=&#34;link&#34; href=&#34;https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/&#34; &gt;MySQL 间隙锁死锁&lt;/a&gt;这类低并发下根本复现不了的故障——提前在上线前打出来。把 &lt;code&gt;wrk&lt;/code&gt; 当手术刀测单点极限，把 &lt;code&gt;JMeter&lt;/code&gt; 当沙盘演练完整业务流，配合着用才最稳妥。&lt;/p&gt;
+&lt;details class=&#34;article-notes&#34;&gt;
+    &lt;summary&gt;写作附记&lt;/summary&gt;
+    &lt;div class=&#34;article-notes__content&#34;&gt;
+        &lt;h3 id=&#34;原始背景与提示词&#34;&gt;原始背景与提示词
+&lt;/h3&gt;&lt;ul&gt;
+&lt;li&gt;原始提示词：
+&lt;blockquote&gt;
+&lt;p&gt;梳理核心思路，撰写科普文章：http 压力测试工具，wrk vs Jmeter 有什么不同，我了解到的，wrk 倾向于 一个线程多个 connect 进行测试，Jmeter 更多是短连接模式，能通过配置调整为长连接&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;/li&gt;
+&lt;li&gt;重写说明：本次按 &lt;code&gt;blog-writer-free v1.2.0&lt;/code&gt; 重写，纠正了“JMeter 默认短连接”的常见误区并解释了实战中为何容易表现出短连接特征，补充了非 GUI 压测与“协同遗漏”两个关键工程细节。&lt;/li&gt;
+&lt;/ul&gt;
+    &lt;/div&gt;
+&lt;/details&gt;</description>
+        </item>
+        <item>
         <title>Git禁用http仓库</title>
         <link>https://ttf248.life/p/git-disable-http-repositories/</link>
         <pubDate>Mon, 08 Jan 2024 21:22:04 +0800</pubDate>
