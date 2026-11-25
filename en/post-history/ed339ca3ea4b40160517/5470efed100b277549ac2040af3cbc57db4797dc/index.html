@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="editorial" data-code-copy="Copy code" data-code-copied="Copied" data-code-expand="Expand all" data-code-collapse="Collapse code">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="A custom allocator can improve performance, increase memory utilization efficiency, and address the issue of frequent, small memory allocations.\nAntecedent Recently, I&rsquo;ve been working on the development of network data packets, requiring frequent allocation and release of small blocks of memory. Initially, I considered using a memory pool, reviewing several existing ones and discovering this: https://github.com/cacay/MemoryPool When looking at the interface, I was quite puzzled by how the memory pool&rsquo;s implementation was a bit strange. The MemoryPool implementation logic involves allocating fixed-size memory spaces. Having reviewed Boost’s memory pool interface, it provides a template that is instantiated when used. Fortunately, this library already had an article describing it, mentioning the concept of ‘allocator’.\n">
+<title>Standard Library Container Memory Allocators: allocator</title>
+
+<link rel='canonical' href='https://ttf248.life/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Standard Library Container Memory Allocators: allocator">
+<meta property='og:description' content="A custom allocator can improve performance, increase memory utilization efficiency, and address the issue of frequent, small memory allocations.\nAntecedent Recently, I&rsquo;ve been working on the development of network data packets, requiring frequent allocation and release of small blocks of memory. Initially, I considered using a memory pool, reviewing several existing ones and discovering this: https://github.com/cacay/MemoryPool When looking at the interface, I was quite puzzled by how the memory pool&rsquo;s implementation was a bit strange. The MemoryPool implementation logic involves allocating fixed-size memory spaces. Having reviewed Boost’s memory pool interface, it provides a template that is instantiated when used. Fortunately, this library already had an article describing it, mentioning the concept of ‘allocator’.\n">
+<meta property='og:url' content='https://ttf248.life/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2019-12-30T13:26:19&#43;08:00'/><meta property='article:modified_time' content='2019-12-30T13:26:19&#43;08:00'/>
+<meta name="twitter:title" content="Standard Library Container Memory Allocators: allocator">
+<meta name="twitter:description" content="A custom allocator can improve performance, increase memory utilization efficiency, and address the issue of frequent, small memory allocations.\nAntecedent Recently, I&rsquo;ve been working on the development of network data packets, requiring frequent allocation and release of small blocks of memory. Initially, I considered using a memory pool, reviewing several existing ones and discovering this: https://github.com/cacay/MemoryPool When looking at the interface, I was quite puzzled by how the memory pool&rsquo;s implementation was a bit strange. The MemoryPool implementation logic involves allocating fixed-size memory spaces. Having reviewed Boost’s memory pool interface, it provides a template that is instantiated when used. Fortunately, this library already had an article describing it, mentioning the concept of ‘allocator’.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/en/","name":"Uncle Xiang's Notebook","position":1},{"@type":"ListItem","item":"https://ttf248.life/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/","name":"Standard Library Container Memory Allocators: allocator","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2019-12-30T13:26:19+08:00","datePublished":"2019-12-30T13:26:19+08:00","headline":"Standard Library Container Memory Allocators: allocator","inLanguage":"en","mainEntityOfPage":"https://ttf248.life/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/en/" aria-label="Uncle Xiang&#39;s Notebook Home">
+            <span class="site-header__title">Uncle Xiang&#39;s Notebook</span>
+            <span class="site-header__subtitle">Collecting Moments, Marking Time</span>
+        </a>
+<nav class="site-header__nav" aria-label="Navigation">
+            <div class="site-header__nav-group" role="group" aria-label="Browse">
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/en/projects/" aria-label="Projects">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>Projects</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="Switch writing source"
+                    data-source-toggle-button>
+                    Author writing
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/author/"
+                            class="site-header__source-toggle-option">
+                            Author writing
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI writing
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="Switch color mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open navigation menu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="Navigation">
+        <div class="mobile-navigation__header">
+            <span>Navigation</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="Close navigation menu">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="Browse">
+                <div class="mobile-navigation__group-label">Browse</div>
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="Projects">
+                <div class="mobile-navigation__group-label">Projects</div>
+                <a class="mobile-navigation__area" href="/en/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>Projects</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="Writing">
+                <div class="mobile-navigation__group-label">Writing</div>
+                <a href="/en/writing/author/">Author writing</a>
+                <a href="/en/writing/ai/">AI writing</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>Language</span>
+                <select aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="Article reading tools">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/en/p/standard-library-container-memory-allocator/">← <span>Back to the current post</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">Table of contents</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">Font size</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">Reading font size</span>
+        <div class="article-reading-settings__options" role="group" aria-label="Reading font size">
+            <button type="button" data-reading-size="small" aria-pressed="false">Small</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">Default</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">Large</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="Table of contents">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">Table of contents</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>On this page</span>
+            <small data-article-reading-remaining data-template="About #MINUTES min left">About 3 min left</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li>
+      <ol>
+        <li>
+          <ol>
+            <li><a href="#antecedent">Antecedent</a></li>
+            <li><a href="#usage-requirements">Usage Requirements</a></li>
+            <li><a href="#usage-requirements-1">Usage Requirements</a></li>
+            <li><a href="#usage-requirements-2">Usage Requirements</a></li>
+            <li><a href="#usage-requirements-3">Usage Requirements</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article" data-reading-minutes="3">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Standard Library Container Memory Allocators: allocator</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Dec 30, 2019</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">4 minute read</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="Version history">
+        <p>
+            <strong>Archived version</strong>
+            
+            Version date
+            <time datetime="2025-06-01T15:10:34&#43;08:00">Jun 01, 2025 15:10</time>
+
+            <code>5470efed</code>
+        </p>
+        <p>
+            
+                <a href="/en/p/standard-library-container-memory-allocator/">← Back to the current post</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">This archived link no longer has an available destination.</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>Version history · 4</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">Review changes</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="5470efed100b277549ac2040af3cbc57db4797dc"
+        data-unchanged="The visible article content is identical."
+        data-loading="Loading versions…"
+        data-error="Could not load the versions. Exit and reopen the review to retry."
+        data-same="Choose two different versions.">
+        <header class="post-review__header">
+            <h1 id="post-review-title">Review changes</h1>
+            <button type="button" class="post-review-button" data-review-close>Exit review</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">Base version</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/en/p/standard-library-container-memory-allocator/">Current version</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/en/post-history/ed339ca3ea4b40160517/014d98495108316899811ac3b7d474801fcc23a9/">Jun 02, 2025 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="5470efed100b277549ac2040af3cbc57db4797dc" data-url="/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/">Jun 01, 2025 15:10 · 5470efed</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/en/post-history/ed339ca3ea4b40160517/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">May 28, 2025 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd" data-url="/en/post-history/ed339ca3ea4b40160517/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">May 25, 2025 02:57 · 1b1cd1c9</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">Target version</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/en/p/standard-library-container-memory-allocator/">Current version</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/en/post-history/ed339ca3ea4b40160517/014d98495108316899811ac3b7d474801fcc23a9/">Jun 02, 2025 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="5470efed100b277549ac2040af3cbc57db4797dc" data-url="/en/post-history/ed339ca3ea4b40160517/5470efed100b277549ac2040af3cbc57db4797dc/">Jun 01, 2025 15:10 · 5470efed</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/en/post-history/ed339ca3ea4b40160517/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">May 28, 2025 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd" data-url="/en/post-history/ed339ca3ea4b40160517/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">May 25, 2025 02:57 · 1b1cd1c9</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− Removed</del>
+            <ins class="post-review-inline--ins">&#43; Added</ins>
+            <mark class="post-review-inline--format">Formatting or link change</mark>
+            <label><input type="checkbox" data-review-all> Show all content</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="Version differences" role="region"
+            data-folded-label="Expand #COUNT# unchanged blocks"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/en/post-history/ed339ca3ea4b40160517/014d98495108316899811ac3b7d474801fcc23a9/">Standard Library Container Memory Allocators: allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-02T19:00:25&#43;08:00">Jun 02, 2025 19:00</time>
+
+                            <code>014d9849</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">Standard Library Container Memory Allocators: allocator <span class="post-archive-meta">(Viewing)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-01T15:10:34&#43;08:00">Jun 01, 2025 15:10</time>
+
+                            <code>5470efed</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/ed339ca3ea4b40160517/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">Allocator for standard library containers</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-28T09:47:38&#43;08:00">May 28, 2025 09:47</time>
+
+                            <code>64434a6a</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/ed339ca3ea4b40160517/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">Allocator for standard library containers</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-25T02:57:45&#43;08:00">May 25, 2025 02:57</time>
+
+                            <code>1b1cd1c9</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>On this page</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li>
+      <ol>
+        <li>
+          <ol>
+            <li><a href="#antecedent">Antecedent</a></li>
+            <li><a href="#usage-requirements">Usage Requirements</a></li>
+            <li><a href="#usage-requirements-1">Usage Requirements</a></li>
+            <li><a href="#usage-requirements-2">Usage Requirements</a></li>
+            <li><a href="#usage-requirements-3">Usage Requirements</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>A custom allocator can improve performance, increase memory utilization efficiency, and address the issue of frequent, small memory allocations.</p>
+<h4 id="antecedent">Antecedent
+</h4><p>Recently, I&rsquo;ve been working on the development of network data packets, requiring frequent allocation and release of small blocks of memory. Initially, I considered using a memory pool, reviewing several existing ones and discovering this:
+<a class="link" href="https://github.com/cacay/MemoryPool">https://github.com/cacay/MemoryPool</a>
+When looking at the interface, I was quite puzzled by how the memory pool&rsquo;s implementation was a bit strange. The <code>MemoryPool</code> implementation logic involves allocating fixed-size memory spaces. Having reviewed Boost’s memory pool interface, it provides a template that is instantiated when used. Fortunately, this library already had an article describing it, mentioning the concept of ‘allocator’.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gu">#### [wiki](https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_(C%2B%2B))
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">In C++ programming, an allocator is a key component of the C++ standard library. The C++ library defines various data structures commonly referred to as &#34;containers&#34; (such as linked lists, sets, etc.). A common feature of these containers is that their size can be changed at runtime; therefore, dynamic memory allocation becomes necessary to achieve this. The allocator is used to handle container requests for memory allocation and deallocation. In other words, the allocator encapsulates the low-level details of memory management for standard template library (STL) containers. By default, the C++ standard library uses its built-in generic allocator; however, programmers can customize allocators to replace it as needed.
+</span></span><span class="line"><span class="cl">``<span class="sb">` The allocator was originally invented by Alexander Stepanov as part of the C++ Standard Template Library (STL) as a way to “make the library more flexible and independent of the underlying data model,” allowing programmers to use custom pointer and reference types within the library. However, when the STL was incorporated into the C++ standard, the C++ standards committee realized that full abstraction of the data model would lead to unacceptable performance penalties. To compromise, restrictions on allocators in the standard became much stricter, and as a result, the degree to which allocators can be customized is now greatly limited compared to Stepanov’s original vision.
+</span></span></span><span class="line"><span class="cl"><span class="sb">
+</span></span></span><span class="line"><span class="cl"><span class="sb">`</span>``markdown
+</span></span><span class="line"><span class="cl"><span class="gu">#### [wiki](https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_(C%2B%2B))
+</span></span></span><span class="line"><span class="cl">Although customization of the allocator is limited, it is still often necessary to use a custom allocator in many cases, typically for encapsulating access methods to different types of memory spaces (such as shared memory and reclaimed memory), or for improving performance when using memory pools. In addition, from the perspective of memory usage and execution time, introducing a dedicated allocator for programs that frequently perform small amounts of memory allocation will also benefit.
+</span></span></code></pre></div><h4 id="usage-requirements"><a class="link" href="https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_%28C%2B%2B%29">Usage Requirements</a>
+</h4><p>Defining custom allocators primarily aims to improve performance. Utilizing a dedicated custom allocator can enhance program performance, or improve memory usage efficiency, or both [4][8]. The default allocator uses the <code>new</code> operator to allocate storage [Reference 5], which often leverages the C language heap allocation function (malloc()) [9]. Because heap allocation functions are typically optimized for infrequent large memory allocations, the default allocator generally performs well when allocating memory for containers that require a single large memory allocation, such as vectors and doubly-ended queues [8]. However, when using the default allocator to allocate memory for associative containers with linked lists or bidirectional linked lists – which frequently require allocating small amounts of memory – performance is typically very low [4][9].</p>
+<h4 id="usage-requirements-1"><a class="link" href="https://en.wikipedia.org/wiki/Memory_pool_%28C%2B%2B%29">Usage Requirements</a>
+</h4><p>In short, this section (…)(like) is a “I Have a Dream” speech for the allocator. Before the dream comes true, programmers concerned with portability will be limited to (using) stateless custom allocators.
+—Scott Meyers, <em>Effective STL</em>
+Given this, in this case, memory pools are often used to address frequent, small allocations [8]. Unlike the default “on-demand allocation” method, when using a memory pool allocator, the program pre-allocates large blocks of memory (referred to as the “memory pool”) upfront.  Then, when requesting memory, the custom allocator simply returns a pointer to an available block within the pool. Unlike object deconstruction, no actual memory is released; instead, the release is deferred until the lifecycle of the memory pool ends [Note 1][8].</p>
+<h4 id="usage-requirements-2"><a class="link" href="https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_%28C%2B%2B%29">Usage Requirements</a>
+</h4><p>On the topic of &ldquo;Custom Allocators,&rdquo; numerous C++ experts and authors have participated in discussions, such as Scott Meyers&rsquo; <em>Effective STL</em> and Andrei Alexandrescu’s <em>Modern C++ Design</em>, which both mention it. Meyers observed that if one requires all instances of a particular type <code>T</code>’s allocator to be equal, then the portable allocator instance must not contain state. Although the C++ standard encourages library implementers to support stateful allocators [Ref 4], Meyers called this paragraph “(seemingly) a wonderful idea,” but it is almost empty rhetoric, and considered the allocator restrictions “too strict” [4]. For example, STL’s list allows the splice method, meaning a node from one list object A can be directly inserted into another list object B. This requires that the memory allocated by A’s allocator is released by B’s allocator, thereby deducing that A and B’s allocator instances must be equal. Meyer’s conclusion is that allocators should be defined as types using static methods. For example, according to the C++ standard, an allocator must provide a class template other that implements the rebind method.</p>
+<h4 id="usage-requirements-3"><a class="link" href="https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_%28C%2B%2B%29">Usage Requirements</a>
+</h4><p>Additionally, in <em>The C++ Programming Language</em> by Bjarne Stroustrup, he states “&lsquo;strict allocation to avoid different information for each object,&rsquo; this is clearly not a problem’ (roughly), and points out that most allocators don&rsquo;t need state, or even perform better when there is no state. He proposes three use cases for custom allocators: pool-based allocator, shared memory allocator, and garbage collector, and demonstrates an implementation of an allocator which utilizes an internal memory pool to quickly allocate/deallocate small amounts of memory. However, he also notes that such optimization may already be present in the sample allocator he provides [3].
+Another use for custom allocators is debugging memory-related errors [10]. To achieve this, you can write a memory allocator that allocates additional memory when allocating, and uses it to store debugging information. This allocator not only ensures that memory is allocated/deallocated by the same type of allocator, but also provides some protection against cache overflows [11].</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">Table of contents</h2>
+        <button type="button" data-article-toc-close aria-label="Close table of contents">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="Back to top"
+    title="Back to top"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

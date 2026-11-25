@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="美股有三个交易时段，分别是：盘前、盘中、盘后；接口推送数据还是数值增量的逻辑（尽可能的节约带宽），仅在第一次发送全量，第二次开始所有字段都是增量推送逻辑。\n为什么不用最优方案？牵扯到不同项目组，有些都已经上线多年。我方属于新对接，所以只能尽量兼容。\n">
+<title>Protobuf错误的将零定义为有效的业务值</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Protobuf错误的将零定义为有效的业务值">
+<meta property='og:description' content="美股有三个交易时段，分别是：盘前、盘中、盘后；接口推送数据还是数值增量的逻辑（尽可能的节约带宽），仅在第一次发送全量，第二次开始所有字段都是增量推送逻辑。\n为什么不用最优方案？牵扯到不同项目组，有些都已经上线多年。我方属于新对接，所以只能尽量兼容。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2025-02-20T15:26:51&#43;08:00'/><meta property='article:modified_time' content='2025-02-20T15:26:51&#43;08:00'/>
+<meta name="twitter:title" content="Protobuf错误的将零定义为有效的业务值">
+<meta name="twitter:description" content="美股有三个交易时段，分别是：盘前、盘中、盘后；接口推送数据还是数值增量的逻辑（尽可能的节约带宽），仅在第一次发送全量，第二次开始所有字段都是增量推送逻辑。\n为什么不用最优方案？牵扯到不同项目组，有些都已经上线多年。我方属于新对接，所以只能尽量兼容。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/","name":"Protobuf错误的将零定义为有效的业务值","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2025-02-20T15:26:51+08:00","datePublished":"2025-02-20T15:26:51+08:00","headline":"Protobuf错误的将零定义为有效的业务值","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/p/protobuf-zero-value-trap/">← <span>返回当前文章</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 2 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#一系列问题">一系列问题</a>
+      <ol>
+        <li><a href="#无法识别交易时段">无法识别交易时段</a></li>
+        <li><a href="#引入-optional">引入 optional</a></li>
+        <li><a href="#gcc-版本问题">gcc 版本问题</a></li>
+      </ol>
+    </li>
+    <li><a href="#合理的枚举">合理的枚举</a>
+      <ol>
+        <li><a href="#为什么从-1-开始更合理">为什么从 1 开始更合理？</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="2">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Protobuf错误的将零定义为有效的业务值</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2025年02月20日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 4 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>历史版本</strong>
+            
+            版本时间
+            <time datetime="2025-02-20T15:47:53&#43;08:00">2025年02月20日 15:47</time>
+
+            <code>1065e65c</code>
+        </p>
+        <p>
+            
+                <a href="/p/protobuf-zero-value-trap/">← 返回当前文章</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 8</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="1065e65c30a4771b040f89b17e62cdb537d33322"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/p/protobuf-zero-value-trap/">当前版本</option>
+                        
+                            
+                            <option value="f8f8124d3fa9f2b675d29a4787e4624c8320e1eb" data-url="/post-history/bbb79b879aa37bdec728/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">2026年02月28日 18:47 · f8f8124d</option>
+                        
+                            
+                            <option value="783b1372b81103d258ac1f4925c7157b845a75e0" data-url="/post-history/bbb79b879aa37bdec728/783b1372b81103d258ac1f4925c7157b845a75e0/">2026年01月29日 22:52 · 783b1372</option>
+                        
+                            
+                            <option value="b0bd8a5dc240c3addeccaa897103477ab6ee2017" data-url="/post-history/bbb79b879aa37bdec728/b0bd8a5dc240c3addeccaa897103477ab6ee2017/">2025年07月28日 00:01 · b0bd8a5d</option>
+                        
+                            
+                            <option value="5af0b83a89ccbd9d0c46e348acd73e196959852a" data-url="/post-history/bbb79b879aa37bdec728/5af0b83a89ccbd9d0c46e348acd73e196959852a/">2025年06月11日 21:39 · 5af0b83a</option>
+                        
+                            
+                            <option value="e6c6d9840c72e2f5a02221f291ea09ba9245c2f3" data-url="/post-history/bbb79b879aa37bdec728/e6c6d9840c72e2f5a02221f291ea09ba9245c2f3/">2025年06月02日 08:00 · e6c6d984</option>
+                        
+                            
+                            <option value="e5615de25f2bf04dfb10513bb57394225dc526f1" data-url="/post-history/bbb79b879aa37bdec728/e5615de25f2bf04dfb10513bb57394225dc526f1/">2025年05月24日 01:17 · e5615de2</option>
+                        
+                            
+                            <option value="b6a07d120a6993d65558a4d6363f5b8f79344fe2" data-url="/post-history/bbb79b879aa37bdec728/b6a07d120a6993d65558a4d6363f5b8f79344fe2/">2025年02月20日 17:40 · b6a07d12</option>
+                        
+                            
+                            <option value="1065e65c30a4771b040f89b17e62cdb537d33322" data-url="/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/">2025年02月20日 15:47 · 1065e65c</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/p/protobuf-zero-value-trap/">当前版本</option>
+                        
+                            
+                            <option value="f8f8124d3fa9f2b675d29a4787e4624c8320e1eb" data-url="/post-history/bbb79b879aa37bdec728/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">2026年02月28日 18:47 · f8f8124d</option>
+                        
+                            
+                            <option value="783b1372b81103d258ac1f4925c7157b845a75e0" data-url="/post-history/bbb79b879aa37bdec728/783b1372b81103d258ac1f4925c7157b845a75e0/">2026年01月29日 22:52 · 783b1372</option>
+                        
+                            
+                            <option value="b0bd8a5dc240c3addeccaa897103477ab6ee2017" data-url="/post-history/bbb79b879aa37bdec728/b0bd8a5dc240c3addeccaa897103477ab6ee2017/">2025年07月28日 00:01 · b0bd8a5d</option>
+                        
+                            
+                            <option value="5af0b83a89ccbd9d0c46e348acd73e196959852a" data-url="/post-history/bbb79b879aa37bdec728/5af0b83a89ccbd9d0c46e348acd73e196959852a/">2025年06月11日 21:39 · 5af0b83a</option>
+                        
+                            
+                            <option value="e6c6d9840c72e2f5a02221f291ea09ba9245c2f3" data-url="/post-history/bbb79b879aa37bdec728/e6c6d9840c72e2f5a02221f291ea09ba9245c2f3/">2025年06月02日 08:00 · e6c6d984</option>
+                        
+                            
+                            <option value="e5615de25f2bf04dfb10513bb57394225dc526f1" data-url="/post-history/bbb79b879aa37bdec728/e5615de25f2bf04dfb10513bb57394225dc526f1/">2025年05月24日 01:17 · e5615de2</option>
+                        
+                            
+                            <option value="b6a07d120a6993d65558a4d6363f5b8f79344fe2" data-url="/post-history/bbb79b879aa37bdec728/b6a07d120a6993d65558a4d6363f5b8f79344fe2/">2025年02月20日 17:40 · b6a07d12</option>
+                        
+                            
+                            <option value="1065e65c30a4771b040f89b17e62cdb537d33322" data-url="/post-history/bbb79b879aa37bdec728/1065e65c30a4771b040f89b17e62cdb537d33322/">2025年02月20日 15:47 · 1065e65c</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/post-history/bbb79b879aa37bdec728/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">枚举值尽量不要从零开始定义</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-02-28T18:47:02&#43;08:00">2026年02月28日 18:47</time>
+
+                            <code>f8f8124d</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/bbb79b879aa37bdec728/783b1372b81103d258ac1f4925c7157b845a75e0/">枚举值尽量不要从零开始定义</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-01-29T22:52:12&#43;08:00">2026年01月29日 22:52</time>
+
+                            <code>783b1372</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/bbb79b879aa37bdec728/b0bd8a5dc240c3addeccaa897103477ab6ee2017/">枚举值尽量不要从零开始定义</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-07-28T00:01:18&#43;08:00">2025年07月28日 00:01</time>
+
+                            <code>b0bd8a5d</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/bbb79b879aa37bdec728/5af0b83a89ccbd9d0c46e348acd73e196959852a/">枚举值尽量不要从零开始定义</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-11T21:39:30&#43;08:00">2025年06月11日 21:39</time>
+
+                            <code>5af0b83a</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/bbb79b879aa37bdec728/e6c6d9840c72e2f5a02221f291ea09ba9245c2f3/">Protobuf零值陷阱：当默认值成为业务逻辑的隐形杀手</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-02T08:00:57&#43;08:00">2025年06月02日 08:00</time>
+
+                            <code>e6c6d984</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/bbb79b879aa37bdec728/e5615de25f2bf04dfb10513bb57394225dc526f1/">Protobuf零值陷阱：当默认值成为业务逻辑的隐形杀手</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-24T01:17:11&#43;08:00">2025年05月24日 01:17</time>
+
+                            <code>e5615de2</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/bbb79b879aa37bdec728/b6a07d120a6993d65558a4d6363f5b8f79344fe2/">Protobuf零值陷阱：当默认值成为业务逻辑的隐形杀手</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-02-20T17:40:17&#43;08:00">2025年02月20日 17:40</time>
+
+                            <code>b6a07d12</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">Protobuf错误的将零定义为有效的业务值 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-02-20T15:47:53&#43;08:00">2025年02月20日 15:47</time>
+
+                            <code>1065e65c</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>美股有三个交易时段，分别是：盘前、盘中、盘后；接口推送数据还是数值增量的逻辑（尽可能的节约带宽），仅在第一次发送全量，第二次开始所有字段都是增量推送逻辑。</p>
+<blockquote>
+<p>为什么不用最优方案？牵扯到不同项目组，有些都已经上线多年。我方属于新对接，所以只能尽量兼容。</p>
+</blockquote>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#一系列问题">一系列问题</a>
+      <ol>
+        <li><a href="#无法识别交易时段">无法识别交易时段</a></li>
+        <li><a href="#引入-optional">引入 optional</a></li>
+        <li><a href="#gcc-版本问题">gcc 版本问题</a></li>
+      </ol>
+    </li>
+    <li><a href="#合理的枚举">合理的枚举</a>
+      <ol>
+        <li><a href="#为什么从-1-开始更合理">为什么从 1 开始更合理？</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="一系列问题">一系列问题
+</h2><p>单从摘要上看，可能还觉得没什么问题，问题带入组内的系统架构，带出来一系列问题。刚处理上一个问题，又遇到了新的问题，这个问题是由于之前的问题引起的。</p>
+<h3 id="无法识别交易时段">无法识别交易时段
+</h3><p>已知盘中阶段定义为在 <code>protobuf</code> 中定义为 0，但是在收到数据的时候由于是增量推送，业务方无法有效识别这个<code>零</code>是默认值，还是真实的业务值。</p>
+<p>通俗理解：每次收到 0，无法判断这个 0 是新行情设置的值，还是 protobuf 的默认值</p>
+<h3 id="引入-optional">引入 optional
+</h3><p>Since protobuf release 3.15, proto3 supports using the optional keyword (just as in proto2) to give a scalar field presence information</p>
+<p>组内的通讯协议是基于 <code>protobuf</code> 的，但是由于历史原因，选择的版本比较老，并没支持 <code>optional</code> 关键字。懂的都理解，由于从底层开始引入 <code>protobuf</code>，项目底层通过静态库的方式发布，导致整个编译链路都需要升级，这个成本是非常高的。</p>
+<h3 id="gcc-版本问题">gcc 版本问题
+</h3><p>好不容易想了方案，底层发布两个不同的版本，尽可能的控制 <code>protobuf</code> 新版本的编译依赖传播。但是在编译的时候，发现 <code>gcc</code> 版本太低，不支持 <code>protobuf</code> 的新特性。</p>
+<p>组内常用的服务器类型：centos7、centos8。centos7 默认的 <code>gcc</code> 版本是 4.8，centos8 默认的 <code>gcc</code> 版本是 8.3。由于 <code>protobuf</code> 的新特性需要 <code>gcc</code> 版本在 7.4 以上，所以 centos7 无法支持。</p>
+<p><a class="link" href="https://gcc.gnu.org/bugzilla/show_bug.cgi?id=82461">Bug 82461 - [7 Regression] Temporary required for brace-initializing (non-literal-type) member variable</a>。</p>
+<p>最后折腾一圈，相关服务的部署、编译服务器都挪到 centos8 上，解决了这个问题。</p>
+<h2 id="合理的枚举">合理的枚举
+</h2><p>回顾整个问题，其实有一个更简单、高效的解决方案：调整枚举的定义，从 1 开始编号，而不是从 0 开始。这样就能有效区分默认值和业务值，避免上述一系列麻烦。</p>
+<h3 id="为什么从-1-开始更合理">为什么从 1 开始更合理？
+</h3><p>在 <code>protobuf</code> 中，枚举类型的默认值固定为 0。如果我们将有意义的业务值定义为 0（比如“盘中”），在增量推送时，业务方无法判断收到的 0 是业务值还是未设置的默认值。而如果将枚举从 1 开始定义，0 可以保留为一个无意义的默认值或“未知”状态，问题迎刃而解。</p>
+<p>建议的实践：</p>
+<p>在设计 protobuf 枚举时，始终将 0 定义为无意义的默认值（如 <code>UNKNOWN</code> 或 <code>RESERVED</code>）。
+将实际业务值从 1 开始分配，确保与默认值 0 区分开。</p>
+<p>通过这一小调整，我们不仅解决了交易时段识别的问题，还为未来的协议设计提供了一个宝贵的经验教训。</p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

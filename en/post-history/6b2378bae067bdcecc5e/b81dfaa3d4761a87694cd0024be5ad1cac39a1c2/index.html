@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="editorial" data-code-copy="Copy code" data-code-copied="Copied" data-code-expand="Expand all" data-code-collapse="Collapse code">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="In the daily work of software development, we often encounter tricky “minor issues” that seem simple but can consume us hours of valuable time. One such “disaster zone” is deleting specific files – particularly those generated unexpectedly by toolchains.\nI encountered a “level-boss” problem: during local development, a file named nul inexplicably appeared in my project. I tried Windows Explorer, the CMD command line, but the system displayed &ldquo;File not found&rdquo; or &ldquo;Cannot delete.&rdquo; This file was like a ghost, stubbornly residing in my project directory.\n">
+<title>Local Development Pain: Why Can&#39;t You Delete `nul` Files? A Solution to the “Composite” File System Problem</title>
+
+<link rel='canonical' href='https://ttf248.life/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Local Development Pain: Why Can't You Delete `nul` Files? A Solution to the “Composite” File System Problem">
+<meta property='og:description' content="In the daily work of software development, we often encounter tricky “minor issues” that seem simple but can consume us hours of valuable time. One such “disaster zone” is deleting specific files – particularly those generated unexpectedly by toolchains.\nI encountered a “level-boss” problem: during local development, a file named nul inexplicably appeared in my project. I tried Windows Explorer, the CMD command line, but the system displayed &ldquo;File not found&rdquo; or &ldquo;Cannot delete.&rdquo; This file was like a ghost, stubbornly residing in my project directory.\n">
+<meta property='og:url' content='https://ttf248.life/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2025-11-08T16:37:46&#43;08:00'/><meta property='article:modified_time' content='2025-11-08T16:37:46&#43;08:00'/>
+<meta name="twitter:title" content="Local Development Pain: Why Can't You Delete `nul` Files? A Solution to the “Composite” File System Problem">
+<meta name="twitter:description" content="In the daily work of software development, we often encounter tricky “minor issues” that seem simple but can consume us hours of valuable time. One such “disaster zone” is deleting specific files – particularly those generated unexpectedly by toolchains.\nI encountered a “level-boss” problem: during local development, a file named nul inexplicably appeared in my project. I tried Windows Explorer, the CMD command line, but the system displayed &ldquo;File not found&rdquo; or &ldquo;Cannot delete.&rdquo; This file was like a ghost, stubbornly residing in my project directory.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/en/","name":"Uncle Xiang's Notebook","position":1},{"@type":"ListItem","item":"https://ttf248.life/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/","name":"Local Development Pain: Why Can't You Delete `nul` Files? A Solution to the “Composite” File System Problem","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"gemini-2.5-pro"},"dateModified":"2025-11-08T16:37:46+08:00","datePublished":"2025-11-08T16:37:46+08:00","headline":"Local Development Pain: Why Can't You Delete `nul` Files? A Solution to the “Composite” File System Problem","inLanguage":"en","mainEntityOfPage":"https://ttf248.life/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/en/" aria-label="Uncle Xiang&#39;s Notebook Home">
+            <span class="site-header__title">Uncle Xiang&#39;s Notebook</span>
+            <span class="site-header__subtitle">Collecting Moments, Marking Time</span>
+        </a>
+<nav class="site-header__nav" aria-label="Navigation">
+            <div class="site-header__nav-group" role="group" aria-label="Browse">
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/en/projects/" aria-label="Projects">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>Projects</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="Switch writing source"
+                    data-source-toggle-button>
+                    Author writing
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/author/"
+                            class="site-header__source-toggle-option">
+                            Author writing
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI writing
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="Switch color mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open navigation menu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="Navigation">
+        <div class="mobile-navigation__header">
+            <span>Navigation</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="Close navigation menu">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="Browse">
+                <div class="mobile-navigation__group-label">Browse</div>
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="Projects">
+                <div class="mobile-navigation__group-label">Projects</div>
+                <a class="mobile-navigation__area" href="/en/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>Projects</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="Writing">
+                <div class="mobile-navigation__group-label">Writing</div>
+                <a href="/en/writing/author/">Author writing</a>
+                <a href="/en/writing/ai/">AI writing</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>Language</span>
+                <select aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="Article reading tools">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/en/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/">← <span>Back to the current post</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">Table of contents</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">Font size</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">Reading font size</span>
+        <div class="article-reading-settings__options" role="group" aria-label="Reading font size">
+            <button type="button" data-reading-size="small" aria-pressed="false">Small</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">Default</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">Large</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="Table of contents">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">Table of contents</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>On this page</span>
+            <small data-article-reading-remaining data-template="About #MINUTES min left">About 3 min left</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#phase-one-routine-attempts-and-the-ineffective-solution-of-standard-approaches">Phase One: Routine Attempts and the Ineffective Solution of “Standard” Approaches</a></li>
+    <li><a href="#stage-two-a-flash-of-insight--is-it-multiple-problem-overlapping">Stage Two: A Flash of Insight – Is it “Multiple Problem Overlapping”?</a></li>
+    <li><a href="#stage-two-a-flash-of-insight--is-it-multiple-problem-overlap">Stage Two: A Flash of Insight – Is it “Multiple Problem Overlap”?</a></li>
+    <li><a href="#phase-three-cutting-off-the-root--targeting-the-path-eliminating-everything-in-one-go">Phase Three: Cutting Off the Root – Targeting the Path, Eliminating Everything in One Go</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article" data-reading-minutes="3">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Local Development Pain: Why Can&#39;t You Delete `nul` Files? A Solution to the “Composite” File System Problem</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Nov 08, 2025</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">4 minute read</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">gemini-2.5-pro</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="Version history">
+        <p>
+            <strong>Archived version</strong>
+            
+            Version date
+            <time datetime="2025-11-08T16:48:55&#43;08:00">Nov 08, 2025 16:48</time>
+
+            <code>b81dfaa3</code>
+        </p>
+        <p>
+            
+                <a href="/en/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/">← Back to the current post</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">This archived link no longer has an available destination.</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>Version history · 2</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">Review changes</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="b81dfaa3d4761a87694cd0024be5ad1cac39a1c2"
+        data-unchanged="The visible article content is identical."
+        data-loading="Loading versions…"
+        data-error="Could not load the versions. Exit and reopen the review to retry."
+        data-same="Choose two different versions.">
+        <header class="post-review__header">
+            <h1 id="post-review-title">Review changes</h1>
+            <button type="button" class="post-review-button" data-review-close>Exit review</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">Base version</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/en/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/">Current version</option>
+                        
+                            
+                            <option value="86624e33f0aae40868322155f145766470eeb6f2" data-url="/en/post-history/6b2378bae067bdcecc5e/86624e33f0aae40868322155f145766470eeb6f2/">Jul 26, 2026 22:44 · 86624e33</option>
+                        
+                            
+                            <option value="b81dfaa3d4761a87694cd0024be5ad1cac39a1c2" data-url="/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/">Nov 08, 2025 16:48 · b81dfaa3</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">Target version</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/en/p/local-development-pain-why-cant-you-delete-nul-files-a-solution-to-the-composite-file-system-problem/">Current version</option>
+                        
+                            
+                            <option value="86624e33f0aae40868322155f145766470eeb6f2" data-url="/en/post-history/6b2378bae067bdcecc5e/86624e33f0aae40868322155f145766470eeb6f2/">Jul 26, 2026 22:44 · 86624e33</option>
+                        
+                            
+                            <option value="b81dfaa3d4761a87694cd0024be5ad1cac39a1c2" data-url="/en/post-history/6b2378bae067bdcecc5e/b81dfaa3d4761a87694cd0024be5ad1cac39a1c2/">Nov 08, 2025 16:48 · b81dfaa3</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− Removed</del>
+            <ins class="post-review-inline--ins">&#43; Added</ins>
+            <mark class="post-review-inline--format">Formatting or link change</mark>
+            <label><input type="checkbox" data-review-all> Show all content</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="Version differences" role="region"
+            data-folded-label="Expand #COUNT# unchanged blocks"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/en/post-history/6b2378bae067bdcecc5e/86624e33f0aae40868322155f145766470eeb6f2/">Local Development Pain: Why Can&#39;t You Delete `nul` Files? A Solution to the “Composite” File System Problem</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-26T22:44:26&#43;08:00">Jul 26, 2026 22:44</time>
+
+                            <code>86624e33</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">Local Development Pain: Why Can&#39;t You Delete `nul` Files? A Solution to the “Composite” File System Problem <span class="post-archive-meta">(Viewing)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-11-08T16:48:55&#43;08:00">Nov 08, 2025 16:48</time>
+
+                            <code>b81dfaa3</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>On this page</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#phase-one-routine-attempts-and-the-ineffective-solution-of-standard-approaches">Phase One: Routine Attempts and the Ineffective Solution of “Standard” Approaches</a></li>
+    <li><a href="#stage-two-a-flash-of-insight--is-it-multiple-problem-overlapping">Stage Two: A Flash of Insight – Is it “Multiple Problem Overlapping”?</a></li>
+    <li><a href="#stage-two-a-flash-of-insight--is-it-multiple-problem-overlap">Stage Two: A Flash of Insight – Is it “Multiple Problem Overlap”?</a></li>
+    <li><a href="#phase-three-cutting-off-the-root--targeting-the-path-eliminating-everything-in-one-go">Phase Three: Cutting Off the Root – Targeting the Path, Eliminating Everything in One Go</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>In the daily work of software development, we often encounter tricky “minor issues” that seem simple but can consume us hours of valuable time. One such “disaster zone” is deleting specific files – particularly those generated unexpectedly by toolchains.</p>
+<p>I encountered a “level-boss” problem: during local development, a file named <code>nul</code> inexplicably appeared in my project. I tried Windows Explorer, the CMD command line, but the system displayed &ldquo;File not found&rdquo; or &ldquo;Cannot delete.&rdquo; This file was like a ghost, stubbornly residing in my project directory.</p>
+<h2 id="phase-one-routine-attempts-and-the-ineffective-solution-of-standard-approaches">Phase One: Routine Attempts and the Ineffective Solution of “Standard” Approaches
+</h2><p>When I encounter this problem, my first instinct is to create a <code>nul</code> file.
+<strong>Why is <code>nul</code> special?</strong></p>
+<p>Developers familiar with Windows history may know that <code>nul</code> is a &ldquo;trap.&rdquo; In Windows (and earlier DOS) systems, <code>NUL</code>, <code>CON</code>, <code>PRN</code>, <code>AUX</code>, etc., are reserved device names. <code>NUL</code> represents the “null device” (similar to Unix/Linux’s <code>/dev/null</code>).</p>
+<p>When the Windows file system API sees you trying to operate a “file” named <code>nul</code>, it treats it as an operation on this “null device,” rather than a filename with the same name. Therefore, all standard file operations (such as deleting or renaming) fail.
+<strong>How are <code>nul</code> files created?</strong></p>
+<p>This is usually the fault of cross-platform development tools (like Git, Node.js scripts, Python scripts, etc.). These tools may be based on POSIX (Unix-like) standards, in which case <code>nul</code> is simply a regular filename to them. When they run on Windows, they sometimes bypass standard APIs and create this “Windows-unfriendly” file.
+<strong>“Standard” Solutions Recommended Online</strong></p>
+<p>I quickly searched the web and found that I wasn’t the first person to encounter this problem. The community offered several “advanced” solutions that were widely accepted:</p>
+<ol>
+<li>
+<p><strong>Use the <code>\\.\</code> syntax:</strong> In CMD, use the special &ldquo;long path&rdquo; syntax to bypass Windows name checking.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">del <span class="se">\\</span>.<span class="se">\C</span>:<span class="se">\y</span>our<span class="se">\p</span>roject<span class="se">\p</span>ath<span class="se">\n</span>ul
+</span></span></code></pre></div></li>
+<li>
+<p><strong>Use Git Bash:</strong> Git Bash provides a lightweight Unix environment, which doesn’t treat <code>nul</code> as a special device.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">rm nul
+</span></span></code></pre></div></li>
+<li>
+<p><strong>Use WSL (Windows Subsystem for Linux):</strong> Enter WSL, mount the Windows disk, and use the Linux <code>rm</code> command to delete.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">rm /mnt/c/your/project/path/nul
+</span></span></code></pre></div></li>
+</ol>
+<p>However, <strong>none of these methods worked for me!</strong> Whether it was WSL or Git Bash, when I tried <code>rm nul</code>, the system reported a &ldquo;No such file or directory&rdquo; error. This led me to ponder the problem seemed more complex than I initially thought.</p>
+<h2 id="stage-two-a-flash-of-insight--is-it-multiple-problem-overlapping">Stage Two: A Flash of Insight – Is it “Multiple Problem Overlapping”?
+</h2><p>If the <code>nul</code> file actually existed, why were even Unix tools saying &ldquo;cannot find&rdquo; it?</p>
+<p>I began to suspect that <strong>the problem wasn&rsquo;t just with the <code>nul</code> file itself, but also with its “habitat” – the directory where it was located?</strong></p>
+<p>I immediately opened Git Bash (this was key, because Windows Explorer might not display anomalies), navigated to the directory containing the <code>nul</code> file, and then executed <code>ls -la</code> (list all files, including hidden ones, and show detailed information).</p>
+<p>That’s when I finally discovered the “blind spot”: <strong>the directory where the <code>nul</code> file was stored actually contained an illegal character within its name!</strong></p>
+<h2 id="stage-two-a-flash-of-insight--is-it-multiple-problem-overlap">Stage Two: A Flash of Insight – Is it “Multiple Problem Overlap”?
+</h2><p>In my case, this directory name might be one ending with a space or a period (<code>.</code>) or containing special characters (like <code>?</code>, <code>*</code>, <code>:</code>) that development tools “carry along” when syncing across platforms—these are all equally problematic.</p>
+<p>For example, a directory displayed in Git Bash as <code>&quot;my-app &quot;</code> (note the trailing space) or <code>&quot;my-app.&quot;</code>.</p>
+<p><strong>That’s where the problem lies!</strong></p>
+<ul>
+<li><strong>Problem A:</strong> I have an “illegal” file named <code>nul</code>.</li>
+<li><strong>Problem B:</strong> I have an “illegal” directory named <code>&quot;my-app &quot;</code>.</li>
+</ul>
+<p>When I try <code>rm /path/to/&quot;my-app &quot;/nul</code>, both the Windows system and Unix tools are “confused.” The Windows API cannot correctly parse this path containing illegal characters; while Git Bash or WSL might “see” this illegal directory, it may fail to access its internal <code>nul</code> file due to complex path parsing issues.</p>
+<h2 id="phase-three-cutting-off-the-root--targeting-the-path-eliminating-everything-in-one-go">Phase Three: Cutting Off the Root – Targeting the Path, Eliminating Everything in One Go
+</h2><p>Now that we’ve confirmed it was a problem with both “file path” and “filename,” the solution became clear: <strong>don&rsquo;t try to delete that <code>nul</code> file; instead, directly delete that “illegitimate” parent directory!</strong></p>
+<p>My final resolution steps were as follows:</p>
+<ol>
+<li><strong>Open Git Bash:</strong> This is the only tool capable of correctly “seeing” and handling these illegal names.</li>
+<li><strong>Navigate to the parent directory of the “problem directory”:</strong></li>
+<li><strong>Verify the true name of the “problem directory”:</strong></li>
+<li><strong>Execute the “Ultimate Delete”:</strong> Using the <code>rm</code> command with the <code>-r</code> (recursive) and <code>-f</code> (force) options, combined with <strong>quotes</strong>, to delete the entire directory.</li>
+</ol>
+<p>After executing the command, the troublesome directory containing the <code>nul</code> file, which itself had an invalid name, was finally completely removed from my filesystem.</p>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">Table of contents</h2>
+        <button type="button" data-article-toc-close aria-label="Close table of contents">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="Back to top"
+    title="Back to top"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

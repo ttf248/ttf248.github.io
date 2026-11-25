@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="blog-writer 解决的是写稿动作自动化，blog-style-suite 解决的就是另一层更现实的问题：风格学习这件事，不能每次写稿都重新烧一遍 token。\n写到这里，skill 这条路其实已经不够了。它更像一条需要反复跑、反复调、还能换 provider 的构建流水线，所以最后才会长成 Python 项目。\n">
+<title>AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开">
+<meta property='og:description' content="blog-writer 解决的是写稿动作自动化，blog-style-suite 解决的就是另一层更现实的问题：风格学习这件事，不能每次写稿都重新烧一遍 token。\n写到这里，skill 这条路其实已经不够了。它更像一条需要反复跑、反复调、还能换 provider 的构建流水线，所以最后才会长成 Python 项目。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-04-03T00:01:00&#43;08:00'/><meta property='article:modified_time' content='2026-04-03T00:01:00&#43;08:00'/>
+<meta name="twitter:title" content="AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开">
+<meta name="twitter:description" content="blog-writer 解决的是写稿动作自动化，blog-style-suite 解决的就是另一层更现实的问题：风格学习这件事，不能每次写稿都重新烧一遍 token。\n写到这里，skill 这条路其实已经不够了。它更像一条需要反复跑、反复调、还能换 provider 的构建流水线，所以最后才会长成 Python 项目。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/","name":"AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-04-03T00:01:00+08:00","datePublished":"2026-04-03T00:01:00+08:00","headline":"AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/trash/">← <span>废纸篓</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 7 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#最朴素的办法当然有用但代价也最直接">最朴素的办法当然有用，但代价也最直接</a></li>
+    <li><a href="#为什么最后更适合做成-python-项目">为什么最后更适合做成 Python 项目</a></li>
+    <li><a href="#它真正省-token-的地方不是一个点而是三层拆分">它真正省 token 的地方，不是一个点，而是三层拆分</a>
+      <ol>
+        <li><a href="#第一层扫描和筛选尽量不用-ai">第一层，扫描和筛选尽量不用 AI</a></li>
+        <li><a href="#第二层把每篇一调改成每类一调">第二层，把“每篇一调”改成“每类一调”</a></li>
+        <li><a href="#第三层运行时只读压缩后的-runtime">第三层，运行时只读压缩后的 runtime</a></li>
+      </ol>
+    </li>
+    <li><a href="#数据结构为什么要这么设计">数据结构为什么要这么设计</a></li>
+    <li><a href="#checkpoint-和缓存不只是省时间也是在省-token">checkpoint 和缓存，不只是省时间，也是在省 token</a></li>
+    <li><a href="#所以核心设计思路其实很简单">所以核心设计思路其实很简单</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="7">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月03日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 11 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">Codex (GPT-5)</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>已删除</strong>
+            
+                <time datetime="2026-04-03T09:41:28&#43;08:00">2026年04月03日</time>
+ ·
+            
+            版本时间
+            <time datetime="2026-04-03T09:01:19&#43;08:00">2026年04月03日 09:01</time>
+
+            <code>12523571</code>
+        </p>
+        <p>
+            
+                <a href="/trash/">← 废纸篓</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 4</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="125235716d3181382d5b789d401ccfc2c0d77a5e"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        
+                        
+                            
+                            <option value="04dccb98c55a6ea3b81408012b33a6219cf8ab77" data-url="/post-history/b32f1001243ba72bc5fc/04dccb98c55a6ea3b81408012b33a6219cf8ab77/">2026年04月03日 09:29 · 04dccb98</option>
+                        
+                            
+                            <option value="4567f71a1c4483bf092f52fef688ed16f61448b4" data-url="/post-history/b32f1001243ba72bc5fc/4567f71a1c4483bf092f52fef688ed16f61448b4/">2026年04月03日 09:08 · 4567f71a</option>
+                        
+                            
+                            <option value="125235716d3181382d5b789d401ccfc2c0d77a5e" data-url="/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/">2026年04月03日 09:01 · 12523571</option>
+                        
+                            
+                            <option value="77ee3f5ad66e56111ac7ea178a344e4cca178af1" data-url="/post-history/b32f1001243ba72bc5fc/77ee3f5ad66e56111ac7ea178a344e4cca178af1/">2026年04月03日 00:11 · 77ee3f5a</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        
+                        
+                            
+                            <option value="04dccb98c55a6ea3b81408012b33a6219cf8ab77" data-url="/post-history/b32f1001243ba72bc5fc/04dccb98c55a6ea3b81408012b33a6219cf8ab77/">2026年04月03日 09:29 · 04dccb98</option>
+                        
+                            
+                            <option value="4567f71a1c4483bf092f52fef688ed16f61448b4" data-url="/post-history/b32f1001243ba72bc5fc/4567f71a1c4483bf092f52fef688ed16f61448b4/">2026年04月03日 09:08 · 4567f71a</option>
+                        
+                            
+                            <option value="125235716d3181382d5b789d401ccfc2c0d77a5e" data-url="/post-history/b32f1001243ba72bc5fc/125235716d3181382d5b789d401ccfc2c0d77a5e/">2026年04月03日 09:01 · 12523571</option>
+                        
+                            
+                            <option value="77ee3f5ad66e56111ac7ea178a344e4cca178af1" data-url="/post-history/b32f1001243ba72bc5fc/77ee3f5ad66e56111ac7ea178a344e4cca178af1/">2026年04月03日 00:11 · 77ee3f5a</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/post-history/b32f1001243ba72bc5fc/04dccb98c55a6ea3b81408012b33a6219cf8ab77/">AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-03T09:29:56&#43;08:00">2026年04月03日 09:29</time>
+
+                            <code>04dccb98</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/b32f1001243ba72bc5fc/4567f71a1c4483bf092f52fef688ed16f61448b4/">AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-03T09:08:24&#43;08:00">2026年04月03日 09:08</time>
+
+                            <code>4567f71a</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">AI 写博客这件事，后来还是得做成工程（二）：风格数据和 token 成本为什么必须拆开 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-03T09:01:19&#43;08:00">2026年04月03日 09:01</time>
+
+                            <code>12523571</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/b32f1001243ba72bc5fc/77ee3f5ad66e56111ac7ea178a344e4cca178af1/">blog-style-suite：把风格数据、生成过程和 token 成本一起拆开</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-03T00:11:51&#43;08:00">2026年04月03日 00:11</time>
+
+                            <code>77ee3f5a</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p><code>blog-writer</code> 解决的是写稿动作自动化，<code>blog-style-suite</code> 解决的就是另一层更现实的问题：风格学习这件事，不能每次写稿都重新烧一遍 token。</p>
+<p>写到这里，skill 这条路其实已经不够了。它更像一条需要反复跑、反复调、还能换 provider 的构建流水线，所以最后才会长成 Python 项目。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#最朴素的办法当然有用但代价也最直接">最朴素的办法当然有用，但代价也最直接</a></li>
+    <li><a href="#为什么最后更适合做成-python-项目">为什么最后更适合做成 Python 项目</a></li>
+    <li><a href="#它真正省-token-的地方不是一个点而是三层拆分">它真正省 token 的地方，不是一个点，而是三层拆分</a>
+      <ol>
+        <li><a href="#第一层扫描和筛选尽量不用-ai">第一层，扫描和筛选尽量不用 AI</a></li>
+        <li><a href="#第二层把每篇一调改成每类一调">第二层，把“每篇一调”改成“每类一调”</a></li>
+        <li><a href="#第三层运行时只读压缩后的-runtime">第三层，运行时只读压缩后的 runtime</a></li>
+      </ol>
+    </li>
+    <li><a href="#数据结构为什么要这么设计">数据结构为什么要这么设计</a></li>
+    <li><a href="#checkpoint-和缓存不只是省时间也是在省-token">checkpoint 和缓存，不只是省时间，也是在省 token</a></li>
+    <li><a href="#所以核心设计思路其实很简单">所以核心设计思路其实很简单</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>上一篇我讲的是 <a class="link" href="/post-history/8bc884298ab4656425f5/04dccb98c55a6ea3b81408012b33a6219cf8ab77/"><code>blog-writer</code> 是怎么从复制粘贴里长出来的</a>。这一篇往前推一步，专门讲为什么风格数据、构建过程、运行时读取必须拆开。下一篇再收口到 <a class="link" href="/post-history/0150044669d229b7ef90/04dccb98c55a6ea3b81408012b33a6219cf8ab77/">本地模型、在线模型和 Minimax 该怎么分工</a>。</p>
+<h2 id="最朴素的办法当然有用但代价也最直接">最朴素的办法当然有用，但代价也最直接
+</h2><p>先把话说死一点。Token 足够富裕的时候，直接生吃历史文章，当然是能跑的。</p>
+<p>你把旧文章批量塞给模型，让它现场归纳风格，再结合当前题目起草正文，这件事在能力上没什么问题。甚至在样本还不多的时候，它还挺省事。</p>
+<p>但它有两个很现实的副作用：</p>
+<ul>
+<li>每次写稿都要重复付费</li>
+<li>每次都要重复等待</li>
+</ul>
+<p>而且样本越多，这个问题越重。你博客写得越久，历史文章越多，重复喂上下文这件事就越不划算。</p>
+<p>所以我后来越来越明确一件事：<strong>风格学习和正文生成，应该是两个阶段。</strong></p>
+<p>风格学习是低频动作，正文生成是高频动作。低频动作可以重一点，高频动作必须轻。</p>
+<p>这句话听上去像废话，但很多 AI 工作流一开始失败，恰恰就是因为把这两件事混在一起了。</p>
+<h2 id="为什么最后更适合做成-python-项目">为什么最后更适合做成 Python 项目
+</h2><p>最开始数据生成模块其实还是往 skill 的方向写的，但写着写着就发现不对。</p>
+<p>因为它处理的已经不是“单次任务说明”，而是一条完整的数据管线：</p>
+<ul>
+<li>扫描 <code>content/post</code></li>
+<li>提取 frontmatter、正文开头、结尾、小标题、摘录</li>
+<li>判断哪些文章该入选，哪些该排除</li>
+<li>给文章分 lane</li>
+<li>做启发式评分</li>
+<li>选出最值得代表文风的样本</li>
+<li>再把这些东西压成一份更轻的 runtime</li>
+</ul>
+<p>这套东西继续塞在 skill 里，维护成本会越来越高。它更像一个需要被重复运行、可测试、可恢复、可替换 provider 的构建系统。</p>
+<p>所以最后落成 Python 项目，其实是很自然的结果。不是为了“更工程化”而工程化，而是因为它真的已经长成了一条 pipeline。</p>
+<h2 id="它真正省-token-的地方不是一个点而是三层拆分">它真正省 token 的地方，不是一个点，而是三层拆分
+</h2><p>现在回头看，<code>blog-style-suite</code> 省 token 的关键，不是某一个优化技巧，而是架构上主动把问题拆开了。</p>
+<h3 id="第一层扫描和筛选尽量不用-ai">第一层，扫描和筛选尽量不用 AI
+</h3><p>在 <code>scanner.py</code> 这一层，很多事情本来就没必要上模型。</p>
+<p>比如：</p>
+<ul>
+<li>frontmatter 解析</li>
+<li><code>&lt;!--more--&gt;</code> 检查</li>
+<li>正文是否过短</li>
+<li>是否嵌了 prompt</li>
+<li>blockquote 占比是否过高</li>
+<li>路径遍历、标题提取、小标题提取</li>
+</ul>
+<p>这些东西交给规则做就行，没必要每篇文章都调一次模型。</p>
+<p>后来在 <code>bc4b950</code> 这个提交里，scan 阶段干脆彻底改成了纯启发式。提交说明里写得很直接，<code>AI 调用从 ~2000 次降到 5 次/provider</code>。这不是小修小补，是整条成本曲线都被改了。</p>
+<h3 id="第二层把每篇一调改成每类一调">第二层，把“每篇一调”改成“每类一调”
+</h3><p>真正贵的地方，不只是有没有 AI，而是调用粒度。</p>
+<p>如果每篇文章都单独做 AI 筛选、AI 分类、AI 打标签，那文章一多，调用次数就会直接爆掉。后面重构以后，思路变成：</p>
+<ul>
+<li>scan 阶段先本地启发式处理</li>
+<li>build 阶段再按 lane 批量精选</li>
+<li>每个 lane 一次</li>
+<li>最后作者风格压缩再来一次</li>
+</ul>
+<p>这就把原来按文章线性增长的成本，压到了按 lane 增长。lane 就四个，作者风格再加一次，冷启动也就 5 次左右。</p>
+<p>这一步其实很关键。很多人说“优化 token”，最后只是从大 prompt 改成小 prompt。但更本质的优化，是把调用单位改了。</p>
+<h3 id="第三层运行时只读压缩后的-runtime">第三层，运行时只读压缩后的 runtime
+</h3><p>这也是我觉得最重要的一层。</p>
+<p>现在 <code>blog-writer</code> 正常写稿时，不再去读一堆原始语料，而是只读 <code>.agents/data/blog-writing/published.runtime.json</code>。这个文件顶层结构已经被压到比较稳定的几块：</p>
+<ul>
+<li><code>author_style</code></li>
+<li><code>lanes</code></li>
+<li><code>samples</code></li>
+<li><code>writer_guide</code></li>
+</ul>
+<p>这意味着写稿阶段拿到的，不再是一堆原始文章，而是一份预处理后的、已经筛好、压好的“文风索引”。</p>
+<p>这才是预处理真正省 token 的地方。不是说历史文章没用了，而是它们的作用，已经提前在构建阶段被消化了一轮。</p>
+<h2 id="数据结构为什么要这么设计">数据结构为什么要这么设计
+</h2><p>我觉得这套结构设计得比较对路的地方，是它没有试图做成一个巨型万能 schema，而是刻意分成了几种不同粒度的数据。</p>
+<p><code>author_style</code> 负责全局声音。比如开头习惯、结构习惯、推理习惯、事实处理方式。这个层是“这人整体怎么写”。</p>
+<p><code>lanes</code> 负责局部增强。技术、金融、随笔、工具体验，这几类题材虽然都是同一个作者写，但确实会有局部差异。这个层是“这类题更适合怎么写”。</p>
+<p><code>samples</code> 不是全文，而是 sample card。里面只有开头卡、结构卡、声音卡、不要抄什么。这个层是“拿几个最能代表风格的例子做提示”。</p>
+<p><code>writer_guide</code> 再去约束读取顺序和读取上限。这个层是“运行时别贪多，读到够用就停”。</p>
+<p>你会发现，这几个层级其实刚好对应四个问题：</p>
+<ul>
+<li>我整体是什么风格</li>
+<li>这篇当前属于哪类</li>
+<li>有没有几个高价值样本可以参考</li>
+<li>运行时怎么读才不浪费</li>
+</ul>
+<p>这比把所有历史文章硬塞给模型清晰得多。</p>
+<h2 id="checkpoint-和缓存不只是省时间也是在省-token">checkpoint 和缓存，不只是省时间，也是在省 token
+</h2><p>后面又做了两件我觉得非常务实的事。</p>
+<p>一个是 provider checkpoint 恢复。<code>2e6bb9f</code> 这个提交里，把 provider 的中间结果恢复机制补上了。这样构建中断以后，不需要全部重来。</p>
+<p>另一个是 screening / lane 指纹缓存复用。<code>5b82d23</code> 这个提交里，用指纹判断旧结果还能不能复用。条件没变，就直接拿旧结果，不再重跑。</p>
+<p>这两步表面上是“工程体验更好”，本质上还是在控成本。因为对接本地模型也好，对接在线模型也好，只要你能少调一次，就是真实省下来一次。</p>
+<h2 id="所以核心设计思路其实很简单">所以核心设计思路其实很简单
+</h2><p>如果要用一句话总结 <code>blog-style-suite</code> 的设计思路，我会这么说：</p>
+<p><strong>把高频阶段做轻，把低频阶段做重，把需要模型判断的地方压缩到最少，把不需要模型判断的地方尽量本地化。</strong></p>
+<p>这套东西说白了不神秘。真正难的不是“想到可以预处理”，而是愿不愿意把整条链路拆清楚。</p>
+<p>很多时候，AI 工作流一开始很丝滑，是因为你还没到必须算账的时候。等历史数据多起来、文章数量多起来、provider 也多起来，迟早会碰到成本问题。</p>
+<p>这时候如果前面没有做数据分层，没有把扫描、构建、运行时拆开，那后面几乎必然会越来越重。</p>
+<p>所以下一篇，我就继续把这个问题往前推一步。</p>
+<p>既然风格构建也贵，那为什么不接本地模型？本地模型接进来以后，和在线版本到底差在哪？Minimax 放在这条链路里，又扮演了什么角色？</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://github.com/ttf248/notebook/commit/bc4b950cbb13e37d1fdb16a9d23325cfefa6f90e">notebook: commit <code>bc4b950</code>，AI 调用从约 2000 次降到 5 次/provider</a></li>
+<li><a class="link" href="https://github.com/ttf248/notebook/commit/2e6bb9f4ea554b87830dc3c67f96aa8ce95ec73f">notebook: commit <code>2e6bb9f</code>，provider checkpoint 恢复机制</a></li>
+<li><a class="link" href="https://github.com/ttf248/notebook/commit/5b82d23899c69532654010ed6833f27eda5ada82">notebook: commit <code>5b82d23</code>，screening/lane 指纹缓存复用</a></li>
+<li><a class="link" href="https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/style_pipeline/scanner.py">notebook: <code>scanner.py</code></a></li>
+<li><a class="link" href="https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/style_pipeline/builder.py">notebook: <code>builder.py</code></a></li>
+<li><a class="link" href="https://github.com/ttf248/notebook/blob/dev/scripts/blog-style-suite/style_pipeline/compressor.py">notebook: <code>compressor.py</code></a></li>
+<li><a class="link" href="#post-archive-unavailable">notebook: <code>README.md</code> for <code>blog-style-suite</code></a></li>
+</ul>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">本次的内容比较多，拆分成系列文章：去年就有很多稿子是通过大模型写的，那会是自己写个大纲或者问题清单，然后AI出稿子，复制内容到本地 md 文档，填写头信息，标签信息、发布文章；近期 codex 用了很多，发现 codex 里面的联网搜索能力很强，那我是不是能写个 skill，将这些事情自动化，此时诞生了 skill blog-writer 的第一稿，我还想着让 AI 学习我以前文章的风格，这就导致 blog-writer 运行的时候，很费 token，后续我针对 blog-writer 进行了多个版本的优化，拆分了 数据模块，数据生成的模块，原本数据生成的模块还是独立的 skill，写着写着，我就发现，更适合做成 Python 项目，此时就有了 blog-style-suite，然后我又发现，训练风格数据，也是比较费 token，我就想着用本地的大模型，对接了本地的大模型，我又想到了对比下本地大模型和在线版本的区别，又对接了 minimax；blog-style-suite 和 blog-writer 的演化历史可以分析的 git 提价记录。顺带基于本地 blog-writer、blog-style-suite 的代码，可以讲讲里面的设计思路，是如何做到了节约 token，数据结构是如何设计的，核心的设计思路。Token 富裕完全能生吃历史文章，预处理能节约很多 token
+</span></span></code></pre></div><h3 id="写作思路摘要">写作思路摘要
+</h3><ul>
+<li>这一篇重点放在架构拆分和 token 成本，不重复第一篇的流程起源。</li>
+<li>直接用三层拆分来解释节省 token 的原因，比泛泛说“做了优化”更清楚。</li>
+<li>把 <code>scanner</code>、<code>builder</code>、<code>runtime</code> 的职责分开写，顺手把数据结构设计讲透。</li>
+<li>特意把 checkpoint 和指纹缓存单独拎出来，因为它们体现的是“工程化以后才有的现实收益”。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

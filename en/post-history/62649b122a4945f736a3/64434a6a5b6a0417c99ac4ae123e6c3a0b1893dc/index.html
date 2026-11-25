@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="editorial" data-code-copy="Copy code" data-code-copied="Copied" data-code-expand="Expand all" data-code-collapse="Collapse code">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="In software development and operations, process freezes are frequently encountered, leading to system performance degradation or service unavailability. This article introduces the use of the pstack tool to troubleshoot frozen processes by analyzing stack information to identify and resolve root causes.\nThe risk control system&rsquo;s sub-service experienced a freeze, rendering the risk control service unavailable. Due to a lack of service availability monitoring, the frozen process was not detected promptly, leading to system unavailability.\n">
+<title>Troubleshooting process hangs using pstack</title>
+
+<link rel='canonical' href='https://ttf248.life/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Troubleshooting process hangs using pstack">
+<meta property='og:description' content="In software development and operations, process freezes are frequently encountered, leading to system performance degradation or service unavailability. This article introduces the use of the pstack tool to troubleshoot frozen processes by analyzing stack information to identify and resolve root causes.\nThe risk control system&rsquo;s sub-service experienced a freeze, rendering the risk control service unavailable. Due to a lack of service availability monitoring, the frozen process was not detected promptly, leading to system unavailability.\n">
+<meta property='og:url' content='https://ttf248.life/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2024-02-24T23:55:59&#43;08:00'/><meta property='article:modified_time' content='2024-02-24T23:55:59&#43;08:00'/>
+<meta name="twitter:title" content="Troubleshooting process hangs using pstack">
+<meta name="twitter:description" content="In software development and operations, process freezes are frequently encountered, leading to system performance degradation or service unavailability. This article introduces the use of the pstack tool to troubleshoot frozen processes by analyzing stack information to identify and resolve root causes.\nThe risk control system&rsquo;s sub-service experienced a freeze, rendering the risk control service unavailable. Due to a lack of service availability monitoring, the frozen process was not detected promptly, leading to system unavailability.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/en/","name":"Uncle Xiang's Notebook","position":1},{"@type":"ListItem","item":"https://ttf248.life/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/","name":"Troubleshooting process hangs using pstack","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2024-02-24T23:55:59+08:00","datePublished":"2024-02-24T23:55:59+08:00","headline":"Troubleshooting process hangs using pstack","inLanguage":"en","mainEntityOfPage":"https://ttf248.life/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/en/" aria-label="Uncle Xiang&#39;s Notebook Home">
+            <span class="site-header__title">Uncle Xiang&#39;s Notebook</span>
+            <span class="site-header__subtitle">Collecting Moments, Marking Time</span>
+        </a>
+<nav class="site-header__nav" aria-label="Navigation">
+            <div class="site-header__nav-group" role="group" aria-label="Browse">
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/en/projects/" aria-label="Projects">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>Projects</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="Switch writing source"
+                    data-source-toggle-button>
+                    Author writing
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/author/"
+                            class="site-header__source-toggle-option">
+                            Author writing
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI writing
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="Switch color mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open navigation menu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="Navigation">
+        <div class="mobile-navigation__header">
+            <span>Navigation</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="Close navigation menu">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="Browse">
+                <div class="mobile-navigation__group-label">Browse</div>
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="Projects">
+                <div class="mobile-navigation__group-label">Projects</div>
+                <a class="mobile-navigation__area" href="/en/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>Projects</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="Writing">
+                <div class="mobile-navigation__group-label">Writing</div>
+                <a href="/en/writing/author/">Author writing</a>
+                <a href="/en/writing/ai/">AI writing</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>Language</span>
+                <select aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="Article reading tools">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/en/p/pstack-troubleshooting-process-hangs/">← <span>Back to the current post</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">Table of contents</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">Font size</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">Reading font size</span>
+        <div class="article-reading-settings__options" role="group" aria-label="Reading font size">
+            <button type="button" data-reading-size="small" aria-pressed="false">Small</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">Default</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">Large</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="Table of contents">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">Table of contents</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>On this page</span>
+            <small data-article-reading-remaining data-template="About #MINUTES min left">About 2 min left</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#main-body">Main body</a></li>
+    <li><a href="#steps">Steps</a></li>
+    <li><a href="#case-study">Case study</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="2">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Troubleshooting process hangs using pstack</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Feb 24, 2024</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">2 minute read</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="Version history">
+        <p>
+            <strong>Archived version</strong>
+            
+            Version date
+            <time datetime="2025-05-28T09:47:38&#43;08:00">May 28, 2025 09:47</time>
+
+            <code>64434a6a</code>
+        </p>
+        <p>
+            
+                <a href="/en/p/pstack-troubleshooting-process-hangs/">← Back to the current post</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">This archived link no longer has an available destination.</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>Version history · 4</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">Review changes</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc"
+        data-unchanged="The visible article content is identical."
+        data-loading="Loading versions…"
+        data-error="Could not load the versions. Exit and reopen the review to retry."
+        data-same="Choose two different versions.">
+        <header class="post-review__header">
+            <h1 id="post-review-title">Review changes</h1>
+            <button type="button" class="post-review-button" data-review-close>Exit review</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">Base version</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/en/p/pstack-troubleshooting-process-hangs/">Current version</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/en/post-history/62649b122a4945f736a3/014d98495108316899811ac3b7d474801fcc23a9/">Jun 02, 2025 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="929d0b9309f7d36ffc039c66b876d9b2de00fab3" data-url="/en/post-history/62649b122a4945f736a3/929d0b9309f7d36ffc039c66b876d9b2de00fab3/">Jun 02, 2025 06:00 · 929d0b93</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">May 28, 2025 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd" data-url="/en/post-history/62649b122a4945f736a3/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">May 25, 2025 02:57 · 1b1cd1c9</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">Target version</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/en/p/pstack-troubleshooting-process-hangs/">Current version</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/en/post-history/62649b122a4945f736a3/014d98495108316899811ac3b7d474801fcc23a9/">Jun 02, 2025 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="929d0b9309f7d36ffc039c66b876d9b2de00fab3" data-url="/en/post-history/62649b122a4945f736a3/929d0b9309f7d36ffc039c66b876d9b2de00fab3/">Jun 02, 2025 06:00 · 929d0b93</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/en/post-history/62649b122a4945f736a3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">May 28, 2025 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd" data-url="/en/post-history/62649b122a4945f736a3/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">May 25, 2025 02:57 · 1b1cd1c9</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− Removed</del>
+            <ins class="post-review-inline--ins">&#43; Added</ins>
+            <mark class="post-review-inline--format">Formatting or link change</mark>
+            <label><input type="checkbox" data-review-all> Show all content</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="Version differences" role="region"
+            data-folded-label="Expand #COUNT# unchanged blocks"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/en/post-history/62649b122a4945f736a3/014d98495108316899811ac3b7d474801fcc23a9/">pstack troubleshoot a hung process</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-02T19:00:25&#43;08:00">Jun 02, 2025 19:00</time>
+
+                            <code>014d9849</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/62649b122a4945f736a3/929d0b9309f7d36ffc039c66b876d9b2de00fab3/">pstack troubleshoot a hung process</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-02T06:00:45&#43;08:00">Jun 02, 2025 06:00</time>
+
+                            <code>929d0b93</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">Troubleshooting process hangs using pstack <span class="post-archive-meta">(Viewing)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-28T09:47:38&#43;08:00">May 28, 2025 09:47</time>
+
+                            <code>64434a6a</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/62649b122a4945f736a3/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">Troubleshooting process freezing with pstack</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-25T02:57:45&#43;08:00">May 25, 2025 02:57</time>
+
+                            <code>1b1cd1c9</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>In software development and operations, process freezes are frequently encountered, leading to system performance degradation or service unavailability. This article introduces the use of the <code>pstack</code> tool to troubleshoot frozen processes by analyzing stack information to identify and resolve root causes.</p>
+<p>The risk control system&rsquo;s sub-service experienced a freeze, rendering the risk control service unavailable. Due to a lack of service availability monitoring, the frozen process was not detected promptly, leading to system unavailability.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>On this page</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#main-body">Main body</a></li>
+    <li><a href="#steps">Steps</a></li>
+    <li><a href="#case-study">Case study</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="main-body">Main body
+</h2><p>A hung process is a state where the process stops responding but does not exit. This can be caused by various factors, such as deadlocks, resource exhaustion, or exceptions. To resolve these issues, we can use the pstack tool to analyze the process&rsquo;s stack information and identify the root cause.</p>
+<h2 id="steps">Steps
+</h2><p>pstack is a commonly used tool, typically provided with gdb (the GNU debugger). You can install it using the following command:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">sudo apt-get install gdb
+</span></span></code></pre></div><p>To obtain the process ID: First, we need to get the process ID (PID) of the frozen process. You can use the <code>ps</code> command to list all processes and find the PID you want to troubleshoot.
+Use the pstack tool to analyze process stacks. Once you have obtained the process ID, you can use pstack to retrieve stack information for that process. Run the following command:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">pstack &lt;PID&gt;
+</span></span></code></pre></div><p>This will output the process&rsquo;s stack information, displaying the current sequence of function calls. Analyzing this information can reveal where the process is stalled and help locate the issue.</p>
+<p>Analyzing stack information can help identify the cause of process freezes. This may reveal deadlocks, infinite loops, or other anomalies. Take appropriate measures based on the specific situation, such as releasing locks or fixing code logic.</p>
+<h2 id="case-study">Case study
+</h2><p>A simple demo where, after the main function starts, a new sub-thread is created. The actual execution function enters an infinite loop, causing the program to fail to terminate normally and enter a frozen state.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">cmake_minimum_required<span class="o">(</span>VERSION 3.0.0<span class="o">)</span>
+</span></span><span class="line"><span class="cl">project<span class="o">(</span>pstack_main VERSION 0.1.0 LANGUAGES C CXX<span class="o">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">include<span class="o">(</span>CTest<span class="o">)</span>
+</span></span><span class="line"><span class="cl">enable_testing<span class="o">()</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查找线程库</span>
+</span></span><span class="line"><span class="cl">find_package<span class="o">(</span>Threads REQUIRED<span class="o">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">add_executable<span class="o">(</span>pstack_main main.cpp<span class="o">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 链接线程库</span>
+</span></span><span class="line"><span class="cl">target_link_libraries<span class="o">(</span>pstack_main PRIVATE Threads::Threads<span class="o">)</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">set<span class="o">(</span>CPACK_PROJECT_NAME <span class="si">${</span><span class="nv">PROJECT_NAME</span><span class="si">}</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">set<span class="o">(</span>CPACK_PROJECT_VERSION <span class="si">${</span><span class="nv">PROJECT_VERSION</span><span class="si">}</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">include<span class="o">(</span>CPack<span class="o">)</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;thread&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;chrono&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">void</span> <span class="nf">infiniteLoop</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">while</span> <span class="p">(</span><span class="nb">true</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="c1">// 主线程进入死循环
+</span></span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kr">thread</span> <span class="kr">thread</span><span class="p">(</span><span class="n">infiniteLoop</span><span class="p">);</span> <span class="c1">// 创建一个线程，执行死循环函数
+</span></span></span><span class="line"><span class="cl">    <span class="kr">thread</span><span class="p">.</span><span class="n">join</span><span class="p">();</span> <span class="c1">// 等待线程结束
+</span></span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Starting program, pstack result:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">Thread <span class="m">2</span> <span class="o">(</span>Thread 0x7eff3619b700 <span class="o">(</span>LWP 1315017<span class="o">))</span>:
+</span></span><span class="line"><span class="cl"><span class="c1">#0  infiniteLoop () at /root/pstack/main.cpp:6</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#1  0x0000000000402ca9 in std::__invoke_impl&lt;void, void (*)()&gt; (__f=@0x2260eb8: 0x4029a6 &lt;infiniteLoop()&gt;) at /usr/include/c++/8/bits/invoke.h:60</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#2  0x0000000000402b02 in std::__invoke&lt;void (*)()&gt; (__fn=@0x2260eb8: 0x4029a6 &lt;infiniteLoop()&gt;) at /usr/include/c++/8/bits/invoke.h:95</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#3  0x0000000000403150 in std::thread::_Invoker&lt;std::tuple&lt;void (*)()&gt; &gt;::_M_invoke&lt;0ul&gt; (this=0x2260eb8) at /usr/include/c++/8/thread:244</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#4  0x0000000000403126 in std::thread::_Invoker&lt;std::tuple&lt;void (*)()&gt; &gt;::operator() (this=0x2260eb8) at /usr/include/c++/8/thread:253</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#5  0x000000000040310a in std::thread::_State_impl&lt;std::thread::_Invoker&lt;std::tuple&lt;void (*)()&gt; &gt; &gt;::_M_run (this=0x2260eb0) at /usr/include/c++/8/thread:196</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#6  0x00007eff36bceb23 in execute_native_thread_routine () from /lib64/libstdc++.so.6</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#7  0x00007eff36ea91ca in start_thread () from /lib64/libpthread.so.0</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#8  0x00007eff361d58d3 in clone () from /lib64/libc.so.6</span>
+</span></span><span class="line"><span class="cl">Thread <span class="m">1</span> <span class="o">(</span>Thread 0x7eff372e1740 <span class="o">(</span>LWP 1315016<span class="o">))</span>:
+</span></span><span class="line"><span class="cl"><span class="c1">#0  0x00007eff36eaa6cd in __pthread_timedjoin_ex () from /lib64/libpthread.so.0</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#1  0x00007eff36bceda7 in std::thread::join() () from /lib64/libstdc++.so.6</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#2  0x00000000004029d2 in main () at /root/pstack/main.cpp:13</span>
+</span></span></code></pre></div><p>The process froze because of a deadlock loop. The main thread entered a deadlock loop, preventing the child threads from exiting, which resulted in the process freeze.</p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">Table of contents</h2>
+        <button type="button" data-article-toc-close aria-label="Close table of contents">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="Back to top"
+    title="Back to top"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

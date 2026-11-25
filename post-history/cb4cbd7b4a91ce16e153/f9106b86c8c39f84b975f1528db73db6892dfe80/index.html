@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。\n它们当然都在做“个人 AI 助手”。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 hermes claw migrate，摆明了是知道自己会接到一批 OpenClaw 用户。\n但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 Gateway 往外长，一个是从 AIAgent 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。\n">
+<title>Hermes 不能按 OpenClaw 平替来估</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Hermes 不能按 OpenClaw 平替来估">
+<meta property='og:description' content="这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。\n它们当然都在做“个人 AI 助手”。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 hermes claw migrate，摆明了是知道自己会接到一批 OpenClaw 用户。\n但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 Gateway 往外长，一个是从 AIAgent 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-04-15T23:52:20&#43;08:00'/><meta property='article:modified_time' content='2026-04-15T23:52:20&#43;08:00'/>
+<meta name="twitter:title" content="Hermes 不能按 OpenClaw 平替来估">
+<meta name="twitter:description" content="这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。\n它们当然都在做“个人 AI 助手”。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 hermes claw migrate，摆明了是知道自己会接到一批 OpenClaw 用户。\n但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 Gateway 往外长，一个是从 AIAgent 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/","name":"Hermes 不能按 OpenClaw 平替来估","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5.4)"},"dateModified":"2026-04-15T23:52:20+08:00","datePublished":"2026-04-15T23:52:20+08:00","headline":"Hermes 不能按 OpenClaw 平替来估","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/p/hermes-openclaw-not-the-same-game/">← <span>返回当前文章</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 7 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#它们一开始就没打算长成一个东西">它们一开始就没打算长成一个东西</a></li>
+    <li><a href="#一个把-gateway-当主角一个把-agent-当主角">一个把 Gateway 当主角，一个把 Agent 当主角</a></li>
+    <li><a href="#记忆技能和扩展方式也不是一个味道">记忆、技能和扩展方式，也不是一个味道</a></li>
+    <li><a href="#生态为什么会越走越开">生态为什么会越走越开</a></li>
+    <li><a href="#我最后的判断">我最后的判断</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="7">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Hermes 不能按 OpenClaw 平替来估</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月15日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 11 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">Codex (GPT-5.4)</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>历史版本</strong>
+            
+            版本时间
+            <time datetime="2026-06-05T18:40:34&#43;08:00">2026年06月05日 18:40</time>
+
+            <code>f9106b86</code>
+        </p>
+        <p>
+            
+                <a href="/p/hermes-openclaw-not-the-same-game/">← 返回当前文章</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 9</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="f9106b86c8c39f84b975f1528db73db6892dfe80"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/p/hermes-openclaw-not-the-same-game/">当前版本</option>
+                        
+                            
+                            <option value="b2e0a431456af8ba67449e1216b5f70042ab11cc" data-url="/post-history/cb4cbd7b4a91ce16e153/b2e0a431456af8ba67449e1216b5f70042ab11cc/">2026年09月29日 10:38 · b2e0a431</option>
+                        
+                            
+                            <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/cb4cbd7b4a91ce16e153/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
+                        
+                            
+                            <option value="2b79d1d91f6dd881a1e42d0fec96a96602f00a67" data-url="/post-history/cb4cbd7b4a91ce16e153/2b79d1d91f6dd881a1e42d0fec96a96602f00a67/">2026年07月25日 14:06 · 2b79d1d9</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/cb4cbd7b4a91ce16e153/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="a582be90459eb04f718ddf3634a6763a24d5d3f3" data-url="/post-history/cb4cbd7b4a91ce16e153/a582be90459eb04f718ddf3634a6763a24d5d3f3/">2026年07月12日 11:35 · a582be90</option>
+                        
+                            
+                            <option value="f9106b86c8c39f84b975f1528db73db6892dfe80" data-url="/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/">2026年06月05日 18:40 · f9106b86</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/post-history/cb4cbd7b4a91ce16e153/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="7bcf867df79b996ad954b60436c291d9f21efc44" data-url="/post-history/cb4cbd7b4a91ce16e153/7bcf867df79b996ad954b60436c291d9f21efc44/">2026年04月16日 19:15 · 7bcf867d</option>
+                        
+                            
+                            <option value="f085f96adb1fde3920a9e1366fc17560b539bbcf" data-url="/post-history/cb4cbd7b4a91ce16e153/f085f96adb1fde3920a9e1366fc17560b539bbcf/">2026年04月16日 01:35 · f085f96a</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/p/hermes-openclaw-not-the-same-game/">当前版本</option>
+                        
+                            
+                            <option value="b2e0a431456af8ba67449e1216b5f70042ab11cc" data-url="/post-history/cb4cbd7b4a91ce16e153/b2e0a431456af8ba67449e1216b5f70042ab11cc/">2026年09月29日 10:38 · b2e0a431</option>
+                        
+                            
+                            <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/cb4cbd7b4a91ce16e153/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
+                        
+                            
+                            <option value="2b79d1d91f6dd881a1e42d0fec96a96602f00a67" data-url="/post-history/cb4cbd7b4a91ce16e153/2b79d1d91f6dd881a1e42d0fec96a96602f00a67/">2026年07月25日 14:06 · 2b79d1d9</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/cb4cbd7b4a91ce16e153/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="a582be90459eb04f718ddf3634a6763a24d5d3f3" data-url="/post-history/cb4cbd7b4a91ce16e153/a582be90459eb04f718ddf3634a6763a24d5d3f3/">2026年07月12日 11:35 · a582be90</option>
+                        
+                            
+                            <option value="f9106b86c8c39f84b975f1528db73db6892dfe80" data-url="/post-history/cb4cbd7b4a91ce16e153/f9106b86c8c39f84b975f1528db73db6892dfe80/">2026年06月05日 18:40 · f9106b86</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/post-history/cb4cbd7b4a91ce16e153/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="7bcf867df79b996ad954b60436c291d9f21efc44" data-url="/post-history/cb4cbd7b4a91ce16e153/7bcf867df79b996ad954b60436c291d9f21efc44/">2026年04月16日 19:15 · 7bcf867d</option>
+                        
+                            
+                            <option value="f085f96adb1fde3920a9e1366fc17560b539bbcf" data-url="/post-history/cb4cbd7b4a91ce16e153/f085f96adb1fde3920a9e1366fc17560b539bbcf/">2026年04月16日 01:35 · f085f96a</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/b2e0a431456af8ba67449e1216b5f70042ab11cc/">Hermes 不能按 OpenClaw 平替来估</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-09-29T10:38:47&#43;08:00">2026年09月29日 10:38</time>
+
+                            <code>b2e0a431</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/c016c3d078b31c7d0a508729a563502e2cdcc667/">Hermes 不能按 OpenClaw 平替来估</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-26T22:39:23&#43;08:00">2026年07月26日 22:39</time>
+
+                            <code>c016c3d0</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/2b79d1d91f6dd881a1e42d0fec96a96602f00a67/">Hermes 不能按 OpenClaw 平替来估</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-25T14:06:40&#43;08:00">2026年07月25日 14:06</time>
+
+                            <code>2b79d1d9</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/72295f513a73ec4fcc6d84660def9db9525297a0/">Hermes 不能按 OpenClaw 平替来估</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-23T10:52:57&#43;08:00">2026年07月23日 10:52</time>
+
+                            <code>72295f51</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/a582be90459eb04f718ddf3634a6763a24d5d3f3/">Hermes 不能按 OpenClaw 平替来估</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-12T11:35:02&#43;08:00">2026年07月12日 11:35</time>
+
+                            <code>a582be90</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">Hermes 不能按 OpenClaw 平替来估 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-06-05T18:40:34&#43;08:00">2026年06月05日 18:40</time>
+
+                            <code>f9106b86</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-27T19:25:37&#43;08:00">2026年04月27日 19:25</time>
+
+                            <code>de7da291</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/7bcf867df79b996ad954b60436c291d9f21efc44/">把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-16T19:15:21&#43;08:00">2026年04月16日 19:15</time>
+
+                            <code>7bcf867d</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/cb4cbd7b4a91ce16e153/f085f96adb1fde3920a9e1366fc17560b539bbcf/">把 Hermes 当成 OpenClaw 替代品，可能一开始就看偏了</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-16T01:35:04&#43;08:00">2026年04月16日 01:35</time>
+
+                            <code>f085f96a</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>这两天我把 Hermes 和 OpenClaw 的文档来回翻了一圈，越看越觉得，很多人把这两个项目放在一起比，其实一开始就比偏了。</p>
+<p>它们当然都在做“个人 AI 助手”。都能接消息、调模型、跑工具、留住一点上下文。Hermes 甚至还专门做了 <code>hermes claw migrate</code>，摆明了是知道自己会接到一批 OpenClaw 用户。</p>
+<p>但是说白了，Hermes 不是换皮版 OpenClaw，OpenClaw 也不是多了几个消息入口的 agent framework。一个是从 <code>Gateway</code> 往外长，一个是从 <code>AIAgent</code> 往外长。这个差别不先看明白，后面谈架构、设计理念和生态，基本都会越聊越乱。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#它们一开始就没打算长成一个东西">它们一开始就没打算长成一个东西</a></li>
+    <li><a href="#一个把-gateway-当主角一个把-agent-当主角">一个把 Gateway 当主角，一个把 Agent 当主角</a></li>
+    <li><a href="#记忆技能和扩展方式也不是一个味道">记忆、技能和扩展方式，也不是一个味道</a></li>
+    <li><a href="#生态为什么会越走越开">生态为什么会越走越开</a></li>
+    <li><a href="#我最后的判断">我最后的判断</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="它们一开始就没打算长成一个东西">它们一开始就没打算长成一个东西
+</h2><p>OpenClaw 官方文档把 <code>Gateway</code> 放在非常前的位置。它的定义很直接：一个长期运行的 Gateway 持有所有消息面，控制面客户端、Web UI、Node 设备都通过 WebSocket 连到这个 Gateway 上，而且一个 host 上只有一个 Gateway 去管核心消息连接，像 WhatsApp 这种会话也明确由它独占。</p>
+<p>这意味着什么？意味着 OpenClaw 的世界观不是“先有一个 agent，再给它接几个入口”，而是“先有一个常驻的通信和控制平面，再把 agent runtime、session、skills、delegate、sub-agent 都组织到这个平面里”。</p>
+<p>Hermes 就不是这个味道。它的架构图一上来写得很明白，CLI、Gateway、ACP、Batch Runner、API Server、Python Library 这些入口，最后都汇到同一个 <code>AIAgent</code> 核心。Session storage 是 SQLite + FTS5，工具后端、provider resolution、prompt builder 都是围着这个 core 组织的。</p>
+<p>所以从骨架上看，OpenClaw 更像一个“常驻型个人助理系统”；Hermes 更像一个“agent runtime 平台”，消息入口只是它的一个延伸面。</p>
+<h2 id="一个把-gateway-当主角一个把-agent-当主角">一个把 Gateway 当主角，一个把 Agent 当主角
+</h2><p>这个架构差异，最后会直接变成使用体验差异。</p>
+<p>OpenClaw 的强项，是把“我怎么在很多渠道上拥有一个长期在线、带身份、带边界、可路由的助手”这件事做得非常重。它有默认的 DM pairing、安全策略、按 channel/account/peer 做 routing、多 agent 绑定、delegate 模式，甚至连“代表谁发、用哪个账号收、在哪个群里出现”这种组织级问题都专门写成文档了。</p>
+<p>换句话说，OpenClaw 想先解决的是存在性问题。这个 agent 先得像个真的人，或者像个真的组织助理，活在 Telegram、Discord、Slack、WhatsApp、Signal、WebChat 这些面上，然后你再去谈它会不会写代码、会不会做任务分发。</p>
+<p>Hermes 的重心更偏“能力积累”。它当然也有 Gateway，也能接 Telegram、Discord、Slack、WhatsApp 这些平台，但官方叙事里最靠前的词不是路由和账号，而是 persistent memory、skills、MCP、sub-agents、toolsets，还有 batch processing、trajectory export、RL training。</p>
+<p>这就很关键了。Hermes 要解决的核心问题不是“怎么把一个 AI 接到尽可能多的消息面上”，而是“怎么让这个 agent 逐步长出自己的技能、记忆和可复用能力，甚至还能顺手拿去做训练数据和实验”。</p>
+<p>所以我更愿意这么概括：</p>
+<p>OpenClaw 是 communication-first 的 personal assistant system。</p>
+<p>Hermes 是 agent-core-first 的 self-hosted agent platform。</p>
+<h2 id="记忆技能和扩展方式也不是一个味道">记忆、技能和扩展方式，也不是一个味道
+</h2><p>很多人会说，这俩不都支持 skill、memory、plugin 吗。没错，都支持。但是落点不一样。</p>
+<p>OpenClaw 的 agent runtime 里，workspace 是很重的概念。<code>AGENTS.md</code>、<code>SOUL.md</code>、<code>TOOLS.md</code>、<code>BOOTSTRAP.md</code>、<code>IDENTITY.md</code>、<code>USER.md</code> 这些文件会在新 session 的第一轮直接注入上下文。技能加载也有一整套优先级：workspace 里的、项目里的、个人目录里的、<code>~/.openclaw/skills</code> 里的、bundled 的，都能往里叠。它本质上是在搭一个“人格 + 规则 + 工作区 + 通道”统一的长期助手环境。</p>
+<p>Hermes 的技能系统明显更偏“程序化记忆”。官方文档直接说，skills 是 on-demand knowledge documents，走 progressive disclosure，兼容 <code>agentskills.io</code> 的开放标准，统一放在 <code>~/.hermes/skills/</code> 下面，而且 agent 自己就能修改和删除 skill。这个味道就不是“给助手配几份说明书”了，而是“把做过的事沉淀成可以再次加载的能力块”。</p>
+<p>记忆也一样。Hermes 内置的是很克制的 <code>MEMORY.md</code> 和 <code>USER.md</code>，再配一个 SQLite + FTS5 的 session search，另外再往外挂 8 类 memory provider。这个设计挺有意思，它没有一上来把“长期人格环境”写得特别厚，而是把短记忆、检索式回忆、外挂式长期记忆拆开了。</p>
+<p>OpenClaw 不是没有记忆，也不是没有 sub-agent、多 agent、delegate 这些进阶能力。相反，它这些都不少。但从文档结构和默认心智模型看，它更像在经营一个持续在线的 assistant workspace；Hermes 更像在经营一个会持续进化的 agent capability graph。</p>
+<h2 id="生态为什么会越走越开">生态为什么会越走越开
+</h2><p>生态这块，表面看都是“开源 + 可扩展”，实际上也分叉得很明显。</p>
+<p>OpenClaw 的生态更宽，更偏外部接入层。官方插件可以扩 channels、model providers、tools、skills、speech、web fetch、web search、memory，社区插件和 ClawHub 也在围着“接更多平台、接更多账号、接更多工作流”长。它甚至明确兼容 <code>.codex-plugin</code>、<code>.claude-plugin</code>、<code>.cursor-plugin</code> 这类 bundle 形态。这个动作很聪明，说白了就是先把别家生态的壳也吃进来，先把入口做大。</p>
+<p>再看 OpenClaw 的文档，你会发现它对 sub-agent、delegate、组织代理、thread binding、DM pairing、group mention 这些东西写得非常细。说明它的生态目标，不只是单机玩家折腾，而是希望真的变成一个长期运行的 agent operating system。</p>
+<p>Hermes 的生态则更像“内核能力外接”。它有 Python plugin system，有 memory provider plugin，有 context engine plugin，有 MCP server 接入，也有 Skills Hub 和 <code>agentskills.io</code> 这种开放 skill 标准。再加上 batch runner、trajectory export、Atropos 这些训练相关接口，Hermes 的生态天然会吸引两类人。</p>
+<p>一类是把它当个人 agent 用的人。</p>
+<p>另一类是把它当研究、训练、实验、workflow substrate 用的人。</p>
+<p>这两类用户的需求差异很大，但 Hermes 的架构刚好都能兜住。所以你会感觉 Hermes 的生态虽然未必像 OpenClaw 那样先在“渠道数量”和“消息存在感”上铺开，但我会更倾向于觉得，它在 agent substrate 这块的后劲会更大。</p>
+<p>还有一个挺有意思的细节。Hermes 官方 README 里不光有 <code>hermes claw migrate</code>，还挂了一个社区项目 <code>HermesClaw</code>，用来在同一个 WeChat 账号上同时跑 Hermes Agent 和 OpenClaw。这个信号已经很明显了：Hermes 不是假装自己和 OpenClaw 没关系，它是在承认这条用户迁移链路存在，然后顺手把这条链路产品化了。</p>
+<h2 id="我最后的判断">我最后的判断
+</h2><p>如果你要的是一个“真的活在消息面上的个人助理系统”，要的是账号、渠道、路由、delegate、组织边界、长期在线、强控制面，那 OpenClaw 这条路更完整，也更像一个成熟的通信底座。</p>
+<p>如果你要的是一个“会越用越像自己工作台的 agent core”，看重的是 skill 沉淀、memory 组合、MCP、插件、sub-agent、训练数据和后续可塑性，那 Hermes 更顺手。</p>
+<p>所以别再简单问“Hermes 能不能替代 OpenClaw”了。这个问题问得有点糙。</p>
+<p>更准确的问法应该是：</p>
+<p>你到底想要一个长在消息网络里的 AI 助理，还是一个长在本地工作流和 agent runtime 里的 AI 平台？</p>
+<p>想清楚这个，选择就没那么拧巴了。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://github.com/NousResearch/hermes-agent">Hermes Agent GitHub README</a></li>
+<li><a class="link" href="https://hermes-agent.org/">Hermes Agent 官网 Features</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/developer-guide/architecture">Hermes Agent Architecture</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/skills">Hermes Agent Skills System</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/memory">Hermes Agent Persistent Memory</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp">Hermes Agent MCP</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins">Hermes Agent Plugins</a></li>
+<li><a class="link" href="https://github.com/openclaw/openclaw">OpenClaw GitHub README</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/architecture">OpenClaw Gateway Architecture</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/agent">OpenClaw Agent Runtime</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/multi-agent">OpenClaw Multi-Agent Routing</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/delegate-architecture">OpenClaw Delegate Architecture</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/tools/subagents">OpenClaw Sub-Agents</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/tools/plugin">OpenClaw Plugins</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/tools/skills-config">OpenClaw Skills Config</a></li>
+</ul>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><blockquote>
+<p>提示词：Hermes 和 OpenClaw 的不同，架构上的不同，设计理念上面的不同，生态的不同</p>
+</blockquote>
+<h3 id="写作思路摘要">写作思路摘要
+</h3><ul>
+<li>先把“替代品对比”这个常见问法拆掉，直接把主线定成“两个项目的中心到底放在哪”。</li>
+<li>架构部分优先看官方文档里的主入口和核心组件，而不是社区二手总结。</li>
+<li>设计理念部分不做空泛价值判断，直接落到 Gateway、Agent Core、memory、skill、delegate 这些具体设计上。</li>
+<li>生态部分重点比较扩展方向，不做星标、热度和社区口水战。</li>
+<li>事实核验以 2026-04-15 可见的官方仓库与官方文档为准。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

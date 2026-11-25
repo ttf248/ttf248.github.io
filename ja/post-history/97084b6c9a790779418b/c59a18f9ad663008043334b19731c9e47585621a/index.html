@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr" data-theme="editorial" data-code-copy="コードをコピー" data-code-copied="コピーしました" data-code-expand="すべて展開" data-code-collapse="コードを折りたたむ">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。\n">
+<title>Keepalived &#43; HAProxy を用いた高可用ロードバランシングの構築</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Keepalived + HAProxy を用いた高可用ロードバランシングの構築">
+<meta property='og:description' content="現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。\n">
+<meta property='og:url' content='https://ttf248.life/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2025-09-19T09:45:55&#43;08:00'/><meta property='article:modified_time' content='2025-09-19T09:45:55&#43;08:00'/>
+<meta name="twitter:title" content="Keepalived + HAProxy を用いた高可用ロードバランシングの構築">
+<meta name="twitter:description" content="現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/","name":"Keepalived + HAProxy を用いた高可用ロードバランシングの構築","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"claude-4-sonnet"},"dateModified":"2025-09-19T09:45:55+08:00","datePublished":"2025-09-19T09:45:55+08:00","headline":"Keepalived + HAProxy を用いた高可用ロードバランシングの構築","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/ja/" aria-label="向叔の手帳 ホーム">
+            <span class="site-header__title">向叔の手帳</span>
+            <span class="site-header__subtitle">時を集め、歳月に痕跡を残す</span>
+        </a>
+<nav class="site-header__nav" aria-label="ナビゲーション">
+            <div class="site-header__nav-group" role="group" aria-label="閲覧">
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/ja/projects/" aria-label="プロジェクト">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>プロジェクト</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="執筆ソースを切り替え"
+                    data-source-toggle-button>
+                    著者執筆
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/author/"
+                            class="site-header__source-toggle-option">
+                            著者執筆
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 執筆
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/" selected>日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="カラーモードを切り替え">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="ナビゲーションメニューを開く">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="ナビゲーション">
+        <div class="mobile-navigation__header">
+            <span>ナビゲーション</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="ナビゲーションメニューを閉じる">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="閲覧">
+                <div class="mobile-navigation__group-label">閲覧</div>
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="プロジェクト">
+                <div class="mobile-navigation__group-label">プロジェクト</div>
+                <a class="mobile-navigation__area" href="/ja/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>プロジェクト</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="執筆">
+                <div class="mobile-navigation__group-label">執筆</div>
+                <a href="/ja/writing/author/">著者執筆</a>
+                <a href="/ja/writing/ai/">AI 執筆</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>言語</span>
+                <select aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/" selected>日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="記事閲覧ツール">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/ja/p/keepalived-haproxy-for-high-availability-load-balancing/">← <span>現在の記事に戻る</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目次</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">文字サイズ</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">閲覧時の文字サイズ</span>
+        <div class="article-reading-settings__options" role="group" aria-label="閲覧時の文字サイズ">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">標準</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目次">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目次</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="閲覧進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>この記事の目次</span>
+            <small data-article-reading-remaining data-template="残り約 #MINUTES 分">残り約 10 分</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#技術概要">技術概要</a>
+      <ol>
+        <li><a href="#keepalived-の概要">Keepalived の概要</a></li>
+        <li><a href="#haproxy-の概要">HAProxy の概要</a></li>
+      </ol>
+    </li>
+    <li><a href="#アーキテクチャ設計">アーキテクチャ設計</a>
+      <ol>
+        <li><a href="#全体アーキテクチャ">全体アーキテクチャ</a></li>
+        <li><a href="#全体アーキテクチャ-1">全体アーキテクチャ</a></li>
+        <li><a href="#コンポーネントの説明">コンポーネントの説明</a></li>
+      </ol>
+    </li>
+    <li><a href="#環境準備">環境準備</a>
+      <ol>
+        <li><a href="#サーバ計画">サーバ計画</a></li>
+        <li><a href="#サーバ計画-1">サーバ計画</a></li>
+        <li><a href="#サーバー構成">サーバー構成</a></li>
+        <li><a href="#サーバー計画">サーバー計画</a></li>
+        <li><a href="#サーバー構成-1">サーバー構成</a></li>
+        <li><a href="#サーバー計画-1">サーバー計画</a></li>
+        <li><a href="#ソフトウェアのインストール">ソフトウェアのインストール</a></li>
+      </ol>
+    </li>
+    <li><a href="#keepalived-設定">Keepalived 設定</a>
+      <ol>
+        <li><a href="#主ノード設定-lb-master">主ノード設定 (lb-master)</a></li>
+        <li><a href="#備中节点配置-lb-backup">備中节点配置 (lb-backup)</a></li>
+        <li><a href="#haproxy健康チェックスクリプト">HAProxy健康チェックスクリプト</a></li>
+        <li><a href="#状態通知スクリプト">状態通知スクリプト</a></li>
+      </ol>
+    </li>
+    <li><a href="#haproxy-設定">HAProxy 設定</a>
+      <ol>
+        <li><a href="#メイン設定ファイル">メイン設定ファイル</a></li>
+        <li><a href="#設定手順">設定手順</a></li>
+      </ol>
+    </li>
+    <li><a href="#サービス開始とテスト">サービス開始とテスト</a>
+      <ol>
+        <li><a href="#サービスの起動">サービスの起動</a></li>
+        <li><a href="#vip認証の確認">VIP認証の確認</a></li>
+        <li><a href="#機能テスト">機能テスト</a>
+          <ol>
+            <li><a href="#1-負荷分散テスト">1. 負荷分散テスト</a></li>
+            <li><a href="#2-フェイルオーバーテスト">2. フェイルオーバーテスト</a></li>
+            <li><a href="#3-バックエンドサーバー障害テスト">3. バックエンドサーバー障害テスト</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#モニタリングとメンテナンス">モニタリングとメンテナンス</a>
+      <ol>
+        <li><a href="#ロギング監視">ロギング監視</a>
+          <ol>
+            <li><a href="#haproxyログ">HAProxyログ</a></li>
+            <li><a href="#keepalivedログ">Keepalivedログ</a></li>
+          </ol>
+        </li>
+        <li><a href="#パフォーマンス監視">パフォーマンス監視</a>
+          <ol>
+            <li><a href="#統計ページ監視">統計ページ監視</a></li>
+            <li><a href="#コマンドライン監視">コマンドライン監視</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#よくあるトラブルシューティング">よくあるトラブルシューティング</a>
+      <ol>
+        <li><a href="#1-vipの切り替え不可">1. VIPの切り替え不可</a></li>
+        <li><a href="#2-健康チェック失敗">2. 健康チェック失敗</a></li>
+        <li><a href="#3-負荷分散の不均衡">3. 負荷分散の不均衡</a></li>
+      </ol>
+    </li>
+    <li><a href="#オプティマイズの提案">オプティマイズの提案</a>
+      <ol>
+        <li><a href="#1-パフォーマンス最適化">1. パフォーマンス最適化</a></li>
+        <li><a href="#2-セキュリティ強化">2. セキュリティ強化</a></li>
+        <li><a href="#3-モニタリングとアラート">3. モニタリングとアラート</a></li>
+      </ol>
+    </li>
+    <li><a href="#結論">結論</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="10">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Keepalived &#43; HAProxy を用いた高可用ロードバランシングの構築</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2025年09月19日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">読了時間: 16分</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">claude-4-sonnet</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="版の履歴">
+        <p>
+            <strong>過去の版</strong>
+            
+            版の日時
+            <time datetime="2025-09-19T10:05:47&#43;08:00">2025年09月19日 10:05</time>
+
+            <code>c59a18f9</code>
+        </p>
+        <p>
+            
+                <a href="/ja/p/keepalived-haproxy-for-high-availability-load-balancing/">← 現在の記事に戻る</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">この履歴のリンク先は利用できません。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>版の履歴 · 1</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">変更を比較</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="c59a18f9ad663008043334b19731c9e47585621a"
+        data-unchanged="記事の表示内容に変更はありません。"
+        data-loading="版を読み込み中…"
+        data-error="版を読み込めませんでした。終了してから開き直してください。"
+        data-same="異なる二つの版を選んでください。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">変更を比較</h1>
+            <button type="button" class="post-review-button" data-review-close>比較を終了</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">比較元</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/ja/p/keepalived-haproxy-for-high-availability-load-balancing/">現在の版</option>
+                        
+                            
+                            <option value="c59a18f9ad663008043334b19731c9e47585621a" data-url="/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/">2025年09月19日 10:05 · c59a18f9</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">比較先</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/ja/p/keepalived-haproxy-for-high-availability-load-balancing/">現在の版</option>
+                        
+                            
+                            <option value="c59a18f9ad663008043334b19731c9e47585621a" data-url="/ja/post-history/97084b6c9a790779418b/c59a18f9ad663008043334b19731c9e47585621a/">2025年09月19日 10:05 · c59a18f9</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− 削除</del>
+            <ins class="post-review-inline--ins">&#43; 追加</ins>
+            <mark class="post-review-inline--format">書式やリンクの変更</mark>
+            <label><input type="checkbox" data-review-all> すべての内容を表示</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版の差分" role="region"
+            data-folded-label="変更のない #COUNT# ブロックを展開"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">Keepalived &#43; HAProxy を用いた高可用ロードバランシングの構築 <span class="post-archive-meta">(閲覧中)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-09-19T10:05:47&#43;08:00">2025年09月19日 10:05</time>
+
+                            <code>c59a18f9</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>現代インターネットアーキテクチャにおいて、高可用性はシステム設計における重要な検討事項です。本稿では、KeepalivedとHAProxyを使用して高可用なロードバランシングクラスタを構築し、サービスの継続性と信頼性を確保する方法について詳細に解説します。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>この記事の目次</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#技術概要">技術概要</a>
+      <ol>
+        <li><a href="#keepalived-の概要">Keepalived の概要</a></li>
+        <li><a href="#haproxy-の概要">HAProxy の概要</a></li>
+      </ol>
+    </li>
+    <li><a href="#アーキテクチャ設計">アーキテクチャ設計</a>
+      <ol>
+        <li><a href="#全体アーキテクチャ">全体アーキテクチャ</a></li>
+        <li><a href="#全体アーキテクチャ-1">全体アーキテクチャ</a></li>
+        <li><a href="#コンポーネントの説明">コンポーネントの説明</a></li>
+      </ol>
+    </li>
+    <li><a href="#環境準備">環境準備</a>
+      <ol>
+        <li><a href="#サーバ計画">サーバ計画</a></li>
+        <li><a href="#サーバ計画-1">サーバ計画</a></li>
+        <li><a href="#サーバー構成">サーバー構成</a></li>
+        <li><a href="#サーバー計画">サーバー計画</a></li>
+        <li><a href="#サーバー構成-1">サーバー構成</a></li>
+        <li><a href="#サーバー計画-1">サーバー計画</a></li>
+        <li><a href="#ソフトウェアのインストール">ソフトウェアのインストール</a></li>
+      </ol>
+    </li>
+    <li><a href="#keepalived-設定">Keepalived 設定</a>
+      <ol>
+        <li><a href="#主ノード設定-lb-master">主ノード設定 (lb-master)</a></li>
+        <li><a href="#備中节点配置-lb-backup">備中节点配置 (lb-backup)</a></li>
+        <li><a href="#haproxy健康チェックスクリプト">HAProxy健康チェックスクリプト</a></li>
+        <li><a href="#状態通知スクリプト">状態通知スクリプト</a></li>
+      </ol>
+    </li>
+    <li><a href="#haproxy-設定">HAProxy 設定</a>
+      <ol>
+        <li><a href="#メイン設定ファイル">メイン設定ファイル</a></li>
+        <li><a href="#設定手順">設定手順</a></li>
+      </ol>
+    </li>
+    <li><a href="#サービス開始とテスト">サービス開始とテスト</a>
+      <ol>
+        <li><a href="#サービスの起動">サービスの起動</a></li>
+        <li><a href="#vip認証の確認">VIP認証の確認</a></li>
+        <li><a href="#機能テスト">機能テスト</a>
+          <ol>
+            <li><a href="#1-負荷分散テスト">1. 負荷分散テスト</a></li>
+            <li><a href="#2-フェイルオーバーテスト">2. フェイルオーバーテスト</a></li>
+            <li><a href="#3-バックエンドサーバー障害テスト">3. バックエンドサーバー障害テスト</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#モニタリングとメンテナンス">モニタリングとメンテナンス</a>
+      <ol>
+        <li><a href="#ロギング監視">ロギング監視</a>
+          <ol>
+            <li><a href="#haproxyログ">HAProxyログ</a></li>
+            <li><a href="#keepalivedログ">Keepalivedログ</a></li>
+          </ol>
+        </li>
+        <li><a href="#パフォーマンス監視">パフォーマンス監視</a>
+          <ol>
+            <li><a href="#統計ページ監視">統計ページ監視</a></li>
+            <li><a href="#コマンドライン監視">コマンドライン監視</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#よくあるトラブルシューティング">よくあるトラブルシューティング</a>
+      <ol>
+        <li><a href="#1-vipの切り替え不可">1. VIPの切り替え不可</a></li>
+        <li><a href="#2-健康チェック失敗">2. 健康チェック失敗</a></li>
+        <li><a href="#3-負荷分散の不均衡">3. 負荷分散の不均衡</a></li>
+      </ol>
+    </li>
+    <li><a href="#オプティマイズの提案">オプティマイズの提案</a>
+      <ol>
+        <li><a href="#1-パフォーマンス最適化">1. パフォーマンス最適化</a></li>
+        <li><a href="#2-セキュリティ強化">2. セキュリティ強化</a></li>
+        <li><a href="#3-モニタリングとアラート">3. モニタリングとアラート</a></li>
+      </ol>
+    </li>
+    <li><a href="#結論">結論</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <blockquote>
+<p>実際の構成部分が検証されていないため、本文の構成はAIによって作成されています</p>
+</blockquote>
+<p>この画像は「タスク計画」というタイトルで、おそらくタスクのスケジュールやリストを示していると思われます。詳細な翻訳のためには画像の具体的な内容を確認する必要がありますが、一般的な表現として以下のように記述できます。</p>
+<p>タスク計画 (Tasukku Keikaku) - 任務計画 (Tanmoku Keikaku)</p>
+<h2 id="技術概要">技術概要
+</h2><h3 id="keepalived-の概要">Keepalived の概要
+</h3><p>Keepalived は、VRRP（Virtual Router Redundancy Protocol）プロトコルを基盤とした高可用性ソリューションであり、主にサーバーのフェイルオーバーとロードバランシングを実現するために使用されます。</p>
+<p><strong>主な特徴：</strong></p>
+<ul>
+<li><strong>VRRP プロトコル対応:</strong> 仮想IPアドレスの主/備切り替えの実装</li>
+<li><strong>健康チェック:</strong> サービスの状態を監視し、自動的に故障トランスファーを実行</li>
+<li><strong>設定の簡素化:</strong> 設定ファイルのみで複雑な高可用性アーキテクチャを実現</li>
+<li><strong>軽量:</strong> リソース消費量が少なく、性能に優れている</li>
+</ul>
+<p><strong>動作原理：</strong>
+Keepalived は、VRRP プロトコルを通じて複数のサーバー間で仮想IPアドレスを共有します。正常時には、主サーバーが仮想IPアドレスを持ちサービスを提供し、主サーバーが故障した場合、備サーバーが自動的に仮想IPアドレスを接管し、サービスの停止を防ぎます。</p>
+<h3 id="haproxy-の概要">HAProxy の概要
+</h3><p>HAProxy は、高性能なロードバランサーおよびリバースプロキシサーバーであり、高負荷環境で広く利用されています。
+<strong>主な機能：</strong></p>
+<ul>
+<li><strong>ロードバランシング:</strong> 複数のロードバランシングアルゴリズムをサポート</li>
+<li><strong>ヘルスチェック:</strong> バックエンドサーバーの状態をリアルタイムに監視</li>
+<li><strong>SSL終端:</strong> HTTPS トラフィックの処理をサポート</li>
+<li><strong>統計モニタリング:</strong> 詳細な実行状態の統計情報を提供
+<strong>利用シーン：</strong></li>
+<li>Web サービス のロードバランシング</li>
+<li>データベース接続プーリング</li>
+<li>マイクロサービスゲートウェイ</li>
+<li>API インターフェース のプロキシ</li>
+</ul>
+<h2 id="アーキテクチャ設計">アーキテクチャ設計
+</h2><h3 id="全体アーキテクチャ">全体アーキテクチャ
+</h3><pre tabindex="0"><code>                    ┌─────────────────┐
+                    │   Client        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  Virtual IP     │
+                    │  (VIP)          │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (Master)       │◄────────────►│   (Backup)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   Backend     │ │   Backend   │ │   Backend     │
+└───────────────┘ └─────────────┘ └───────────────┘
+</code></pre><h3 id="全体アーキテクチャ-1">全体アーキテクチャ
+</h3><pre tabindex="0"><code>                    ┌─────────────────┐
+                    │   クライアント        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  仮想IP (VIP)       │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (マスター)       │◄────────────►│   (バックアップ)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   バックエンド     │ │   バックエンド   │ │   バックエンド     │
+└───────────────┘ └─────────────┘ └───────────────┘
+</code></pre><h3 id="コンポーネントの説明">コンポーネントの説明
+</h3><ul>
+<li><strong>仮想IP (VIP)</strong>: 顧客がアクセスする統一的なエントリポイント</li>
+<li><strong>HAProxy 主備ノード</strong>: ロードバランシングサービスを提供し、Keepalivedを使用して高可用性を実現します</li>
+<li><strong>バックエンドサーバー</strong>: 実際にサービスを提供するWebサーバー</li>
+</ul>
+<h2 id="環境準備">環境準備
+</h2><h3 id="サーバ計画">サーバ計画
+</h3><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>役割</th>
+					<th>IPアドレス</th>
+					<th>ホスト名</th>
+					<th>サービス</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>HAProxy 主ノード</td>
+					<td>192.168.1.10</td>
+					<td>lb-master</td>
+					<td>HAProxy + Keepalived</td>
+			</tr>
+	</tbody>
+</table></div>
+<h3 id="サーバ計画-1">サーバ計画
+</h3><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>役割</th>
+					<th>IPアドレス</th>
+					<th>ホスト名</th>
+					<th>サービス</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>HAProxy 備後端</td>
+					<td>192.168.1.11</td>
+					<td>lb-backup</td>
+					<td>HAProxy + Keepalived</td>
+			</tr>
+	</tbody>
+</table></div>
+<h3 id="サーバー構成">サーバー構成
+</h3><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>ロール</th>
+					<th>IPアドレス</th>
+					<th>ホスト名</th>
+					<th>サービス</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>仮想IP</td>
+					<td>192.168.1.100</td>
+					<td>-</td>
+					<td>VIP</td>
+			</tr>
+	</tbody>
+</table></div>
+<h3 id="サーバー計画">サーバー計画
+</h3><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>役割</th>
+					<th>IPアドレス</th>
+					<th>ホスト名</th>
+					<th>サービス</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>Webサーバー1</td>
+					<td>192.168.1.20</td>
+					<td>web1</td>
+					<td>Nginx/Apache</td>
+			</tr>
+	</tbody>
+</table></div>
+<h3 id="サーバー構成-1">サーバー構成
+</h3><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>ロール</th>
+					<th>IPアドレス</th>
+					<th>ホスト名</th>
+					<th>サービス</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>Webサーバー2</td>
+					<td>192.168.1.21</td>
+					<td>web2</td>
+					<td>Nginx/Apache</td>
+			</tr>
+	</tbody>
+</table></div>
+<h3 id="サーバー計画-1">サーバー計画
+</h3><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>ロール</th>
+					<th>IPアドレス</th>
+					<th>ホスト名</th>
+					<th>サービス</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>Webサーバー3</td>
+					<td>192.168.1.22</td>
+					<td>web3</td>
+					<td>Nginx/Apache</td>
+			</tr>
+	</tbody>
+</table></div>
+<h3 id="ソフトウェアのインストール">ソフトウェアのインストール
+</h3><p>HAProxy主備サーバに必要ソフトウェアをインストールします：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># CentOS/RHEL</span>
+</span></span><span class="line"><span class="cl">yum install -y haproxy keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># Ubuntu/Debian</span>
+</span></span><span class="line"><span class="cl">apt-get update
+</span></span><span class="line"><span class="cl">apt-get install -y haproxy keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># サービスを起動時に自動開始にする</span>
+</span></span><span class="line"><span class="cl">systemctl <span class="nb">enable</span> haproxy keepalived
+</span></span></code></pre></div><h2 id="keepalived-設定">Keepalived 設定
+</h2><h3 id="主ノード設定-lb-master">主ノード設定 (lb-master)
+</h3><p><code>/etc/keepalived/keepalived.conf</code> ファイルを作成します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">! Configuration File <span class="k">for</span> keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">global_defs <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    router_id LB_MASTER
+</span></span><span class="line"><span class="cl">    script_user root
+</span></span><span class="line"><span class="cl">    enable_script_security
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># HAProxyサービスのステータスを確認するスクリプト</span>
+</span></span><span class="line"><span class="cl">vrrp_script chk_haproxy <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    script <span class="s2">&#34;/etc/keepalived/check_haproxy.sh&#34;</span>
+</span></span><span class="line"><span class="cl">    interval <span class="m">2</span>
+</span></span><span class="line"><span class="cl">    weight -2
+</span></span><span class="line"><span class="cl">    fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    rise <span class="m">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">vrrp_instance VI_1 <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    state MASTER
+</span></span><span class="line"><span class="cl">    interface eth0
+</span></span><span class="line"><span class="cl">    virtual_router_id <span class="m">51</span>
+</span></span><span class="line"><span class="cl">    priority <span class="m">100</span>
+</span></span><span class="line"><span class="cl">    advert_int <span class="m">1</span>
+</span></span><span class="line"><span class="cl">    authentication <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        auth_type PASS
+</span></span><span class="line"><span class="cl">        auth_pass mypassword123
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    virtual_ipaddress <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        192.168.1.100/24
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    track_script <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        chk_haproxy
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    notify_master <span class="s2">&#34;/etc/keepalived/notify.sh master&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_backup <span class="s2">&#34;/etc/keepalived/notify.sh backup&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_fault <span class="s2">&#34;/etc/keepalived/notify.sh fault&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span></code></pre></div><h3 id="備中节点配置-lb-backup">備中节点配置 (lb-backup)
+</h3><p><code>/etc/keepalived/keepalived.conf</code> ファイルを作成します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">! keepalived の構成ファイル
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">global_defs <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    router_id LB_BACKUP
+</span></span><span class="line"><span class="cl">    script_user root
+</span></span><span class="line"><span class="cl">    enable_script_security
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">vrrp_script chk_haproxy <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    script <span class="s2">&#34;/etc/keepalived/check_haproxy.sh&#34;</span>
+</span></span><span class="line"><span class="cl">    interval <span class="m">2</span>
+</span></span><span class="line"><span class="cl">    weight -2
+</span></span><span class="line"><span class="cl">    fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    rise <span class="m">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">vrrp_instance VI_1 <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    state BACKUP
+</span></span><span class="line"><span class="cl">    interface eth0
+</span></span><span class="line"><span class="cl">    virtual_router_id <span class="m">51</span>
+</span></span><span class="line"><span class="cl">    priority <span class="m">90</span>
+</span></span><span class="line"><span class="cl">    advert_int <span class="m">1</span>
+</span></span><span class="line"><span class="cl">    authentication <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        auth_type PASS
+</span></span><span class="line"><span class="cl">        auth_pass mypassword123
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    virtual_ipaddress <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        192.168.1.100/24
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    track_script <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        chk_haproxy
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    notify_master <span class="s2">&#34;/etc/keepalived/notify.sh master&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_backup <span class="s2">&#34;/etc/keepalived/notify.sh backup&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_fault <span class="s2">&#34;/etc/keepalived/notify.sh fault&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span></code></pre></div><h3 id="haproxy健康チェックスクリプト">HAProxy健康チェックスクリプト
+</h3><p><code>/etc/keepalived/check_haproxy.sh</code>というHAProxyの健康チェックスクリプトを作成します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="cp">#!/bin/bash
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># HAProxyプロセスが実行中か確認</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="o">[</span> <span class="k">$(</span>ps -C haproxy --no-header <span class="p">|</span> wc -l<span class="k">)</span> -eq <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">    <span class="c1"># HAProxyを起動を試行</span>
+</span></span><span class="line"><span class="cl">    systemctl start haproxy
+</span></span><span class="line"><span class="cl">    sleep <span class="m">2</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1"># 再度チェックし、まだ実行されていない場合は終了</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="o">[</span> <span class="k">$(</span>ps -C haproxy --no-header <span class="p">|</span> wc -l<span class="k">)</span> -eq <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">exit</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">    <span class="k">fi</span>
+</span></span><span class="line"><span class="cl"><span class="k">fi</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># HAProxyポートがリッスン中か確認</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> ! netstat -tuln <span class="p">|</span> grep -q <span class="s2">&#34;:80 &#34;</span><span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">exit</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl"><span class="k">fi</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">exit</span> <span class="m">0</span>
+</span></span></code></pre></div><h3 id="状態通知スクリプト">状態通知スクリプト
+</h3><p><code>/etc/keepalived/notify.sh</code> という状態通知スクリプトを作成します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="cp">#!/bin/bash
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nv">TYPE</span><span class="o">=</span><span class="nv">$1</span>
+</span></span><span class="line"><span class="cl"><span class="nv">NAME</span><span class="o">=</span><span class="nv">$2</span>
+</span></span><span class="line"><span class="cl"><span class="nv">STATE</span><span class="o">=</span><span class="nv">$3</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">case</span> <span class="nv">$STATE</span> in
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;MASTER&#34;</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Became MASTER&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;BACKUP&#34;</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Became BACKUP&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;FAULT&#34;</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Fault detected&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">    *<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Unknown state: </span><span class="nv">$STATE</span><span class="s2">&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl"><span class="k">esac</span>
+</span></span></code></pre></div><p>スクリプトの実行権限を設定します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">chmod +x /etc/keepalived/check_haproxy.sh
+</span></span><span class="line"><span class="cl">chmod +x /etc/keepalived/notify.sh
+</span></span></code></pre></div><h2 id="haproxy-設定">HAProxy 設定
+</h2><h3 id="メイン設定ファイル">メイン設定ファイル
+</h3><p>主備ノード上で同じHAProxyの設定ファイル <code>/etc/haproxy/haproxy.cfg</code> を作成します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">global
+</span></span><span class="line"><span class="cl">    log 127.0.0.1:514 local0
+</span></span><span class="line"><span class="cl">    chroot /var/lib/haproxy
+</span></span><span class="line"><span class="cl">    stats socket /run/haproxy/admin.sock mode <span class="m">660</span> level admin
+</span></span><span class="line"><span class="cl">    stats timeout 30s
+</span></span><span class="line"><span class="cl">    user haproxy
+</span></span><span class="line"><span class="cl">    group haproxy
+</span></span><span class="line"><span class="cl">    daemon
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">defaults
+</span></span><span class="line"><span class="cl">    mode http
+</span></span><span class="line"><span class="cl">    log global
+</span></span><span class="line"><span class="cl">    option httplog
+</span></span><span class="line"><span class="cl">    option dontlognull
+</span></span><span class="line"><span class="cl">    option log-health-checks
+</span></span><span class="line"><span class="cl">    option forwardfor except 127.0.0.0/8
+</span></span><span class="line"><span class="cl">    option redispatch
+</span></span><span class="line"><span class="cl">    retries <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    timeout http-request 10s
+</span></span><span class="line"><span class="cl">    timeout queue 1m
+</span></span><span class="line"><span class="cl">    timeout connect 10s
+</span></span><span class="line"><span class="cl">    timeout client 1m
+</span></span><span class="line"><span class="cl">    timeout server 1m
+</span></span><span class="line"><span class="cl">    timeout http-keep-alive 10s
+</span></span><span class="line"><span class="cl">    timeout check 10s
+</span></span><span class="line"><span class="cl">    maxconn <span class="m">3000</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># ページ設定の統計</span>
+</span></span><span class="line"><span class="cl">listen stats
+</span></span><span class="line"><span class="cl">    <span class="nb">bind</span> *:8080
+</span></span><span class="line"><span class="cl">    stats <span class="nb">enable</span>
+</span></span><span class="line"><span class="cl">    stats uri /stats
+</span></span><span class="line"><span class="cl">    stats realm HAProxy<span class="se">\ </span>Statistics
+</span></span><span class="line"><span class="cl">    stats auth admin:password123
+</span></span><span class="line"><span class="cl">    stats refresh 30s
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 前端設定</span>
+</span></span><span class="line"><span class="cl">frontend web_frontend
+</span></span><span class="line"><span class="cl">    <span class="nb">bind</span> *:80
+</span></span><span class="line"><span class="cl">    default_backend web_servers
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 後端サーバー設定</span>
+</span></span><span class="line"><span class="cl">backend web_servers
+</span></span><span class="line"><span class="cl">    balance roundrobin
+</span></span><span class="line"><span class="cl">    option httpchk GET /health
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    server web1 192.168.1.20:80 check inter <span class="m">2000</span> rise <span class="m">2</span> fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    server web2 192.168.1.21:80 check inter <span class="m">2000</span> rise <span class="m">2</span> fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    server web3 192.168.1.22:80 check inter <span class="m">2000</span> rise <span class="m">2</span> fall <span class="m">3</span>
+</span></span></code></pre></div><h3 id="設定手順">設定手順
+</h3><p><strong>グローバル設定:</strong></p>
+<ul>
+<li><code>log</code>: 日志設定</li>
+<li><code>chroot</code>: セーフティサンドボックス</li>
+<li><code>stats socket</code>: 管理インターフェース</li>
+<li><code>daemon</code>: バックグラウンド実行
+<strong>デフォルト設定:</strong></li>
+<li><code>mode http</code>: HTTPモード</li>
+<li><code>balance roundrobin</code>: ラウンドロビンバランシング</li>
+<li><code>option httpchk</code>: HTTPヘルスチェック</li>
+<li><code>timeout</code>: 様々なタイムアウト設定
+<strong>バックエンドサーバー:</strong></li>
+<li><code>check</code>: ヘルスチェックを有効にする</li>
+<li><code>inter 2000</code>: チェック間隔2秒</li>
+<li><code>rise 2</code>: 連続2回成功した場合に可用とマークする</li>
+<li><code>fall 3</code>: 連続3回失敗した場合に不可用とマークする</li>
+</ul>
+<h2 id="サービス開始とテスト">サービス開始とテスト
+</h2><h3 id="サービスの起動">サービスの起動
+</h3><p>主節点および副節点上でサービスを起動します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># HAProxyの起動</span>
+</span></span><span class="line"><span class="cl">systemctl start haproxy
+</span></span><span class="line"><span class="cl">systemctl status haproxy
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># Keepalivedの起動</span>
+</span></span><span class="line"><span class="cl">systemctl start keepalived
+</span></span><span class="line"><span class="cl">systemctl status keepalived
+</span></span></code></pre></div><h3 id="vip認証の確認">VIP認証の確認
+</h3><p>仮想IPが正しくバインドされているかを確認します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 主ノードでIPアドレスを表示</span>
+</span></span><span class="line"><span class="cl">ip addr show
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 以下の様な出力が表示されるはずです：</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#     inet 192.168.1.100/24 scope global secondary eth0:0</span>
+</span></span></code></pre></div><h3 id="機能テスト">機能テスト
+</h3><h4 id="1-負荷分散テスト">1. 負荷分散テスト
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># VIPに複数回アクセスし、リクエストの分配状況を監視</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> i in <span class="o">{</span>1..10<span class="o">}</span><span class="p">;</span> <span class="k">do</span>
+</span></span><span class="line"><span class="cl">    curl -s http://192.168.1.100/ <span class="p">|</span> grep <span class="s2">&#34;Server&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="k">done</span>
+</span></span></code></pre></div><h4 id="2-フェイルオーバーテスト">2. フェイルオーバーテスト
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 主ノードでHAProxyサービスを停止する</span>
+</span></span><span class="line"><span class="cl">systemctl stop haproxy
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># VIPがバックノードに切り替わるのを監視する</span>
+</span></span><span class="line"><span class="cl">ip addr show
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># サービスの正常性を確認する</span>
+</span></span><span class="line"><span class="cl">curl http://192.168.1.100/
+</span></span></code></pre></div><h4 id="3-バックエンドサーバー障害テスト">3. バックエンドサーバー障害テスト
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 一台のWebサーバーを停止する</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># web1サーバーで：</span>
+</span></span><span class="line"><span class="cl">systemctl stop nginx
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># HAProxy統計ページを監視する</span>
+</span></span><span class="line"><span class="cl">curl http://192.168.1.100:8080/stats
+</span></span></code></pre></div><h2 id="モニタリングとメンテナンス">モニタリングとメンテナンス
+</h2><h3 id="ロギング監視">ロギング監視
+</h3><h4 id="haproxyログ">HAProxyログ
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># HAProxyログの確認</span>
+</span></span><span class="line"><span class="cl">tail -f /var/log/haproxy.log
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># アクセス統計の確認</span>
+</span></span><span class="line"><span class="cl">grep <span class="s2">&#34;HTTP/1.1&#34;</span> /var/log/haproxy.log <span class="p">|</span> tail -20
+</span></span></code></pre></div><h4 id="keepalivedログ">Keepalivedログ
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># Keepalivedログの確認</span>
+</span></span><span class="line"><span class="cl">tail -f /var/log/messages <span class="p">|</span> grep keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 状態変化ログの確認</span>
+</span></span><span class="line"><span class="cl">tail -f /var/log/keepalived-state.log
+</span></span></code></pre></div><h3 id="パフォーマンス監視">パフォーマンス監視
+</h3><h4 id="統計ページ監視">統計ページ監視
+</h4><p>HAProxyの統計ページへのアクセス: <code>http://192.168.1.100:8080/stats</code>
+主要指標:</p>
+<ul>
+<li><strong>Session Rate</strong>: 会話レート</li>
+<li><strong>Session Total</strong>: 総会話数</li>
+<li><strong>Bytes In/Out</strong>: 流量統計</li>
+<li><strong>Response Time</strong>: 応答時間</li>
+<li><strong>Server Status</strong>: サーバー状態</li>
+</ul>
+<h4 id="コマンドライン監視">コマンドライン監視
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># HAProxyプロセスの状態を確認</span>
+</span></span><span class="line"><span class="cl">ps aux <span class="p">|</span> grep haproxy
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># ポートのリスニング状態を確認</span>
+</span></span><span class="line"><span class="cl">netstat -tuln <span class="p">|</span> grep -E <span class="s2">&#34;(80|8080)&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 接続数を確認</span>
+</span></span><span class="line"><span class="cl">ss -ant <span class="p">|</span> grep :80 <span class="p">|</span> wc -l
+</span></span></code></pre></div><h2 id="よくあるトラブルシューティング">よくあるトラブルシューティング
+</h2><h3 id="1-vipの切り替え不可">1. VIPの切り替え不可
+</h3><p><strong>問題現象:</strong>
+主ノード故障後、VIPがバックアップノードに切り替わらない
+<strong>トラブルシューティング手順:</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># Keepalived設定を確認</span>
+</span></span><span class="line"><span class="cl">keepalived -t -f /etc/keepalived/keepalived.conf
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># VRRP通信を監視</span>
+</span></span><span class="line"><span class="cl">tcpdump -i eth0 vrrp
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># ファイアウォール設定を確認</span>
+</span></span><span class="line"><span class="cl">iptables -L <span class="p">|</span> grep vrrp
+</span></span></code></pre></div><p><strong>解決策:</strong></p>
+<ul>
+<li>VRRPプロトコル通信が正常であることを確認</li>
+<li>ネットワークインターフェースの設定を確認</li>
+<li>認証パスワードの一致性を検証</li>
+</ul>
+<h3 id="2-健康チェック失敗">2. 健康チェック失敗
+</h3><p><strong>問題現象:</strong>
+バックエンドサーバーが利用不可としてマークされている
+<strong>トラブルシューティング手順:</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 手動で健康チェックを実行</span>
+</span></span><span class="line"><span class="cl">curl -I http://192.168.1.20/health
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># HAProxyログを確認</span>
+</span></span><span class="line"><span class="cl">grep <span class="s2">&#34;Health check&#34;</span> /var/log/haproxy.log
+</span></span></code></pre></div><p><strong>解決策:</strong></p>
+<ul>
+<li>健康チェックURLにアクセス可能であることを確認</li>
+<li>チェック間隔と閾値を調整</li>
+<li>バックエンドサーバーの状態を確認</li>
+</ul>
+<h3 id="3-負荷分散の不均衡">3. 負荷分散の不均衡
+</h3><p><strong>問題現象:</strong>
+リクエストがバックエンドサーバーに均等に分散されない
+<strong>トラブルシューティング手順:</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 統計ページを確認</span>
+</span></span><span class="line"><span class="cl">curl -s http://192.168.1.100:8080/stats
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># アクセスログを分析</span>
+</span></span><span class="line"><span class="cl">awk <span class="s1">&#39;{print $6}&#39;</span> /var/log/haproxy.log <span class="p">|</span> sort <span class="p">|</span> uniq -c
+</span></span></code></pre></div><p><strong>解決策:</strong></p>
+<ul>
+<li>負荷分散アルゴリズムの設定を確認</li>
+<li>サーバーの重み設定を検証</li>
+<li>セッション保持の要件を考慮</li>
+</ul>
+<h2 id="オプティマイズの提案">オプティマイズの提案
+</h2><h3 id="1-パフォーマンス最適化">1. パフォーマンス最適化
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># システムパラメータの調整</span>
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s1">&#39;net.core.somaxconn = 65535&#39;</span> &gt;&gt; /etc/sysctl.conf
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s1">&#39;net.ipv4.tcp_max_syn_backlog = 65535&#39;</span> &gt;&gt; /etc/sysctl.conf
+</span></span><span class="line"><span class="cl">sysctl -p
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># HAProxy設定の最適化</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># maxconn値を増やす</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># timeoutパラメータを調整する</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 圧縮機能を有効にする</span>
+</span></span></code></pre></div><h3 id="2-セキュリティ強化">2. セキュリティ強化
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 統計ページへのアクセス制限</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># haproxy.cfg に ACL ルールを追加</span>
+</span></span><span class="line"><span class="cl">acl allowed_ips src 192.168.1.0/24
+</span></span><span class="line"><span class="cl">http-request deny <span class="k">if</span> !allowed_ips
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># SSL/TLS の有効化</span>
+</span></span><span class="line"><span class="cl"><span class="nb">bind</span> *:443 ssl crt /etc/ssl/certs/server.pem
+</span></span><span class="line"><span class="cl">redirect scheme https <span class="k">if</span> !<span class="o">{</span> ssl_fc <span class="o">}</span>
+</span></span></code></pre></div><h3 id="3-モニタリングとアラート">3. モニタリングとアラート
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 統合監視システム</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># Prometheusによる監視設定</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># Grafanaダッシュボードの設定</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># アラートルールを設定</span>
+</span></span></code></pre></div><h2 id="結論">結論
+</h2><p>KeepalivedとHAProxyの組み合わせにより、高可用性を持つロードバランシングクラスタを構築しました。この構成には以下の利点があります。</p>
+<ol>
+<li><strong>高可用性:</strong> VRRPプロトコルによる自動フェイルオーバーを実現</li>
+<li><strong>ロードバランシング:</strong> スマートなリクエスト分散により、システム性能を向上</li>
+<li><strong>健康チェック:</strong> リアルタイムでサービスの状態を監視し、故障ノードを自動的に除外</li>
+<li><strong>メンテナンスの容易さ:</strong> 設定が簡単で、管理も容易</li>
+<li><strong>コスト効率:</strong> オープンソースソフトウェアを使用することで、運用コストを削減
+本番環境へのデプロイ時には、ネットワークセキュリティ、監視アラート、バックアップとリカバリなどの面での整備が必要であり、システムの安定性と信頼性を確保します。</li>
+</ol>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目次</h2>
+        <button type="button" data-article-toc-close aria-label="目次を閉じる">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="トップへ戻る"
+    title="トップへ戻る"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr" data-theme="editorial" data-code-copy="コードをコピー" data-code-copied="コピーしました" data-code-expand="すべて展開" data-code-collapse="コードを折りたたむ">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="著者はハードウェアに強い関心を持ち、JMeterを用いて負荷テストを実施し、CentOS 7上にJMeter、InfluxDB、Grafanaをデプロイするプロセスを記録しました。JMeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerによるインストール方法、Grafanaの簡易的なデプロイと設定について共有しています。高性能プログラムモードに関する経験や参考資料もまとめました。\n">
+<title>LinuxでJMeterの負荷テスト環境を構築する</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="LinuxでJMeterの負荷テスト環境を構築する">
+<meta property='og:description' content="著者はハードウェアに強い関心を持ち、JMeterを用いて負荷テストを実施し、CentOS 7上にJMeter、InfluxDB、Grafanaをデプロイするプロセスを記録しました。JMeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerによるインストール方法、Grafanaの簡易的なデプロイと設定について共有しています。高性能プログラムモードに関する経験や参考資料もまとめました。\n">
+<meta property='og:url' content='https://ttf248.life/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2020-12-22T10:12:50&#43;08:00'/><meta property='article:modified_time' content='2020-12-22T10:12:50&#43;08:00'/>
+<meta name="twitter:title" content="LinuxでJMeterの負荷テスト環境を構築する">
+<meta name="twitter:description" content="著者はハードウェアに強い関心を持ち、JMeterを用いて負荷テストを実施し、CentOS 7上にJMeter、InfluxDB、Grafanaをデプロイするプロセスを記録しました。JMeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerによるインストール方法、Grafanaの簡易的なデプロイと設定について共有しています。高性能プログラムモードに関する経験や参考資料もまとめました。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/","name":"LinuxでJMeterの負荷テスト環境を構築する","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2020-12-22T10:12:50+08:00","datePublished":"2020-12-22T10:12:50+08:00","headline":"LinuxでJMeterの負荷テスト環境を構築する","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/ja/" aria-label="向叔の手帳 ホーム">
+            <span class="site-header__title">向叔の手帳</span>
+            <span class="site-header__subtitle">時を集め、歳月に痕跡を残す</span>
+        </a>
+<nav class="site-header__nav" aria-label="ナビゲーション">
+            <div class="site-header__nav-group" role="group" aria-label="閲覧">
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/ja/projects/" aria-label="プロジェクト">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>プロジェクト</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="執筆ソースを切り替え"
+                    data-source-toggle-button>
+                    著者執筆
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/author/"
+                            class="site-header__source-toggle-option">
+                            著者執筆
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 執筆
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/" selected>日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="カラーモードを切り替え">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="ナビゲーションメニューを開く">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="ナビゲーション">
+        <div class="mobile-navigation__header">
+            <span>ナビゲーション</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="ナビゲーションメニューを閉じる">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="閲覧">
+                <div class="mobile-navigation__group-label">閲覧</div>
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="プロジェクト">
+                <div class="mobile-navigation__group-label">プロジェクト</div>
+                <a class="mobile-navigation__area" href="/ja/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>プロジェクト</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="執筆">
+                <div class="mobile-navigation__group-label">執筆</div>
+                <a href="/ja/writing/author/">著者執筆</a>
+                <a href="/ja/writing/ai/">AI 執筆</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>言語</span>
+                <select aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/" selected>日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="記事閲覧ツール">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/ja/p/linux-setup-jmeter-testing-environment/">← <span>現在の記事に戻る</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目次</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">文字サイズ</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">閲覧時の文字サイズ</span>
+        <div class="article-reading-settings__options" role="group" aria-label="閲覧時の文字サイズ">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">標準</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目次">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目次</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="閲覧進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>この記事の目次</span>
+            <small data-article-reading-remaining data-template="残り約 #MINUTES 分">残り約 8 分</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#背景">背景</a></li>
+    <li><a href="#背景-1">背景</a></li>
+    <li><a href="#jmeter">JMeter</a>
+      <ol>
+        <li><a href="#jmeter-導入-centos7">Jmeter 導入 CentOS7</a></li>
+        <li><a href="#jmeter-コマンド">JMeter コマンド</a></li>
+      </ol>
+    </li>
+    <li><a href="#influxdb">InfluxDB</a>
+      <ol>
+        <li><a href="#influxdbの特徴">InfluxDBの特徴</a></li>
+        <li><a href="#influxdb-docker-インストール">InfluxDB Docker インストール</a></li>
+        <li><a href="#influxdbデータベースとユーザーの作成">InfluxDBデータベースとユーザーの作成</a></li>
+      </ol>
+    </li>
+    <li><a href="#grafana">Grafana</a></li>
+    <li><a href="#付録">付録</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article" data-reading-minutes="8">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">LinuxでJMeterの負荷テスト環境を構築する</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2020年12月22日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">読了時間: 13分</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="版の履歴">
+        <p>
+            <strong>過去の版</strong>
+            
+            版の日時
+            <time datetime="2025-06-02T19:00:25&#43;08:00">2025年06月02日 19:00</time>
+
+            <code>014d9849</code>
+        </p>
+        <p>
+            
+                <a href="/ja/p/linux-setup-jmeter-testing-environment/">← 現在の記事に戻る</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">この履歴のリンク先は利用できません。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>版の履歴 · 4</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">変更を比較</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="014d98495108316899811ac3b7d474801fcc23a9"
+        data-unchanged="記事の表示内容に変更はありません。"
+        data-loading="版を読み込み中…"
+        data-error="版を読み込めませんでした。終了してから開き直してください。"
+        data-same="異なる二つの版を選んでください。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">変更を比較</h1>
+            <button type="button" class="post-review-button" data-review-close>比較を終了</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">比較元</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/ja/p/linux-setup-jmeter-testing-environment/">現在の版</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/">2025年06月02日 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="5470efed100b277549ac2040af3cbc57db4797dc" data-url="/ja/post-history/8da3e8a503c245748ae3/5470efed100b277549ac2040af3cbc57db4797dc/">2025年06月01日 15:10 · 5470efed</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/ja/post-history/8da3e8a503c245748ae3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">2025年05月28日 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="beb09ddc6a8e31ed92661df4832d020ff24210ac" data-url="/ja/post-history/8da3e8a503c245748ae3/beb09ddc6a8e31ed92661df4832d020ff24210ac/">2025年05月25日 14:10 · beb09ddc</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">比較先</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/ja/p/linux-setup-jmeter-testing-environment/">現在の版</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/ja/post-history/8da3e8a503c245748ae3/014d98495108316899811ac3b7d474801fcc23a9/">2025年06月02日 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="5470efed100b277549ac2040af3cbc57db4797dc" data-url="/ja/post-history/8da3e8a503c245748ae3/5470efed100b277549ac2040af3cbc57db4797dc/">2025年06月01日 15:10 · 5470efed</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/ja/post-history/8da3e8a503c245748ae3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">2025年05月28日 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="beb09ddc6a8e31ed92661df4832d020ff24210ac" data-url="/ja/post-history/8da3e8a503c245748ae3/beb09ddc6a8e31ed92661df4832d020ff24210ac/">2025年05月25日 14:10 · beb09ddc</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− 削除</del>
+            <ins class="post-review-inline--ins">&#43; 追加</ins>
+            <mark class="post-review-inline--format">書式やリンクの変更</mark>
+            <label><input type="checkbox" data-review-all> すべての内容を表示</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版の差分" role="region"
+            data-folded-label="変更のない #COUNT# ブロックを展開"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">LinuxでJMeterの負荷テスト環境を構築する <span class="post-archive-meta">(閲覧中)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-02T19:00:25&#43;08:00">2025年06月02日 19:00</time>
+
+                            <code>014d9849</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/ja/post-history/8da3e8a503c245748ae3/5470efed100b277549ac2040af3cbc57db4797dc/">LinuxでJMeterの負荷テスト環境を構築する</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-01T15:10:34&#43;08:00">2025年06月01日 15:10</time>
+
+                            <code>5470efed</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/ja/post-history/8da3e8a503c245748ae3/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">Linux上にJMeterテスト環境を構築する</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-28T09:47:38&#43;08:00">2025年05月28日 09:47</time>
+
+                            <code>64434a6a</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/ja/post-history/8da3e8a503c245748ae3/beb09ddc6a8e31ed92661df4832d020ff24210ac/">LinuxでJMeterテスト環境を構築する</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-25T14:10:37&#43;08:00">2025年05月25日 14:10</time>
+
+                            <code>beb09ddc</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>この記事の目次</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#背景">背景</a></li>
+    <li><a href="#背景-1">背景</a></li>
+    <li><a href="#jmeter">JMeter</a>
+      <ol>
+        <li><a href="#jmeter-導入-centos7">Jmeter 導入 CentOS7</a></li>
+        <li><a href="#jmeter-コマンド">JMeter コマンド</a></li>
+      </ol>
+    </li>
+    <li><a href="#influxdb">InfluxDB</a>
+      <ol>
+        <li><a href="#influxdbの特徴">InfluxDBの特徴</a></li>
+        <li><a href="#influxdb-docker-インストール">InfluxDB Docker インストール</a></li>
+        <li><a href="#influxdbデータベースとユーザーの作成">InfluxDBデータベースとユーザーの作成</a></li>
+      </ol>
+    </li>
+    <li><a href="#grafana">Grafana</a></li>
+    <li><a href="#付録">付録</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>著者はハードウェアに強い関心を持ち、JMeterを用いて負荷テストを実施し、CentOS 7上にJMeter、InfluxDB、Grafanaをデプロイするプロセスを記録しました。JMeterのインストールとコマンドの使用方法、InfluxDBの特徴とDockerによるインストール方法、Grafanaの簡易的なデプロイと設定について共有しています。高性能プログラムモードに関する経験や参考資料もまとめました。</p>
+<h2 id="背景">背景
+</h2><p><code>広く知られているように</code>、私にはハードウェアに対する強い関心が持っており、テストグループが <code>JMeter</code> を使用して負荷テストを行っている際、パフォーマンスが向上しないことを発見しました。好奇心旺盛な私は、会社の負荷テストの方法を試してみることに決意しました。また、ある頃合いにオープンソース中国で読んだ投稿「より洗練された高性能の負荷テストグラフを作成する方法」があり、<code>Windows</code> バージョンでのテスト実行時に可視化された <code>TPS</code> データの表示を実現していました。さらに、Web パネルを構成することでどのようなメリットがあるのでしょうか？</p>
+<blockquote>
+<p>頭の中で思いついたのは、当然のことばかりです。実際に試してみないとしかたないことを理解します
+テスト作成およびデバッグには GUI モードを使用しないでください！</p>
+</blockquote>
+<h2 id="背景-1">背景
+</h2><p>公式推奨は、コマンドラインで負荷テストレポートを取得し、GUIで表示する方法ですが、データに誤差が含まれているという問題があります。JMeterの理解が十分ではないため、少なくとも<code>Linux</code>版のコンソールパネルを弄り転げる理由を見つけたいと思います。</p>
+<p>開かれた中国（オープンチャイナ）の投稿では、コアコンポーネントのデプロイメント方法があまりにも友好的ではなく、インストールに必要なファイルは公众号を通じてダウンロードする必要があり、現代的な若者として、もちろん<code>Docker</code>で代替します。要するに、サーバーは国内であり、国境を越えたソースアドレスへのアクセス速度が遅いため、少なくともイメージサービスとしては、阿里云には無料の高速化があります。</p>
+<p><code>docker</code> のインストールとデプロイメントについては、ここでは詳細な説明を省略し、以前の記事を参照してください。</p>
+<hr>
+<p>次の内容は、2つの主要な領域に分かれています：基本的なテスト環境コンポーネントの構築、および各コンポーネントの簡単な認識の説明</p>
+<h2 id="jmeter">JMeter
+</h2><p>Apache JMeter は Apache 組織が開発した Java ベースの負荷テストツールです。ソフトウェアに対して負荷テストを実施するために使用され、当初は Web アプリケーション テスト用に設計されましたが、その後、他のテスト分野にも拡張されました。 静的および動的なリソース（静的ファイル、Java 小サービスプログラム、CGI スクリプト、Java オブジェクト、データベース、FTP サーバーなど）をテストに使用できます。 JMeter は、さまざまなストレスカテゴリからの巨大な負荷をシミュレートして、サーバー、ネットワーク、またはオブジェクトの強度をテストし、全体的なパフォーマンスを分析するために使用できます。 さらに、JMeter はアプリケーションに対して機能/回帰テストを実行し、断言を含むスクリプトを作成することで、プログラムが期待どおりの結果を返すことを検証します。 最大限の柔軟性を実現するため、JMeter は正規表現を使用して断言を作成することを許可しています。 Apache JMeter は、静的なリソース（ファイル、Servlet、Perlスクリプト、Javaオブジェクト、データベースとクエリ、FTPサーバーなど）および動的なリソースのパフォーマンスをテストするために使用できます。 サーバー、ネットワーク、またはオブジェクトに対して、過酷な負荷や異なる種類のストレス下での全体的なパフォーマンスを分析するために、高負荷をシミュレートすることができます。 パフォーマンスのグラフィカル分析や、大規模な同時実行負荷でサーバー/スクリプト/オブジェクトをテストするのに使用できます。</p>
+<h3 id="jmeter-導入-centos7">Jmeter 導入 CentOS7
+</h3><p>JDK の実行環境をインストールし、JMeter のインストールパッケージをダウンロードします。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">yum install java-1.8.0-openjdk -y <span class="o">&amp;&amp;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">wget https://mirrors.bfsu.edu.cn/apache//jmeter/binaries/apache-jmeter-5.4.tgz <span class="o">&amp;&amp;</span> tar -xf apache-jmeter-5.4.tgz
+</span></span></code></pre></div><p>環境変数を設定します。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">JMETER_HOME</span><span class="o">=</span><span class="nv">$HOME</span>/jmeter/apache-jmeter-5.4
+</span></span><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">PATH</span><span class="o">=</span><span class="nv">$JMETER_HOME</span>/bin:<span class="nv">$PATH</span>
+</span></span></code></pre></div><h3 id="jmeter-コマンド">JMeter コマンド
+</h3><p>最後に <code>Grafana</code> ダッシュボードに送信し、<code>-l</code> パラメータを入力しなくても、<code>web</code> コンソールでデータを観察できます。</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">jmeter -n -t /tmp/order-500-10s.jmx -l /tmp/jmeter-order-report-20200109/order-500-10s.jtl
+</span></span><span class="line"><span class="cl"><span class="c1"># 通常、テスト結果とテストレポートは省略し、コマンドを簡略化します。</span>
+</span></span><span class="line"><span class="cl">jmeter -n -t /tmp/order-500-10s.jmx
+</span></span></code></pre></div><h2 id="influxdb">InfluxDB
+</h2><p>InfluxDBは、Go言語で記述されたオープンソースの分散型時系列、イベント、指標データベースです。外部依存なしで動作します。このデータベースは現在、大量の時間スタンプデータ（DevOpsモニタリングデータ、APPメトリクス、IoTセンサーデータ、リアルタイム分析データなど）を保存するために主に利用されています。</p>
+<h3 id="influxdbの特徴">InfluxDBの特徴
+</h3><p>InfluxDBの特徴は、以下の9点にまとめられます。</p>
+<ul>
+<li>非構造化（非モデリング）：任意の数の列を格納できます。</li>
+<li>メトリクスの保存期間の設定が可能</li>
+<li>時間に関連する関数（min、max、sum、count、mean、medianなど）をサポートし、統計分析が容易です。</li>
+<li>ストアポリシーのサポート：データの更新や削除に使用できます。（InfluxDBはデータの削除や変更方法を提供していません。）</li>
+<li>連続クエリのサポート：データベース内で自動的にスケジュールされたクエリのセットで、ストアポリシーと組み合わせてInfluxDBのシステム負荷を軽減します。</li>
+<li>ネイティブなHTTPサポート、組み込みHTTP API</li>
+<li>SQLライクな構文のサポート</li>
+<li>クラスタ内のデータのレプリカ数を設定可能</li>
+<li>定期的なサンプリングによるデータ書き込みをサポートし、別のmeasurementにデータを分割して保存することで、粒度に応じたデータストレージが可能です。</li>
+</ul>
+<h3 id="influxdb-docker-インストール">InfluxDB Docker インストール
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">mkdir influxdb <span class="o">&amp;&amp;</span> <span class="nb">cd</span> influxdb <span class="o">&amp;&amp;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">docker run -p 8086:8086 -d --name influxdb -v <span class="nv">$PWD</span>:/var/lib/influxdb influxdb:1.7
+</span></span></code></pre></div><p><code>docker exec -it influxdb /bin/bash</code> でコンテナに入り、コマンドを実行し、手動でデータベースを作成</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">root@bce0a55bbc72:/# influx
+</span></span><span class="line"><span class="cl">http://localhost:8086 への接続、バージョン 1.7.10
+</span></span><span class="line"><span class="cl">InfluxDB シェル バージョン: 1.7.10
+</span></span><span class="line"><span class="cl">&gt; 対話式パネルでコマンドを実行
+</span></span></code></pre></div><h3 id="influxdbデータベースとユーザーの作成">InfluxDBデータベースとユーザーの作成
+</h3><p>データベースの作成: <code>create database jmeter_t2</code>
+データベースの表示: <code>show databases</code>
+データベースの切り替え: <code>use jmeter_t2</code>
+ユーザーの作成: <code>create user &quot;admin&quot; with password 'admin' with all privileges</code>
+ユーザーの表示: <code>show users</code></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">&gt; show users
+</span></span><span class="line"><span class="cl">user  admin
+</span></span><span class="line"><span class="cl">----  -----
+</span></span><span class="line"><span class="cl">admin <span class="nb">true</span>
+</span></span></code></pre></div><p>ユーザー権限が<code>admin</code>で<code>true</code>と表示されれば、データベースの準備は完了です。</p>
+<h2 id="grafana">Grafana
+</h2><p>テストケースの作成時に、グラフによる表現はあまり必要ないことがわかりました。インターフェースの<code>tps</code>データはコマンドラインで実行する際にすでに観測できるため、主にプログラム内部の処理時間を知りたいと考えています。</p>
+<p>Grafanaのコンソールパネルを簡単にデプロイし、InfluxDBと連携するための設定ファイルをインポートします。</p>
+<p>コンソールではラベルによるフィルタリングがサポートされており、通常は1つの<code>InfluxDB</code>データベースを設定するだけで済みます：</p>
+<ul>
+<li>アプリケーション名</li>
+<li>テストケース名</li>
+</ul>
+<p><span class="post-archive-meta">この版の一部の機能やファイルは利用できません。本文や残っている説明は引き続き閲覧できます。 grafana</span></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">docker run -d --name<span class="o">=</span>grafana -p 3000:3000 grafana/grafana:7.3.1
+</span></span></code></pre></div><p>ブラウザ版ではサンプリング間隔により<code>TPS</code>や関連数値がJMeterの集計レポートと一致しないため、参考リンクを参照してください：[https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/](<a class="link" href="https://www.vinsguru">https://www.vinsguru</a>. ## Grafana</p>
+<p>テストケースの作成時に、グラフによる表現はあまり必要ないことがわかりました。インターフェースの<code>tps</code>データはコマンドラインで実行する際にすでに観測できるため、プログラム内部の処理時間を確認することが主な目的です。</p>
+<p>Grafanaのコンソールパネルを簡単にデプロイし、InfluxDBと連携するための設定ファイルをインポートしました。</p>
+<p>コンソールではラベルによるフィルタリングがサポートされており、通常は1つの<code>InfluxDB</code>データベースを設定するだけで済みます：</p>
+<ul>
+<li>アプリケーション名</li>
+<li>テストケース名</li>
+</ul>
+<p><span class="post-archive-meta">この版の一部の機能やファイルは利用できません。本文や残っている説明は引き続き閲覧できます。 grafana</span></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">docker run -d --name<span class="o">=</span>grafana -p 3000:3000 grafana/grafana:7.3.1
+</span></span></code></pre></div><p>ブラウザ版ではサンプリング間隔により、計算された<code>TPS</code>や関連数値がJMeterの集計レポートと一致しないため、参考リンクを参照してください：[https://www.vinsguru.com/jmeter-real-time-results-influxdb-grafana/](<a class="link" href="https://www.vinsguru">https://www.vinsguru</a>.</p>
+<h2 id="付録">付録
+</h2><ul>
+<li>高性能のプログラムパターンは、必然的にone loop threadであるべきであり、ロック、入隊列、出隊列などのものは、不必要なパフォーマンス低下を引き起こす</li>
+<li>核心ビジネスロジックの実行時間が、他のコードを導入する時間よりも大きい場合のみ、並行処理が有効に効率を向上させることができ、コアな実行時間が十分に小さい場合は、慎重に他のコードを導入すべき</li>
+</ul>
+<h2 id="参考資料">参考資料
+</h2><ul>
+<li><a class="link" href="https://my.oschina.net/u/4617935/blog/4680856">JMeterシリーズのJMeter+Grafana+InfluxDB リアルタイム監視</a></li>
+<li><a class="link" href="https://hub.docker.com/_/influxdb">influxdb 公式イメージ</a></li>
+<li><a class="link" href="https://hub.docker.com/r/grafana/grafana">grafana 公式イメージ</a></li>
+<li><a class="link" href="https://jmeter.apache.org/download_jmeter.cgi">JMeter 公式サイト</a></li>
+<li><a class="link" href="https://medium.com/@jasonli.studio/to-install-apache-jmeter-in-centos7-294bc72a97ba">CentOS7にApache JMeterをインストールする方法</a></li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目次</h2>
+        <button type="button" data-article-toc-close aria-label="目次を閉じる">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="トップへ戻る"
+    title="トップへ戻る"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="editorial" data-code-copy="Copy code" data-code-copied="Copied" data-code-expand="Expand all" data-code-collapse="Collapse code">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="When I recently wrote the algorithm service, as soon as I implemented modules like twap and vwap, this old problem popped up again.\nIf we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like TwapOrderManager, VwapOrderManager, and AlgoOrderManager sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of namespace isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native package system.\n">
+<title>What is this process of layering folders and then wrapping them in a namespace called?</title>
+
+<link rel='canonical' href='https://ttf248.life/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="What is this process of layering folders and then wrapping them in a namespace called?">
+<meta property='og:description' content="When I recently wrote the algorithm service, as soon as I implemented modules like twap and vwap, this old problem popped up again.\nIf we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like TwapOrderManager, VwapOrderManager, and AlgoOrderManager sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of namespace isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native package system.\n">
+<meta property='og:url' content='https://ttf248.life/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-04-09T02:31:07&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T02:31:07&#43;08:00'/>
+<meta name="twitter:title" content="What is this process of layering folders and then wrapping them in a namespace called?">
+<meta name="twitter:description" content="When I recently wrote the algorithm service, as soon as I implemented modules like twap and vwap, this old problem popped up again.\nIf we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like TwapOrderManager, VwapOrderManager, and AlgoOrderManager sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of namespace isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native package system.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/en/","name":"Uncle Xiang's Notebook","position":1},{"@type":"ListItem","item":"https://ttf248.life/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/","name":"What is this process of layering folders and then wrapping them in a namespace called?","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"GPT-5"},"dateModified":"2026-04-09T02:31:07+08:00","datePublished":"2026-04-09T02:31:07+08:00","headline":"What is this process of layering folders and then wrapping them in a namespace called?","inLanguage":"en","mainEntityOfPage":"https://ttf248.life/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/en/" aria-label="Uncle Xiang&#39;s Notebook Home">
+            <span class="site-header__title">Uncle Xiang&#39;s Notebook</span>
+            <span class="site-header__subtitle">Collecting Moments, Marking Time</span>
+        </a>
+<nav class="site-header__nav" aria-label="Navigation">
+            <div class="site-header__nav-group" role="group" aria-label="Browse">
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/en/projects/" aria-label="Projects">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>Projects</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="Switch writing source"
+                    data-source-toggle-button>
+                    Author writing
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/author/"
+                            class="site-header__source-toggle-option">
+                            Author writing
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI writing
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="Switch color mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open navigation menu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="Navigation">
+        <div class="mobile-navigation__header">
+            <span>Navigation</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="Close navigation menu">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="Browse">
+                <div class="mobile-navigation__group-label">Browse</div>
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="Projects">
+                <div class="mobile-navigation__group-label">Projects</div>
+                <a class="mobile-navigation__area" href="/en/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>Projects</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="Writing">
+                <div class="mobile-navigation__group-label">Writing</div>
+                <a href="/en/writing/author/">Author writing</a>
+                <a href="/en/writing/ai/">AI writing</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>Language</span>
+                <select aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="Article reading tools">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/en/p/cpp-folder-namespace-what-is-it-called/">← <span>Back to the current post</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">Table of contents</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">Font size</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">Reading font size</span>
+        <div class="article-reading-settings__options" role="group" aria-label="Reading font size">
+            <button type="button" data-reading-size="small" aria-pressed="false">Small</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">Default</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">Large</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="Table of contents">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">Table of contents</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>On this page</span>
+            <small data-article-reading-remaining data-template="About #MINUTES min left">About 3 min left</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#to-state-the-conclusion-first">To state the conclusion first</a></li>
+    <li><a href="#what-is-actually-solved-here-is-not-just-about-looking-good">What is actually solved here is not just about &ldquo;looking good&rdquo;</a></li>
+    <li><a href="#this-is-more-like-packaging-by-feature">This is more like &ldquo;packaging by feature&rdquo;</a></li>
+    <li><a href="#taking-it-one-step-further-its-about-high-cohesion-and-low-coupling">Taking it one step further, it&rsquo;s about high cohesion and low coupling</a></li>
+    <li><a href="#when-its-not-enough-anymore">When It&rsquo;s Not Enough Anymore</a>
+      <ol>
+        <li><a href="#directory-and-namespace-mismatch">Directory and Namespace Mismatch</a></li>
+        <li><a href="#module-boundaries-are-false-boundaries">Module Boundaries are False Boundaries</a></li>
+        <li><a href="#the-longer-the-common-directory-the-fatter-it-gets">The longer the <code>common</code> directory, the fatter it gets</a></li>
+        <li><a href="#structure-by-layer-only-not-by-business-domain">Structure by Layer Only, Not by Business Domain</a></li>
+      </ol>
+    </li>
+    <li><a href="#so-what-should-it-be-called">So, what should it be called?</a></li>
+    <li><a href="#the-last-sentence">The Last Sentence</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#writing-notes">Writing Notes</a>
+      <ol>
+        <li><a href="#original-prompt">Original Prompt</a></li>
+        <li><a href="#writing-approach-summary">Writing Approach Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="3">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">What is this process of layering folders and then wrapping them in a namespace called?</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Apr 09, 2026</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">5 minute read</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">GPT-5</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="Version history">
+        <p>
+            <strong>Archived version</strong>
+            
+            Version date
+            <time datetime="2026-07-26T22:44:26&#43;08:00">Jul 26, 2026 22:44</time>
+
+            <code>86624e33</code>
+        </p>
+        <p>
+            
+                <a href="/en/p/cpp-folder-namespace-what-is-it-called/">← Back to the current post</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">This archived link no longer has an available destination.</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>Version history · 2</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">Review changes</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="86624e33f0aae40868322155f145766470eeb6f2"
+        data-unchanged="The visible article content is identical."
+        data-loading="Loading versions…"
+        data-error="Could not load the versions. Exit and reopen the review to retry."
+        data-same="Choose two different versions.">
+        <header class="post-review__header">
+            <h1 id="post-review-title">Review changes</h1>
+            <button type="button" class="post-review-button" data-review-close>Exit review</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">Base version</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/en/p/cpp-folder-namespace-what-is-it-called/">Current version</option>
+                        
+                            
+                            <option value="86624e33f0aae40868322155f145766470eeb6f2" data-url="/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/">Jul 26, 2026 22:44 · 86624e33</option>
+                        
+                            
+                            <option value="0f9d0a42d8ac387f4503d8bae7823f39320b5f66" data-url="/en/post-history/e071015742f95c6de0a1/0f9d0a42d8ac387f4503d8bae7823f39320b5f66/">Apr 09, 2026 15:45 · 0f9d0a42</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">Target version</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/en/p/cpp-folder-namespace-what-is-it-called/">Current version</option>
+                        
+                            
+                            <option value="86624e33f0aae40868322155f145766470eeb6f2" data-url="/en/post-history/e071015742f95c6de0a1/86624e33f0aae40868322155f145766470eeb6f2/">Jul 26, 2026 22:44 · 86624e33</option>
+                        
+                            
+                            <option value="0f9d0a42d8ac387f4503d8bae7823f39320b5f66" data-url="/en/post-history/e071015742f95c6de0a1/0f9d0a42d8ac387f4503d8bae7823f39320b5f66/">Apr 09, 2026 15:45 · 0f9d0a42</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− Removed</del>
+            <ins class="post-review-inline--ins">&#43; Added</ins>
+            <mark class="post-review-inline--format">Formatting or link change</mark>
+            <label><input type="checkbox" data-review-all> Show all content</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="Version differences" role="region"
+            data-folded-label="Expand #COUNT# unchanged blocks"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">What is this process of layering folders and then wrapping them in a namespace called? <span class="post-archive-meta">(Viewing)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-26T22:44:26&#43;08:00">Jul 26, 2026 22:44</time>
+
+                            <code>86624e33</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/e071015742f95c6de0a1/0f9d0a42d8ac387f4503d8bae7823f39320b5f66/">What is this process of layering folders and then wrapping them in a namespace called?</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-09T15:45:31&#43;08:00">Apr 09, 2026 15:45</time>
+
+                            <code>0f9d0a42</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>When I recently wrote the algorithm service, as soon as I implemented modules like <code>twap</code> and <code>vwap</code>, this old problem popped up again.</p>
+<p>If we rely on class names to enforce semantics in C++, the naming convention quickly becomes out of control. Things like <code>TwapOrderManager</code>, <code>VwapOrderManager</code>, and <code>AlgoOrderManager</code> sound like, &ldquo;I know my structure isn&rsquo;t contained, but I&rsquo;ll at least add a prefix.&rdquo; Frankly speaking, organizing by folders and then adding a layer of <code>namespace</code> isn&rsquo;t about code snobbery; it&rsquo;s filling the gap that C++ has because it lacks Java&rsquo;s native <code>package</code> system.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>On this page</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#to-state-the-conclusion-first">To state the conclusion first</a></li>
+    <li><a href="#what-is-actually-solved-here-is-not-just-about-looking-good">What is actually solved here is not just about &ldquo;looking good&rdquo;</a></li>
+    <li><a href="#this-is-more-like-packaging-by-feature">This is more like &ldquo;packaging by feature&rdquo;</a></li>
+    <li><a href="#taking-it-one-step-further-its-about-high-cohesion-and-low-coupling">Taking it one step further, it&rsquo;s about high cohesion and low coupling</a></li>
+    <li><a href="#when-its-not-enough-anymore">When It&rsquo;s Not Enough Anymore</a>
+      <ol>
+        <li><a href="#directory-and-namespace-mismatch">Directory and Namespace Mismatch</a></li>
+        <li><a href="#module-boundaries-are-false-boundaries">Module Boundaries are False Boundaries</a></li>
+        <li><a href="#the-longer-the-common-directory-the-fatter-it-gets">The longer the <code>common</code> directory, the fatter it gets</a></li>
+        <li><a href="#structure-by-layer-only-not-by-business-domain">Structure by Layer Only, Not by Business Domain</a></li>
+      </ol>
+    </li>
+    <li><a href="#so-what-should-it-be-called">So, what should it be called?</a></li>
+    <li><a href="#the-last-sentence">The Last Sentence</a></li>
+    <li><a href="#references">References</a></li>
+    <li><a href="#writing-notes">Writing Notes</a>
+      <ol>
+        <li><a href="#original-prompt">Original Prompt</a></li>
+        <li><a href="#writing-approach-summary">Writing Approach Summary</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="to-state-the-conclusion-first">To state the conclusion first
+</h2><p>If I have to find a software engineering term that is the closest, I think the two words that should be mentioned are:</p>
+<ul>
+<li><strong>Modularization</strong></li>
+<li><strong>Namespace management</strong></li>
+</ul>
+<p>If I want to be more precise, this type of directory organization is often doing:</p>
+<ul>
+<li><strong>Packaging by feature / Packaging by domain</strong>, which is commonly referred to as <code>package by feature</code></li>
+<li>If the business boundaries are already very strong, it will also carry a bit of <strong>bounded context</strong>.</li>
+</ul>
+<p>In other words, it is not a small concept with a single standard translation name; rather, it is more like several design principles stacked together.</p>
+<h2 id="what-is-actually-solved-here-is-not-just-about-looking-good">What is actually solved here is not just about &ldquo;looking good&rdquo;
+</h2><p>When many people first see a <code>namespace</code>, their immediate thought is to avoid name collisions. This is certainly true; the <code>namespace</code> in C++ standards was originally designed to prevent naming conflicts in large projects <a class="link" href="https://en.cppreference.com/w/cpp/language/namespace">cppreference</a>. However, when it comes to actual business code, its value goes far beyond that.</p>
+<p>Once the directory structure and <code>namespace</code> are aligned, class names no longer need to repeat the higher-level semantics.</p>
+<p>For example, previously one might write something like this:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">TwapOrderManager</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">TwapScheduleEngine</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">VwapOrderManager</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">VwapScheduleEngine</span><span class="p">;</span>
+</span></span></code></pre></div><p>After adopting directories and namespaces, a more natural way to write it is usually:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">algo</span><span class="o">::</span><span class="n">twap</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">OrderManager</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">ScheduleEngine</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">algo</span><span class="o">::</span><span class="n">vwap</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">OrderManager</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">ScheduleEngine</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>This removes the redundant prefix, making the semantics clearer. Because &ldquo;which context it belongs to&rdquo; is no longer stuffed into the class name, but rather expressed by the directory and <code>namespace</code>.</p>
+<p>Therefore, this approach essentially involves <strong>extracting contextual information from the names and letting the structure carry it</strong>.</p>
+<h2 id="this-is-more-like-packaging-by-feature">This is more like &ldquo;packaging by feature&rdquo;
+</h2><p>If your directory looks like this:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">strategy/
+</span></span><span class="line"><span class="cl">  twap/
+</span></span><span class="line"><span class="cl">    order_manager.h
+</span></span><span class="line"><span class="cl">    schedule_engine.h
+</span></span><span class="line"><span class="cl">    slicer.h
+</span></span><span class="line"><span class="cl">  vwap/
+</span></span><span class="line"><span class="cl">    order_manager.h
+</span></span><span class="line"><span class="cl">    schedule_engine.h
+</span></span><span class="line"><span class="cl">    slicer.h
+</span></span></code></pre></div><p>Then you are no longer doing traditional &ldquo;packaging by technical layer.&rdquo;</p>
+<p>The traditional way is more like this:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">models/
+</span></span><span class="line"><span class="cl">services/
+</span></span><span class="line"><span class="cl">utils/
+</span></span><span class="line"><span class="cl">controllers/
+</span></span></code></pre></div><p>This structure looks neat at the beginning, but as the business logic grows, the <code>service</code> directory will look like a junk heap. Classes related to one feature get scattered across different directories, making it hard to read the code because your mind keeps jumping around.</p>
+<p>Whereas the <code>twap</code> or <code>vwap</code> approach is closer to <code>package by feature</code>. This means a directory first answers the question, &ldquo;What is this business module about?&rdquo;, and then places all the objects and processes needed for that specific business module inside it. This concept is more common in the Java world, but it works just as well in C++; the difference is that what carries it isn&rsquo;t a native <code>package</code>, but rather a combination of &ldquo;directory + <code>namespace</code> + header file boundaries.&rdquo;</p>
+<p>Simply put, you are <strong>organizing code by the reason for change, not by the appearance of the code.</strong></p>
+<h2 id="taking-it-one-step-further-its-about-high-cohesion-and-low-coupling">Taking it one step further, it&rsquo;s about high cohesion and low coupling
+</h2><p>The frequently mentioned phrase in software engineering, &ldquo;high cohesion, low coupling,&rdquo; actually falls into this area.</p>
+<p>Since the objects under <code>twap</code> collaborate frequently with each other, they should be placed closer together, and their namespaces should also be close; <code>vwap</code> is similar to it but not quite the same, so it deserves its own boundary. Doing this has several direct benefits:</p>
+<ul>
+<li>Class names within the same module can be shorter</li>
+<li>Dependencies between modules are easier to see</li>
+<li>It&rsquo;s easier to judge during refactoring whether changes might propagate to other areas</li>
+<li>If you eventually need to split a certain capability into an independent library, the cost will be smaller.</li>
+</ul>
+<p>This is also why many mature projects end up looking like they have consistent &ldquo;directory boundaries + namespace boundaries + compilation boundaries.&rdquo; In projects like QuickFIX, you can see a similar idea: types and extension points are kept under clear namespaces rather than being artificially separated by very long class prefixes <a class="link" href="https://quickfixengine.org/c/">QuickFIX</a> <a class="link" href="https://github.com/quickfix/quickfix">GitHub</a>.</p>
+<h2 id="when-its-not-enough-anymore">When It&rsquo;s Not Enough Anymore
+</h2><p>However, don&rsquo;t mythologize this either.</p>
+<p>Simply layering folders and wrapping them in a <code>namespace</code> can only indicate that you are moving towards modularization; it doesn&rsquo;t mean the architecture is automatically sound. Several common pitfalls are also obvious:</p>
+<h3 id="directory-and-namespace-mismatch">Directory and Namespace Mismatch
+</h3><p>The directory is <code>twap/</code>, but the code contains scattered global classes, or <code>namespace common</code> floating everywhere. This is basically useless.</p>
+<h3 id="module-boundaries-are-false-boundaries">Module Boundaries are False Boundaries
+</h3><p>There are <code>twap</code> and <code>vwap</code> on the surface, but they actually <code>#include</code> each other. The common logic can leak through freely, and in the end, it just moves the files around without reducing any coupling.</p>
+<h3 id="the-longer-the-common-directory-the-fatter-it-gets">The longer the <code>common</code> directory, the fatter it gets
+</h3><p>This is the most common issue. Many projects are structured quite well at first, but later find it troublesome and start dumping things into <code>common</code>, <code>base</code>, or <code>util</code>. By the end, instead of having truly stable abstractions that have been properly developed, they end up with a massive pitfall that everyone can touch and everyone depends on.</p>
+<h3 id="structure-by-layer-only-not-by-business-domain">Structure by Layer Only, Not by Business Domain
+</h3><p>If your directory structure is always <code>api</code>, <code>service</code>, <code>dao</code>, <code>model</code>, then many business concepts actually have no home. Class names are forced to get longer and longer, cramming everything that should be expressed by the structure back into the name itself.</p>
+<h2 id="so-what-should-it-be-called">So, what should it be called?
+</h2><p>If I were communicating this within a team, I think there are three levels of description:</p>
+<ul>
+<li>If you just want to speak plain language: <strong>Modularization based on directories and namespaces</strong></li>
+<li>If you want to sound more engineering-focused: <strong>Package organization by feature, combined with hierarchical namespaces</strong></li>
+<li>If these boundaries are already strongly bound to business semantics: <strong>Module division with a bounded context feel</strong></li>
+</ul>
+<p>I personally lean towards the second option. Because it is closest to the scenario you described.</p>
+<p>What you&rsquo;re doing isn&rsquo;t about C++ syntax tricks, nor is it just about naming conventions; you are doing something more substantial: <strong>Using structure to carry semantics, allowing names to return to their true meaning</strong>.</p>
+<p>When class names get shorter and file names get shorter, what you first see when reading the code is an object with clear context like <code>twap::OrderManager</code>, rather than something that mixes directory responsibility, naming responsibility, and implementation responsibility all together like <code>TwapOrderManagerImpl</code>.</p>
+<p>Only then does the code start to feel somewhat like Java after its package structure has matured.</p>
+<h2 id="the-last-sentence">The Last Sentence
+</h2><p>So, in software engineering, there are corresponding concepts, but there isn&rsquo;t one single standard answer.</p>
+<p>Broadly speaking, it&rsquo;s called modularization. In terms of code organization, it&rsquo;s called feature-based packaging, plus namespace management. In terms of domain boundaries, it has something to do with bounded context.</p>
+<p>How should I put it? The most valuable aspect of this practice is never that &ldquo;the names look neat,&rdquo; but rather that you finally don&rsquo;t have to rely on super long prefixes to compensate for structural deficiencies.</p>
+<h2 id="references">References
+</h2><ul>
+<li><a class="link" href="https://en.cppreference.com/w/cpp/language/namespace">cppreference: Namespaces</a></li>
+<li><a class="link" href="https://quickfixengine.org/c/">QuickFIX/C++ Official Site</a></li>
+<li><a class="link" href="https://github.com/quickfix/quickfix">QuickFIX GitHub Repository</a></li>
+<li><a class="link" href="https://www.javapractices.com/home/HomeAction.do">Java Practices: Package by feature, not layer</a></li>
+<li><a class="link" href="https://martinfowler.com/bliki/BoundedContext.html">Martin Fowler: Bounded Context</a></li>
+</ul>
+<h2 id="writing-notes">Writing Notes
+</h2><h3 id="original-prompt">Original Prompt
+</h3><blockquote>
+<p>Prompt: When developing code in C++, a good practice is to organize it by folders and then wrap each class with a namespace, similar to Java&rsquo;s package. This can effectively reduce redundant content in file names and class names. A classic project is QuickFIX, and we have recently used a similar design for algorithm services. Many functional modules like TWAP and VWAP are similar. Is there a specific concept in software engineering for this?</p>
+</blockquote>
+<h3 id="writing-approach-summary">Writing Approach Summary
+</h3><ul>
+<li>Start by focusing on the actual trigger points of <code>twap</code> and <code>vwap</code> in algorithm services, making the judgment clear first.</li>
+<li>Instead of forcing the problem into a single noun, it is broken down into more accurate levels such as modularization, namespace management, and packaging by feature.</li>
+<li>The correspondence between QuickFIX and Java packages has been retained to illustrate that C++ often needs directories and namespaces to supplement structural semantics.</li>
+<li>The focus is on &ldquo;using structure to carry semantics,&rdquo; rather than remaining at a superficial explanation like &ldquo;avoiding name collisions.&rdquo;</li>
+<li>Added reference links for <code>namespace</code>, <code>package by feature</code>, and <code>bounded context</code> to facilitate further development.</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">Table of contents</h2>
+        <button type="button" data-article-toc-close aria-label="Close table of contents">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="Back to top"
+    title="Back to top"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

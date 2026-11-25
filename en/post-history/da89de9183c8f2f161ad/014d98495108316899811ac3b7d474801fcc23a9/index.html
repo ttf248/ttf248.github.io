@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="editorial" data-code-copy="Copy code" data-code-copied="Copied" data-code-expand="Expand all" data-code-collapse="Collapse code">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="In the history of C++ development projects, we utilized a custom protocol for communication, which employed a two-dimensional array pattern. When processing large volumes of data, the protocol required iterating through the arrays and performing serialization operations to generate logs. Due to its low efficiency, this resulted in noticeable lag or stuttering within the system under heavy load, as reported by the business department.\nProblem Identification When troubleshooting the issue, we first performed a performance analysis of the system and discovered that CPU utilization increased significantly when processing large amounts of data, and system response times became longer. By analyzing the system logs, we identified numerous serialization operations, which were inefficient when handling two-dimensional arrays, leading to a decline in system performance.\n">
+<title>Linux backend services handling large volumes of string data – performance is slow.</title>
+
+<link rel='canonical' href='https://ttf248.life/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Linux backend services handling large volumes of string data – performance is slow.">
+<meta property='og:description' content="In the history of C++ development projects, we utilized a custom protocol for communication, which employed a two-dimensional array pattern. When processing large volumes of data, the protocol required iterating through the arrays and performing serialization operations to generate logs. Due to its low efficiency, this resulted in noticeable lag or stuttering within the system under heavy load, as reported by the business department.\nProblem Identification When troubleshooting the issue, we first performed a performance analysis of the system and discovered that CPU utilization increased significantly when processing large amounts of data, and system response times became longer. By analyzing the system logs, we identified numerous serialization operations, which were inefficient when handling two-dimensional arrays, leading to a decline in system performance.\n">
+<meta property='og:url' content='https://ttf248.life/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/'>
+<meta property='og:site_name' content='Uncle Xiang&#39;s Notebook'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2024-11-13T19:42:59&#43;08:00'/><meta property='article:modified_time' content='2024-11-13T19:42:59&#43;08:00'/>
+<meta name="twitter:title" content="Linux backend services handling large volumes of string data – performance is slow.">
+<meta name="twitter:description" content="In the history of C++ development projects, we utilized a custom protocol for communication, which employed a two-dimensional array pattern. When processing large volumes of data, the protocol required iterating through the arrays and performing serialization operations to generate logs. Due to its low efficiency, this resulted in noticeable lag or stuttering within the system under heavy load, as reported by the business department.\nProblem Identification When troubleshooting the issue, we first performed a performance analysis of the system and discovered that CPU utilization increased significantly when processing large amounts of data, and system response times became longer. By analyzing the system logs, we identified numerous serialization operations, which were inefficient when handling two-dimensional arrays, leading to a decline in system performance.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/en/","name":"Uncle Xiang's Notebook","position":1},{"@type":"ListItem","item":"https://ttf248.life/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/","name":"Linux backend services handling large volumes of string data – performance is slow.","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2024-11-13T19:42:59+08:00","datePublished":"2024-11-13T19:42:59+08:00","headline":"Linux backend services handling large volumes of string data – performance is slow.","inLanguage":"en","mainEntityOfPage":"https://ttf248.life/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/en/" aria-label="Uncle Xiang&#39;s Notebook Home">
+            <span class="site-header__title">Uncle Xiang&#39;s Notebook</span>
+            <span class="site-header__subtitle">Collecting Moments, Marking Time</span>
+        </a>
+<nav class="site-header__nav" aria-label="Navigation">
+            <div class="site-header__nav-group" role="group" aria-label="Browse">
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/en/projects/" aria-label="Projects">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>Projects</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="Switch writing source"
+                    data-source-toggle-button>
+                    Author writing
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/author/"
+                            class="site-header__source-toggle-option">
+                            Author writing
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/en/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI writing
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="Switch color mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="Open navigation menu">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="Navigation">
+        <div class="mobile-navigation__header">
+            <span>Navigation</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="Close navigation menu">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="Browse">
+                <div class="mobile-navigation__group-label">Browse</div>
+                <a href="/en/">Home</a>
+                <a href="/en/archives/">Archives</a>
+                <a href="/en/trash/">Trash</a>
+                <a href="/en/categories/">Categories</a>
+                <a href="/en/tags/">Tags</a>
+                <a href="/en/search/">Search</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="Projects">
+                <div class="mobile-navigation__group-label">Projects</div>
+                <a class="mobile-navigation__area" href="/en/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>Projects</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="Writing">
+                <div class="mobile-navigation__group-label">Writing</div>
+                <a href="/en/writing/author/">Author writing</a>
+                <a href="/en/writing/ai/">AI writing</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>Language</span>
+                <select aria-label="Switch language" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/" selected>English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="Article reading tools">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/en/p/linux-backend-slow-string-processing/">← <span>Back to the current post</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">Table of contents</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">Font size</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">Reading font size</span>
+        <div class="article-reading-settings__options" role="group" aria-label="Reading font size">
+            <button type="button" data-reading-size="small" aria-pressed="false">Small</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">Default</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">Large</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="Table of contents">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">Table of contents</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="Reading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>On this page</span>
+            <small data-article-reading-remaining data-template="About #MINUTES min left">About 3 min left</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#problem-identification">Problem Identification</a></li>
+    <li><a href="#demo-verification">Demo Verification</a>
+      <ol>
+        <li><a href="#key-points-explanation">Key Points Explanation</a></li>
+        <li><a href="#key-points-explanation-1">Key Points Explanation</a></li>
+        <li><a href="#key-points-explanation-2">Key Points Explanation</a></li>
+        <li><a href="#key-points-explanation-3">Key Points Explanation</a></li>
+      </ol>
+    </li>
+    <li><a href="#complete-code">Complete Code</a></li>
+    <li><a href="#complete-code-1">Complete Code</a></li>
+    <li><a href="#complete-code-2">Complete Code</a></li>
+    <li><a href="#complete-code-3">Complete Code</a></li>
+    <li><a href="#complete-code-4">Complete Code</a></li>
+    <li><a href="#complete-code-5">Complete Code</a></li>
+    <li><a href="#complete-code-6">Complete Code</a></li>
+    <li><a href="#complete-code-7">Complete Code</a></li>
+    <li><a href="#complete-code-8">Complete Code</a></li>
+    <li><a href="#complete-code-9">Complete Code</a></li>
+    <li><a href="#complete-code-10">Complete Code</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article" data-reading-minutes="3">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Linux backend services handling large volumes of string data – performance is slow.</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">Nov 13, 2024</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">5 minute read</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="Version history">
+        <p>
+            <strong>Archived version</strong>
+            
+            Version date
+            <time datetime="2025-06-02T19:00:25&#43;08:00">Jun 02, 2025 19:00</time>
+
+            <code>014d9849</code>
+        </p>
+        <p>
+            
+                <a href="/en/p/linux-backend-slow-string-processing/">← Back to the current post</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">This archived link no longer has an available destination.</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>Version history · 4</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">Review changes</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="014d98495108316899811ac3b7d474801fcc23a9"
+        data-unchanged="The visible article content is identical."
+        data-loading="Loading versions…"
+        data-error="Could not load the versions. Exit and reopen the review to retry."
+        data-same="Choose two different versions.">
+        <header class="post-review__header">
+            <h1 id="post-review-title">Review changes</h1>
+            <button type="button" class="post-review-button" data-review-close>Exit review</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">Base version</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/en/p/linux-backend-slow-string-processing/">Current version</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/">Jun 02, 2025 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="929d0b9309f7d36ffc039c66b876d9b2de00fab3" data-url="/en/post-history/da89de9183c8f2f161ad/929d0b9309f7d36ffc039c66b876d9b2de00fab3/">Jun 02, 2025 06:00 · 929d0b93</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/en/post-history/da89de9183c8f2f161ad/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">May 28, 2025 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd" data-url="/en/post-history/da89de9183c8f2f161ad/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">May 25, 2025 02:57 · 1b1cd1c9</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">Target version</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/en/p/linux-backend-slow-string-processing/">Current version</option>
+                        
+                            
+                            <option value="014d98495108316899811ac3b7d474801fcc23a9" data-url="/en/post-history/da89de9183c8f2f161ad/014d98495108316899811ac3b7d474801fcc23a9/">Jun 02, 2025 19:00 · 014d9849</option>
+                        
+                            
+                            <option value="929d0b9309f7d36ffc039c66b876d9b2de00fab3" data-url="/en/post-history/da89de9183c8f2f161ad/929d0b9309f7d36ffc039c66b876d9b2de00fab3/">Jun 02, 2025 06:00 · 929d0b93</option>
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/en/post-history/da89de9183c8f2f161ad/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">May 28, 2025 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd" data-url="/en/post-history/da89de9183c8f2f161ad/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">May 25, 2025 02:57 · 1b1cd1c9</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− Removed</del>
+            <ins class="post-review-inline--ins">&#43; Added</ins>
+            <mark class="post-review-inline--format">Formatting or link change</mark>
+            <label><input type="checkbox" data-review-all> Show all content</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="Version differences" role="region"
+            data-folded-label="Expand #COUNT# unchanged blocks"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">Linux backend services handling large volumes of string data – performance is slow. <span class="post-archive-meta">(Viewing)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-02T19:00:25&#43;08:00">Jun 02, 2025 19:00</time>
+
+                            <code>014d9849</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/da89de9183c8f2f161ad/929d0b9309f7d36ffc039c66b876d9b2de00fab3/">Linux backend services handling large volumes of string data – performance is slow.</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-06-02T06:00:45&#43;08:00">Jun 02, 2025 06:00</time>
+
+                            <code>929d0b93</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/da89de9183c8f2f161ad/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">Slow efficiency when processing large string data in Linux backend services</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-28T09:47:38&#43;08:00">May 28, 2025 09:47</time>
+
+                            <code>64434a6a</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/en/post-history/da89de9183c8f2f161ad/1b1cd1c9e81dc11e1bdac4bea8f714f8248179cd/">Slow efficiency when processing large string data in Linux backend services</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-25T02:57:45&#43;08:00">May 25, 2025 02:57</time>
+
+                            <code>1b1cd1c9</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>On this page</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#problem-identification">Problem Identification</a></li>
+    <li><a href="#demo-verification">Demo Verification</a>
+      <ol>
+        <li><a href="#key-points-explanation">Key Points Explanation</a></li>
+        <li><a href="#key-points-explanation-1">Key Points Explanation</a></li>
+        <li><a href="#key-points-explanation-2">Key Points Explanation</a></li>
+        <li><a href="#key-points-explanation-3">Key Points Explanation</a></li>
+      </ol>
+    </li>
+    <li><a href="#complete-code">Complete Code</a></li>
+    <li><a href="#complete-code-1">Complete Code</a></li>
+    <li><a href="#complete-code-2">Complete Code</a></li>
+    <li><a href="#complete-code-3">Complete Code</a></li>
+    <li><a href="#complete-code-4">Complete Code</a></li>
+    <li><a href="#complete-code-5">Complete Code</a></li>
+    <li><a href="#complete-code-6">Complete Code</a></li>
+    <li><a href="#complete-code-7">Complete Code</a></li>
+    <li><a href="#complete-code-8">Complete Code</a></li>
+    <li><a href="#complete-code-9">Complete Code</a></li>
+    <li><a href="#complete-code-10">Complete Code</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>In the history of C++ development projects, we utilized a custom protocol for communication, which employed a two-dimensional array pattern. When processing large volumes of data, the protocol required iterating through the arrays and performing serialization operations to generate logs. Due to its low efficiency, this resulted in noticeable lag or stuttering within the system under heavy load, as reported by the business department.</p>
+<h2 id="problem-identification">Problem Identification
+</h2><p>When troubleshooting the issue, we first performed a performance analysis of the system and discovered that CPU utilization increased significantly when processing large amounts of data, and system response times became longer. By analyzing the system logs, we identified numerous serialization operations, which were inefficient when handling two-dimensional arrays, leading to a decline in system performance.</p>
+<p>The <code>pstack</code> tool captured thread information for the service, pinpointing that the log threads spent most of their time processing string concatenation.</p>
+<blockquote>
+<p>This is today’s focus: different accumulation methods have significant efficiency differences. Historically, the code used the <code>+</code> operator, which frequently creates temporary objects and is very inefficient. You know it&rsquo;s bad, but you don&rsquo;t know <em>how</em> bad it is.</p>
+</blockquote>
+<h2 id="demo-verification">Demo Verification
+</h2><p>Based on the project code, we extracted the business logic and wrote a simple demo to verify the efficiency issues of string concatenation. We compiled and ran it in <code>Release</code> mode using the <code>vs2022</code> compiler under <code>windows</code> and the <code>gcc8.5</code> compiler under <code>linux</code>, comparing the efficiencies.</p>
+<h3 id="key-points-explanation">Key Points Explanation
+</h3><p>The project utilized Method Four, and before obtaining test data, readers should consider which method is most efficient and which is least efficient. I was quite surprised by the results.</p>
+<ol>
+<li><strong>Method 1 (<code>+=</code> Concatenation)</strong>: Directly concatenates each field using <code>+=</code> to a string.</li>
+<li><strong>Method 2 (<code>std::ostringstream</code> Concatenation)</strong>: Uses a stream (<code>std::ostringstream</code>) to concatenate each field, which is more efficient, especially when dealing with large amounts of data.</li>
+<li><strong>Method 3 (Pre-allocated Memory <code>+=</code> Concatenation)</strong>: Pre-allocates enough memory for the string using <code>reserve</code> to reduce the overhead of memory reallocation and improve performance.</li>
+<li><strong>Method 4 (<code>bodys = bodys + body + &quot;\n&quot;</code>)</strong>: Each concatenation creates a new temporary string object, leading to performance degradation, especially with large-scale concatenations due to the allocation and copying of a new memory space each time.</li>
+</ol>
+<p>Referring to the results, we can see that this method was selected as the least efficient.</p>
+<p>Furthermore, let&rsquo;s analyze the optimization efficiency of different platform compilers – Microsoft’s <code>visual studio</code> remains consistently excellent, with high string optimization efficiency, while the <code>gcc</code> compiler lags somewhat in this regard.</p>
+<h3 id="key-points-explanation-1">Key Points Explanation
+</h3><blockquote>
+<p>The code executes on different machines, and the two datasets do not have a direct comparison; instead, differences can be compared between various splicing methods.</p>
+</blockquote>
+<h3 id="key-points-explanation-2">Key Points Explanation
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">Windows platform under Visual Studio <span class="m">2022</span> compiler
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">Data Generation Time: 0.054 seconds.
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">Data Merging Performance:
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">+ Data merging <span class="o">(</span>+<span class="o">=)</span> took: 0.053 seconds.
+</span></span><span class="line"><span class="cl">+ ostringstream Data merging took: 0.054 seconds.
+</span></span><span class="line"><span class="cl">+ Pre-reserved Data merging took: 0.045 seconds.
+</span></span><span class="line"><span class="cl">+ Data merging <span class="o">(</span><span class="nv">bodys</span> <span class="o">=</span> bodys + body + <span class="s2">&#34;\n&#34;</span><span class="o">)</span> took: 16.108 seconds.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">Data Merging Complete.
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Program finished.
+</span></span></code></pre></div><h3 id="key-points-explanation-3">Key Points Explanation
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">Linux platform under GCC 8.5 compiler
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">Data Generation Time: 0.108 seconds.
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">Data Merging Performance:
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">+ Data merging <span class="o">(</span>+<span class="o">=)</span> took: 0.100 seconds.
+</span></span><span class="line"><span class="cl">+ ostringstream Data merging took: 0.083 seconds.
+</span></span><span class="line"><span class="cl">+ Pre-reserved Data merging took: 0.057 seconds.
+</span></span><span class="line"><span class="cl">+ Data merging <span class="o">(</span><span class="nv">bodys</span> <span class="o">=</span> bodys + body + <span class="s2">&#34;\n&#34;</span><span class="o">)</span> took: 29.298 seconds.
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">Data Merging Complete.
+</span></span><span class="line"><span class="cl">----------------------------------------
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Program finished.
+</span></span></code></pre></div><h2 id="complete-code">Complete Code
+</h2><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;iostream&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;vector&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;random&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;chrono&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;sstream&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;iomanip&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span> <span class="n">DataRow</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">typedef</span> <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">DataRow</span><span class="o">&gt;</span> <span class="n">DataGroup</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">ResponsePackage</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">ErrorInfo</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">DataRow</span> <span class="n">Head</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">ClientId</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">UUID</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">MsgID</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">SessionID</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">ExtraInfo1</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">ExtraInfo2</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">DataGroup</span> <span class="n">DataBody</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span></code></pre></div><h2 id="complete-code-1">Complete Code
+</h2><p>// Generate specified length of random string
+std::string generateRandomString(size_t length)
+{
+const char charset[] = &ldquo;abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&rdquo;;
+const size_t max_index = sizeof(charset) - 1;
+std::string random_string;
+random_string.reserve(length);</p>
+<pre><code>std::random_device rd;
+std::mt19937 generator(rd());
+std::uniform_int_distribution&lt;&gt; distribution(0, max_index);
+</code></pre>
+<h2 id="complete-code-2">Complete Code
+</h2><p>for (size_t i = 0; i &lt; length; ++i)
+{
+random_string += charset[distribution(generator)];
+}</p>
+<p>return random_string;
+}</p>
+<p>void create_large_string()
+{
+// Example request package with 50 fields
+ResponsePackage requestPackage;</p>
+<h2 id="complete-code-3">Complete Code
+</h2><p>requestPackage.Head = {
+&ldquo;Field1&rdquo;, &ldquo;Field2&rdquo;, &ldquo;Field3&rdquo;, &ldquo;Field4&rdquo;, &ldquo;Field5&rdquo;,
+&ldquo;Field6&rdquo;, &ldquo;Field7&rdquo;, &ldquo;Field8&rdquo;, &ldquo;Field9&rdquo;, &ldquo;Field10&rdquo;,
+&ldquo;Field11&rdquo;, &ldquo;Field12&rdquo;, &ldquo;Field13&rdquo;, &ldquo;Field14&rdquo;, &ldquo;Field15&rdquo;,
+&ldquo;Field16&rdquo;, &ldquo;Field17&rdquo;, &ldquo;Field18&rdquo;, &ldquo;Field19&rdquo;, &ldquo;Field20&rdquo;,
+&ldquo;Field21&rdquo;, &ldquo;Field22&rdquo;, &ldquo;Field23&rdquo;, &ldquo;Field24&rdquo;, &ldquo;Field25&rdquo;,
+&ldquo;Field26&rdquo;, &ldquo;Field27&rdquo;, &ldquo;Field28&rdquo;, &ldquo;Field29&rdquo;, &ldquo;Field30&rdquo;,
+&ldquo;Field31&rdquo;, &ldquo;Field32&rdquo;, &ldquo;Field33&rdquo;, &ldquo;Field34&rdquo;, &ldquo;Field35&rdquo;
+};</p>
+<h2 id="complete-code-4">Complete Code
+</h2><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field31&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field32&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field33&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field34&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field35&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field36&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field37&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field38&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field39&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field40&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field41&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field42&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field43&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field44&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field45&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field46&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field47&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field48&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field49&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;Field50&#34;</span><span class="p">:</span> <span class="s2">&#34;&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><h2 id="complete-code-5">Complete Code
+</h2><p>requestPackage.ClientId = &ldquo;ClientID&rdquo;;
+requestPackage.UUID = &ldquo;UUID&rdquo;;
+requestPackage.MsgID = &ldquo;MsgID&rdquo;;
+requestPackage.SessionID = &ldquo;SessionID&rdquo;;
+requestPackage.ExtraInfo1 = &ldquo;ExtraInfo1&rdquo;;
+requestPackage.ExtraInfo2 = &ldquo;ExtraInfo2&rdquo;;</p>
+<p>// Start timing for data generation
+auto start_gen = std::chrono::high_resolution_clock::now();</p>
+<h2 id="complete-code-6">Complete Code
+</h2><p>// Generate 10,000 rows of data, each with 50 fields
+for (size_t i = 0; i &lt; 10000; ++i)
+{
+DataRow dataRow(50, &ldquo;This is a test string&rdquo;);
+requestPackage.DataBody.push_back(dataRow);
+}</p>
+<pre><code>// End timing for data generation
+auto end_gen = std::chrono::high_resolution_clock::now();
+std::chrono::duration&lt;double&gt; duration_gen = end_gen - start_gen;
+</code></pre>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gu">## Complete Code
+</span></span></span><span class="line"><span class="cl">// Display result generation time
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;\n----------------------------------------\n&#34;;
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;Data Generation Time: &#34; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_gen.count() &lt;&lt; &#34; seconds.\n&#34;;
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;----------------------------------------\n&#34;;
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    // Data merging using different methods
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;\n----------------------------------------\n&#34;;
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;Data Merging Performance:\n&#34;;
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;----------------------------------------\n&#34;;
+</span></span></code></pre></div><h2 id="complete-code-7">Complete Code
+</h2><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// Method 1: Using &#39;+=&#39; string concatenation
+</span></span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">start_merge</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">bodys</span><span class="p">(</span><span class="s">&#34;&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span> <span class="nl">vec</span> <span class="p">:</span> <span class="n">requestPackage</span><span class="p">.</span><span class="n">DataBody</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">body</span><span class="p">(</span><span class="s">&#34;This is a test string&#34;</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span> <span class="nl">item</span> <span class="p">:</span> <span class="n">vec</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">body</span> <span class="o">+=</span> <span class="n">item</span> <span class="o">+</span> <span class="s">&#34; &#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="n">bodys</span> <span class="o">+=</span> <span class="n">body</span> <span class="o">+</span> <span class="s">&#34;</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">end_merge</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gu">## Complete Code
+</span></span></span><span class="line"><span class="cl">}
+</span></span><span class="line"><span class="cl">    auto end_merge = std::chrono::high_resolution_clock::now();
+</span></span><span class="line"><span class="cl">    std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;+ Data merging (+=) took: &#34; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &#34; seconds.\n&#34;;
+</span></span></code></pre></div><h2 id="complete-code-8">Complete Code
+</h2><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="c1">// Method 2: Using ostringstream
+</span></span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">start_merge</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">ostringstream</span> <span class="n">bodys</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> <span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span> <span class="nl">vec</span> <span class="p">:</span> <span class="n">requestPackage</span><span class="p">.</span><span class="n">DataBody</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">ostringstream</span> <span class="n">body</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">body</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;This is a test string&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">for</span> <span class="p">(</span><span class="k">auto</span><span class="o">&amp;</span> <span class="nl">item</span> <span class="p">:</span> <span class="n">vec</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">body</span> <span class="o">&lt;&lt;</span> <span class="n">item</span> <span class="o">&lt;&lt;</span> <span class="s">&#34; &#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="n">bodys</span> <span class="o">&lt;&lt;</span> <span class="n">body</span><span class="p">.</span><span class="n">str</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="k">auto</span> <span class="n">end_merge</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">chrono</span><span class="o">::</span><span class="n">high_resolution_clock</span><span class="o">::</span><span class="n">now</span><span class="p">();</span>
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gu">## Complete Code
+</span></span></span><span class="line"><span class="cl">}
+</span></span><span class="line"><span class="cl">    auto end_merge = std::chrono::high_resolution_clock::now();
+</span></span><span class="line"><span class="cl">    std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+</span></span><span class="line"><span class="cl">    std::cout &lt;&lt; &#34;+ ostringstream Data merging took: &#34; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &#34; seconds.\n&#34;;
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gu">## Complete Code
+</span></span></span><span class="line"><span class="cl">{
+</span></span><span class="line"><span class="cl">        // Method 3: Pre-allocated memory
+</span></span><span class="line"><span class="cl">        auto start_merge = std::chrono::high_resolution_clock::now();
+</span></span><span class="line"><span class="cl">        std::string bodys;
+</span></span><span class="line"><span class="cl">        bodys.reserve(1000 <span class="ge">* 50 *</span> 20); // Pre-allocate enough memory
+</span></span><span class="line"><span class="cl">        for (auto&amp; vec : requestPackage.DataBody)
+</span></span><span class="line"><span class="cl">        {
+</span></span><span class="line"><span class="cl">            std::string body(&#34;This is a test string&#34;);
+</span></span><span class="line"><span class="cl">            body.reserve(50 * 20); // Pre-allocate memory for each row
+</span></span><span class="line"><span class="cl">            for (auto&amp; item : vec)
+</span></span><span class="line"><span class="cl">            {
+</span></span><span class="line"><span class="cl">                body += item + &#34; &#34;;
+</span></span><span class="line"><span class="cl">            }
+</span></span></code></pre></div><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gu">## Complete Code
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">for (auto&amp; item : vec) {
+</span></span><span class="line"><span class="cl">                body += item + &#34; &#34;;
+</span></span><span class="line"><span class="cl">            }
+</span></span><span class="line"><span class="cl">            bodys += body + &#34;\n&#34;;
+</span></span><span class="line"><span class="cl">        }
+</span></span><span class="line"><span class="cl">        auto end_merge = std::chrono::high_resolution_clock::now();
+</span></span><span class="line"><span class="cl">        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+</span></span><span class="line"><span class="cl">        std::cout &lt;&lt; &#34;+ Pre-reserved Data merging took: &#34; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &#34; seconds.\n&#34;;
+</span></span><span class="line"><span class="cl">    }
+</span></span></code></pre></div><h2 id="complete-code-9">Complete Code
+</h2><pre tabindex="0"><code>// Method 4: Using &#39;bodys = bodys + body + &#34;\n&#34;&#39;
+auto start_merge = std::chrono::high_resolution_clock::now();
+std::string bodys(&#34;&#34;);
+for (auto&amp; vec : requestPackage.DataBody)
+{
+    std::string body(&#34;This is a test string&#34;);
+    for (auto&amp; item : vec)
+    {
+        body = body + item + &#34; &#34;; // Note the use of &#39;body = body + item&#39;
+    }
+    bodys = bodys + body + &#34;\n&#34;; // Again, using &#39;bodys = bodys + body&#39;
+</code></pre><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-markdown" data-lang="markdown"><span class="line"><span class="cl"><span class="gu">## Complete Code
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">```cpp
+</span></span><span class="line"><span class="cl">        auto start_merge = std::chrono::high_resolution_clock::now();
+</span></span><span class="line"><span class="cl">        bodys = bodys + body + &#34;\n&#34;; // Again, using &#39;bodys = bodys + body&#39;
+</span></span><span class="line"><span class="cl">        auto end_merge = std::chrono::high_resolution_clock::now();
+</span></span><span class="line"><span class="cl">        std::chrono::duration&lt;double&gt; duration_merge = end_merge - start_merge;
+</span></span><span class="line"><span class="cl">        std::cout &lt;&lt; &#34;+ Data merging (bodys = bodys + body + \&#34;\\n\&#34;) took: &#34; &lt;&lt; std::fixed &lt;&lt; std::setprecision(3) &lt;&lt; duration_merge.count() &lt;&lt; &#34; seconds.\n&#34;;
+</span></span></code></pre></div><h2 id="complete-code-10">Complete Code
+</h2><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-c++" data-lang="c++"><span class="line"><span class="cl"><span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;</span><span class="se">\n</span><span class="s">----------------------------------------</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Data Merging Complete.</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;----------------------------------------</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="k">try</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">create_large_string</span><span class="p">();</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="k">catch</span> <span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">exception</span><span class="o">&amp;</span> <span class="n">e</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">std</span><span class="o">::</span><span class="n">cerr</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;Caught exception: &#34;</span> <span class="o">&lt;&lt;</span> <span class="n">e</span><span class="p">.</span><span class="n">what</span><span class="p">()</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&#34;</span><span class="se">\n</span><span class="s">Program finished.</span><span class="se">\n</span><span class="s">&#34;</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">Table of contents</h2>
+        <button type="button" data-article-toc-close aria-label="Close table of contents">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 Uncle Xiang&#39;s Notebook
+    </section>
+    
+    <section class="powerby">
+        
+            A financial IT programmer's tinkering and daily life musings <br/>
+        Built with <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> <br />
+        Theme <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> designed by <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a>
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="Back to top"
+    title="Back to top"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

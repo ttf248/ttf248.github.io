@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="自定义分配器可以提升性能、提高内存使用效率，并解决频繁少量内存分配的问题。\n">
+<title>标准库容器的内存分配器：allocator</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="标准库容器的内存分配器：allocator">
+<meta property='og:description' content="自定义分配器可以提升性能、提高内存使用效率，并解决频繁少量内存分配的问题。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2019-12-30T13:26:19&#43;08:00'/><meta property='article:modified_time' content='2019-12-30T13:26:19&#43;08:00'/>
+<meta name="twitter:title" content="标准库容器的内存分配器：allocator">
+<meta name="twitter:description" content="自定义分配器可以提升性能、提高内存使用效率，并解决频繁少量内存分配的问题。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/","name":"标准库容器的内存分配器：allocator","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2019-12-30T13:26:19+08:00","datePublished":"2019-12-30T13:26:19+08:00","headline":"标准库容器的内存分配器：allocator","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/p/standard-library-container-memory-allocator/">← <span>返回当前文章</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 5 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li>
+      <ol>
+        <li>
+          <ol>
+            <li><a href="#前因">前因</a></li>
+            <li><a href="#wiki">wiki</a></li>
+            <li><a href="#使用需求">使用需求</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="5">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">标准库容器的内存分配器：allocator</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2019年12月30日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 8 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>历史版本</strong>
+            
+            版本时间
+            <time datetime="2026-02-28T17:25:48&#43;08:00">2026年02月28日 17:25</time>
+
+            <code>50fbc6a4</code>
+        </p>
+        <p>
+            
+                <a href="/p/standard-library-container-memory-allocator/">← 返回当前文章</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 10</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="50fbc6a4d853234d9351fc60953067411b237f9e"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/p/standard-library-container-memory-allocator/">当前版本</option>
+                        
+                            
+                            <option value="50fbc6a4d853234d9351fc60953067411b237f9e" data-url="/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/">2026年02月28日 17:25 · 50fbc6a4</option>
+                        
+                            
+                            <option value="d01e33d1b8c15e1eece72c8d61b13752de11df63" data-url="/post-history/04bed588dac52d29f792/d01e33d1b8c15e1eece72c8d61b13752de11df63/">2026年01月29日 20:48 · d01e33d1</option>
+                        
+                            
+                            <option value="ab3a62203b1f7387a30f8dfbca5b4b05482bfe38" data-url="/post-history/04bed588dac52d29f792/ab3a62203b1f7387a30f8dfbca5b4b05482bfe38/">2026年01月29日 19:43 · ab3a6220</option>
+                        
+                            
+                            <option value="ab68b7f038bf7c6078675f46c68a94bf9bd4324b" data-url="/post-history/04bed588dac52d29f792/ab68b7f038bf7c6078675f46c68a94bf9bd4324b/">2025年05月24日 22:41 · ab68b7f0</option>
+                        
+                            
+                            <option value="e5615de25f2bf04dfb10513bb57394225dc526f1" data-url="/post-history/04bed588dac52d29f792/e5615de25f2bf04dfb10513bb57394225dc526f1/">2025年05月24日 01:17 · e5615de2</option>
+                        
+                            
+                            <option value="401c56b157150da934b90dc4a763921af6aa7e5d" data-url="/post-history/04bed588dac52d29f792/401c56b157150da934b90dc4a763921af6aa7e5d/">2025年02月15日 03:21 · 401c56b1</option>
+                        
+                            
+                            <option value="b09a1034b56be306d5bcbc699b78f39f9fd86fe3" data-url="/post-history/04bed588dac52d29f792/b09a1034b56be306d5bcbc699b78f39f9fd86fe3/">2024年11月13日 01:46 · b09a1034</option>
+                        
+                            
+                            <option value="8a38e6c9f61967e2f09a0d4eed417893a4f11c70" data-url="/post-history/04bed588dac52d29f792/8a38e6c9f61967e2f09a0d4eed417893a4f11c70/">2022年07月10日 22:21 · 8a38e6c9</option>
+                        
+                            
+                            <option value="caa54ec8713c4d757cefaf45cf9cb83a2674c650" data-url="/post-history/04bed588dac52d29f792/caa54ec8713c4d757cefaf45cf9cb83a2674c650/">2021年08月26日 19:05 · caa54ec8</option>
+                        
+                            
+                            <option value="fd0ece5ce8b0f89c750eedad7124dbeb46232cfa" data-url="/post-history/04bed588dac52d29f792/fd0ece5ce8b0f89c750eedad7124dbeb46232cfa/">2020年12月22日 10:07 · fd0ece5c</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/p/standard-library-container-memory-allocator/">当前版本</option>
+                        
+                            
+                            <option value="50fbc6a4d853234d9351fc60953067411b237f9e" data-url="/post-history/04bed588dac52d29f792/50fbc6a4d853234d9351fc60953067411b237f9e/">2026年02月28日 17:25 · 50fbc6a4</option>
+                        
+                            
+                            <option value="d01e33d1b8c15e1eece72c8d61b13752de11df63" data-url="/post-history/04bed588dac52d29f792/d01e33d1b8c15e1eece72c8d61b13752de11df63/">2026年01月29日 20:48 · d01e33d1</option>
+                        
+                            
+                            <option value="ab3a62203b1f7387a30f8dfbca5b4b05482bfe38" data-url="/post-history/04bed588dac52d29f792/ab3a62203b1f7387a30f8dfbca5b4b05482bfe38/">2026年01月29日 19:43 · ab3a6220</option>
+                        
+                            
+                            <option value="ab68b7f038bf7c6078675f46c68a94bf9bd4324b" data-url="/post-history/04bed588dac52d29f792/ab68b7f038bf7c6078675f46c68a94bf9bd4324b/">2025年05月24日 22:41 · ab68b7f0</option>
+                        
+                            
+                            <option value="e5615de25f2bf04dfb10513bb57394225dc526f1" data-url="/post-history/04bed588dac52d29f792/e5615de25f2bf04dfb10513bb57394225dc526f1/">2025年05月24日 01:17 · e5615de2</option>
+                        
+                            
+                            <option value="401c56b157150da934b90dc4a763921af6aa7e5d" data-url="/post-history/04bed588dac52d29f792/401c56b157150da934b90dc4a763921af6aa7e5d/">2025年02月15日 03:21 · 401c56b1</option>
+                        
+                            
+                            <option value="b09a1034b56be306d5bcbc699b78f39f9fd86fe3" data-url="/post-history/04bed588dac52d29f792/b09a1034b56be306d5bcbc699b78f39f9fd86fe3/">2024年11月13日 01:46 · b09a1034</option>
+                        
+                            
+                            <option value="8a38e6c9f61967e2f09a0d4eed417893a4f11c70" data-url="/post-history/04bed588dac52d29f792/8a38e6c9f61967e2f09a0d4eed417893a4f11c70/">2022年07月10日 22:21 · 8a38e6c9</option>
+                        
+                            
+                            <option value="caa54ec8713c4d757cefaf45cf9cb83a2674c650" data-url="/post-history/04bed588dac52d29f792/caa54ec8713c4d757cefaf45cf9cb83a2674c650/">2021年08月26日 19:05 · caa54ec8</option>
+                        
+                            
+                            <option value="fd0ece5ce8b0f89c750eedad7124dbeb46232cfa" data-url="/post-history/04bed588dac52d29f792/fd0ece5ce8b0f89c750eedad7124dbeb46232cfa/">2020年12月22日 10:07 · fd0ece5c</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">标准库容器的内存分配器：allocator <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-02-28T17:25:48&#43;08:00">2026年02月28日 17:25</time>
+
+                            <code>50fbc6a4</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/d01e33d1b8c15e1eece72c8d61b13752de11df63/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-01-29T20:48:19&#43;08:00">2026年01月29日 20:48</time>
+
+                            <code>d01e33d1</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/ab3a62203b1f7387a30f8dfbca5b4b05482bfe38/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-01-29T19:43:49&#43;08:00">2026年01月29日 19:43</time>
+
+                            <code>ab3a6220</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/ab68b7f038bf7c6078675f46c68a94bf9bd4324b/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-24T22:41:54&#43;08:00">2025年05月24日 22:41</time>
+
+                            <code>ab68b7f0</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/e5615de25f2bf04dfb10513bb57394225dc526f1/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-24T01:17:11&#43;08:00">2025年05月24日 01:17</time>
+
+                            <code>e5615de2</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/401c56b157150da934b90dc4a763921af6aa7e5d/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-02-15T03:21:58&#43;08:00">2025年02月15日 03:21</time>
+
+                            <code>401c56b1</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/b09a1034b56be306d5bcbc699b78f39f9fd86fe3/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2024-11-13T01:46:23&#43;08:00">2024年11月13日 01:46</time>
+
+                            <code>b09a1034</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/8a38e6c9f61967e2f09a0d4eed417893a4f11c70/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2022-07-10T22:21:07&#43;08:00">2022年07月10日 22:21</time>
+
+                            <code>8a38e6c9</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/caa54ec8713c4d757cefaf45cf9cb83a2674c650/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2021-08-26T19:05:25&#43;08:00">2021年08月26日 19:05</time>
+
+                            <code>caa54ec8</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/04bed588dac52d29f792/fd0ece5ce8b0f89c750eedad7124dbeb46232cfa/">标准库容器的内存分配器：allocator</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2020-12-22T10:07:05&#43;08:00">2020年12月22日 10:07</time>
+
+                            <code>fd0ece5c</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>自定义分配器可以提升性能、提高内存使用效率，并解决频繁少量内存分配的问题。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li>
+      <ol>
+        <li>
+          <ol>
+            <li><a href="#前因">前因</a></li>
+            <li><a href="#wiki">wiki</a></li>
+            <li><a href="#使用需求">使用需求</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h4 id="前因">前因
+</h4><p>近期接触到了网络网络数据包的开发，需要频繁的申请和释放小块的内存，原本想着使用内存池，查看了几个现有的内存池，发现了这个</p>
+<p><a class="link" href="https://github.com/cacay/MemoryPool">https://github.com/cacay/MemoryPool</a></p>
+<p>看到接口的时候，就比较纳闷，这个内存池的实现怎么有点奇怪。<code>MemoryPool</code>的实现逻辑，是在申请固定大小的内存空间。看过boost的内存池接口，提供的是一个模板，用的时候进行实例化。正巧这个库已经有文章进行过介绍，提到了<code>allocator</code>这个概念。</p>
+<h4 id="wiki"><a class="link" href="https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_%28C%2B%2B%29">wiki</a>
+</h4><p>在C++编程中，分配器（英语：allocator）是C++标准库的重要组成部分。C++的库中定义了多种被统称为“容器”的数据结构（如链表、集合等），这些容器的共同特征之一，就是其大小可以在程序的运行时改变；为了实现这一点，进行动态内存分配就显得尤为必要，在此分配器就用于处理容器对内存的分配与释放请求。换句话说，分配器用于封装标准模板库（STL）容器在内存管理上的低层细节。默认情况下，C++标准库使用其自带的通用分配器，但根据具体需要，程序员也可自行定制分配器以替代之。</p>
+<p>分配器最早由亚历山大·斯特潘诺夫作为C++标准模板库（Standard Template Library，简称STL）的一部分发明，其初衷是创造一种能“使库更加灵活，并能独立于底层数据模型的方法”，并允许程序员在库中利用自定义的指针和引用类型；但在将标准模板库纳入C++标准时，C++标准委员会意识到对数据模型的完全抽象化处理会带来不可接受的性能损耗，为作折中，标准中对分配器的限制变得更加严格，而有鉴于此，与斯特潘诺夫原先的设想相比，现有标准所描述的分配器可定制程度已大大受限。</p>
+<p>虽然分配器的定制有所限制，但在许多情况下，仍需要用到自定义的分配器，而这一般是为封装对不同类型内存空间（如共享内存与已回收内存）的访问方式，或在使用内存池进行内存分配时提高性能而为。除此以外，从内存占用和运行时间的角度看，在频繁进行少量内存分配的程序中，若引入为之专门定制的分配器，也会获益良多。</p>
+<h4 id="使用需求"><a class="link" href="https://zh.wikipedia.org/wiki/%E5%88%86%E9%85%8D%E5%99%A8_%28C%2B%2B%29">使用需求</a>
+</h4><p>定义自定义分配器的主要原因之一是提升性能。利用专用的自定义分配器可以提高程序的性能，又或提高内存使用效率，亦或两者兼而有之[4][8]。默认分配器使用new操作符分配存储空间[文 5]，而这常利用C语言堆分配函数（malloc()）实现[9]。由于堆分配函数常针对偶发的内存大量分配作优化，因此在为需要一次分配大量内存的容器（如向量、双端队列）分配内存时，默认分配器一般效率良好[8]。但是，对于关联容器与双向链表这类需要频繁分配少量内存的容器来说，若采用默认分配器分配内存，则通常效率很低[4][9]。除此之外，基于malloc()的默认分配器还存在许多问题，诸如较差的引用局部性[4]，以及可能造成内存碎片化[4][9]。</p>
+<p>简言之，此段（……）（如同）是这一标准针对分配器的一场《我有一个梦想》的演讲。在梦想成真之前，关心可移植性的程序员将把自己局限于（使用）无状态的自定义分配器上。
+——斯科特 梅耶斯，《Effective STL》
+有鉴于此，在这一情况下，人们常使用基于内存池的分配器来解决频繁少量分配问题[8]。与默认的“按需分配”方式不同，在使用基于内存池的分配器时，程序会预先为之分配大块内存（即“内存池”），而后在需要分配内存时，自定义分配器只需向请求方返回一个指向池内内存的指针即可；而在对象析构时，并不需实际解除分配内存，而是延迟到内存池的生命周期完结时才真正解除分配[注 1][8]。</p>
+<p>在“自定义分配器”这一话题上，已有诸多C++专家与相关作者参与探讨，例如斯科特·梅耶斯的作品《Effective STL》与安德烈·亚历山德雷斯库的《Modern C++ Design》都有提及。梅耶斯洞察到，若要求针对某一类型T的分配器的所有实例都相等，则可移植的分配器的实例必须不包含状态。虽然C++标准鼓励库的实现者支持带状态的分配器[文 4]，但梅耶斯称，相关段落是“（看似）美妙的观点”，但也几乎是空话，并称分配器的限制“过于严苛”[4]。例如，STL的list允许splice方法，即一个list对象A的节点可以被直接移入另一个list对象B中，这就要求A的分配器申请到的内存，可被B的分配器释放掉，从而推导出A与B的分配器实例必须相等。梅耶斯的结论是，分配器最好定义为使用静态方法的类型。例如，根据C++标准，分配器必须提供一个实现了rebind方法的other类模板。</p>
+<p>另外，在《C++程序设计语言》中，比雅尼·斯特劳斯特鲁普则认为“‘严格限制分配器，以免各对象信息不同’，这点显然问题不大”（大意），并指出大部分分配器并不需要状态，甚至没有状态情形下性能反倒更佳。他提出了三个自定义分配器的用例：内存池型的分配器、共享内存型分配器与垃圾回收型分配器，并展示了一个分配器的实现，此间利用了一个内部内存池，以快速分配/解除分配少量内存。但他也提到，如此优化可能已经在他所提供的样例分配器中实现[3]。</p>
+<p>自定义分配器的另一用途是调试内存相关错误[10]。若要做到这一点，可以编写一个分配器，令之在分配时分配额外的内存，并借此存放调试信息。这类分配器不仅可以保证内存由同类分配器分配/解除分配内存，还可在一定程度上保护程序免受缓存溢出之害[11]。</p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

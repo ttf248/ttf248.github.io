@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="一次 Minimax M3 性能优化任务里，我看到的不是工具排名，而是一条能否留下改动、数据与回退决定的工作流。">
+<title>同一个模型，为什么这次 Claude Code 把性能优化做完了</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="同一个模型，为什么这次 Claude Code 把性能优化做完了">
+<meta property='og:description' content="一次 Minimax M3 性能优化任务里，我看到的不是工具排名，而是一条能否留下改动、数据与回退决定的工作流。">
+<meta property='og:url' content='https://ttf248.life/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-07-10T00:00:00&#43;00:00'/><meta property='article:modified_time' content='2026-07-10T00:00:00&#43;00:00'/>
+<meta name="twitter:title" content="同一个模型，为什么这次 Claude Code 把性能优化做完了">
+<meta name="twitter:description" content="一次 Minimax M3 性能优化任务里，我看到的不是工具排名，而是一条能否留下改动、数据与回退决定的工作流。">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/","name":"同一个模型，为什么这次 Claude Code 把性能优化做完了","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-07-10T00:00:00Z","datePublished":"2026-07-10T00:00:00Z","headline":"同一个模型，为什么这次 Claude Code 把性能优化做完了","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/trash/">← <span>废纸篓</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 4 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#我给它们的规矩只有四步">我给它们的规矩只有四步</a></li>
+    <li><a href="#让我服气的不是二十分钟">让我服气的不是二十分钟</a></li>
+    <li><a href="#适配更好只是下一轮要验证的猜测">“适配更好”只是下一轮要验证的猜测</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="4">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">同一个模型，为什么这次 Claude Code 把性能优化做完了</h1>
+        
+    
+        
+        
+        <h3 class="article-subtitle">
+            一次受控性能优化任务里的工具执行差异
+        </h3>
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年07月10日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 6 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">Codex (GPT-5)</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>已删除</strong>
+            
+                <time datetime="2026-07-12T20:14:36&#43;08:00">2026年07月12日</time>
+ ·
+            
+            版本时间
+            <time datetime="2026-07-10T21:50:36&#43;08:00">2026年07月10日 21:50</time>
+
+            <code>ff5de4ae</code>
+        </p>
+        <p>
+            
+                <a href="/trash/">← 废纸篓</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 3</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="ff5de4ae51e369e3b660fa13035ce01e4ff52737"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        
+                        
+                            
+                            <option value="4db4afae1ff89e69fc3a9e684b3ccea1a686ec83" data-url="/post-history/36336f4139df350f37b4/4db4afae1ff89e69fc3a9e684b3ccea1a686ec83/">2026年07月12日 11:48 · 4db4afae</option>
+                        
+                            
+                            <option value="a582be90459eb04f718ddf3634a6763a24d5d3f3" data-url="/post-history/36336f4139df350f37b4/a582be90459eb04f718ddf3634a6763a24d5d3f3/">2026年07月12日 11:35 · a582be90</option>
+                        
+                            
+                            <option value="ff5de4ae51e369e3b660fa13035ce01e4ff52737" data-url="/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/">2026年07月10日 21:50 · ff5de4ae</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        
+                        
+                            
+                            <option value="4db4afae1ff89e69fc3a9e684b3ccea1a686ec83" data-url="/post-history/36336f4139df350f37b4/4db4afae1ff89e69fc3a9e684b3ccea1a686ec83/">2026年07月12日 11:48 · 4db4afae</option>
+                        
+                            
+                            <option value="a582be90459eb04f718ddf3634a6763a24d5d3f3" data-url="/post-history/36336f4139df350f37b4/a582be90459eb04f718ddf3634a6763a24d5d3f3/">2026年07月12日 11:35 · a582be90</option>
+                        
+                            
+                            <option value="ff5de4ae51e369e3b660fa13035ce01e4ff52737" data-url="/post-history/36336f4139df350f37b4/ff5de4ae51e369e3b660fa13035ce01e4ff52737/">2026年07月10日 21:50 · ff5de4ae</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/post-history/36336f4139df350f37b4/4db4afae1ff89e69fc3a9e684b3ccea1a686ec83/">同一个模型，为什么这次 Claude Code 把性能优化做完了</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-12T11:48:14&#43;08:00">2026年07月12日 11:48</time>
+
+                            <code>4db4afae</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/36336f4139df350f37b4/a582be90459eb04f718ddf3634a6763a24d5d3f3/">同一个模型，为什么这次 Claude Code 把性能优化做完了</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-12T11:35:02&#43;08:00">2026年07月12日 11:35</time>
+
+                            <code>a582be90</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">同一个模型，为什么这次 Claude Code 把性能优化做完了 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-10T21:50:36&#43;08:00">2026年07月10日 21:50</time>
+
+                            <code>ff5de4ae</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>同一份提示词、同一个 Minimax M3、同一类性能优化任务，昨天却给了我一次很不普通的工具切换体验：Claude Code 在约二十分钟里留下了可复盘的优化过程；Codex 跑了一个多小时，截至我停止时，没有留下我愿意保留的优化。它不是一场工具排名，而是一次关于执行纪律的现场记录。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#我给它们的规矩只有四步">我给它们的规矩只有四步</a></li>
+    <li><a href="#让我服气的不是二十分钟">让我服气的不是二十分钟</a></li>
+    <li><a href="#适配更好只是下一轮要验证的猜测">“适配更好”只是下一轮要验证的猜测</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>我原本以为，这场对比没什么意思：同一份性能优化提示词，同一个 Minimax M3 模型，换两个编码工具跑一跑而已。结果差别大到让我没法再把它当成一次普通的工具切换。</p>
+<p>这不是工具排行榜。我没有多轮、可公开复现的基准，只能记录昨天这个现场：Claude Code 把我交代的活落到了地上；Codex 则运行了一个多小时，到我停止时，没有产出值得保留的优化。</p>
+<h2 id="我给它们的规矩只有四步">我给它们的规矩只有四步
+</h2><p>性能优化最怕改动越堆越多，最后既不知道哪一刀有效，也没法干净地退回来。所以这次我把规则卡得很死：一次只做一个小改动，立刻验证，对照性能数据；有效就留下，无效就回退。</p>
+<p>模型用的是 Minimax M3。我知道它未必能一下找到什么大招，所以我更在乎它会不会守住这四步。这里的“性能数据”是我在任务里用来决定保留还是回退的结果；具体代码、指标数值和基准细节不在本文公开，因此这不是可复现的性能测评。</p>
+<p>我对齐了提示词、模型和任务目标；工具自身的上下文、命令调用、默认工作流，以及运行环境和版本等变量，并没有被做成严格控制。本文要记录的，是这一次工作流体验和交付过程的不同，不是严格的工具横评。</p>
+<h2 id="让我服气的不是二十分钟">让我服气的不是二十分钟
+</h2><p>Claude Code 大约二十分钟完成。这里的“完成”，是指它给出了经本次验证后我选择保留的改动；这个时长也只是我对这一次执行的观察，并不是它的稳定耗时承诺。</p>
+<p>真正让我改观的不是时间数字，而是后来翻任务文档时看到的过程。文档把每一轮的尝试方向、改动后的结果，以及保留或回退的决定排在一起。我能顺着它接手：知道哪个方向继续，哪个方向到此为止。</p>
+<p>这件事在性能优化里很值钱。哪怕某一轮没有结果，也不等于白烧时间——它至少留下了一个被排除的方向。更重要的是，我写进提示词里的规则没有停在提示词里，而是变成了实际工作节奏。</p>
+<p>反过来看 Codex 那次，它未必什么都没做，但最终没有留下我能核对的“改动—数据—决定”链条，也没有产生我愿意保留的优化。性能任务里，跑得久不等于多做了事；没有证据把改动和结果扣起来，久有时只是更贵的迷路。</p>
+<p>我当然不会用一次任务给产品判死刑，更不会宣布谁全面领先。这次差异也可能来自任务拆解、工具调用、上下文管理、验证循环、默认权限或运行环境等因素。至于我听到的 Claude Code 受限消息，我没有核验，本文不据此推断任何厂商动机。</p>
+<p>但在这个具体现场里，我确实佩服 Claude Code 的落地能力。对我来说，能力受限的模型只要被放进“小改、验证、记账、回退”的流程里，也能一步步把结果挪出来；没有这套约束，屏幕上再多改动，也不等于留下了一次可用的性能优化。</p>
+<h2 id="适配更好只是下一轮要验证的猜测">“适配更好”只是下一轮要验证的猜测
+</h2><p>我的第一个猜测是：Minimax M3 在 Claude Code 里，是否更容易被带进这种节奏？这只是猜测，不是结论。也可能根本不是模型适配，而是 Claude Code 在任务拆解、执行约束和验证闭环上，更能把同一个模型推着往前走。</p>
+<p>要把这个问题说得更硬，需要同一份代码、同一套基准、相近的环境和更多轮次；还要把各自的改动、数据、回退和最终验收条件都留下来。否则，我最多只能说：昨天这一单，体验差距非常明显。</p>
+<p>OpenCode 还没测，正好可以放进下一轮。我会继续沿用这套约束，记录每次改动、数据和回退。最后比的不是谁说得漂亮，而是谁留下了我能继续接手的结果。</p>
+<h2 id="参考资料">参考资料
+</h2><p>本文基于作者亲历记录，未引用外部资料。</p>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><p>$blog-writer 阿里云发新闻禁用了 claude code，市场都知道他家喜欢搞小动作，但是昨天的开发任务，让我佩服他的落地能力，一样的提示词，都是做性能优化，对接一样的模型，都是 Minimax M3 模型，由于模型能力比较弱，我指定了每次小改，逐步验证，对比性能数据，有效果保留，没效果就回退。codex 跑了一个多小时，什么有用的都没折腾出来，claude code，二十分钟做完了，翻看文档记录，清楚的记录了每轮的尝试方向，迭代以后的效果。我可以说是 Minimax 就是对 claude code 适配更好，确实他家有先发优势，各家都要适配他的 claude code，但是这个差距也太明显了。opencode 还没去测试，空了再去试试。</p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

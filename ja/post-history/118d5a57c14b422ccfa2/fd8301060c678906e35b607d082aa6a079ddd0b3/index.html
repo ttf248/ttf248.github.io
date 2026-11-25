@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr" data-theme="editorial" data-code-copy="コードをコピー" data-code-copied="コピーしました" data-code-expand="すべて展開" data-code-collapse="コードを折りたたむ">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="昨日書いた《HermesをOpenClawの代替品と見なすのは危険かもしれない》を書き終えた後、私は周りのドキュメントを巡回しました。巡るほど、この二つのものの違いを見るには、機能だけを見ているだけでは不十分で、トークンがどのように消費されるかを見る方が、より直接的だと感じました。\n私の判断は、まずここに置きます。\nOpenClaw はデフォルトで長期的にオンラインのワークベンチのようなものであり、多くのアイデンティティ、ルール、ワークスペースファイル、メッセージ面制約などが自然に各対話フローに引き継がれるため、ベースラインは通常重くなります。一方、Hermes は明らかに抑制的で、多くのコンテキストはオンデマンドで発見され、オンデマンドで注入されます。システムプロンプトも意図的に安定したプレフィックスを維持しており、デフォルトではトークンを抑えやすいです。\nもちろん、これはHermesが必ずしもより節約できるという意味ではありません。memory provider、skills、sub-agent、長いツール出力をすべて有効にすると、同じように大量のトークンを消費します。しかし、率直に言って、これら2つのアーキテクチャは、初日から異なる方法でトークンを消費しています。\n">
+<title>アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。">
+<meta property='og:description' content="昨日書いた《HermesをOpenClawの代替品と見なすのは危険かもしれない》を書き終えた後、私は周りのドキュメントを巡回しました。巡るほど、この二つのものの違いを見るには、機能だけを見ているだけでは不十分で、トークンがどのように消費されるかを見る方が、より直接的だと感じました。\n私の判断は、まずここに置きます。\nOpenClaw はデフォルトで長期的にオンラインのワークベンチのようなものであり、多くのアイデンティティ、ルール、ワークスペースファイル、メッセージ面制約などが自然に各対話フローに引き継がれるため、ベースラインは通常重くなります。一方、Hermes は明らかに抑制的で、多くのコンテキストはオンデマンドで発見され、オンデマンドで注入されます。システムプロンプトも意図的に安定したプレフィックスを維持しており、デフォルトではトークンを抑えやすいです。\nもちろん、これはHermesが必ずしもより節約できるという意味ではありません。memory provider、skills、sub-agent、長いツール出力をすべて有効にすると、同じように大量のトークンを消費します。しかし、率直に言って、これら2つのアーキテクチャは、初日から異なる方法でトークンを消費しています。\n">
+<meta property='og:url' content='https://ttf248.life/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-04-16T01:13:53&#43;08:00'/><meta property='article:modified_time' content='2026-04-16T01:13:53&#43;08:00'/>
+<meta name="twitter:title" content="アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。">
+<meta name="twitter:description" content="昨日書いた《HermesをOpenClawの代替品と見なすのは危険かもしれない》を書き終えた後、私は周りのドキュメントを巡回しました。巡るほど、この二つのものの違いを見るには、機能だけを見ているだけでは不十分で、トークンがどのように消費されるかを見る方が、より直接的だと感じました。\n私の判断は、まずここに置きます。\nOpenClaw はデフォルトで長期的にオンラインのワークベンチのようなものであり、多くのアイデンティティ、ルール、ワークスペースファイル、メッセージ面制約などが自然に各対話フローに引き継がれるため、ベースラインは通常重くなります。一方、Hermes は明らかに抑制的で、多くのコンテキストはオンデマンドで発見され、オンデマンドで注入されます。システムプロンプトも意図的に安定したプレフィックスを維持しており、デフォルトではトークンを抑えやすいです。\nもちろん、これはHermesが必ずしもより節約できるという意味ではありません。memory provider、skills、sub-agent、長いツール出力をすべて有効にすると、同じように大量のトークンを消費します。しかし、率直に言って、これら2つのアーキテクチャは、初日から異なる方法でトークンを消費しています。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/","name":"アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5.4)"},"dateModified":"2026-04-16T01:13:53+08:00","datePublished":"2026-04-16T01:13:53+08:00","headline":"アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/ja/" aria-label="向叔の手帳 ホーム">
+            <span class="site-header__title">向叔の手帳</span>
+            <span class="site-header__subtitle">時を集め、歳月に痕跡を残す</span>
+        </a>
+<nav class="site-header__nav" aria-label="ナビゲーション">
+            <div class="site-header__nav-group" role="group" aria-label="閲覧">
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/ja/projects/" aria-label="プロジェクト">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>プロジェクト</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="執筆ソースを切り替え"
+                    data-source-toggle-button>
+                    著者執筆
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/author/"
+                            class="site-header__source-toggle-option">
+                            著者執筆
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 執筆
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/" selected>日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="カラーモードを切り替え">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="ナビゲーションメニューを開く">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="ナビゲーション">
+        <div class="mobile-navigation__header">
+            <span>ナビゲーション</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="ナビゲーションメニューを閉じる">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="閲覧">
+                <div class="mobile-navigation__group-label">閲覧</div>
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="プロジェクト">
+                <div class="mobile-navigation__group-label">プロジェクト</div>
+                <a class="mobile-navigation__area" href="/ja/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>プロジェクト</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="執筆">
+                <div class="mobile-navigation__group-label">執筆</div>
+                <a href="/ja/writing/author/">著者執筆</a>
+                <a href="/ja/writing/ai/">AI 執筆</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>言語</span>
+                <select aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/" selected>日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="記事閲覧ツール">
+    
+    
+    
+        
+        
+            
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/ja/trash/">← <span>ごみ箱</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目次</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">文字サイズ</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">閲覧時の文字サイズ</span>
+        <div class="article-reading-settings__options" role="group" aria-label="閲覧時の文字サイズ">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">標準</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目次">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目次</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="閲覧進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>この記事の目次</span>
+            <small data-article-reading-remaining data-template="残り約 #MINUTES 分">残り約 12 分</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#openclaw-はなぜデフォルトでより重いのか">OpenClaw はなぜデフォルトでより重いのか</a></li>
+    <li><a href="#hermes-はなぜより抑制的に見えるのか">Hermes はなぜより抑制的に見えるのか</a></li>
+    <li><a href="#これは誰がより進んでいるかではなくどこにコストをかけるかである">これは誰がより進んでいるかではなく、どこにコストをかけるかである</a></li>
+    <li><a href="#本当に差がつくのはシステムプロンプトだけではない">本当に差がつくのは、システムプロンプトだけではない</a></li>
+    <li><a href="#本当に計算するなら口先だけではダメだ">本当に計算するなら、口先だけではダメだ</a></li>
+    <li><a href="#結局私はこの側に立つ">結局、私はこの側に立つ</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+    <li><a href="#作成上の注記">作成上の注記</a>
+      <ol>
+        <li><a href="#元のプロンプト">元のプロンプト</a></li>
+        <li><a href="#ライティングのアイデア概要">ライティングのアイデア概要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="12">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月16日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">読了時間: 19分</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">Codex (GPT-5.4)</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="版の履歴">
+        <p>
+            <strong>削除済み</strong>
+            
+                <time datetime="2026-11-25T02:44:21&#43;08:00">2026年11月25日</time>
+ ·
+            
+            版の日時
+            <time datetime="2026-07-26T22:50:29&#43;08:00">2026年07月26日 22:50</time>
+
+            <code>fd830106</code>
+        </p>
+        <p>
+            
+                <a href="/ja/trash/">← ごみ箱</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">この履歴のリンク先は利用できません。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>版の履歴 · 4</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">変更を比較</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="fd8301060c678906e35b607d082aa6a079ddd0b3"
+        data-unchanged="記事の表示内容に変更はありません。"
+        data-loading="版を読み込み中…"
+        data-error="版を読み込めませんでした。終了してから開き直してください。"
+        data-same="異なる二つの版を選んでください。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">変更を比較</h1>
+            <button type="button" class="post-review-button" data-review-close>比較を終了</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">比較元</span>
+                    <select aria-labelledby="post-review-label-0">
+                        
+                        
+                            
+                            <option value="fd8301060c678906e35b607d082aa6a079ddd0b3" data-url="/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/">2026年07月26日 22:50 · fd830106</option>
+                        
+                            
+                            <option value="d6f3d1314ebb890276398dbca6fa159742581ea3" data-url="/ja/post-history/118d5a57c14b422ccfa2/d6f3d1314ebb890276398dbca6fa159742581ea3/">2026年06月09日 00:49 · d6f3d131</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/ja/post-history/118d5a57c14b422ccfa2/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="0a035711eabc74564313f4b34ec54a040c035d75" data-url="/ja/post-history/118d5a57c14b422ccfa2/0a035711eabc74564313f4b34ec54a040c035d75/">2026年04月16日 01:50 · 0a035711</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">比較先</span>
+                    <select aria-labelledby="post-review-label-1">
+                        
+                        
+                            
+                            <option value="fd8301060c678906e35b607d082aa6a079ddd0b3" data-url="/ja/post-history/118d5a57c14b422ccfa2/fd8301060c678906e35b607d082aa6a079ddd0b3/">2026年07月26日 22:50 · fd830106</option>
+                        
+                            
+                            <option value="d6f3d1314ebb890276398dbca6fa159742581ea3" data-url="/ja/post-history/118d5a57c14b422ccfa2/d6f3d1314ebb890276398dbca6fa159742581ea3/">2026年06月09日 00:49 · d6f3d131</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/ja/post-history/118d5a57c14b422ccfa2/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="0a035711eabc74564313f4b34ec54a040c035d75" data-url="/ja/post-history/118d5a57c14b422ccfa2/0a035711eabc74564313f4b34ec54a040c035d75/">2026年04月16日 01:50 · 0a035711</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− 削除</del>
+            <ins class="post-review-inline--ins">&#43; 追加</ins>
+            <mark class="post-review-inline--format">書式やリンクの変更</mark>
+            <label><input type="checkbox" data-review-all> すべての内容を表示</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版の差分" role="region"
+            data-folded-label="変更のない #COUNT# ブロックを展開"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。 <span class="post-archive-meta">(閲覧中)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-26T22:50:29&#43;08:00">2026年07月26日 22:50</time>
+
+                            <code>fd830106</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/ja/post-history/118d5a57c14b422ccfa2/d6f3d1314ebb890276398dbca6fa159742581ea3/">アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-06-09T00:49:59&#43;08:00">2026年06月09日 00:49</time>
+
+                            <code>d6f3d131</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/ja/post-history/118d5a57c14b422ccfa2/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-27T19:25:37&#43;08:00">2026年04月27日 19:25</time>
+
+                            <code>de7da291</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/ja/post-history/118d5a57c14b422ccfa2/0a035711eabc74564313f4b34ec54a040c035d75/">アーキテクチャが変わったので、HermesとOpenClawのトークンの消費方法は違います。</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-16T01:50:44&#43;08:00">2026年04月16日 01:50</time>
+
+                            <code>0a035711</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>昨日書いた<a class="link" href="/ja/p/hermes-openclaw-not-the-same-game/">《HermesをOpenClawの代替品と見なすのは危険かもしれない》</a>を書き終えた後、私は周りのドキュメントを巡回しました。巡るほど、この二つのものの違いを見るには、機能だけを見ているだけでは不十分で、トークンがどのように消費されるかを見る方が、より直接的だと感じました。</p>
+<p>私の判断は、まずここに置きます。</p>
+<p>OpenClaw はデフォルトで長期的にオンラインのワークベンチのようなものであり、多くのアイデンティティ、ルール、ワークスペースファイル、メッセージ面制約などが自然に各対話フローに引き継がれるため、ベースラインは通常重くなります。一方、Hermes は明らかに抑制的で、多くのコンテキストはオンデマンドで発見され、オンデマンドで注入されます。システムプロンプトも意図的に安定したプレフィックスを維持しており、デフォルトではトークンを抑えやすいです。</p>
+<p>もちろん、これはHermesが必ずしもより節約できるという意味ではありません。memory provider、skills、sub-agent、長いツール出力をすべて有効にすると、同じように大量のトークンを消費します。しかし、率直に言って、これら2つのアーキテクチャは、初日から異なる方法でトークンを消費しています。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>この記事の目次</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#openclaw-はなぜデフォルトでより重いのか">OpenClaw はなぜデフォルトでより重いのか</a></li>
+    <li><a href="#hermes-はなぜより抑制的に見えるのか">Hermes はなぜより抑制的に見えるのか</a></li>
+    <li><a href="#これは誰がより進んでいるかではなくどこにコストをかけるかである">これは誰がより進んでいるかではなく、どこにコストをかけるかである</a></li>
+    <li><a href="#本当に差がつくのはシステムプロンプトだけではない">本当に差がつくのは、システムプロンプトだけではない</a></li>
+    <li><a href="#本当に計算するなら口先だけではダメだ">本当に計算するなら、口先だけではダメだ</a></li>
+    <li><a href="#結局私はこの側に立つ">結局、私はこの側に立つ</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+    <li><a href="#作成上の注記">作成上の注記</a>
+      <ol>
+        <li><a href="#元のプロンプト">元のプロンプト</a></li>
+        <li><a href="#ライティングのアイデア概要">ライティングのアイデア概要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="openclaw-はなぜデフォルトでより重いのか">OpenClaw はなぜデフォルトでより重いのか
+</h2><p>OpenClaw の設計ロジックは、元々「軽いエージェントを一つ出して、ちょっとおしゃべりする」というものではなく、「まず長期的に存在するエージェントのワークステーションを構築する」というものです。この点は公式の workspace ドキュメントに非常に明確に書かれています。</p>
+<p><code>AGENTS.md</code>、<code>SOUL.md</code>、<code>USER.md</code> はセッションごとにロードされます。<code>IDENTITY.md</code>、<code>TOOLS.md</code>、<code>HEARTBEAT.md</code>、<code>BOOT.md</code>、<code>MEMORY.md</code> といったファイルも、同じワークスペース内で巡回します。ドキュメントはさらには、<code>HEARTBEAT.md</code> は非常に短く保つよう注意喚起し、トークン消費を避けるように促しています。このような注意喚起自体が、OpenClaw が自身のデフォルトのコンテキストが比較的厚いことを明確に示しています。</p>
+<p>しかし、一つ明確にしておくべき点があります。OpenClaw はすべてを無条件で全文常駐させるわけではありません。公式のトークンドキュメントには、skills をシステムプロンプトに組み込む場合、デフォルトでは単なるメタデータであり、具体的な説明は必要に応じて <code>read</code> する必要があると明記されています。したがって、問題は「節約ができない」ことではなく、「デフォルトで持っていく土台自体が元々大きい」ということです。</p>
+<p>この件は実は理解しにくいものではありません。OpenClaw が解決しようとしているのは、「長期的なオンライン状態」と「複数のメッセージ面での存在感」です。</p>
+<p>Telegram、Discord、Slack、WhatsAppといった複数の場所に同時に存在し、アイデンティティ、ルーティング、境界線、委任（delegate）を伴いながら活動させる場合、多くのルールは後から付け足すものであってはなりません。それはまず自分自身が何者であるか、どのように話すべきか、誰に向き合っているのか、現在のワークスペースの制約は何か、スキルをどこから取得するのか、どの記憶を持ち運ぶべきで、どの記憶を持ち運んではいけないのかを知る必要があります。</p>
+<p>そのため、OpenClaw のトークン消費は、より固定のオーバーヘッドが大きい傾向があります。</p>
+<p>メッセージを送信するたびに、単にモデルに一文を話しかけているのではなく、すでに完成された「アシスタント環境」全体を呼び出しています。この環境は使いやすいのですが、その代償としてベースとなるプロンプトがより厚くなり、たとえ今回のターンで直接使われなくても、多くのコンテキストがそこに保持されることになります。</p>
+<h2 id="hermes-はなぜより抑制的に見えるのか">Hermes はなぜより抑制的に見えるのか
+</h2><p>Hermes の件ですが、ドキュメントの中で最も興味深い点は、常に2つのことを強調している点です。それは「オンデマンドローディング」と「プロンプトキャッシュの保持」です。</p>
+<p>まずコンテキストファイルをチェックしてください。Hermesはセッション開始時に、現在の作業ディレクトリでヒットした種類のプロジェクトコンテキストのみをロードします。<code>AGENTS.md</code>や<code>CLAUDE.md</code>、<code>.cursorrules</code>などは「最初に見つかったものが採用される（first match wins）」ため、すべてが一度に読み込まれるわけではありません。さらに重要なのは、サブディレクトリ内の<code>AGENTS.md</code>は起動時にすべて読み込まれるのではなく、実際にそのディレクトリに移動し、そのファイルを読み込み、そのパスに到達したときに、段階的に発見され、段階的に注入されるということです。</p>
+<p>公式ドキュメントでは、この設計の利点が明確に書かれています：</p>
+<ul>
+<li>システムプロンプトの肥大化なし</li>
+<li>プロンプトキャッシュの保持</li>
+</ul>
+<p>この味はOpenClawとは全然違いますね。Hermesが言っているように、システムプロンプトは長すぎない方がいいし、後回しにできるコンテキストは後回しにして、関連するタイミングでのみ出現するものなら、最初のラウンドで詰め込みすぎない方がいいですよ。</p>
+<p>skills も同じ考え方です。Hermes の skills ドキュメントには、プログレッシブ・ディスクロージャー（段階的開示）が明確に書かれており、目的はトークン使用量の最小化です。言い換えれば、skill はデフォルトで全文常駐するのではなく、モデルにまず軽量なインデックスを見せ、本当に必要なときだけ具体的な内容を展開させるということです。</p>
+<ul>
+<li>データマイニング</li>
+<li>ディープラーニング</li>
+<li>ニューラルネットワーク</li>
+</ul>
+<p>そして、その記憶システムも組み合わせ型に偏っています。公式ドキュメントでは組み込みメモリが厳しく制限されており、<code>MEMORY.md</code> は約 800 トークン、<code>USER.md</code> は約 500 トークンで、合計すると固定のコンテキストウィンドウは約 1300 トークンになります。<code>SOUL.md</code> は固定のアイデンティティであり、<code>USER.md</code> とメモリはシステムプロンプトに含まれますが、セッション検索やメモリプロバイダー、Honchoなどはより外部レイヤーのようなものです。この構造自体がプロンプトを自然に短くするわけではありませんが、コスト管理がしやすいデフォルトの姿勢を提供しています。</p>
+<p>そのため、アーキテクチャの観点から見ると、私はHermesを「デフォルトでは控えめだが、徐々に重みを増していく」と分類する方が気が進みます。</p>
+<h2 id="これは誰がより進んでいるかではなくどこにコストをかけるかである">これは誰がより進んでいるかではなく、どこにコストをかけるかである
+</h2><p>多くの比較記事は、トークン消費を単一の結論として記述する傾向がありますが、これは適切ではないと思います。</p>
+<p>OpenClaw が重いのは、設計が悪いからではありません。むしろ、意図的に多くのものを前置しているのです。長期オンラインで、クロスプラットフォームで、パーソナリティを持ち、ワークスペースとルーティングを備えたアシスタントを求めるなら、これらのコンテキストにはいずれコストがかかります。単にデフォルトのパスでこれらを一式揃えているだけです。</p>
+<p>Hermes はより抑制的ですが、それがないわけではありません。長い <code>SOUL.md</code> やプロジェクトの <code>AGENTS.md</code>、複数のスキル、MCP、メモリプロバイダー、サブエージェント、長いツール出力などを重ねると、トークンはやはり速く消費されます。特にツールの結果自体が非常に長い場合や、複雑なコードベース内を何度も検索させる場合は、アーキテクチャ名だけで節約できるわけではありません。</p>
+<p>したがって、より正確な言い方は以下の通りです。</p>
+<p>OpenClaw は、コストを「アシスタント環境の常駐」に前倒しします。</p>
+<p>Hermes はコストを「必要な時に能力を展開する」ことに後置します。</p>
+<p>これら二つのアプローチに絶対的な優劣はありませんが、請求書の構造が全く異なります。</p>
+<h2 id="本当に差がつくのはシステムプロンプトだけではない">本当に差がつくのは、システムプロンプトだけではない
+</h2><p>他にも、見落とされがちな細かい点があります。</p>
+<p>第一に、Hermes は context files の部分を安定したプレフィックスにするように設計されています。サブディレクトリの hint は、関連するツールの結果に追加されるものであり、すべてのプロジェクトコンテキストを system prompt に絶えず流し込むわけではありません。このアプローチはトークンを節約するだけでなく、本質的にはプロバイダーのプロンプトキャッシュのためのスペースを確保しているとも言えます。</p>
+<p>第二に、Hermes の <code>execute_code</code> のようなツールは、設計上、スクリプトが最終的に <code>print()</code> で出力した結果のみをモデルに返すように設計されており、途中の RPC ツール呼び出しの結果がすべてコンテキストに入るわけではありません。複雑なフローの場合、この構造により、無意味なツールのノイズを大幅に削減できます。</p>
+<ol start="3">
+<li>OpenClaw のワークスペースの哲学は、「家財道具を全部持っていく」というものに近いです。たとえ個々のファイルが短くても、種類が多い、人格レイヤーが多い、ルールレイヤーが多い、スキルや記憶の階層が多いだけで、基本的なコンテキストは少しずつ厚みを増していきます。この厚みはバグではなく、製品としての取捨選択によるものです。</li>
+</ol>
+<p>第四に、両側がサブエージェントの処理を行うことも、総勘定書に影響を与えます。Hermes の多くの設計はローカルなコンテキストとローカルな実行を強調していますが、OpenClaw は複数のエージェントのアイデンティティ、ルーティング、委任といった組織能力をより重視しています。一方はコンテキストを切り替えるようなものであり、もう一方は存在関係を組織するようなものです。最終的にトークン料金に落とし込むと、形状は当然異なります。</p>
+<h2 id="本当に計算するなら口先だけではダメだ">本当に計算するなら、口先だけではダメだ
+</h2><p>長期的に使うつもりなら、誰かが「こっちの方が節約になる」と言っても鵜呑みにせず、ツールが出したデータを見てください。</p>
+<p>OpenClaw の公式ドキュメントには、<code>/context detail</code> や <code>/usage tokens</code> のようなコマンドがあり、ドキュメントでもセッション開始時にどのファイルが注入されるか通知してくれます。これはベースディスクがどれだけ分厚いかを見るのに非常に適しています。</p>
+<p>Hermes の件ですが、公式ドキュメントの Honcho や関連する機能において、トークンバジェット、スキルプログレッシブディスクロージャー、コンテキストファイル注入の方法といった手がかりが提供されています。これらは <code>hermes insights</code>、セッションストレージ、および実際のプロバイダーの請求書と合わせて確認できます。</p>
+<p>要するに、アーキテクチャは「どう使うか」しか決められず、「どれだけ使うか」までは決めてくれない。実際に請求額を決めるのは、君が書いた <code>SOUL.md</code> の長さ、詰め込んだ記憶の量、開いたスキル数、ツールの出力をどれだけ取り込めたか、そしてモデル自体の価格だ。</p>
+<h2 id="結局私はこの側に立つ">結局、私はこの側に立つ
+</h2><p>デフォルトのアーキテクチャだけを見て、極端な設定は考慮に入れなければ、私はやはり Hermes の方がトークンの消費を比較的抑制された範囲に抑えやすいと考えています。</p>
+<p>より強力だからではなく、プロンプト設計の段階から「無意味な永続コンテキストの膨張」を回避し続けているからです。OpenClawはそれとは対照的で、多少多く持っていくことを厭わずとも、その長期オンラインアシスタントとしてのアイデンティティ、ワークスペース、メッセージングインターフェースの境界が崩れないことを保証します。</p>
+<p>そのため、トークンコストを特に気にする場合や、ワークフローが主にローカル、CLI、コードリポジトリ、スキル蓄積といったシナリオで発生する場合は、Hermesのアプローチの方が一般的に扱いやすいでしょう。</p>
+<p>もしあなたが、様々なメッセージの場に本当に常駐する長期アシスタントを求めているのであれば、OpenClawはトークンを多めに使う方が、むしろ正常な対価だと思います。まるで人間のように常にオンラインでありながら、毎回使い捨ての小さなツールであるかのような軽さを要求することはできませんから。</p>
+<p>ああ、結局この件はまた元の問題に戻ってきましたね。</p>
+<p>あなたはオンラインアシスタントを育てているのか、それともローカルエージェントコアを育てているのか。これを明確にすれば、トークン計算はそれほど難しく感じなくなるはずだ。</p>
+<h2 id="参考資料">参考資料
+</h2><ul>
+<li><a class="link" href="/ja/p/hermes-openclaw-not-the-same-game/">前の記事：Hermes を OpenClaw の代替品と見なすのは、最初から偏っているかもしれない</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/overview">Hermes Agent Features Overview</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files/">Hermes Agent Context Files</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/personality/">Hermes Agent Personality &amp; SOUL.md</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/skills">Hermes Agent Skills</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/reference/tools-reference/">Hermes Agent Built-in Tools Reference</a></li>
+<li><a class="link" href="https://hermes-agent.nousresearch.com/docs/user-guide/features/honcho/">Hermes Agent Honcho Memory</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/agent-workspace">OpenClaw Agent Workspace</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/reference/token-use">OpenClaw Token Use and Costs</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/concepts/memory">OpenClaw Memory</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/multi-agent">OpenClaw Multi-Agent Routing</a></li>
+<li><a class="link" href="https://docs.openclaw.ai/reference/context">OpenClaw Context Reference</a></li>
+</ul>
+<h2 id="作成上の注記">作成上の注記
+</h2><h3 id="元のプロンプト">元のプロンプト
+</h3><blockquote>
+<p>プロンプト：Hermes と OpenClaw について、両者のトークン消費状況に関する記事をもう一つ書いてください。アーキテクチャが異なるため、消費量も当然異なります。</p>
+</blockquote>
+<h3 id="ライティングのアイデア概要">ライティングのアイデア概要
+</h3><ul>
+<li>前回の記事の判断を引き継ぎつつ、論点をトークン消費に絞り込み、全体的なアーキテクチャ比較は繰り返さない。</li>
+<li>「どちらが省」といった空論ではなく、両者のデフォルトのコンテキストアセンブリ方法を重点的に比較する。</li>
+<li>Hermes はプログレッシブディスカバリー（段階的開示）、オンデマンドでの発見、およびプロンプトキャッシュの保持に焦点を当てる。</li>
+<li>OpenClaw はワークスペース常駐ファイル、長期オンラインアシスタント環境、固定オーバーヘッドに焦点を当てる。</li>
+<li>結びではユーザーが提示した核心的な判断は維持しつつも、「実際の請求書を見るなら、公式の usage/context ツールと実際のプロバイダーの課金体系を考慮する必要がある」という現実的な注意喚起を補足する。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目次</h2>
+        <button type="button" data-article-toc-close aria-label="目次を閉じる">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="トップへ戻る"
+    title="トップへ戻る"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

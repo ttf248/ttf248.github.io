@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="在现代互联网架构中，高可用性是系统设计的重要考量。本文将详细介绍如何使用Keepalived和HAProxy搭建高可用负载均衡集群，确保服务的连续性和可靠性。\n">
+<title>Keepalived&#43;HAProxy 搭建高可用负载均衡</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="Keepalived+HAProxy 搭建高可用负载均衡">
+<meta property='og:description' content="在现代互联网架构中，高可用性是系统设计的重要考量。本文将详细介绍如何使用Keepalived和HAProxy搭建高可用负载均衡集群，确保服务的连续性和可靠性。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2025-09-19T09:45:55&#43;08:00'/><meta property='article:modified_time' content='2025-09-19T09:45:55&#43;08:00'/>
+<meta name="twitter:title" content="Keepalived+HAProxy 搭建高可用负载均衡">
+<meta name="twitter:description" content="在现代互联网架构中，高可用性是系统设计的重要考量。本文将详细介绍如何使用Keepalived和HAProxy搭建高可用负载均衡集群，确保服务的连续性和可靠性。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/","name":"Keepalived+HAProxy 搭建高可用负载均衡","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"claude-4-sonnet"},"dateModified":"2025-09-19T09:45:55+08:00","datePublished":"2025-09-19T09:45:55+08:00","headline":"Keepalived+HAProxy 搭建高可用负载均衡","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/p/keepalived-haproxy-for-high-availability-load-balancing/">← <span>返回当前文章</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 7 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#技术简介">技术简介</a>
+      <ol>
+        <li><a href="#keepalived-简介">Keepalived 简介</a></li>
+        <li><a href="#haproxy-简介">HAProxy 简介</a></li>
+      </ol>
+    </li>
+    <li><a href="#架构设计">架构设计</a>
+      <ol>
+        <li><a href="#整体架构">整体架构</a></li>
+        <li><a href="#组件说明">组件说明</a></li>
+      </ol>
+    </li>
+    <li><a href="#环境准备">环境准备</a>
+      <ol>
+        <li><a href="#服务器规划">服务器规划</a></li>
+        <li><a href="#软件安装">软件安装</a></li>
+      </ol>
+    </li>
+    <li><a href="#keepalived-配置">Keepalived 配置</a>
+      <ol>
+        <li><a href="#主节点配置-lb-master">主节点配置 (lb-master)</a></li>
+        <li><a href="#备节点配置-lb-backup">备节点配置 (lb-backup)</a></li>
+        <li><a href="#健康检查脚本">健康检查脚本</a></li>
+        <li><a href="#状态通知脚本">状态通知脚本</a></li>
+      </ol>
+    </li>
+    <li><a href="#haproxy-配置">HAProxy 配置</a>
+      <ol>
+        <li><a href="#主配置文件">主配置文件</a></li>
+        <li><a href="#配置说明">配置说明</a></li>
+      </ol>
+    </li>
+    <li><a href="#服务启动与测试">服务启动与测试</a>
+      <ol>
+        <li><a href="#启动服务">启动服务</a></li>
+        <li><a href="#验证vip绑定">验证VIP绑定</a></li>
+        <li><a href="#功能测试">功能测试</a>
+          <ol>
+            <li><a href="#1-负载均衡测试">1. 负载均衡测试</a></li>
+            <li><a href="#2-故障切换测试">2. 故障切换测试</a></li>
+            <li><a href="#3-后端服务器故障测试">3. 后端服务器故障测试</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#监控与维护">监控与维护</a>
+      <ol>
+        <li><a href="#日志监控">日志监控</a>
+          <ol>
+            <li><a href="#haproxy日志">HAProxy日志</a></li>
+            <li><a href="#keepalived日志">Keepalived日志</a></li>
+          </ol>
+        </li>
+        <li><a href="#性能监控">性能监控</a>
+          <ol>
+            <li><a href="#统计页面监控">统计页面监控</a></li>
+            <li><a href="#命令行监控">命令行监控</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#常见问题排查">常见问题排查</a>
+      <ol>
+        <li><a href="#1-vip无法切换">1. VIP无法切换</a></li>
+        <li><a href="#2-健康检查失败">2. 健康检查失败</a></li>
+        <li><a href="#3-负载不均衡">3. 负载不均衡</a></li>
+      </ol>
+    </li>
+    <li><a href="#优化建议">优化建议</a>
+      <ol>
+        <li><a href="#1-性能优化">1. 性能优化</a></li>
+        <li><a href="#2-安全加固">2. 安全加固</a></li>
+        <li><a href="#3-监控告警">3. 监控告警</a></li>
+      </ol>
+    </li>
+    <li><a href="#总结">总结</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="7">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">Keepalived&#43;HAProxy 搭建高可用负载均衡</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2025年09月19日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 11 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">claude-4-sonnet</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>历史版本</strong>
+            
+            版本时间
+            <time datetime="2026-07-23T10:52:57&#43;08:00">2026年07月23日 10:52</time>
+
+            <code>72295f51</code>
+        </p>
+        <p>
+            
+                <a href="/p/keepalived-haproxy-for-high-availability-load-balancing/">← 返回当前文章</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 6</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="72295f513a73ec4fcc6d84660def9db9525297a0"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/p/keepalived-haproxy-for-high-availability-load-balancing/">当前版本</option>
+                        
+                            
+                            <option value="30ee15a20d3157383dfdaed356e5aa0c6ad80737" data-url="/post-history/62f107a115b1b5f33b0b/30ee15a20d3157383dfdaed356e5aa0c6ad80737/">2026年07月25日 13:57 · 30ee15a2</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="f8f8124d3fa9f2b675d29a4787e4624c8320e1eb" data-url="/post-history/62f107a115b1b5f33b0b/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">2026年02月28日 18:47 · f8f8124d</option>
+                        
+                            
+                            <option value="783b1372b81103d258ac1f4925c7157b845a75e0" data-url="/post-history/62f107a115b1b5f33b0b/783b1372b81103d258ac1f4925c7157b845a75e0/">2026年01月29日 22:52 · 783b1372</option>
+                        
+                            
+                            <option value="c59868159854e9efc64bfd69628c9b6f60d2f0d5" data-url="/post-history/62f107a115b1b5f33b0b/c59868159854e9efc64bfd69628c9b6f60d2f0d5/">2025年09月19日 10:25 · c5986815</option>
+                        
+                            
+                            <option value="840561566fad164c3eee631f3d156ed5425274a1" data-url="/post-history/62f107a115b1b5f33b0b/840561566fad164c3eee631f3d156ed5425274a1/">2025年09月19日 09:54 · 84056156</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/p/keepalived-haproxy-for-high-availability-load-balancing/">当前版本</option>
+                        
+                            
+                            <option value="30ee15a20d3157383dfdaed356e5aa0c6ad80737" data-url="/post-history/62f107a115b1b5f33b0b/30ee15a20d3157383dfdaed356e5aa0c6ad80737/">2026年07月25日 13:57 · 30ee15a2</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="f8f8124d3fa9f2b675d29a4787e4624c8320e1eb" data-url="/post-history/62f107a115b1b5f33b0b/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">2026年02月28日 18:47 · f8f8124d</option>
+                        
+                            
+                            <option value="783b1372b81103d258ac1f4925c7157b845a75e0" data-url="/post-history/62f107a115b1b5f33b0b/783b1372b81103d258ac1f4925c7157b845a75e0/">2026年01月29日 22:52 · 783b1372</option>
+                        
+                            
+                            <option value="c59868159854e9efc64bfd69628c9b6f60d2f0d5" data-url="/post-history/62f107a115b1b5f33b0b/c59868159854e9efc64bfd69628c9b6f60d2f0d5/">2025年09月19日 10:25 · c5986815</option>
+                        
+                            
+                            <option value="840561566fad164c3eee631f3d156ed5425274a1" data-url="/post-history/62f107a115b1b5f33b0b/840561566fad164c3eee631f3d156ed5425274a1/">2025年09月19日 09:54 · 84056156</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/post-history/62f107a115b1b5f33b0b/30ee15a20d3157383dfdaed356e5aa0c6ad80737/">Keepalived&#43;HAProxy 搭建高可用负载均衡</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-25T13:57:25&#43;08:00">2026年07月25日 13:57</time>
+
+                            <code>30ee15a2</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">Keepalived&#43;HAProxy 搭建高可用负载均衡 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-23T10:52:57&#43;08:00">2026年07月23日 10:52</time>
+
+                            <code>72295f51</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/62f107a115b1b5f33b0b/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">Keepalived&#43;HAProxy 搭建高可用负载均衡</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-02-28T18:47:02&#43;08:00">2026年02月28日 18:47</time>
+
+                            <code>f8f8124d</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/62f107a115b1b5f33b0b/783b1372b81103d258ac1f4925c7157b845a75e0/">Keepalived&#43;HAProxy 搭建高可用负载均衡</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-01-29T22:52:12&#43;08:00">2026年01月29日 22:52</time>
+
+                            <code>783b1372</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/62f107a115b1b5f33b0b/c59868159854e9efc64bfd69628c9b6f60d2f0d5/">Keepalived&#43;HAProxy 搭建高可用负载均衡</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-09-19T10:25:48&#43;08:00">2025年09月19日 10:25</time>
+
+                            <code>c5986815</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/62f107a115b1b5f33b0b/840561566fad164c3eee631f3d156ed5425274a1/">Keepalived&#43;HAProxy 搭建高可用负载均衡</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-09-19T09:54:27&#43;08:00">2025年09月19日 09:54</time>
+
+                            <code>84056156</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>在现代互联网架构中，高可用性是系统设计的重要考量。本文将详细介绍如何使用Keepalived和HAProxy搭建高可用负载均衡集群，确保服务的连续性和可靠性。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#技术简介">技术简介</a>
+      <ol>
+        <li><a href="#keepalived-简介">Keepalived 简介</a></li>
+        <li><a href="#haproxy-简介">HAProxy 简介</a></li>
+      </ol>
+    </li>
+    <li><a href="#架构设计">架构设计</a>
+      <ol>
+        <li><a href="#整体架构">整体架构</a></li>
+        <li><a href="#组件说明">组件说明</a></li>
+      </ol>
+    </li>
+    <li><a href="#环境准备">环境准备</a>
+      <ol>
+        <li><a href="#服务器规划">服务器规划</a></li>
+        <li><a href="#软件安装">软件安装</a></li>
+      </ol>
+    </li>
+    <li><a href="#keepalived-配置">Keepalived 配置</a>
+      <ol>
+        <li><a href="#主节点配置-lb-master">主节点配置 (lb-master)</a></li>
+        <li><a href="#备节点配置-lb-backup">备节点配置 (lb-backup)</a></li>
+        <li><a href="#健康检查脚本">健康检查脚本</a></li>
+        <li><a href="#状态通知脚本">状态通知脚本</a></li>
+      </ol>
+    </li>
+    <li><a href="#haproxy-配置">HAProxy 配置</a>
+      <ol>
+        <li><a href="#主配置文件">主配置文件</a></li>
+        <li><a href="#配置说明">配置说明</a></li>
+      </ol>
+    </li>
+    <li><a href="#服务启动与测试">服务启动与测试</a>
+      <ol>
+        <li><a href="#启动服务">启动服务</a></li>
+        <li><a href="#验证vip绑定">验证VIP绑定</a></li>
+        <li><a href="#功能测试">功能测试</a>
+          <ol>
+            <li><a href="#1-负载均衡测试">1. 负载均衡测试</a></li>
+            <li><a href="#2-故障切换测试">2. 故障切换测试</a></li>
+            <li><a href="#3-后端服务器故障测试">3. 后端服务器故障测试</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#监控与维护">监控与维护</a>
+      <ol>
+        <li><a href="#日志监控">日志监控</a>
+          <ol>
+            <li><a href="#haproxy日志">HAProxy日志</a></li>
+            <li><a href="#keepalived日志">Keepalived日志</a></li>
+          </ol>
+        </li>
+        <li><a href="#性能监控">性能监控</a>
+          <ol>
+            <li><a href="#统计页面监控">统计页面监控</a></li>
+            <li><a href="#命令行监控">命令行监控</a></li>
+          </ol>
+        </li>
+      </ol>
+    </li>
+    <li><a href="#常见问题排查">常见问题排查</a>
+      <ol>
+        <li><a href="#1-vip无法切换">1. VIP无法切换</a></li>
+        <li><a href="#2-健康检查失败">2. 健康检查失败</a></li>
+        <li><a href="#3-负载不均衡">3. 负载不均衡</a></li>
+      </ol>
+    </li>
+    <li><a href="#优化建议">优化建议</a>
+      <ol>
+        <li><a href="#1-性能优化">1. 性能优化</a></li>
+        <li><a href="#2-安全加固">2. 安全加固</a></li>
+        <li><a href="#3-监控告警">3. 监控告警</a></li>
+      </ol>
+    </li>
+    <li><a href="#总结">总结</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <blockquote>
+<p>实际配置部分没有落地验证，文章正文规划依赖AI完成</p>
+</blockquote>
+<p><img src="/post-history/62f107a115b1b5f33b0b/72295f513a73ec4fcc6d84660def9db9525297a0/20250919095219.png" alt="任务规划" loading="lazy"></p>
+<h2 id="技术简介">技术简介
+</h2><h3 id="keepalived-简介">Keepalived 简介
+</h3><p>Keepalived是一个基于VRRP（Virtual Router Redundancy Protocol）协议的高可用解决方案，主要用于实现服务器的故障切换和负载均衡。</p>
+<p><strong>主要特性：</strong></p>
+<ul>
+<li><strong>VRRP协议支持</strong>：实现虚拟IP的主备切换</li>
+<li><strong>健康检查</strong>：监控服务状态，自动故障转移</li>
+<li><strong>配置简单</strong>：通过配置文件即可实现复杂的高可用架构</li>
+<li><strong>轻量级</strong>：资源占用少，性能优异</li>
+</ul>
+<p><strong>工作原理：</strong>
+Keepalived通过VRRP协议在多台服务器之间共享一个虚拟IP地址。正常情况下，主服务器持有虚拟IP并提供服务；当主服务器发生故障时，备用服务器会自动接管虚拟IP，确保服务不中断。</p>
+<h3 id="haproxy-简介">HAProxy 简介
+</h3><p>HAProxy是一个高性能的负载均衡器和反向代理服务器，广泛应用于高并发场景。</p>
+<p><strong>主要功能：</strong></p>
+<ul>
+<li><strong>负载均衡</strong>：支持多种负载均衡算法</li>
+<li><strong>健康检查</strong>：实时监控后端服务器状态</li>
+<li><strong>SSL终结</strong>：支持HTTPS流量处理</li>
+<li><strong>统计监控</strong>：提供详细的运行状态统计</li>
+</ul>
+<p><strong>应用场景：</strong></p>
+<ul>
+<li>Web服务负载均衡</li>
+<li>数据库连接池</li>
+<li>微服务网关</li>
+<li>API接口代理</li>
+</ul>
+<h2 id="架构设计">架构设计
+</h2><h3 id="整体架构">整体架构
+</h3><pre tabindex="0"><code>                    ┌─────────────────┐
+                    │   Client        │
+                    └─────────┬───────┘
+                              │
+                    ┌─────────▼───────┐
+                    │  Virtual IP     │
+                    │  (VIP)          │
+                    └─────────┬───────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+    ┌─────────▼───────┐              ┌─────────▼───────┐
+    │   HAProxy-1     │              │   HAProxy-2     │
+    │  (Master)       │◄────────────►│   (Backup)      │
+    │  + Keepalived   │   VRRP       │  + Keepalived   │
+    └─────────┬───────┘              └─────────┬───────┘
+              │                                │
+              └──────────┬─────────────────────┘
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
+│  Web Server 1 │ │ Web Server 2│ │  Web Server 3 │
+│   Backend     │ │   Backend   │ │   Backend     │
+└───────────────┘ └─────────────┘ └───────────────┘
+</code></pre><h3 id="组件说明">组件说明
+</h3><ul>
+<li><strong>虚拟IP (VIP)</strong>：客户端访问的统一入口</li>
+<li><strong>HAProxy主备节点</strong>：提供负载均衡服务，通过Keepalived实现高可用</li>
+<li><strong>后端服务器</strong>：实际提供服务的Web服务器</li>
+</ul>
+<h2 id="环境准备">环境准备
+</h2><h3 id="服务器规划">服务器规划
+</h3><div class="table-wrapper"><table>
+	<thead>
+			<tr>
+					<th>角色</th>
+					<th>IP地址</th>
+					<th>主机名</th>
+					<th>服务</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>HAProxy主节点</td>
+					<td>192.168.1.10</td>
+					<td>lb-master</td>
+					<td>HAProxy + Keepalived</td>
+			</tr>
+			<tr>
+					<td>HAProxy备节点</td>
+					<td>192.168.1.11</td>
+					<td>lb-backup</td>
+					<td>HAProxy + Keepalived</td>
+			</tr>
+			<tr>
+					<td>虚拟IP</td>
+					<td>192.168.1.100</td>
+					<td>-</td>
+					<td>VIP</td>
+			</tr>
+			<tr>
+					<td>Web服务器1</td>
+					<td>192.168.1.20</td>
+					<td>web1</td>
+					<td>Nginx/Apache</td>
+			</tr>
+			<tr>
+					<td>Web服务器2</td>
+					<td>192.168.1.21</td>
+					<td>web2</td>
+					<td>Nginx/Apache</td>
+			</tr>
+			<tr>
+					<td>Web服务器3</td>
+					<td>192.168.1.22</td>
+					<td>web3</td>
+					<td>Nginx/Apache</td>
+			</tr>
+	</tbody>
+</table></div>
+<h3 id="软件安装">软件安装
+</h3><p>在HAProxy主备节点上安装必要软件：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># CentOS/RHEL</span>
+</span></span><span class="line"><span class="cl">yum install -y haproxy keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># Ubuntu/Debian</span>
+</span></span><span class="line"><span class="cl">apt-get update
+</span></span><span class="line"><span class="cl">apt-get install -y haproxy keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 启用服务开机自启</span>
+</span></span><span class="line"><span class="cl">systemctl <span class="nb">enable</span> haproxy keepalived
+</span></span></code></pre></div><h2 id="keepalived-配置">Keepalived 配置
+</h2><h3 id="主节点配置-lb-master">主节点配置 (lb-master)
+</h3><p>创建配置文件 <code>/etc/keepalived/keepalived.conf</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">! Configuration File <span class="k">for</span> keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">global_defs <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    router_id LB_MASTER
+</span></span><span class="line"><span class="cl">    script_user root
+</span></span><span class="line"><span class="cl">    enable_script_security
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 检查HAProxy服务状态的脚本</span>
+</span></span><span class="line"><span class="cl">vrrp_script chk_haproxy <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    script <span class="s2">&#34;/etc/keepalived/check_haproxy.sh&#34;</span>
+</span></span><span class="line"><span class="cl">    interval <span class="m">2</span>
+</span></span><span class="line"><span class="cl">    weight -2
+</span></span><span class="line"><span class="cl">    fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    rise <span class="m">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">vrrp_instance VI_1 <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    state MASTER
+</span></span><span class="line"><span class="cl">    interface eth0
+</span></span><span class="line"><span class="cl">    virtual_router_id <span class="m">51</span>
+</span></span><span class="line"><span class="cl">    priority <span class="m">100</span>
+</span></span><span class="line"><span class="cl">    advert_int <span class="m">1</span>
+</span></span><span class="line"><span class="cl">    authentication <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        auth_type PASS
+</span></span><span class="line"><span class="cl">        auth_pass mypassword123
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    virtual_ipaddress <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        192.168.1.100/24
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    track_script <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        chk_haproxy
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    notify_master <span class="s2">&#34;/etc/keepalived/notify.sh master&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_backup <span class="s2">&#34;/etc/keepalived/notify.sh backup&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_fault <span class="s2">&#34;/etc/keepalived/notify.sh fault&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span></code></pre></div><h3 id="备节点配置-lb-backup">备节点配置 (lb-backup)
+</h3><p>创建配置文件 <code>/etc/keepalived/keepalived.conf</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">! Configuration File <span class="k">for</span> keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">global_defs <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    router_id LB_BACKUP
+</span></span><span class="line"><span class="cl">    script_user root
+</span></span><span class="line"><span class="cl">    enable_script_security
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">vrrp_script chk_haproxy <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    script <span class="s2">&#34;/etc/keepalived/check_haproxy.sh&#34;</span>
+</span></span><span class="line"><span class="cl">    interval <span class="m">2</span>
+</span></span><span class="line"><span class="cl">    weight -2
+</span></span><span class="line"><span class="cl">    fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    rise <span class="m">2</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">vrrp_instance VI_1 <span class="o">{</span>
+</span></span><span class="line"><span class="cl">    state BACKUP
+</span></span><span class="line"><span class="cl">    interface eth0
+</span></span><span class="line"><span class="cl">    virtual_router_id <span class="m">51</span>
+</span></span><span class="line"><span class="cl">    priority <span class="m">90</span>
+</span></span><span class="line"><span class="cl">    advert_int <span class="m">1</span>
+</span></span><span class="line"><span class="cl">    authentication <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        auth_type PASS
+</span></span><span class="line"><span class="cl">        auth_pass mypassword123
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    virtual_ipaddress <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        192.168.1.100/24
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    track_script <span class="o">{</span>
+</span></span><span class="line"><span class="cl">        chk_haproxy
+</span></span><span class="line"><span class="cl">    <span class="o">}</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    notify_master <span class="s2">&#34;/etc/keepalived/notify.sh master&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_backup <span class="s2">&#34;/etc/keepalived/notify.sh backup&#34;</span>
+</span></span><span class="line"><span class="cl">    notify_fault <span class="s2">&#34;/etc/keepalived/notify.sh fault&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="o">}</span>
+</span></span></code></pre></div><h3 id="健康检查脚本">健康检查脚本
+</h3><p>创建HAProxy健康检查脚本 <code>/etc/keepalived/check_haproxy.sh</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="cp">#!/bin/bash
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 检查HAProxy进程是否运行</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> <span class="o">[</span> <span class="k">$(</span>ps -C haproxy --no-header <span class="p">|</span> wc -l<span class="k">)</span> -eq <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">    <span class="c1"># 尝试启动HAProxy</span>
+</span></span><span class="line"><span class="cl">    systemctl start haproxy
+</span></span><span class="line"><span class="cl">    sleep <span class="m">2</span>
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    <span class="c1"># 再次检查，如果还是没有运行则退出</span>
+</span></span><span class="line"><span class="cl">    <span class="k">if</span> <span class="o">[</span> <span class="k">$(</span>ps -C haproxy --no-header <span class="p">|</span> wc -l<span class="k">)</span> -eq <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">exit</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl">    <span class="k">fi</span>
+</span></span><span class="line"><span class="cl"><span class="k">fi</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 检查HAProxy端口是否监听</span>
+</span></span><span class="line"><span class="cl"><span class="k">if</span> ! netstat -tuln <span class="p">|</span> grep -q <span class="s2">&#34;:80 &#34;</span><span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">    <span class="nb">exit</span> <span class="m">1</span>
+</span></span><span class="line"><span class="cl"><span class="k">fi</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nb">exit</span> <span class="m">0</span>
+</span></span></code></pre></div><h3 id="状态通知脚本">状态通知脚本
+</h3><p>创建状态通知脚本 <code>/etc/keepalived/notify.sh</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="cp">#!/bin/bash
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="nv">TYPE</span><span class="o">=</span><span class="nv">$1</span>
+</span></span><span class="line"><span class="cl"><span class="nv">NAME</span><span class="o">=</span><span class="nv">$2</span>
+</span></span><span class="line"><span class="cl"><span class="nv">STATE</span><span class="o">=</span><span class="nv">$3</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">case</span> <span class="nv">$STATE</span> in
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;MASTER&#34;</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Became MASTER&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;BACKUP&#34;</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Became BACKUP&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">    <span class="s2">&#34;FAULT&#34;</span><span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Fault detected&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">    *<span class="o">)</span>
+</span></span><span class="line"><span class="cl">        <span class="nb">echo</span> <span class="s2">&#34;</span><span class="k">$(</span>date<span class="k">)</span><span class="s2">: Unknown state: </span><span class="nv">$STATE</span><span class="s2">&#34;</span> &gt;&gt; /var/log/keepalived-state.log
+</span></span><span class="line"><span class="cl">        <span class="p">;;</span>
+</span></span><span class="line"><span class="cl"><span class="k">esac</span>
+</span></span></code></pre></div><p>设置脚本执行权限：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">chmod +x /etc/keepalived/check_haproxy.sh
+</span></span><span class="line"><span class="cl">chmod +x /etc/keepalived/notify.sh
+</span></span></code></pre></div><h2 id="haproxy-配置">HAProxy 配置
+</h2><h3 id="主配置文件">主配置文件
+</h3><p>在主备节点上创建相同的HAProxy配置文件 <code>/etc/haproxy/haproxy.cfg</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">global
+</span></span><span class="line"><span class="cl">    log 127.0.0.1:514 local0
+</span></span><span class="line"><span class="cl">    chroot /var/lib/haproxy
+</span></span><span class="line"><span class="cl">    stats socket /run/haproxy/admin.sock mode <span class="m">660</span> level admin
+</span></span><span class="line"><span class="cl">    stats timeout 30s
+</span></span><span class="line"><span class="cl">    user haproxy
+</span></span><span class="line"><span class="cl">    group haproxy
+</span></span><span class="line"><span class="cl">    daemon
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">defaults
+</span></span><span class="line"><span class="cl">    mode http
+</span></span><span class="line"><span class="cl">    log global
+</span></span><span class="line"><span class="cl">    option httplog
+</span></span><span class="line"><span class="cl">    option dontlognull
+</span></span><span class="line"><span class="cl">    option log-health-checks
+</span></span><span class="line"><span class="cl">    option forwardfor except 127.0.0.0/8
+</span></span><span class="line"><span class="cl">    option redispatch
+</span></span><span class="line"><span class="cl">    retries <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    timeout http-request 10s
+</span></span><span class="line"><span class="cl">    timeout queue 1m
+</span></span><span class="line"><span class="cl">    timeout connect 10s
+</span></span><span class="line"><span class="cl">    timeout client 1m
+</span></span><span class="line"><span class="cl">    timeout server 1m
+</span></span><span class="line"><span class="cl">    timeout http-keep-alive 10s
+</span></span><span class="line"><span class="cl">    timeout check 10s
+</span></span><span class="line"><span class="cl">    maxconn <span class="m">3000</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 统计页面配置</span>
+</span></span><span class="line"><span class="cl">listen stats
+</span></span><span class="line"><span class="cl">    <span class="nb">bind</span> *:8080
+</span></span><span class="line"><span class="cl">    stats <span class="nb">enable</span>
+</span></span><span class="line"><span class="cl">    stats uri /stats
+</span></span><span class="line"><span class="cl">    stats realm HAProxy<span class="se">\ </span>Statistics
+</span></span><span class="line"><span class="cl">    stats auth admin:password123
+</span></span><span class="line"><span class="cl">    stats refresh 30s
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 前端配置</span>
+</span></span><span class="line"><span class="cl">frontend web_frontend
+</span></span><span class="line"><span class="cl">    <span class="nb">bind</span> *:80
+</span></span><span class="line"><span class="cl">    default_backend web_servers
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 后端服务器配置</span>
+</span></span><span class="line"><span class="cl">backend web_servers
+</span></span><span class="line"><span class="cl">    balance roundrobin
+</span></span><span class="line"><span class="cl">    option httpchk GET /health
+</span></span><span class="line"><span class="cl">    
+</span></span><span class="line"><span class="cl">    server web1 192.168.1.20:80 check inter <span class="m">2000</span> rise <span class="m">2</span> fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    server web2 192.168.1.21:80 check inter <span class="m">2000</span> rise <span class="m">2</span> fall <span class="m">3</span>
+</span></span><span class="line"><span class="cl">    server web3 192.168.1.22:80 check inter <span class="m">2000</span> rise <span class="m">2</span> fall <span class="m">3</span>
+</span></span></code></pre></div><h3 id="配置说明">配置说明
+</h3><p><strong>全局配置：</strong></p>
+<ul>
+<li><code>log</code>：日志配置</li>
+<li><code>chroot</code>：安全沙箱</li>
+<li><code>stats socket</code>：管理接口</li>
+<li><code>daemon</code>：后台运行</li>
+</ul>
+<p><strong>默认配置：</strong></p>
+<ul>
+<li><code>mode http</code>：HTTP模式</li>
+<li><code>balance roundrobin</code>：轮询负载均衡</li>
+<li><code>option httpchk</code>：HTTP健康检查</li>
+<li><code>timeout</code>：各种超时设置</li>
+</ul>
+<p><strong>后端服务器：</strong></p>
+<ul>
+<li><code>check</code>：启用健康检查</li>
+<li><code>inter 2000</code>：检查间隔2秒</li>
+<li><code>rise 2</code>：连续2次成功标记为可用</li>
+<li><code>fall 3</code>：连续3次失败标记为不可用</li>
+</ul>
+<h2 id="服务启动与测试">服务启动与测试
+</h2><h3 id="启动服务">启动服务
+</h3><p>在主备节点上启动服务：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 启动HAProxy</span>
+</span></span><span class="line"><span class="cl">systemctl start haproxy
+</span></span><span class="line"><span class="cl">systemctl status haproxy
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 启动Keepalived</span>
+</span></span><span class="line"><span class="cl">systemctl start keepalived
+</span></span><span class="line"><span class="cl">systemctl status keepalived
+</span></span></code></pre></div><h3 id="验证vip绑定">验证VIP绑定
+</h3><p>检查虚拟IP是否正确绑定：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 在主节点查看IP地址</span>
+</span></span><span class="line"><span class="cl">ip addr show
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 应该能看到类似输出：</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># eth0: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 1500 qdisc pfifo_fast state UP group default qlen 1000</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#     inet 192.168.1.10/24 brd 192.168.1.255 scope global eth0</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#     inet 192.168.1.100/24 scope global secondary eth0:0</span>
+</span></span></code></pre></div><h3 id="功能测试">功能测试
+</h3><h4 id="1-负载均衡测试">1. 负载均衡测试
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 多次访问VIP，观察请求分发</span>
+</span></span><span class="line"><span class="cl"><span class="k">for</span> i in <span class="o">{</span>1..10<span class="o">}</span><span class="p">;</span> <span class="k">do</span>
+</span></span><span class="line"><span class="cl">    curl -s http://192.168.1.100/ <span class="p">|</span> grep <span class="s2">&#34;Server&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="k">done</span>
+</span></span></code></pre></div><h4 id="2-故障切换测试">2. 故障切换测试
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 在主节点停止HAProxy服务</span>
+</span></span><span class="line"><span class="cl">systemctl stop haproxy
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 观察VIP是否切换到备节点</span>
+</span></span><span class="line"><span class="cl">ip addr show
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 测试服务是否正常</span>
+</span></span><span class="line"><span class="cl">curl http://192.168.1.100/
+</span></span></code></pre></div><h4 id="3-后端服务器故障测试">3. 后端服务器故障测试
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 停止其中一台Web服务器</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 在web1服务器上：</span>
+</span></span><span class="line"><span class="cl">systemctl stop nginx
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 观察HAProxy统计页面</span>
+</span></span><span class="line"><span class="cl">curl http://192.168.1.100:8080/stats
+</span></span></code></pre></div><h2 id="监控与维护">监控与维护
+</h2><h3 id="日志监控">日志监控
+</h3><h4 id="haproxy日志">HAProxy日志
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 查看HAProxy日志</span>
+</span></span><span class="line"><span class="cl">tail -f /var/log/haproxy.log
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查看访问统计</span>
+</span></span><span class="line"><span class="cl">grep <span class="s2">&#34;HTTP/1.1&#34;</span> /var/log/haproxy.log <span class="p">|</span> tail -20
+</span></span></code></pre></div><h4 id="keepalived日志">Keepalived日志
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 查看Keepalived日志</span>
+</span></span><span class="line"><span class="cl">tail -f /var/log/messages <span class="p">|</span> grep keepalived
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查看状态变化日志</span>
+</span></span><span class="line"><span class="cl">tail -f /var/log/keepalived-state.log
+</span></span></code></pre></div><h3 id="性能监控">性能监控
+</h3><h4 id="统计页面监控">统计页面监控
+</h4><p>访问HAProxy统计页面：<code>http://192.168.1.100:8080/stats</code></p>
+<p>关键指标：</p>
+<ul>
+<li><strong>Session Rate</strong>：会话速率</li>
+<li><strong>Session Total</strong>：总会话数</li>
+<li><strong>Bytes In/Out</strong>：流量统计</li>
+<li><strong>Response Time</strong>：响应时间</li>
+<li><strong>Server Status</strong>：服务器状态</li>
+</ul>
+<h4 id="命令行监控">命令行监控
+</h4><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 查看HAProxy进程状态</span>
+</span></span><span class="line"><span class="cl">ps aux <span class="p">|</span> grep haproxy
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查看端口监听状态</span>
+</span></span><span class="line"><span class="cl">netstat -tuln <span class="p">|</span> grep -E <span class="s2">&#34;(80|8080)&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查看连接数</span>
+</span></span><span class="line"><span class="cl">ss -ant <span class="p">|</span> grep :80 <span class="p">|</span> wc -l
+</span></span></code></pre></div><h2 id="常见问题排查">常见问题排查
+</h2><h3 id="1-vip无法切换">1. VIP无法切换
+</h3><p><strong>问题现象：</strong>
+主节点故障后，VIP没有切换到备节点</p>
+<p><strong>排查步骤：</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 检查Keepalived配置</span>
+</span></span><span class="line"><span class="cl">keepalived -t -f /etc/keepalived/keepalived.conf
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查看VRRP通信</span>
+</span></span><span class="line"><span class="cl">tcpdump -i eth0 vrrp
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 检查防火墙设置</span>
+</span></span><span class="line"><span class="cl">iptables -L <span class="p">|</span> grep vrrp
+</span></span></code></pre></div><p><strong>解决方案：</strong></p>
+<ul>
+<li>确保VRRP协议通信正常</li>
+<li>检查网络接口配置</li>
+<li>验证认证密码一致性</li>
+</ul>
+<h3 id="2-健康检查失败">2. 健康检查失败
+</h3><p><strong>问题现象：</strong>
+后端服务器被标记为不可用</p>
+<p><strong>排查步骤：</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 手动执行健康检查</span>
+</span></span><span class="line"><span class="cl">curl -I http://192.168.1.20/health
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 查看HAProxy日志</span>
+</span></span><span class="line"><span class="cl">grep <span class="s2">&#34;Health check&#34;</span> /var/log/haproxy.log
+</span></span></code></pre></div><p><strong>解决方案：</strong></p>
+<ul>
+<li>确保健康检查URL可访问</li>
+<li>调整检查间隔和阈值</li>
+<li>检查后端服务器状态</li>
+</ul>
+<h3 id="3-负载不均衡">3. 负载不均衡
+</h3><p><strong>问题现象：</strong>
+请求没有均匀分发到后端服务器</p>
+<p><strong>排查步骤：</strong></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 查看统计页面</span>
+</span></span><span class="line"><span class="cl">curl -s http://192.168.1.100:8080/stats
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 分析访问日志</span>
+</span></span><span class="line"><span class="cl">awk <span class="s1">&#39;{print $6}&#39;</span> /var/log/haproxy.log <span class="p">|</span> sort <span class="p">|</span> uniq -c
+</span></span></code></pre></div><p><strong>解决方案：</strong></p>
+<ul>
+<li>检查负载均衡算法配置</li>
+<li>验证服务器权重设置</li>
+<li>考虑会话保持需求</li>
+</ul>
+<h2 id="优化建议">优化建议
+</h2><h3 id="1-性能优化">1. 性能优化
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 调整系统参数</span>
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s1">&#39;net.core.somaxconn = 65535&#39;</span> &gt;&gt; /etc/sysctl.conf
+</span></span><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s1">&#39;net.ipv4.tcp_max_syn_backlog = 65535&#39;</span> &gt;&gt; /etc/sysctl.conf
+</span></span><span class="line"><span class="cl">sysctl -p
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 优化HAProxy配置</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 增加maxconn值</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 调整timeout参数</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 启用压缩功能</span>
+</span></span></code></pre></div><h3 id="2-安全加固">2. 安全加固
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 限制统计页面访问</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 在haproxy.cfg中添加ACL规则</span>
+</span></span><span class="line"><span class="cl">acl allowed_ips src 192.168.1.0/24
+</span></span><span class="line"><span class="cl">http-request deny <span class="k">if</span> !allowed_ips
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># 启用SSL/TLS</span>
+</span></span><span class="line"><span class="cl"><span class="nb">bind</span> *:443 ssl crt /etc/ssl/certs/server.pem
+</span></span><span class="line"><span class="cl">redirect scheme https <span class="k">if</span> !<span class="o">{</span> ssl_fc <span class="o">}</span>
+</span></span></code></pre></div><h3 id="3-监控告警">3. 监控告警
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="c1"># 集成监控系统</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 配置Prometheus监控</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 设置Grafana仪表板</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># 配置告警规则</span>
+</span></span></code></pre></div><h2 id="总结">总结
+</h2><p>通过Keepalived和HAProxy的组合，我们成功构建了一个高可用的负载均衡集群。这个方案具有以下优势：</p>
+<ol>
+<li><strong>高可用性</strong>：通过VRRP协议实现自动故障切换</li>
+<li><strong>负载均衡</strong>：智能分发请求，提高系统性能</li>
+<li><strong>健康检查</strong>：实时监控服务状态，自动剔除故障节点</li>
+<li><strong>易于维护</strong>：配置简单，管理方便</li>
+<li><strong>成本效益</strong>：使用开源软件，降低运维成本</li>
+</ol>
+<p>在生产环境中部署时，还需要考虑网络安全、监控告警、备份恢复等方面的完善，以确保系统的稳定可靠运行。</p>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"
+                integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="
+                crossorigin="anonymous"
+                defer
+            ></script><script
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"
+                integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="
+                crossorigin="anonymous"
+                defer
+            ></script><link
+                rel="stylesheet"
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"
+                crossorigin="anonymous"
+            ><link
+                rel="stylesheet"
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"
+                crossorigin="anonymous"
+            >
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

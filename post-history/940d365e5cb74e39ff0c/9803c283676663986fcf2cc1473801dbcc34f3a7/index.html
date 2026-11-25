@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="这两天看 Codex 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。\n总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。\n">
+<title>给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/940d365e5cb74e39ff0c/9803c283676663986fcf2cc1473801dbcc34f3a7/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code">
+<meta property='og:description' content="这两天看 Codex 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。\n总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/940d365e5cb74e39ff0c/9803c283676663986fcf2cc1473801dbcc34f3a7/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-04-01T18:00:00&#43;08:00'/><meta property='article:modified_time' content='2026-04-01T18:00:00&#43;08:00'/>
+<meta name="twitter:title" content="给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code">
+<meta name="twitter:description" content="这两天看 Codex 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。\n总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/940d365e5cb74e39ff0c/9803c283676663986fcf2cc1473801dbcc34f3a7/","name":"给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"codex"},"dateModified":"2026-04-01T18:00:00+08:00","datePublished":"2026-04-01T18:00:00+08:00","headline":"给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/940d365e5cb74e39ff0c/9803c283676663986fcf2cc1473801dbcc34f3a7/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/940d365e5cb74e39ff0c/9803c283676663986fcf2cc1473801dbcc34f3a7/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/940d365e5cb74e39ff0c/9803c283676663986fcf2cc1473801dbcc34f3a7/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/trash/">← <span>废纸篓</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 8 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#skill-到底是什么">skill 到底是什么</a></li>
+    <li><a href="#小白最适合先写什么-skill">小白最适合先写什么 skill</a></li>
+    <li><a href="#一个最小可用的-skill长什么样">一个最小可用的 skill，长什么样</a></li>
+    <li><a href="#skillmd-应该怎么写"><code>SKILL.md</code> 应该怎么写</a>
+      <ol>
+        <li><a href="#1-这个-skill-是干什么的">1. 这个 skill 是干什么的</a></li>
+        <li><a href="#2-用户要提供什么">2. 用户要提供什么</a></li>
+        <li><a href="#3-你要按什么步骤做">3. 你要按什么步骤做</a></li>
+        <li><a href="#4-输出应该长什么样">4. 输出应该长什么样</a></li>
+        <li><a href="#5-自检要检查什么">5. 自检要检查什么</a></li>
+      </ol>
+    </li>
+    <li><a href="#小白最容易踩的几个坑">小白最容易踩的几个坑</a>
+      <ol>
+        <li><a href="#把-skill-写成空泛-prompt">把 skill 写成空泛 prompt</a></li>
+        <li><a href="#把所有说明塞进一个文件">把所有说明塞进一个文件</a></li>
+        <li><a href="#不写不该做什么">不写“不该做什么”</a></li>
+        <li><a href="#没有自检和落盘规则">没有自检和落盘规则</a></li>
+      </ol>
+    </li>
+    <li><a href="#一个比较稳的-codex-skill-开发流程">一个比较稳的 Codex skill 开发流程</a>
+      <ol>
+        <li><a href="#先选一件最近重复做过三次以上的事">先选一件最近重复做过三次以上的事</a></li>
+        <li><a href="#先写最小版-skillmd">先写最小版 <code>SKILL.md</code></a></li>
+        <li><a href="#拿真实任务跑两三轮">拿真实任务跑两三轮</a></li>
+        <li><a href="#把高频重复说明拆出去">把高频重复说明拆出去</a></li>
+        <li><a href="#最后再补失败约束">最后再补失败约束</a></li>
+      </ol>
+    </li>
+    <li><a href="#如果这个-skill-要迁到-claude-code需要改什么">如果这个 skill 要迁到 Claude Code，需要改什么</a></li>
+    <li><a href="#第一目录位置要改">第一，目录位置要改</a></li>
+    <li><a href="#第二调用方式要改">第二，调用方式要改</a></li>
+    <li><a href="#第三把-codex-专属术语换成-claude-code-的术语">第三，把 Codex 专属术语换成 Claude Code 的术语</a></li>
+    <li><a href="#第四补上-claude-code-特有的配置点">第四，补上 Claude Code 特有的配置点</a></li>
+    <li><a href="#哪些-skill-最适合双端复用">哪些 skill 最适合双端复用</a></li>
+    <li><a href="#一个比较稳的迁移思路">一个比较稳的迁移思路</a></li>
+    <li><a href="#说到底skill-开发最重要的不是高级而是稳定">说到底，skill 开发最重要的不是高级，而是稳定</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="8">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月01日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 13 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">codex</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>已删除</strong>
+            
+                <time datetime="2026-04-02T22:54:55&#43;08:00">2026年04月02日</time>
+ ·
+            
+            版本时间
+            <time datetime="2026-04-01T17:02:11&#43;08:00">2026年04月01日 17:02</time>
+
+            <code>9803c283</code>
+        </p>
+        <p>
+            
+                <a href="/trash/">← 废纸篓</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 1</summary>
+        
+            
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">给小白的 Codex skill 开发指南，顺手说清怎么迁到 Claude Code <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-01T17:02:11&#43;08:00">2026年04月01日 17:02</time>
+
+                            <code>9803c283</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>这两天看 <code>Codex</code> 的时候，我越来越觉得，很多人不是不会写 skill，而是一上来就把这事想大了。</p>
+<p>总觉得得先理解一整套 agent 架构，先研究 prompt engineering，先设计一个万能技能中心。说白了，真没必要。对小白来说，skill 最开始就是一份固定操作说明书。你把一件经常重复做的事写清楚，让 agent 别每次都重新猜，这就已经很有用了。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#skill-到底是什么">skill 到底是什么</a></li>
+    <li><a href="#小白最适合先写什么-skill">小白最适合先写什么 skill</a></li>
+    <li><a href="#一个最小可用的-skill长什么样">一个最小可用的 skill，长什么样</a></li>
+    <li><a href="#skillmd-应该怎么写"><code>SKILL.md</code> 应该怎么写</a>
+      <ol>
+        <li><a href="#1-这个-skill-是干什么的">1. 这个 skill 是干什么的</a></li>
+        <li><a href="#2-用户要提供什么">2. 用户要提供什么</a></li>
+        <li><a href="#3-你要按什么步骤做">3. 你要按什么步骤做</a></li>
+        <li><a href="#4-输出应该长什么样">4. 输出应该长什么样</a></li>
+        <li><a href="#5-自检要检查什么">5. 自检要检查什么</a></li>
+      </ol>
+    </li>
+    <li><a href="#小白最容易踩的几个坑">小白最容易踩的几个坑</a>
+      <ol>
+        <li><a href="#把-skill-写成空泛-prompt">把 skill 写成空泛 prompt</a></li>
+        <li><a href="#把所有说明塞进一个文件">把所有说明塞进一个文件</a></li>
+        <li><a href="#不写不该做什么">不写“不该做什么”</a></li>
+        <li><a href="#没有自检和落盘规则">没有自检和落盘规则</a></li>
+      </ol>
+    </li>
+    <li><a href="#一个比较稳的-codex-skill-开发流程">一个比较稳的 Codex skill 开发流程</a>
+      <ol>
+        <li><a href="#先选一件最近重复做过三次以上的事">先选一件最近重复做过三次以上的事</a></li>
+        <li><a href="#先写最小版-skillmd">先写最小版 <code>SKILL.md</code></a></li>
+        <li><a href="#拿真实任务跑两三轮">拿真实任务跑两三轮</a></li>
+        <li><a href="#把高频重复说明拆出去">把高频重复说明拆出去</a></li>
+        <li><a href="#最后再补失败约束">最后再补失败约束</a></li>
+      </ol>
+    </li>
+    <li><a href="#如果这个-skill-要迁到-claude-code需要改什么">如果这个 skill 要迁到 Claude Code，需要改什么</a></li>
+    <li><a href="#第一目录位置要改">第一，目录位置要改</a></li>
+    <li><a href="#第二调用方式要改">第二，调用方式要改</a></li>
+    <li><a href="#第三把-codex-专属术语换成-claude-code-的术语">第三，把 Codex 专属术语换成 Claude Code 的术语</a></li>
+    <li><a href="#第四补上-claude-code-特有的配置点">第四，补上 Claude Code 特有的配置点</a></li>
+    <li><a href="#哪些-skill-最适合双端复用">哪些 skill 最适合双端复用</a></li>
+    <li><a href="#一个比较稳的迁移思路">一个比较稳的迁移思路</a></li>
+    <li><a href="#说到底skill-开发最重要的不是高级而是稳定">说到底，skill 开发最重要的不是高级，而是稳定</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="skill-到底是什么">skill 到底是什么
+</h2><p>如果拿最直白的话来说，skill 不是插件，不是模型微调，也不是某种神秘黑盒。它更像一个可复用的任务包。</p>
+<p>这个包里，通常会有几样东西：</p>
+<ul>
+<li><code>SKILL.md</code></li>
+<li>参考资料</li>
+<li>输出模板</li>
+<li>辅助脚本</li>
+</ul>
+<p>其中真正的核心，其实还是 <code>SKILL.md</code>。它负责告诉 agent，这个 skill 是干什么的，用户要给什么输入，你应该按什么顺序处理，最后输出成什么样。</p>
+<p>截至 2026 年 4 月，OpenAI 对 Codex skill 的官方表述已经很明确了：skill 是把 instructions、resources 和 scripts 打包起来，让 Codex 能按团队偏好稳定完成任务。Anthropic 那边现在也把 Claude Code 的这套能力放到了 skill 机制里，旧的 slash command 目录还兼容，但推荐逐步迁到 <code>.claude/skills/&lt;name&gt;/SKILL.md</code> 这种结构。换句话说，这事不是临时玩具，已经是正经工作流能力了。</p>
+<h2 id="小白最适合先写什么-skill">小白最适合先写什么 skill
+</h2><p>别一开始就写“全能编程助手”。</p>
+<p>这种 skill 看起来很厉害，实际最容易废掉。因为边界太大，输入太散，最后 agent 只能靠猜。你以为自己在做一个万能工具，实际做出来的是一个每次表现都不一样的 prompt 大杂烩。</p>
+<p>更适合新手起步的，是下面几类：</p>
+<ul>
+<li>固定格式写作</li>
+<li>固定格式总结</li>
+<li>固定格式排障</li>
+<li>固定格式代码检查</li>
+<li>固定格式发布前检查</li>
+</ul>
+<p>它们有个共同点：输入清楚，步骤固定，结果也容易判断对不对。</p>
+<p>比如：</p>
+<ul>
+<li>给博客起草 Markdown 成稿</li>
+<li>把 issue 整理成开发任务</li>
+<li>根据报错日志给出排查路径</li>
+<li>按项目规范做一次 PR review</li>
+<li>发布前检查 frontmatter、目录、脚本和链接</li>
+</ul>
+<p>说白了，skill 最适合先固化重复劳动，不适合一上来替你承包所有思考。</p>
+<h2 id="一个最小可用的-skill长什么样">一个最小可用的 skill，长什么样
+</h2><p>先看最小目录结构：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">my-skill/
+</span></span><span class="line"><span class="cl">├── SKILL.md
+</span></span><span class="line"><span class="cl">├── references/
+</span></span><span class="line"><span class="cl">│   └── guide.md
+</span></span><span class="line"><span class="cl">├── templates/
+</span></span><span class="line"><span class="cl">│   └── output-template.md
+</span></span><span class="line"><span class="cl">└── scripts/
+</span></span><span class="line"><span class="cl">    └── validate.ps1
+</span></span></code></pre></div><p>很多人第一反应是，既然 <code>SKILL.md</code> 最重要，那就把所有规则全塞进去。这样短期确实省事，但后面通常会越来越乱。更稳的做法，是把主流程放 <code>SKILL.md</code>，把那些不需要每次都读的大块内容拆出去。</p>
+<p>像这些东西，就很适合拆：</p>
+<ul>
+<li>风格规则</li>
+<li>输出模板</li>
+<li>名词解释</li>
+<li>校验脚本</li>
+<li>示例文件</li>
+</ul>
+<p>这样做的好处很直接。第一，主文件更短，agent 不容易被无关信息带偏。第二，后续维护也轻松，改模板时不用动主流程，改风格时不用碰脚本。</p>
+<h2 id="skillmd-应该怎么写"><code>SKILL.md</code> 应该怎么写
+</h2><p>对于小白，我建议先老老实实写五段。</p>
+<h3 id="1-这个-skill-是干什么的">1. 这个 skill 是干什么的
+</h3><p>别写空话。不要写什么“你是一个专业、全面、系统的助手”。这类句子几乎没信息量。</p>
+<p>直接写任务目标，比如：</p>
+<ul>
+<li>根据用户提供的大纲和链接，输出一篇可发布的 Markdown 博客</li>
+<li>根据错误日志和代码片段，整理排查路径和可能根因</li>
+<li>根据 PR diff 和项目规范，输出 review 意见</li>
+</ul>
+<h3 id="2-用户要提供什么">2. 用户要提供什么
+</h3><p>这里要写输入边界。</p>
+<p>比如博客写作 skill，就可以写：</p>
+<ul>
+<li>必填：大纲</li>
+<li>必填：链接或关键词</li>
+<li>选填：目标读者</li>
+<li>选填：长度和语气</li>
+</ul>
+<p>这一段越清楚，后面误解越少。</p>
+<h3 id="3-你要按什么步骤做">3. 你要按什么步骤做
+</h3><p>这是 skill 最关键的部分。</p>
+<p>不要只说“分析需求并输出结果”，要把顺序写出来。比如：</p>
+<ol>
+<li>先判断是不是依赖最新事实</li>
+<li>如果依赖最新事实，先查官方文档或一手资料</li>
+<li>再整理名词、日期、数字和因果链</li>
+<li>最后按指定风格生成正文</li>
+<li>返回前执行格式和事实检查</li>
+</ol>
+<p>你会发现，真正有用的 skill，核心不是“语气多高级”，而是流程够不够稳。</p>
+<h3 id="4-输出应该长什么样">4. 输出应该长什么样
+</h3><p>这一步也经常被忽略。</p>
+<p>如果你不写，agent 就会按它自己的理解输出。今天给你列表，明天给你散文，后天给你半成品。要想结果稳定，就得把输出格式写死一点。</p>
+<p>比如：</p>
+<ul>
+<li>必须带 frontmatter</li>
+<li>必须包含 <code>&lt;!--more--&gt;</code></li>
+<li>必须补 <code>## 参考资料</code></li>
+<li>必须返回最终写入路径</li>
+</ul>
+<h3 id="5-自检要检查什么">5. 自检要检查什么
+</h3><p>这一段非常值钱。</p>
+<p>因为很多结果看起来“完成了”，其实只是“生成了”。真正决定能不能直接拿来用的，往往就是最后这轮自检。</p>
+<p>常见的自检项可以包括：</p>
+<ul>
+<li>是否缺少必填字段</li>
+<li>是否引用了没核实的事实</li>
+<li>是否输出成了错误格式</li>
+<li>是否偏离目标读者</li>
+<li>是否把研究稿误写成了正式成稿</li>
+</ul>
+<h2 id="小白最容易踩的几个坑">小白最容易踩的几个坑
+</h2><h3 id="把-skill-写成空泛-prompt">把 skill 写成空泛 prompt
+</h3><p>这是最常见的。</p>
+<p>如果你的 <code>SKILL.md</code> 里充满“全面”“深入”“系统”“高质量”这种词，基本可以理解为你什么都没说。agent 看到这种内容，还是只能自己猜。</p>
+<p>写 skill 时，真正重要的是这些：</p>
+<ul>
+<li>什么时候要联网</li>
+<li>优先查什么来源</li>
+<li>哪些资料能当参考</li>
+<li>哪些情况必须停下来</li>
+<li>输出必须长什么样</li>
+</ul>
+<h3 id="把所有说明塞进一个文件">把所有说明塞进一个文件
+</h3><p>这事短期最省事，长期最麻烦。</p>
+<p>一旦 skill 开始变长，你就会发现，每次改一点点东西，都要在一大坨说明里翻来翻去。更现实的问题是，agent 每次都得重新吞一大段并不总是相关的内容。</p>
+<h3 id="不写不该做什么">不写“不该做什么”
+</h3><p>很多人只写“该怎么做”，不写“什么情况下别做”。这会让 agent 太积极。</p>
+<p>比如：</p>
+<ul>
+<li>没核实事实时，不要直接下结论</li>
+<li>用户明确只要研究稿时，不要直接生成成稿</li>
+<li>目标文件已存在时，不要静默覆盖</li>
+</ul>
+<p>这类约束非常重要。说白了，它们决定了 skill 会不会惹事。</p>
+<h3 id="没有自检和落盘规则">没有自检和落盘规则
+</h3><p>尤其是写作类、发布类、代码生成类 skill，没有最后的检查和写入规则，结果通常就停留在“聊天窗口里看起来还行”。</p>
+<p>一旦要落到真实仓库里，就得补上：</p>
+<ul>
+<li>路径生成规则</li>
+<li>覆盖策略</li>
+<li>最小格式要求</li>
+<li>写入成功后的反馈</li>
+</ul>
+<h2 id="一个比较稳的-codex-skill-开发流程">一个比较稳的 Codex skill 开发流程
+</h2><p>如果你准备自己动手，我建议按下面这个顺序来。</p>
+<h3 id="先选一件最近重复做过三次以上的事">先选一件最近重复做过三次以上的事
+</h3><p>不要选最复杂的，选最重复的。</p>
+<p>比如：</p>
+<ul>
+<li>写博客初稿</li>
+<li>做 PR review</li>
+<li>整理 issue</li>
+<li>检查发布物</li>
+</ul>
+<p>这类任务最容易看到收益。</p>
+<h3 id="先写最小版-skillmd">先写最小版 <code>SKILL.md</code>
+</h3><p>先别追求漂亮，先让它能跑。</p>
+<p>最小版只要能回答四个问题：</p>
+<ul>
+<li>它做什么</li>
+<li>需要什么输入</li>
+<li>按什么步骤做</li>
+<li>最后交付什么</li>
+</ul>
+<h3 id="拿真实任务跑两三轮">拿真实任务跑两三轮
+</h3><p>这一步不能省。</p>
+<p>你要看的不是“它有没有输出内容”，而是：</p>
+<ul>
+<li>有没有误解输入</li>
+<li>有没有跳步骤</li>
+<li>有没有乱用旧经验</li>
+<li>输出是不是能直接拿来用</li>
+</ul>
+<p>skill 的价值，不在于生成一段文字，而在于减少你重复解释和返工的次数。</p>
+<h3 id="把高频重复说明拆出去">把高频重复说明拆出去
+</h3><p>等你发现某段说明经常改，就别继续堆在主文件里了。</p>
+<p>把它拆到：</p>
+<ul>
+<li><code>references/</code></li>
+<li><code>templates/</code></li>
+<li><code>scripts/</code></li>
+</ul>
+<p>让主流程只保留决策逻辑。</p>
+<h3 id="最后再补失败约束">最后再补失败约束
+</h3><p>也就是：</p>
+<ul>
+<li>哪些情况不能继续</li>
+<li>哪些情况必须联网确认</li>
+<li>哪些情况只能给草稿，不能直接落盘</li>
+</ul>
+<p>这一步补完之后，skill 才开始像一个能长期复用的东西。</p>
+<h2 id="如果这个-skill-要迁到-claude-code需要改什么">如果这个 skill 要迁到 Claude Code，需要改什么
+</h2><p>先说结论：能迁，而且如果你本来就写得规矩，改动不会特别大。</p>
+<p>但这不等于“复制过去就完事”。真正要改的，主要是运行环境相关的那一层。</p>
+<h2 id="第一目录位置要改">第一，目录位置要改
+</h2><p>如果你现在在 Codex 这边用的是自己仓库里的 skill 目录，比如 <code>.agents/skills/&lt;name&gt;/SKILL.md</code>，那迁到 Claude Code 时，通常要改成：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">.claude/skills/&lt;name&gt;/SKILL.md
+</span></span></code></pre></div><p>这是目前 Claude Code 官方推荐的项目级 skill 位置。旧的 <code>.claude/commands/*.md</code> 还兼容，但官方已经明确更推荐 skill 目录结构，因为它更适合同时带参考资料、模板和脚本。</p>
+<p>换句话说，迁移时第一件事不是改 prompt，而是先把目录放到 Claude Code 能识别的地方。</p>
+<h2 id="第二调用方式要改">第二，调用方式要改
+</h2><p>Codex 这边的 skill 调用，可以是自动，也可以是显式点名。在一些工作流里，甚至会直接写成 <code>$skill-name</code> 这种形式。</p>
+<p>到了 Claude Code，显式触发通常更接近 slash command 的用法，也就是：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">/skill-name
+</span></span></code></pre></div><p>所以如果你原来的 skill 文档里写了很多 Codex 专属的调用说明，迁过去时要一起改掉。不然不是 skill 本身坏了，而是入口已经不对了。</p>
+<h2 id="第三把-codex-专属术语换成-claude-code-的术语">第三，把 Codex 专属术语换成 Claude Code 的术语
+</h2><p>这是最容易漏的地方。</p>
+<p>比如你原来的 skill 里，如果隐含依赖了这些东西：</p>
+<ul>
+<li>Codex 的 team config</li>
+<li>Codex 专属工具名</li>
+<li>Codex 的权限规则</li>
+<li>Codex 的技能自动发现方式</li>
+</ul>
+<p>迁到 Claude Code 时，就要换成它自己的语境：</p>
+<ul>
+<li><code>CLAUDE.md</code></li>
+<li><code>.claude/settings.json</code></li>
+<li><code>.claude/agents/</code></li>
+<li><code>.mcp.json</code></li>
+<li>Claude Code 的权限与 MCP 配置</li>
+</ul>
+<p>说白了，Markdown 文件本身好迁，真正难迁的是运行时假设。</p>
+<h2 id="第四补上-claude-code-特有的配置点">第四，补上 Claude Code 特有的配置点
+</h2><p>如果你只是想“能用”，前三步其实已经差不多了。</p>
+<p>但如果你想“用起来顺”，还得再补一点 Claude Code 特有的东西。比如 frontmatter 配置、是否允许自动触发、是否显式触发优先、是否配合 subagent 使用。</p>
+<p>Claude Code 现在这套 skill 机制，已经不只是一个静态 prompt 文件了。它可以结合子代理、MCP、项目设置和按需加载文件来工作。所以如果你原来的 Codex skill 是个特别大的单文件，迁过去之后，通常值得顺手拆细一点。</p>
+<h2 id="哪些-skill-最适合双端复用">哪些 skill 最适合双端复用
+</h2><p>不是所有 skill 都值得同时维护 Codex 和 Claude Code 两个版本。</p>
+<p>最适合双端复用的，通常是这些：</p>
+<ul>
+<li>写作类</li>
+<li>文档整理类</li>
+<li>研究总结类</li>
+<li>规范检查类</li>
+<li>流程执行类</li>
+</ul>
+<p>因为它们的核心是流程约束，不太依赖某个平台的专属工具。</p>
+<p>最不适合直接复制的，通常是这些：</p>
+<ul>
+<li>强依赖平台专属工具调用的</li>
+<li>强依赖自动发现目录的</li>
+<li>强依赖权限模型的</li>
+<li>强依赖某个内置 prompt 行为的</li>
+</ul>
+<p>这类 skill 不是不能迁，只是迁完以后，本质上已经更像“同一个目标的两套实现”。</p>
+<h2 id="一个比较稳的迁移思路">一个比较稳的迁移思路
+</h2><p>如果你手上已经有 Codex skill，我建议这么做。</p>
+<ol>
+<li>保留原版，不要直接覆盖。</li>
+<li>复制一份到 <code>.claude/skills/&lt;name&gt;/SKILL.md</code>。</li>
+<li>把调用语法、目录约定、工具名改成 Claude Code 的说法。</li>
+<li>把通用逻辑和平台逻辑拆开。</li>
+<li>用两三个真实任务回归测试。</li>
+</ol>
+<p>不要一边迁一边大重构。这样最容易把问题搅在一起，最后你自己都说不清到底坏在哪。</p>
+<h2 id="说到底skill-开发最重要的不是高级而是稳定">说到底，skill 开发最重要的不是高级，而是稳定
+</h2><p>很多人第一次写 skill，总想着一步到位，做一个又聪明又全面的东西。</p>
+<p>但真正能留下来的 skill，通常都不花哨。它只是把一件高频小事做稳了。输入稳定，步骤稳定，输出稳定，出错时也知道该停下来。你下次再用的时候，不用重新解释半天，也不用担心它突然换了一套做法。</p>
+<p>这事看起来不炫，但很值钱。</p>
+<p>因为 agent 真正替你省下来的，不是一两次灵感爆发，而是那些原本要反复解释、反复返工、反复检查的小动作。把这些小动作固化成 skill，本质上就是在给自己做接口。</p>
+<p>先别想着写一个万能 skill。先写一个你明天还愿意继续用的版本，这就够了。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li>OpenAI, Introducing the Codex app: <a class="link" href="https://openai.com/index/introducing-the-codex-app/">https://openai.com/index/introducing-the-codex-app/</a></li>
+<li>OpenAI Academy, Skills: <a class="link" href="https://academy.openai.com/public/resources/skills">https://academy.openai.com/public/resources/skills</a></li>
+<li>OpenAI Skills Catalog: <a class="link" href="https://github.com/openai/skills">https://github.com/openai/skills</a></li>
+<li>Anthropic, Claude Code slash commands and skills: <a class="link" href="https://code.claude.com/docs/en/slash-commands">https://code.claude.com/docs/en/slash-commands</a></li>
+<li>Anthropic, Claude Code settings: <a class="link" href="https://code.claude.com/docs/en/settings">https://code.claude.com/docs/en/settings</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

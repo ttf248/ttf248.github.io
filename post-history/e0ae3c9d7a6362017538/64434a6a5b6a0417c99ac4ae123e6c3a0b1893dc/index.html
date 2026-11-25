@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="저자는 하드웨어에 대한 높은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유하며, 고성능 프로그램 패턴 경험과 참고 자료를 정리했습니다.\n">
+<title>리눅스 기반 Jmeter 부하 테스트 환경 구축</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="리눅스 기반 Jmeter 부하 테스트 환경 구축">
+<meta property='og:description' content="저자는 하드웨어에 대한 높은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유하며, 고성능 프로그램 패턴 경험과 참고 자료를 정리했습니다.\n">
+<meta property='og:url' content='https://ttf248.life/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2020-12-22T10:12:50&#43;08:00'/><meta property='article:modified_time' content='2020-12-22T10:12:50&#43;08:00'/>
+<meta name="twitter:title" content="리눅스 기반 Jmeter 부하 테스트 환경 구축">
+<meta name="twitter:description" content="저자는 하드웨어에 대한 높은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유하며, 고성능 프로그램 패턴 경험과 참고 자료를 정리했습니다.\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/","name":"리눅스 기반 Jmeter 부하 테스트 환경 구축","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"tianlong.xiang"},"dateModified":"2020-12-22T10:12:50+08:00","datePublished":"2020-12-22T10:12:50+08:00","headline":"리눅스 기반 Jmeter 부하 테스트 환경 구축","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/trash/">← <span>废纸篓</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 5 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#배경">배경</a></li>
+    <li><a href="#jmeter">Jmeter</a>
+      <ol>
+        <li><a href="#jmeter-배포-centos7">JMeter 배포 CentOS7</a></li>
+        <li><a href="#지메터-명령어">지메터 명령어</a></li>
+      </ol>
+    </li>
+    <li><a href="#influxdb">InfluxDB</a>
+      <ol>
+        <li><a href="#인플럭스db-특징">인플럭스DB 특징</a></li>
+        <li><a href="#인플럭스db-도커-설치">인플럭스DB 도커 설치</a></li>
+        <li><a href="#인플럭스db-데이터베이스-및-사용자-생성">인플럭스DB 데이터베이스 및 사용자 생성</a></li>
+      </ol>
+    </li>
+    <li><a href="#grafana">Grafana</a></li>
+    <li><a href="#사후기">사후기</a></li>
+    <li><a href="#참고-자료">참고 자료</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="5">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">리눅스 기반 Jmeter 부하 테스트 환경 구축</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2020年12月22日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 9 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">tianlong.xiang</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>已删除</strong>
+            
+                <time datetime="2025-06-01T14:02:36&#43;08:00">2025年06月01日</time>
+ ·
+            
+            版本时间
+            <time datetime="2025-05-28T09:47:38&#43;08:00">2025年05月28日 09:47</time>
+
+            <code>64434a6a</code>
+        </p>
+        <p>
+            
+                <a href="/trash/">← 废纸篓</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 2</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">2025年05月28日 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="beb09ddc6a8e31ed92661df4832d020ff24210ac" data-url="/post-history/e0ae3c9d7a6362017538/beb09ddc6a8e31ed92661df4832d020ff24210ac/">2025年05月25日 14:10 · beb09ddc</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        
+                        
+                            
+                            <option value="64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc" data-url="/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/">2025年05月28日 09:47 · 64434a6a</option>
+                        
+                            
+                            <option value="beb09ddc6a8e31ed92661df4832d020ff24210ac" data-url="/post-history/e0ae3c9d7a6362017538/beb09ddc6a8e31ed92661df4832d020ff24210ac/">2025年05月25日 14:10 · beb09ddc</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">리눅스 기반 Jmeter 부하 테스트 환경 구축 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-28T09:47:38&#43;08:00">2025年05月28日 09:47</time>
+
+                            <code>64434a6a</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/e0ae3c9d7a6362017538/beb09ddc6a8e31ed92661df4832d020ff24210ac/">리눅스 기반 Jmeter 압력 테스트 환경 구축</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-05-25T14:10:37&#43;08:00">2025年05月25日 14:10</time>
+
+                            <code>beb09ddc</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>저자는 하드웨어에 대한 높은 관심을 가지고 있으며, Jmeter를 사용하여 성능 테스트를 진행하고 CentOS 7에 Jmeter, InfluxDB 및 Grafana를 배포하는 과정을 기록했습니다. Jmeter 설치 및 명령어 사용법, InfluxDB의 특징 및 Docker 설치 방법, 그리고 Grafana의 간단한 배포 및 구성 방법을 공유하며, 고성능 프로그램 패턴 경험과 참고 자료를 정리했습니다.</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#배경">배경</a></li>
+    <li><a href="#jmeter">Jmeter</a>
+      <ol>
+        <li><a href="#jmeter-배포-centos7">JMeter 배포 CentOS7</a></li>
+        <li><a href="#지메터-명령어">지메터 명령어</a></li>
+      </ol>
+    </li>
+    <li><a href="#influxdb">InfluxDB</a>
+      <ol>
+        <li><a href="#인플럭스db-특징">인플럭스DB 특징</a></li>
+        <li><a href="#인플럭스db-도커-설치">인플럭스DB 도커 설치</a></li>
+        <li><a href="#인플럭스db-데이터베이스-및-사용자-생성">인플럭스DB 데이터베이스 및 사용자 생성</a></li>
+      </ol>
+    </li>
+    <li><a href="#grafana">Grafana</a></li>
+    <li><a href="#사후기">사후기</a></li>
+    <li><a href="#참고-자료">참고 자료</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="배경">배경
+</h2><p>데이터 시현 외에 웹 패널을 추가로 구성하는 것이 무슨 소용이 있나요?</p>
+<blockquote>
+<p>생각은 자기만 생각하는 대로인데, 직접 해봐야 알 수 있어
+Don&rsquo;t use GUI mode for load testing! only for Test creation and Test debuggin.</p>
+</blockquote>
+<p>공식적으로 추천하는 방식은 명령줄을 통해 부하 테스트 보고서를 얻고 GUI 방식으로 표시하는데, 데이터 오류가 발생할 수 있나요? JMeter에 대한 이해는 깊지 않지만, 적어도 <strong>INLINE_CODE_0</strong> 버전의 콘솔 패널을 굴려볼 만한 이유를 찾았습니다</p>
+<p>오픈소스 차이나 게시글인데, 핵심 컴포넌트 배포 방식이 썩 좋지 않고, 설치에 필요한 파일도 다운로드하려면 공중계정을 팔로우해야 한다. 새세대 사용자로서 당연히 __INLIN_ITALIC_1____으로 대체했다. 결국 서버가 국내에 있어야 하고, 해외 소스 주소 접근 속도는 매우 느리다. 적어도 미러 서비스는 알리바바 클라우드에 무료 가속 기능이 있다.</p>
+<p><strong>INLINE_CODE_0</strong> 설치 배포에 대한 내용은 여기서는 더 이상 다루지 않으며, 이전 자료를 참고하시기를 권장합니다</p>
+<hr>
+<p>다음 내용은 크게 두 부분으로 나뉩니다: 기본 테스트 환경 구성 요소 구축 및 각 요소에 대한 간단한 설명입니다</p>
+<h2 id="jmeter">Jmeter
+</h2><p>Apache JMeter는 Apache 재단에서 개발한 Java 기반의 성능 테스트 도구입니다. 소프트웨어에 대한 부하 테스트를 위해 설계되었으며, 처음에는 웹 애플리케이션 테스트용으로 만들어졌지만 이후 다른 테스트 영역으로 확장되었습니다. 정적 파일, Java 마이크로 서비스, CGI 스크립트, Java 객체, 데이터베이스, FTP 서버 등 정적 및 동적 리소스를 테스트하는 데 사용할 수 있습니다. JMeter는 다양한 압력 범주에서 서버, 네트워크 또는 객체에 대한 막대한 부하를 시뮬레이션하여 강점을 테스트하고 전체 성능을 분석할 수 있습니다. 또한 JMeter는 어설션을 사용하여 스크립트를 생성하여 프로그램이 예상 결과를 반환하는지 확인하여 기능/회귀 테스트를 수행할 수 있습니다. 최대의 유연성을 위해 JMeter는 정규 표현식을 사용하여 어설션을 만들 수 있습니다.</p>
+<p>Apache JMeter는 정적 및 동적 리소스(파일, 서블릿, Perl 스크립트, Java 객체, 데이터베이스 쿼리, FTP 서버 등)의 성능 테스트에 사용될 수 있습니다. 서버, 네트워크 또는 객체에 과도한 부하를 가하여 강도를 테스트하거나 다양한 압력 유형에서 전체적인 성능을 분석하는 데 활용할 수 있으며, 성능 그래프 분석이나 고동시 부하 테스트에도 적합합니다.</p>
+<h3 id="jmeter-배포-centos7">JMeter 배포 CentOS7
+</h3><p>설치 패키지</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">yum install java-1.8.0-openjdk -y <span class="o">&amp;&amp;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">wget https://mirrors.bfsu.edu.cn/apache//jmeter/binaries/apache-jmeter-5.4.tgz <span class="o">&amp;&amp;</span> tar -xf apache-jmeter-5.4.tgz
+</span></span></code></pre></div><p>환경 변수 설정</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">JMETER_HOME</span><span class="o">=</span><span class="nv">$HOME</span>/jmeter/apache-jmeter-5.4
+</span></span><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">PATH</span><span class="o">=</span><span class="nv">$JMETER_HOME</span>/bin:<span class="nv">$PATH</span>
+</span></span></code></pre></div><h3 id="지메터-명령어">지메터 명령어
+</h3><p>최종적으로 __控制面板，可以不输入<code>Grafana</code>参数，在__INLINE_CODE_2__제어판 관측 데이터</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">jmeter -n -t /tmp/order-500-10s.jmx -l /tmp/jmeter-order-report-20200109/order-500-10s.jtl
+</span></span><span class="line"><span class="cl"><span class="c1"># 一般不用测试结果和测试报告，简化命令</span>
+</span></span><span class="line"><span class="cl">jmeter -n -t /tmp/order-500-10s.jmx
+</span></span></code></pre></div><h2 id="influxdb">InfluxDB
+</h2><p>InfluxDB는 Go 언어로 작성된 오픈 소스 분산 시계열, 이벤트 및 지표 데이터베이스이며 외부 의존성이 필요 없습니다. 현재 DevOps 모니터링 데이터, APP 메트릭, IoT 센서 데이터 및 실시간 분석 데이터를 포함한 대량의 타임스탬프 데이터를 저장하는 데 주로 사용됩니다.</p>
+<h3 id="인플럭스db-특징">인플럭스DB 특징
+</h3><p>인플럭스DB의 특징은 다음과 같이 9가지로 요약할 수 있습니다:</p>
+<ul>
+<li>구조(패턴) 없음: 열의 개수가 임의일 수 있습니다</li>
+<li>메트릭 저장 기간을 설정할 수 있습니다</li>
+<li>통계 편의를 위해 시간 관련 함수(최소, 최대, 합계, 개수, 평균, 중앙값 등) 지원;</li>
+<li>지원되는 저장 정책: 데이터의 삭제 및 수정에 사용 가능합니다.(InfluxDB는 데이터 삭제 및 수정 방법을 제공하지 않습니다.)</li>
+<li>연속 쿼리 지원: 데이터베이스에서 자동으로 주기적으로 실행되는 일련의 문이며, 저장 정책과 함께 사용하면 InfluxDB 시스템 점유량을 줄일 수 있습니다</li>
+<li>네이티브 HTTP 지원, 내장된 HTTP API;</li>
+<li>SQL과 유사한 구문을 지원합니다</li>
+<li>클러스터 내 데이터 복제본 수를 설정할 수 있습니다</li>
+<li>정기 샘플링 데이터를 지원하고, 별도의 measurement에 기록하여 세분화된 데이터 저장 기능을 제공합니다</li>
+</ul>
+<h3 id="인플럭스db-도커-설치">인플럭스DB 도커 설치
+</h3><div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">mkdir influxdb <span class="o">&amp;&amp;</span> <span class="nb">cd</span> influxdb <span class="o">&amp;&amp;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">docker run -p 8086:8086 -d --name influxdb -v <span class="nv">$PWD</span>:/var/lib/influxdb influxdb:1.7
+</span></span></code></pre></div><p>컨테이너에 진입하여 명령을 실행하고, 수동으로 데이터베이스를 생성합니다</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">root@bce0a55bbc72:/# influx
+</span></span><span class="line"><span class="cl">Connected to http://localhost:8086 version 1.7.10
+</span></span><span class="line"><span class="cl">InfluxDB shell version: 1.7.10
+</span></span><span class="line"><span class="cl">&gt; 交互面板执行命令
+</span></span></code></pre></div><h3 id="인플럭스db-데이터베이스-및-사용자-생성">인플럭스DB 데이터베이스 및 사용자 생성
+</h3><p>데이터베이스 생성: create database jmeter_t2
+데이터베이스 확인:
+데이터베이스 전환: use jmeter_t2
+관리자 권한으로 비밀번호가 &lsquo;admin&rsquo;인 사용자 &ldquo;admin&quot;을 생성합니다
+사용자 보기</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">&gt; show users
+</span></span><span class="line"><span class="cl">user  admin
+</span></span><span class="line"><span class="cl">----  -----
+</span></span><span class="line"><span class="cl">admin <span class="nb">true</span>
+</span></span></code></pre></div><p>사용자 권한이 표시되면 데이터베이스 준비가 완료되었습니다</p>
+<h2 id="grafana">Grafana
+</h2><p>테스트 케이스를 작성하다 보니 차트 표시가 크게 필요하지 않다는 것을 알게 되었고, 인터페이스의 <strong>INLINE_CODE_0</strong> 데이터는 명령줄에서 실행하면 이미 관찰할 수 있으며, 더 중요한 것은 프로그램 내부의 소요 시간이다</p>
+<p>간단한 배포</p>
+<p>테스트 결과를 태그로 필터링할 수 있으며, 일반적으로 <strong>INLINE_CODE_0</strong> 데이터베이스 하나만 구성하면 됩니다</p>
+<ul>
+<li>애플리케이션 이름</li>
+<li>테스트 사례 이름</li>
+</ul>
+<p><img src="/post-history/e0ae3c9d7a6362017538/64434a6a5b6a0417c99ac4ae123e6c3a0b1893dc/Snipaste_2021-03-09_19-44-22.png" alt="grafana" loading="lazy"></p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-shell" data-lang="shell"><span class="line"><span class="cl">docker run -d --name<span class="o">=</span>grafana -p 3000:3000 grafana/grafana:7.3.1
+</span></span></code></pre></div><p>웹 버전은 샘플러 간격으로 인해 계산된 __INLINE_CODE_0__和相关数值与__INLINE_CODE_1__聚合报告不相符，参考链接：<strong>링크_2</strong></p>
+<p>자료에서는 __INLINE_CODE_0__을 사용자 정의하는 방법도 설명하고 있습니다</p>
+<h2 id="사후기">사후기
+</h2><ul>
+<li>고성능 프로그램 모드는 단일 루프 스레드여야 하며, 잠금, 큐에 넣기 및 큐에서 제거하는 작업은 불필요한 성능 저하를 야기한다</li>
+<li>핵심 비즈니스 로직의 처리 시간은 다른 코드 도입에 필요한 시간보다 길기 때문에, 동시성으로 효율을 높이는 것이 효과적이다. 핵심 처리 시간이 충분히 짧다면 다른 코드를 신중하게 도입하는 것이 좋다.</li>
+</ul>
+<h2 id="참고-자료">참고 자료
+</h2><ul>
+<li>죄송합니다, 번역할 중국어 텍스트가 제공되지 않았습니다. 텍스트를 제공해 주시면 번역해 드리겠습니다.</li>
+<li>죄송합니다, 번역할 중국어 텍스트가 제공되지 않았습니다. 텍스트를 제공해 주시면 번역해 드리겠습니다.</li>
+<li>죄송합니다, 번역할 중국어 텍스트가 제공되지 않았습니다. 텍스트를 제공해 주시면 번역해 드리겠습니다.</li>
+<li>죄송합니다, 번역할 중국어 텍스트가 제공되지 않았습니다. 텍스트를 제공해 주시면 번역해 드리겠습니다.</li>
+<li><a class="link" href="https://medium.com/@jasonli.studio/to-install-apache-jmeter-in-centos7-294bc72a97ba">To install Apache JMeter in CentOS7</a></li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+
+    
+    <div class="pswp__bg"></div>
+
+    
+    <div class="pswp__scroll-wrap">
+
+        
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        
+        <div class="pswp__ui pswp__ui--hidden">
+
+            <div class="pswp__top-bar">
+
+                
+
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                
+                
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div><script
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.js"
+                integrity="sha256-ePwmChbbvXbsO02lbM3HoHbSHTHFAeChekF1xKJdleo="
+                crossorigin="anonymous"
+                defer
+            ></script><script
+                src="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe-ui-default.min.js"
+                integrity="sha256-UKkzOn/w1mBxRmLLGrSeyB4e1xbrp4xylgAWb3M42pU="
+                crossorigin="anonymous"
+                defer
+            ></script><link
+                rel="stylesheet"
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/default-skin/default-skin.min.css"
+                crossorigin="anonymous"
+            ><link
+                rel="stylesheet"
+                href="https://cdn.jsdelivr.net/npm/photoswipe@4.1.3/dist/photoswipe.min.css"
+                crossorigin="anonymous"
+            >
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
+<title>VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="VS Code 调 C++，CMake 和 GDB Printer 要一起配">
+<meta property='og:description' content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-04-09T19:21:36&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T19:21:36&#43;08:00'/>
+<meta name="twitter:title" content="VS Code 调 C++，CMake 和 GDB Printer 要一起配">
+<meta name="twitter:description" content="以前我在 VS Code 里调 C++，配置基本就停在 launch.json，最多再加一句 GDB。\n把 program 填好，把 gdb 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 cmake --build 一下。\n更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。\n这事离谱的地方在于，我以前看过的一些教程也差不多就写到 launch.json 为止。直到最近让 AI 配一个新项目，它顺手加了 preLaunchTask 和 gdb_printers.py，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。\n说实话，这不是什么黑科技。\n但是它刚好补上了 C++ 日常调试里两块很烦的空白：启动前构建，以及断点后的变量展示。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/","name":"VS Code 调 C++，CMake 和 GDB Printer 要一起配","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5.4)"},"dateModified":"2026-04-09T19:21:36+08:00","datePublished":"2026-04-09T19:21:36+08:00","headline":"VS Code 调 C++，CMake 和 GDB Printer 要一起配","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">← <span>返回当前文章</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 6 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#以前只配了一半">以前只配了一半</a></li>
+    <li><a href="#prelaunchtask-才是那个钩子">preLaunchTask 才是那个钩子</a></li>
+    <li><a href="#f5-之前先编译">F5 之前，先编译</a></li>
+    <li><a href="#还有一个痛点自定义类型看不懂">还有一个痛点：自定义类型看不懂</a></li>
+    <li><a href="#给业务类型写一个-python-展示层">给业务类型写一个 Python 展示层</a></li>
+    <li><a href="#别把-launchjson-当成全部">别把 launch.json 当成全部</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="6">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月09日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 10 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">Codex (GPT-5.4)</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>历史版本</strong>
+            
+            版本时间
+            <time datetime="2026-06-05T18:40:34&#43;08:00">2026年06月05日 18:40</time>
+
+            <code>f9106b86</code>
+        </p>
+        <p>
+            
+                <a href="/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">← 返回当前文章</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 8</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="f9106b86c8c39f84b975f1528db73db6892dfe80"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">当前版本</option>
+                        
+                            
+                            <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/020f21aaeb06dd822b52/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
+                        
+                            
+                            <option value="2b79d1d91f6dd881a1e42d0fec96a96602f00a67" data-url="/post-history/020f21aaeb06dd822b52/2b79d1d91f6dd881a1e42d0fec96a96602f00a67/">2026年07月25日 14:06 · 2b79d1d9</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/020f21aaeb06dd822b52/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="565a5166887831fba691f1ff423ef60d703020f9" data-url="/post-history/020f21aaeb06dd822b52/565a5166887831fba691f1ff423ef60d703020f9/">2026年07月22日 11:17 · 565a5166</option>
+                        
+                            
+                            <option value="a582be90459eb04f718ddf3634a6763a24d5d3f3" data-url="/post-history/020f21aaeb06dd822b52/a582be90459eb04f718ddf3634a6763a24d5d3f3/">2026年07月12日 11:35 · a582be90</option>
+                        
+                            
+                            <option value="f9106b86c8c39f84b975f1528db73db6892dfe80" data-url="/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/">2026年06月05日 18:40 · f9106b86</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/post-history/020f21aaeb06dd822b52/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="ac4977860335951fd51fe293a5b392547e54660e" data-url="/post-history/020f21aaeb06dd822b52/ac4977860335951fd51fe293a5b392547e54660e/">2026年04月09日 20:28 · ac497786</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">当前版本</option>
+                        
+                            
+                            <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/020f21aaeb06dd822b52/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
+                        
+                            
+                            <option value="2b79d1d91f6dd881a1e42d0fec96a96602f00a67" data-url="/post-history/020f21aaeb06dd822b52/2b79d1d91f6dd881a1e42d0fec96a96602f00a67/">2026年07月25日 14:06 · 2b79d1d9</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/020f21aaeb06dd822b52/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="565a5166887831fba691f1ff423ef60d703020f9" data-url="/post-history/020f21aaeb06dd822b52/565a5166887831fba691f1ff423ef60d703020f9/">2026年07月22日 11:17 · 565a5166</option>
+                        
+                            
+                            <option value="a582be90459eb04f718ddf3634a6763a24d5d3f3" data-url="/post-history/020f21aaeb06dd822b52/a582be90459eb04f718ddf3634a6763a24d5d3f3/">2026年07月12日 11:35 · a582be90</option>
+                        
+                            
+                            <option value="f9106b86c8c39f84b975f1528db73db6892dfe80" data-url="/post-history/020f21aaeb06dd822b52/f9106b86c8c39f84b975f1528db73db6892dfe80/">2026年06月05日 18:40 · f9106b86</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/post-history/020f21aaeb06dd822b52/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="ac4977860335951fd51fe293a5b392547e54660e" data-url="/post-history/020f21aaeb06dd822b52/ac4977860335951fd51fe293a5b392547e54660e/">2026年04月09日 20:28 · ac497786</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/post-history/020f21aaeb06dd822b52/c016c3d078b31c7d0a508729a563502e2cdcc667/">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-26T22:39:23&#43;08:00">2026年07月26日 22:39</time>
+
+                            <code>c016c3d0</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/020f21aaeb06dd822b52/2b79d1d91f6dd881a1e42d0fec96a96602f00a67/">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-25T14:06:40&#43;08:00">2026年07月25日 14:06</time>
+
+                            <code>2b79d1d9</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/020f21aaeb06dd822b52/72295f513a73ec4fcc6d84660def9db9525297a0/">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-23T10:52:57&#43;08:00">2026年07月23日 10:52</time>
+
+                            <code>72295f51</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/020f21aaeb06dd822b52/565a5166887831fba691f1ff423ef60d703020f9/">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-22T11:17:22&#43;08:00">2026年07月22日 11:17</time>
+
+                            <code>565a5166</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/020f21aaeb06dd822b52/a582be90459eb04f718ddf3634a6763a24d5d3f3/">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-12T11:35:02&#43;08:00">2026年07月12日 11:35</time>
+
+                            <code>a582be90</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">VS Code 调 C&#43;&#43;，CMake 和 GDB Printer 要一起配 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-06-05T18:40:34&#43;08:00">2026年06月05日 18:40</time>
+
+                            <code>f9106b86</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/020f21aaeb06dd822b52/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">VS Code 调 C&#43;&#43;，别漏了 CMake 和 GDB Printer</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-27T19:25:37&#43;08:00">2026年04月27日 19:25</time>
+
+                            <code>de7da291</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/020f21aaeb06dd822b52/ac4977860335951fd51fe293a5b392547e54660e/">VS Code 调 C&#43;&#43;，别漏了 CMake 和 GDB Printer</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-09T20:28:13&#43;08:00">2026年04月09日 20:28</time>
+
+                            <code>ac497786</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>以前我在 VS Code 里调 C++，配置基本就停在 <code>launch.json</code>，最多再加一句 GDB。</p>
+<p>把 <code>program</code> 填好，把 <code>gdb</code> 填好，把断点打好。然后呢？然后每次调试前，自己去终端里 <code>cmake --build</code> 一下。</p>
+<p>更烦的是，自定义的价格、合约、订单类型断下来以后，VS Code 调试窗口经常只能看到一堆内部字段。数据是对的，但是不说人话。</p>
+<p>这事离谱的地方在于，我以前看过的一些教程也差不多就写到 <code>launch.json</code> 为止。直到最近让 AI 配一个新项目，它顺手加了 <code>preLaunchTask</code> 和 <code>gdb_printers.py</code>，我才反应过来：VS Code 调 C++，不只是把 GDB 启起来。调试前可以自动触发 CMake 编译，断点停住以后，也可以让 GDB 加载 Python 脚本，把业务类型处理成自己看得懂的样子。</p>
+<p>说实话，这不是什么黑科技。</p>
+<p>但是它刚好补上了 C++ 日常调试里两块很烦的空白：<strong>启动前构建</strong>，以及<strong>断点后的变量展示</strong>。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#以前只配了一半">以前只配了一半</a></li>
+    <li><a href="#prelaunchtask-才是那个钩子">preLaunchTask 才是那个钩子</a></li>
+    <li><a href="#f5-之前先编译">F5 之前，先编译</a></li>
+    <li><a href="#还有一个痛点自定义类型看不懂">还有一个痛点：自定义类型看不懂</a></li>
+    <li><a href="#给业务类型写一个-python-展示层">给业务类型写一个 Python 展示层</a></li>
+    <li><a href="#别把-launchjson-当成全部">别把 launch.json 当成全部</a></li>
+    <li><a href="#参考资料">参考资料</a></li>
+    <li><a href="#写作附记">写作附记</a>
+      <ol>
+        <li><a href="#原始提示词">原始提示词</a></li>
+        <li><a href="#写作思路摘要">写作思路摘要</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="以前只配了一半">以前只配了一半
+</h2><p>很多教程里的 <code>.vscode/launch.json</code>，大概是这个意思：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;0.2.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;configurations&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;Debug with GDB&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;cppdbg&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;request&#34;</span><span class="p">:</span> <span class="s2">&#34;launch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;program&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;stopAtEntry&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;cwd&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;MIMode&#34;</span><span class="p">:</span> <span class="s2">&#34;gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;miDebuggerPath&#34;</span><span class="p">:</span> <span class="s2">&#34;/usr/bin/gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;setupCommands&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这段不能说错。</p>
+<p>VS Code 官方的 C++ 示例里，也是类似这一套结构：<code>type</code> 用 <code>cppdbg</code>，<code>MIMode</code> 用 <code>gdb</code>，<code>setupCommands</code> 里打开 pretty-printing。</p>
+<p>但是少了一个关键动作。</p>
+<p>你点 F5 的时候，它会去启动 <code>program</code> 指向的那个可执行文件。问题是，这个文件是不是刚刚编出来的？</p>
+<p>如果不是，那你调的就是上一次的旧程序。</p>
+<p>我以前就经常干这种蠢事。代码改了，断点也打了，调半天发现行为不对，最后才想起来：哦，刚刚没重新编译。</p>
+<h2 id="prelaunchtask-才是那个钩子">preLaunchTask 才是那个钩子
+</h2><p>VS Code 的 Tasks，本质上就是把外部命令挂进编辑器。</p>
+<p>编译、测试、打包，原来要在终端敲，现在可以写到 <code>.vscode/tasks.json</code>。然后 <code>launch.json</code> 里的 <code>preLaunchTask</code>，再按 label 去找那一个 task。</p>
+<p>一个最小的 CMake 项目，可以这么放：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">.
+</span></span><span class="line"><span class="cl">├── .vscode/
+</span></span><span class="line"><span class="cl">│   ├── launch.json
+</span></span><span class="line"><span class="cl">│   └── tasks.json
+</span></span><span class="line"><span class="cl">├── CMakeLists.txt
+</span></span><span class="line"><span class="cl">├── src/
+</span></span><span class="line"><span class="cl">│   └── main.cpp
+</span></span><span class="line"><span class="cl">└── tools/
+</span></span><span class="line"><span class="cl">    └── gdb_printers.py
+</span></span></code></pre></div><p><code>CMakeLists.txt</code> 先写到够用：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cmake" data-lang="cmake"><span class="line"><span class="cl"><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span> <span class="s">3.16</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">project</span><span class="p">(</span><span class="s">vscode_cpp_debug_demo</span> <span class="s">LANGUAGES</span> <span class="s">CXX</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_STANDARD</span> <span class="s">20</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_STANDARD_REQUIRED</span> <span class="s">ON</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_RUNTIME_OUTPUT_DIRECTORY</span> <span class="o">${</span><span class="nv">CMAKE_BINARY_DIR</span><span class="o">}</span><span class="s">/bin</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">add_executable</span><span class="p">(</span><span class="s">vscode_cpp_debug_demo</span>
+</span></span><span class="line"><span class="cl">    <span class="s">src/main.cpp</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span><span class="err">
+</span></span></span></code></pre></div><p>然后是 <code>.vscode/tasks.json</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;2.0.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;tasks&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;label&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: configure debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;process&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-S&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-B&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}/build/debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-DCMAKE_BUILD_TYPE=Debug&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;problemMatcher&#34;</span><span class="p">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;label&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: build debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;process&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;--build&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}/build/debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;--parallel&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;dependsOn&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;cmake: configure debug&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;group&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;kind&#34;</span><span class="p">:</span> <span class="s2">&#34;build&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;isDefault&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">      <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;problemMatcher&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;$gcc&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>注意这里的 <code>cmake --build</code>。</p>
+<p>CMake 官方给的构建入口就是这个形式：<code>cmake --build &lt;dir&gt;</code>。它会去调用背后的原生构建工具，比如 Make、Ninja、MSBuild 这一类。</p>
+<p>也就是说，VS Code 不需要知道你的项目到底该敲 <code>make</code> 还是 <code>ninja</code>。</p>
+<p>这件事交给 CMake。</p>
+<h2 id="f5-之前先编译">F5 之前，先编译
+</h2><p>然后回到 <code>.vscode/launch.json</code>，把 <code>preLaunchTask</code> 补进去：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;0.2.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;configurations&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;CMake Debug with GDB&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;cppdbg&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;request&#34;</span><span class="p">:</span> <span class="s2">&#34;launch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;program&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;stopAtEntry&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;cwd&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;environment&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;externalConsole&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;MIMode&#34;</span><span class="p">:</span> <span class="s2">&#34;gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;miDebuggerPath&#34;</span><span class="p">:</span> <span class="s2">&#34;/usr/bin/gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;setupCommands&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;preLaunchTask&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: build debug&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>这一行才是重点：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;preLaunchTask&#34;</span><span class="err">:</span> <span class="s2">&#34;cmake: build debug&#34;</span>
+</span></span></code></pre></div><p>按 F5 的链路就变成了：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">launch.json
+</span></span><span class="line"><span class="cl">  -&gt; preLaunchTask
+</span></span><span class="line"><span class="cl">    -&gt; tasks.json: cmake: build debug
+</span></span><span class="line"><span class="cl">      -&gt; dependsOn: cmake: configure debug
+</span></span><span class="line"><span class="cl">        -&gt; cmake -S ... -B ...
+</span></span><span class="line"><span class="cl">      -&gt; cmake --build ...
+</span></span><span class="line"><span class="cl">  -&gt; gdb 启动最新的 program
+</span></span></code></pre></div><p>如果是 Windows + MinGW，<code>program</code> 大概率要改成带 <code>.exe</code> 的路径，<code>miDebuggerPath</code> 也要指到自己的 <code>gdb.exe</code>。</p>
+<p>如果是 Visual Studio Generator 那种多配置生成器，构建参数通常还要加 <code>--config Debug</code>。</p>
+<p>但是主线不变。</p>
+<p>调试前让 VS Code 先跑一次构建任务，别靠自己脑子记。</p>
+<h2 id="还有一个痛点自定义类型看不懂">还有一个痛点：自定义类型看不懂
+</h2><p>只把编译链路打通，还不够。</p>
+<p>C++ 代码里稍微封装一点业务类型，VS Code 左边那个变量窗口就开始变得难看。</p>
+<p>比如下面这个例子。</p>
+<p><code>src/main.cpp</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdint&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdio&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string_view&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;vector&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">market</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span> <span class="n">raw</span><span class="p">{};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">Price</span> <span class="nf">from_double</span><span class="p">(</span><span class="kt">double</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">Price</span><span class="p">{</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">value</span> <span class="o">*</span> <span class="mi">10000</span><span class="p">)};</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="nf">to_double</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">/</span> <span class="mf">10000.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Instrument</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">symbol</span><span class="p">[</span><span class="mi">16</span><span class="p">]{};</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Price</span> <span class="n">last</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Instrument</span> <span class="nf">make_instrument</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span> <span class="n">symbol</span><span class="p">,</span> <span class="kt">double</span> <span class="n">price</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Instrument</span> <span class="n">instrument</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">snprintf</span><span class="p">(</span><span class="n">instrument</span><span class="p">.</span><span class="n">symbol</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">instrument</span><span class="p">.</span><span class="n">symbol</span><span class="p">),</span> <span class="s">&#34;%s&#34;</span><span class="p">,</span> <span class="n">symbol</span><span class="p">.</span><span class="n">data</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">    <span class="n">instrument</span><span class="p">.</span><span class="n">last</span> <span class="o">=</span> <span class="n">Price</span><span class="o">::</span><span class="n">from_double</span><span class="p">(</span><span class="n">price</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">instrument</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="c1">// namespace market
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">market</span><span class="o">::</span><span class="n">Instrument</span><span class="o">&gt;</span> <span class="n">watchlist</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">market</span><span class="o">::</span><span class="n">make_instrument</span><span class="p">(</span><span class="s">&#34;IF2406&#34;</span><span class="p">,</span> <span class="mf">3578.6</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="n">market</span><span class="o">::</span><span class="n">make_instrument</span><span class="p">(</span><span class="s">&#34;IH2406&#34;</span><span class="p">,</span> <span class="mf">2468.2</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">market</span><span class="o">::</span><span class="n">Price</span> <span class="n">limit</span> <span class="o">=</span> <span class="n">market</span><span class="o">::</span><span class="n">Price</span><span class="o">::</span><span class="n">from_double</span><span class="p">(</span><span class="mf">3600.5</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// 在这里打断点，观察 watchlist 和 limit。
+</span></span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">watchlist</span><span class="p">.</span><span class="n">empty</span><span class="p">()</span> <span class="o">||</span> <span class="n">limit</span><span class="p">.</span><span class="n">raw</span> <span class="o">==</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>market::Price</code> 在业务里是价格。</p>
+<p>但是调试器默认看到的可能只有：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">limit = {raw = 36005000}
+</span></span></code></pre></div><p>没错，数据是对的。</p>
+<p>但是我脑子里还要自己把 <code>36005000</code> 换算成 <code>3600.5000</code>。如果项目里有一堆 <code>Price</code>、<code>Quantity</code>、<code>OrderId</code>、<code>Instrument</code>、<code>AlgoState</code>，调试窗口很快就变成结构体坟场。</p>
+<p>这个时候就该上 GDB pretty-printer 了。</p>
+<p>GDB 官方手册说得很直接：它提供了一套机制，可以用 Python 代码 pretty-print 值，而且这个机制同时适用于 MI 和命令行。</p>
+<p>VS Code 的 C++ 调试刚好走的就是 GDB/MI 这条路。</p>
+<h2 id="给业务类型写一个-python-展示层">给业务类型写一个 Python 展示层
+</h2><p>新建 <code>tools/gdb_printers.py</code>：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">gdb</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">gdb.printing</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">PricePrinter</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">val</span> <span class="o">=</span> <span class="n">val</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">raw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;raw&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">raw</span> <span class="o">/</span> <span class="mf">10000.0</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">InstrumentPrinter</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">val</span> <span class="o">=</span> <span class="n">val</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">symbol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;symbol&#34;</span><span class="p">]</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">price_raw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;last&#34;</span><span class="p">][</span><span class="s2">&#34;raw&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">        <span class="n">price</span> <span class="o">=</span> <span class="n">price_raw</span> <span class="o">/</span> <span class="mf">10000.0</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">symbol</span><span class="si">}</span><span class="s2"> last=</span><span class="si">{</span><span class="n">price</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">build_pretty_printer</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span> <span class="o">=</span> <span class="n">gdb</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">RegexpCollectionPrettyPrinter</span><span class="p">(</span><span class="s2">&#34;market&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span><span class="o">.</span><span class="n">add_printer</span><span class="p">(</span><span class="s2">&#34;Price&#34;</span><span class="p">,</span> <span class="s2">&#34;^market::Price$&#34;</span><span class="p">,</span> <span class="n">PricePrinter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span><span class="o">.</span><span class="n">add_printer</span><span class="p">(</span><span class="s2">&#34;Instrument&#34;</span><span class="p">,</span> <span class="s2">&#34;^market::Instrument$&#34;</span><span class="p">,</span> <span class="n">InstrumentPrinter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">printer</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">gdb</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">register_pretty_printer</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">gdb</span><span class="o">.</span><span class="n">current_objfile</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="n">build_pretty_printer</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="n">replace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>然后在 <code>launch.json</code> 的 <code>setupCommands</code> 里把它 source 进去：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;setupCommands&#34;</span><span class="err">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Load project pretty-printers&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-interpreter-exec console \&#34;source ${workspaceFolder}/tools/gdb_printers.py\&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>重新 F5。</p>
+<p>这时候再看调试窗口，<code>Price</code> 的展示就应该接近：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">limit = 3600.5000
+</span></span></code></pre></div><p><code>Instrument</code> 也会从一坨数组、结构体，变成更接近业务的：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">IF2406 last=3578.6000
+</span></span></code></pre></div><p>这里我故意说“接近”，因为 pretty-printer 要和编译器、类型名字、真实字段布局匹配。</p>
+<p>如果你的业务类型里面又套了 <code>std::vector</code>、<code>std::array</code>、智能指针，Python 脚本里访问的字段可能还要继续调。不要指望一个脚本通吃所有项目。</p>
+<p>但是思路是稳的。</p>
+<p>把“调试时人想看的样子”，单独写成一层 Python 展示逻辑。</p>
+<h2 id="别把-launchjson-当成全部">别把 launch.json 当成全部
+</h2><p>现在再看这套配置，我觉得至少有三层。</p>
+<p><code>.vscode/launch.json</code> 负责“怎么启动调试器”。</p>
+<p><code>.vscode/tasks.json</code> 负责“启动调试器之前，先把项目编出来”。</p>
+<p><code>tools/gdb_printers.py</code> 负责“断住以后，变量用人能看懂的方式展示”。</p>
+<p>以前我只配第一层。</p>
+<p>能用，但是很毛坯。</p>
+<p>真正顺手的 C++ 调试，不应该是“我先去终端编译一下，再回来按 F5，再在变量窗口里心算字段含义”。</p>
+<p>更舒服的链路应该是：按 F5，VS Code 自动跑 CMake，GDB 自动加载项目的 Python printer，断点停下来以后，调试窗口直接说业务语言。</p>
+<p>AI 这次帮我配项目，最有价值的地方倒不是生成了多少 C++ 代码。</p>
+<p>而是它把这些老工具之间的胶水也补上了。</p>
+<p>我以前不是不知道 CMake，也不是不知道 GDB。</p>
+<p>只是少配了中间那几个钩子。</p>
+<h2 id="参考资料">参考资料
+</h2><ul>
+<li><a class="link" href="https://code.visualstudio.com/docs/cpp/config-linux">Using C++ on Linux in VS Code</a></li>
+<li><a class="link" href="https://code.visualstudio.com/docs/debugtest/tasks">VS Code: Integrate with External Tools via Tasks</a></li>
+<li><a class="link" href="https://cmake.org/cmake/help/latest/manual/cmake.1.html">CMake cmake(1) manual</a></li>
+<li><a class="link" href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Pretty-Printing.html">GDB Manual: Pretty Printing</a></li>
+<li><a class="link" href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Writing-a-Pretty_002dPrinter.html">GDB Manual: Writing a Pretty-Printer</a></li>
+</ul>
+<h2 id="写作附记">写作附记
+</h2><h3 id="原始提示词">原始提示词
+</h3><blockquote>
+<p>提示词：$blog-writer vscode 进行 C++ 开发，以前查看的教程，都只是简单的配置了 launch.json 里面的 gdb 调试信息，都没提到配置 preLaunchTask，能做到自动触发 cmake 编译，这还是 AI 配置新项目发现的好东西；如果代码有很多自定义的数据类型，vscode 调试窗口无法直接展示，可以引入 python 脚本进行预处理，这样都能展示了。针对上面的内容，都需要提供实际的代码案例。</p>
+</blockquote>
+<h3 id="写作思路摘要">写作思路摘要
+</h3><ul>
+<li>主线放在“以前只配 launch.json，其实少了调试前构建和调试时展示两层胶水”。</li>
+<li>保留用户给出的触发点：AI 配新项目时发现 <code>preLaunchTask</code> 可以自动触发 CMake 编译。</li>
+<li>代码案例按一个最小 CMake 项目组织，包含 <code>CMakeLists.txt</code>、<code>tasks.json</code>、<code>launch.json</code>、C++ 自定义类型和 GDB Python pretty-printer。</li>
+<li>事实核验优先看 VS Code、CMake、GDB 官方文档；正文不翻译文档，只保留和这条调试链路有关的事实。</li>
+<li>对 pretty-printer 的边界做了提醒：类型名、标准库实现、字段布局会影响 Python 脚本，项目里要按自己的类型改。</li>
+</ul>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ja" dir="ltr" data-theme="editorial" data-code-copy="コードをコピー" data-code-copied="コピーしました" data-code-expand="すべて展開" data-code-collapse="コードを折りたたむ">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="以前VS CodeでC++をデバッグするとき、設定は基本的にlaunch.jsonに留まっていて、せいぜいGDBの行を追加する程度でした。 programを埋めて、gdbを埋めて、ブレークポイントを設定する。それで終わり？毎回デバッグ前にターミナルで手動でcmake --buildしないといけませんでした。 さらに面倒なのは、カスタム価格、契約、注文タイプなどでブレークポイントを打った後、VS Codeのデバッグウィンドウには内部フィールドが大量に表示されるだけで、データ自体は正しいのですが、人間が理解できる言葉になっていない点です。 この件がおかしいと思う点は、以前見たチュートリアルもlaunch.jsonまでしか触れていなかったことです。最近AIに新しいプロジェクトの設定を依頼したところ、なんと自動でpreLaunchTaskとgdb_printers.pyを追加してくれたので、「VS CodeでC++をデバッグするって、ただGDBを起動させるだけじゃないんだな」と気づきました。デバッグ前にCMakeのコンパイルを自動実行できるし、ブレークポイントで停止した後に、GDBにPythonスクリプトをロードさせて、ビジネスロジックの型を自分が見やすい形に整形させられるんです。 正直なところ、これは何かの「裏ワザ」というわけではありません。 しかし、C++の日常的なデバッグにおける非常に面倒な2つの空白部分――起動前のビルドとブレークポイント後の変数表示――を完璧に埋めてくれたのです。\n">
+<title>VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。</title>
+
+<link rel='canonical' href='https://ttf248.life/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="VS CodeでC++を扱う際は、CMakeとGDB Printerを忘れないように。">
+<meta property='og:description' content="以前VS CodeでC++をデバッグするとき、設定は基本的にlaunch.jsonに留まっていて、せいぜいGDBの行を追加する程度でした。 programを埋めて、gdbを埋めて、ブレークポイントを設定する。それで終わり？毎回デバッグ前にターミナルで手動でcmake --buildしないといけませんでした。 さらに面倒なのは、カスタム価格、契約、注文タイプなどでブレークポイントを打った後、VS Codeのデバッグウィンドウには内部フィールドが大量に表示されるだけで、データ自体は正しいのですが、人間が理解できる言葉になっていない点です。 この件がおかしいと思う点は、以前見たチュートリアルもlaunch.jsonまでしか触れていなかったことです。最近AIに新しいプロジェクトの設定を依頼したところ、なんと自動でpreLaunchTaskとgdb_printers.pyを追加してくれたので、「VS CodeでC++をデバッグするって、ただGDBを起動させるだけじゃないんだな」と気づきました。デバッグ前にCMakeのコンパイルを自動実行できるし、ブレークポイントで停止した後に、GDBにPythonスクリプトをロードさせて、ビジネスロジックの型を自分が見やすい形に整形させられるんです。 正直なところ、これは何かの「裏ワザ」というわけではありません。 しかし、C++の日常的なデバッグにおける非常に面倒な2つの空白部分――起動前のビルドとブレークポイント後の変数表示――を完璧に埋めてくれたのです。\n">
+<meta property='og:url' content='https://ttf248.life/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/'>
+<meta property='og:site_name' content='向叔の手帳'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2026-04-09T19:21:36&#43;08:00'/><meta property='article:modified_time' content='2026-04-09T19:21:36&#43;08:00'/>
+<meta name="twitter:title" content="VS CodeでC++を扱う際は、CMakeとGDB Printerを忘れないように。">
+<meta name="twitter:description" content="以前VS CodeでC++をデバッグするとき、設定は基本的にlaunch.jsonに留まっていて、せいぜいGDBの行を追加する程度でした。 programを埋めて、gdbを埋めて、ブレークポイントを設定する。それで終わり？毎回デバッグ前にターミナルで手動でcmake --buildしないといけませんでした。 さらに面倒なのは、カスタム価格、契約、注文タイプなどでブレークポイントを打った後、VS Codeのデバッグウィンドウには内部フィールドが大量に表示されるだけで、データ自体は正しいのですが、人間が理解できる言葉になっていない点です。 この件がおかしいと思う点は、以前見たチュートリアルもlaunch.jsonまでしか触れていなかったことです。最近AIに新しいプロジェクトの設定を依頼したところ、なんと自動でpreLaunchTaskとgdb_printers.pyを追加してくれたので、「VS CodeでC++をデバッグするって、ただGDBを起動させるだけじゃないんだな」と気づきました。デバッグ前にCMakeのコンパイルを自動実行できるし、ブレークポイントで停止した後に、GDBにPythonスクリプトをロードさせて、ビジネスロジックの型を自分が見やすい形に整形させられるんです。 正直なところ、これは何かの「裏ワザ」というわけではありません。 しかし、C++の日常的なデバッグにおける非常に面倒な2つの空白部分――起動前のビルドとブレークポイント後の変数表示――を完璧に埋めてくれたのです。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/ja/","name":"向叔の手帳","position":1},{"@type":"ListItem","item":"https://ttf248.life/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/","name":"VS CodeでC++を扱う際は、CMakeとGDB Printerを忘れないように。","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Codex (GPT-5)"},"dateModified":"2026-04-09T19:21:36+08:00","datePublished":"2026-04-09T19:21:36+08:00","headline":"VS CodeでC++を扱う際は、CMakeとGDB Printerを忘れないように。","inLanguage":"ja","mainEntityOfPage":"https://ttf248.life/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/ja/" aria-label="向叔の手帳 ホーム">
+            <span class="site-header__title">向叔の手帳</span>
+            <span class="site-header__subtitle">時を集め、歳月に痕跡を残す</span>
+        </a>
+<nav class="site-header__nav" aria-label="ナビゲーション">
+            <div class="site-header__nav-group" role="group" aria-label="閲覧">
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <a class="site-header__nav-area" href="/ja/projects/" aria-label="プロジェクト">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>プロジェクト</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="執筆ソースを切り替え"
+                    data-source-toggle-button>
+                    著者執筆
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/author/"
+                            class="site-header__source-toggle-option">
+                            著者執筆
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/ja/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 執筆
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/" selected>日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="カラーモードを切り替え">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="ナビゲーションメニューを開く">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="ナビゲーション">
+        <div class="mobile-navigation__header">
+            <span>ナビゲーション</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="ナビゲーションメニューを閉じる">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="閲覧">
+                <div class="mobile-navigation__group-label">閲覧</div>
+                <a href="/ja/">ホーム</a>
+                <a href="/ja/archives/">アーカイブ</a>
+                <a href="/ja/trash/">ごみ箱</a>
+                <a href="/ja/categories/">カテゴリー</a>
+                <a href="/ja/tags/">タグ</a>
+                <a href="/ja/search/">検索</a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="プロジェクト">
+                <div class="mobile-navigation__group-label">プロジェクト</div>
+                <a class="mobile-navigation__area" href="/ja/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>プロジェクト</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="執筆">
+                <div class="mobile-navigation__group-label">執筆</div>
+                <a href="/ja/writing/author/">著者執筆</a>
+                <a href="/ja/writing/ai/">AI 執筆</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>言語</span>
+                <select aria-label="言語を切り替え" onchange="window.location.href = this.selectedOptions[0].value"><option value="/">中文</option><option value="/en/">English</option><option value="/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/" selected>日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="記事閲覧ツール">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">← <span>現在の記事に戻る</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目次</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">文字サイズ</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">閲覧時の文字サイズ</span>
+        <div class="article-reading-settings__options" role="group" aria-label="閲覧時の文字サイズ">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">標準</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目次">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目次</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="閲覧進捗" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>この記事の目次</span>
+            <small data-article-reading-remaining data-template="残り約 #MINUTES 分">残り約 9 分</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#以前只配了一半">以前只配了一半</a></li>
+    <li><a href="#prelaunchtask-こそがそのフックである">preLaunchTask こそがそのフックである</a></li>
+    <li><a href="#f5-の前にまずコンパイルする">F5 の前に、まずコンパイルする</a></li>
+    <li><a href="#もう一つの課題点カスタム型の可読性">もう一つの課題点：カスタム型の可読性</a></li>
+    <li><a href="#ビジネスタイプ用のpython表示層の作成">ビジネスタイプ用のPython表示層の作成</a></li>
+    <li><a href="#launchjson-を全てだと思ってはいけない">launch.json を全てだと思ってはいけない</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+    <li><a href="#作成上の注記">作成上の注記</a>
+      <ol>
+        <li><a href="#元のプロンプト">元のプロンプト</a></li>
+        <li><a href="#ライティングの骨子まとめ">ライティングの骨子まとめ</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article" data-reading-minutes="9">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2026年04月09日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">読了時間: 15分</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">Codex (GPT-5)</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="版の履歴">
+        <p>
+            <strong>過去の版</strong>
+            
+            版の日時
+            <time datetime="2026-04-09T20:28:13&#43;08:00">2026年04月09日 20:28</time>
+
+            <code>ac497786</code>
+        </p>
+        <p>
+            
+                <a href="/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">← 現在の記事に戻る</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">この履歴のリンク先は利用できません。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>版の履歴 · 2</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">変更を比較</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="ac4977860335951fd51fe293a5b392547e54660e"
+        data-unchanged="記事の表示内容に変更はありません。"
+        data-loading="版を読み込み中…"
+        data-error="版を読み込めませんでした。終了してから開き直してください。"
+        data-same="異なる二つの版を選んでください。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">変更を比較</h1>
+            <button type="button" class="post-review-button" data-review-close>比較を終了</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">比較元</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">現在の版</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/ja/post-history/f5d94c1947f712a2c6b6/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="ac4977860335951fd51fe293a5b392547e54660e" data-url="/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/">2026年04月09日 20:28 · ac497786</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">比較先</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/ja/p/vscode-cpp-debug-prelaunch-cmake-gdb-printer/">現在の版</option>
+                        
+                            
+                            <option value="de7da29160dce0761dd5a9b9ef6d9d355950ebac" data-url="/ja/post-history/f5d94c1947f712a2c6b6/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">2026年04月27日 19:25 · de7da291</option>
+                        
+                            
+                            <option value="ac4977860335951fd51fe293a5b392547e54660e" data-url="/ja/post-history/f5d94c1947f712a2c6b6/ac4977860335951fd51fe293a5b392547e54660e/">2026年04月09日 20:28 · ac497786</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">− 削除</del>
+            <ins class="post-review-inline--ins">&#43; 追加</ins>
+            <mark class="post-review-inline--format">書式やリンクの変更</mark>
+            <label><input type="checkbox" data-review-all> すべての内容を表示</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版の差分" role="region"
+            data-folded-label="変更のない #COUNT# ブロックを展開"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/ja/post-history/f5d94c1947f712a2c6b6/de7da29160dce0761dd5a9b9ef6d9d355950ebac/">VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-27T19:25:37&#43;08:00">2026年04月27日 19:25</time>
+
+                            <code>de7da291</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <span aria-current="page">VS CodeでC&#43;&#43;を扱う際は、CMakeとGDB Printerを忘れないように。 <span class="post-archive-meta">(閲覧中)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-04-09T20:28:13&#43;08:00">2026年04月09日 20:28</time>
+
+                            <code>ac497786</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>この記事の目次</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#以前只配了一半">以前只配了一半</a></li>
+    <li><a href="#prelaunchtask-こそがそのフックである">preLaunchTask こそがそのフックである</a></li>
+    <li><a href="#f5-の前にまずコンパイルする">F5 の前に、まずコンパイルする</a></li>
+    <li><a href="#もう一つの課題点カスタム型の可読性">もう一つの課題点：カスタム型の可読性</a></li>
+    <li><a href="#ビジネスタイプ用のpython表示層の作成">ビジネスタイプ用のPython表示層の作成</a></li>
+    <li><a href="#launchjson-を全てだと思ってはいけない">launch.json を全てだと思ってはいけない</a></li>
+    <li><a href="#参考資料">参考資料</a></li>
+    <li><a href="#作成上の注記">作成上の注記</a>
+      <ol>
+        <li><a href="#元のプロンプト">元のプロンプト</a></li>
+        <li><a href="#ライティングの骨子まとめ">ライティングの骨子まとめ</a></li>
+      </ol>
+    </li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <p>以前VS CodeでC++をデバッグするとき、設定は基本的に<code>launch.json</code>に留まっていて、せいぜいGDBの行を追加する程度でした。
+<code>program</code>を埋めて、<code>gdb</code>を埋めて、ブレークポイントを設定する。それで終わり？毎回デバッグ前にターミナルで手動で<code>cmake --build</code>しないといけませんでした。
+さらに面倒なのは、カスタム価格、契約、注文タイプなどでブレークポイントを打った後、VS Codeのデバッグウィンドウには内部フィールドが大量に表示されるだけで、データ自体は正しいのですが、人間が理解できる言葉になっていない点です。
+この件がおかしいと思う点は、以前見たチュートリアルも<code>launch.json</code>までしか触れていなかったことです。最近AIに新しいプロジェクトの設定を依頼したところ、なんと自動で<code>preLaunchTask</code>と<code>gdb_printers.py</code>を追加してくれたので、「VS CodeでC++をデバッグするって、ただGDBを起動させるだけじゃないんだな」と気づきました。デバッグ前にCMakeのコンパイルを自動実行できるし、ブレークポイントで停止した後に、GDBにPythonスクリプトをロードさせて、ビジネスロジックの型を自分が見やすい形に整形させられるんです。
+正直なところ、これは何かの「裏ワザ」というわけではありません。
+しかし、C++の日常的なデバッグにおける非常に面倒な2つの空白部分――<strong>起動前のビルド</strong>と<strong>ブレークポイント後の変数表示</strong>――を完璧に埋めてくれたのです。</p>
+<h2 id="以前只配了一半">以前只配了一半
+</h2><p>多くのチュートリアルにある <code>.vscode/launch.json</code> は、大体このような内容です：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;0.2.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;configurations&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;Debug with GDB&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;cppdbg&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;request&#34;</span><span class="p">:</span> <span class="s2">&#34;launch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;program&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;stopAtEntry&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;cwd&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;MIMode&#34;</span><span class="p">:</span> <span class="s2">&#34;gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;miDebuggerPath&#34;</span><span class="p">:</span> <span class="s2">&#34;/usr/bin/gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;setupCommands&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>この部分は間違っているとは言えません。
+VS Code の公式の C++ サンプルでも、同様の構造が使われています：<code>type</code> に <code>cppdbg</code> を使い、<code>MIMode</code> に <code>gdb</code> を使い、<code>setupCommands</code> で pretty-printing を有効にしています。
+しかし、決定的に欠けている動作があります。
+F5 を押すと、それは <code>program</code> が指す実行ファイルを起動します。問題は、そのファイルが今まさにコンパイルされたものかどうかです？
+もしそうでなければ、前回ビルドした古いプログラムをデバッグしてしまいます。
+私も以前、よくこんな馬鹿なことをしていました。コードを変更し、ブレークポイントも設定したのに、しばらく動かしてみたら動作がおかしいことに気づき、最後に「ああ、さっき再コンパイルするのを忘れていた」と思い出す、ということがありました。</p>
+<h2 id="prelaunchtask-こそがそのフックである">preLaunchTask こそがそのフックである
+</h2><p>VS Code の Tasks は、本質的に外部コマンドをエディタに組み込む仕組みです。
+コンパイル、テスト、パッケージングといった作業は、以前はターミナルで手動で行う必要がありましたが、今では <code>.vscode/tasks.json</code> に記述できます。そして <code>launch.json</code> の中の <code>preLaunchTask</code> が、そのラベルを使って該当するタスクを探し出します。
+最小限の CMake プロジェクトを例に挙げると、このように配置できます：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">.
+</span></span><span class="line"><span class="cl">├── .vscode/
+</span></span><span class="line"><span class="cl">│   ├── launch.json
+</span></span><span class="line"><span class="cl">│   └── tasks.json
+</span></span><span class="line"><span class="cl">├── CMakeLists.txt
+</span></span><span class="line"><span class="cl">├── src/
+</span></span><span class="line"><span class="cl">│   └── main.cpp
+</span></span><span class="line"><span class="cl">└── tools/
+</span></span><span class="line"><span class="cl">    └── gdb_printers.py
+</span></span></code></pre></div><p><code>CMakeLists.txt</code> はまず、これだけ記述します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cmake" data-lang="cmake"><span class="line"><span class="cl"><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span> <span class="s">3.16</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">project</span><span class="p">(</span><span class="s">vscode_cpp_debug_demo</span> <span class="s">LANGUAGES</span> <span class="s">CXX</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_STANDARD</span> <span class="s">20</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_CXX_STANDARD_REQUIRED</span> <span class="s">ON</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">set</span><span class="p">(</span><span class="s">CMAKE_RUNTIME_OUTPUT_DIRECTORY</span> <span class="o">${</span><span class="nv">CMAKE_BINARY_DIR</span><span class="o">}</span><span class="s">/bin</span><span class="p">)</span><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="nb">add_executable</span><span class="p">(</span><span class="s">vscode_cpp_debug_demo</span>
+</span></span><span class="line"><span class="cl">    <span class="s">src/main.cpp</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span><span class="err">
+</span></span></span></code></pre></div><p>次に、<code>.vscode/tasks.json</code> です：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;2.0.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;tasks&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;label&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: configure debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;process&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-S&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-B&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}/build/debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;-DCMAKE_BUILD_TYPE=Debug&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;problemMatcher&#34;</span><span class="p">:</span> <span class="p">[]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">},</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;label&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: build debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;process&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;--build&#34;</span><span class="p">,</span> <span class="s2">&#34;${workspaceFolder}/build/debug&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="s2">&#34;--parallel&#34;</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;dependsOn&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;cmake: configure debug&#34;</span><span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;group&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;kind&#34;</span><span class="p">:</span> <span class="s2">&#34;build&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;isDefault&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">      <span class="p">},</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;problemMatcher&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;$gcc&#34;</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>ここの <code>cmake --build</code> に注目してください。
+CMake の公式なビルドのエントリーポイントは、この形式です：<code>cmake --build &lt;dir&gt;</code>。これは、Make や Ninja、MSBuild といった背後のネイティブビルドツールを呼び出します。
+つまり、VS Code はあなたのプロジェクトが <code>make</code> を実行すべきなのか <code>ninja</code> を実行すべきなのかを知る必要がないのです。
+そのことは CMake に任せているわけです。</p>
+<h2 id="f5-の前にまずコンパイルする">F5 の前に、まずコンパイルする
+</h2><p>その後、<code>.vscode/launch.json</code> に戻り、<code>preLaunchTask</code> を追記してください：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;version&#34;</span><span class="p">:</span> <span class="s2">&#34;0.2.0&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;configurations&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">    <span class="p">{</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;name&#34;</span><span class="p">:</span> <span class="s2">&#34;CMake Debug with GDB&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;cppdbg&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;request&#34;</span><span class="p">:</span> <span class="s2">&#34;launch&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;program&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}/build/debug/bin/vscode_cpp_debug_demo&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;stopAtEntry&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;cwd&#34;</span><span class="p">:</span> <span class="s2">&#34;${workspaceFolder}&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;environment&#34;</span><span class="p">:</span> <span class="p">[],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;externalConsole&#34;</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;MIMode&#34;</span><span class="p">:</span> <span class="s2">&#34;gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;miDebuggerPath&#34;</span><span class="p">:</span> <span class="s2">&#34;/usr/bin/gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;setupCommands&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">        <span class="p">{</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;Enable pretty-printing for gdb&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">          <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">        <span class="p">}</span>
+</span></span><span class="line"><span class="cl">      <span class="p">],</span>
+</span></span><span class="line"><span class="cl">      <span class="nt">&#34;preLaunchTask&#34;</span><span class="p">:</span> <span class="s2">&#34;cmake: build debug&#34;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">  <span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>ここが重要です：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;preLaunchTask&#34;</span><span class="err">:</span> <span class="s2">&#34;cmake: build debug&#34;</span>
+</span></span></code></pre></div><p>F5 を押す流れは以下のようになります：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">launch.json
+</span></span><span class="line"><span class="cl">  -&gt; preLaunchTask
+</span></span><span class="line"><span class="cl">    -&gt; tasks.json: cmake: build debug
+</span></span><span class="line"><span class="cl">      -&gt; dependsOn: cmake: configure debug
+</span></span><span class="line"><span class="cl">        -&gt; cmake -S ... -B ...
+</span></span><span class="line"><span class="cl">      -&gt; cmake --build ...
+</span></span><span class="line"><span class="cl">  -&gt; gdb が最新の program を起動する
+</span></span></code></pre></div><p>Windows + MinGW の場合、<code>program</code> は <code>.exe</code> 付きのパスに変更する必要がある可能性が高く、<code>miDebuggerPath</code> も自身の <code>gdb.exe</code> を指すようにする必要があります。
+Visual Studio Generator のような複数の設定を生成するジェネレータの場合は、ビルド引数に通常 <code>--config Debug</code> を追加する必要があります。
+しかし、基本的な流れは変わりません。
+デバッグする前に VS Code に一度ビルドタスクを実行させてください。自分で記憶に頼るのはやめましょう。</p>
+<h2 id="もう一つの課題点カスタム型の可読性">もう一つの課題点：カスタム型の可読性
+</h2><p>コンパイルリンクを繋げるだけでは不十分です。
+C++コードで少し業務的な型をラップするだけで、VS Codeの左側の変数ウィンドウがすぐに見づらくなります。
+例えば、以下の例を見てください。</p>
+<p><code>src/main.cpp</code>:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-cpp" data-lang="cpp"><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdint&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;cstdio&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;string_view&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl"><span class="cp">#include</span> <span class="cpf">&lt;vector&gt;</span><span class="cp">
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">namespace</span> <span class="n">market</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Price</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span> <span class="n">raw</span><span class="p">{};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">static</span> <span class="n">Price</span> <span class="nf">from_double</span><span class="p">(</span><span class="kt">double</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="n">Price</span><span class="p">{</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">value</span> <span class="o">*</span> <span class="mi">10000</span><span class="p">)};</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="kt">double</span> <span class="nf">to_double</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">/</span> <span class="mf">10000.0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">struct</span> <span class="nc">Instrument</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="kt">char</span> <span class="n">symbol</span><span class="p">[</span><span class="mi">16</span><span class="p">]{};</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Price</span> <span class="n">last</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">Instrument</span> <span class="nf">make_instrument</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span> <span class="n">symbol</span><span class="p">,</span> <span class="kt">double</span> <span class="n">price</span><span class="p">)</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">Instrument</span> <span class="n">instrument</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">snprintf</span><span class="p">(</span><span class="n">instrument</span><span class="p">.</span><span class="n">symbol</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">instrument</span><span class="p">.</span><span class="n">symbol</span><span class="p">),</span> <span class="s">&#34;%s&#34;</span><span class="p">,</span> <span class="n">symbol</span><span class="p">.</span><span class="n">data</span><span class="p">());</span>
+</span></span><span class="line"><span class="cl">    <span class="n">instrument</span><span class="p">.</span><span class="n">last</span> <span class="o">=</span> <span class="n">Price</span><span class="o">::</span><span class="n">from_double</span><span class="p">(</span><span class="n">price</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">instrument</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">}</span> <span class="c1">// namespace market
+</span></span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="kt">int</span> <span class="nf">main</span><span class="p">()</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">market</span><span class="o">::</span><span class="n">Instrument</span><span class="o">&gt;</span> <span class="n">watchlist</span><span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="n">market</span><span class="o">::</span><span class="n">make_instrument</span><span class="p">(</span><span class="s">&#34;IF2406&#34;</span><span class="p">,</span> <span class="mf">3578.6</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">        <span class="n">market</span><span class="o">::</span><span class="n">make_instrument</span><span class="p">(</span><span class="s">&#34;IH2406&#34;</span><span class="p">,</span> <span class="mf">2468.2</span><span class="p">),</span>
+</span></span><span class="line"><span class="cl">    <span class="p">};</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="n">market</span><span class="o">::</span><span class="n">Price</span> <span class="n">limit</span> <span class="o">=</span> <span class="n">market</span><span class="o">::</span><span class="n">Price</span><span class="o">::</span><span class="n">from_double</span><span class="p">(</span><span class="mf">3600.5</span><span class="p">);</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="c1">// ここでブレークポイントを置き、watchlistとlimitを観察する。
+</span></span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">watchlist</span><span class="p">.</span><span class="n">empty</span><span class="p">()</span> <span class="o">||</span> <span class="n">limit</span><span class="p">.</span><span class="n">raw</span> <span class="o">==</span> <span class="mi">0</span><span class="p">;</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p><code>market::Price</code> は業務上「価格」です。
+しかし、デバッガがデフォルトで見せるのは以下のようになるかもしれません：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">limit = {raw = 36005000}
+</span></span></code></pre></div><p>その通り、データは正しいです。
+しかし、私の頭の中では、この <code>36005000</code> を手動で <code>3600.5000</code> に変換しなければなりません。もしプロジェクト内に <code>Price</code>、<code>Quantity</code>、<code>OrderId</code>、<code>Instrument</code>、<code>AlgoState</code> などが山ほどある場合、デバッグウィンドウはすぐに構造体の墓場になってしまいます。
+このときこそ GDB の pretty-printer が必要になります。
+GDB の公式マニュアルには非常に明確に書かれています。それは、Pythonコードを使って値をpretty-printするための仕組みを提供しており、この仕組みはMI（Machine Interface）とコマンドラインの両方に適用できるということです。
+VS CodeのC++デバッグがまさに GDB/MI という経路を通っています。</p>
+<h2 id="ビジネスタイプ用のpython表示層の作成">ビジネスタイプ用のPython表示層の作成
+</h2><p><code>tools/gdb_printers.py</code> を新規作成します：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-python" data-lang="python"><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">gdb</span>
+</span></span><span class="line"><span class="cl"><span class="kn">import</span> <span class="nn">gdb.printing</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">PricePrinter</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">val</span> <span class="o">=</span> <span class="n">val</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">raw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;raw&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">raw</span> <span class="o">/</span> <span class="mf">10000.0</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">class</span> <span class="nc">InstrumentPrinter</span><span class="p">:</span>
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="bp">self</span><span class="o">.</span><span class="n">val</span> <span class="o">=</span> <span class="n">val</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">    <span class="k">def</span> <span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span></span><span class="line"><span class="cl">        <span class="n">symbol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;symbol&#34;</span><span class="p">]</span><span class="o">.</span><span class="n">string</span><span class="p">()</span>
+</span></span><span class="line"><span class="cl">        <span class="n">price_raw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">val</span><span class="p">[</span><span class="s2">&#34;last&#34;</span><span class="p">][</span><span class="s2">&#34;raw&#34;</span><span class="p">])</span>
+</span></span><span class="line"><span class="cl">        <span class="n">price</span> <span class="o">=</span> <span class="n">price_raw</span> <span class="o">/</span> <span class="mf">10000.0</span>
+</span></span><span class="line"><span class="cl">        <span class="k">return</span> <span class="sa">f</span><span class="s2">&#34;</span><span class="si">{</span><span class="n">symbol</span><span class="si">}</span><span class="s2"> last=</span><span class="si">{</span><span class="n">price</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&#34;</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="k">def</span> <span class="nf">build_pretty_printer</span><span class="p">():</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span> <span class="o">=</span> <span class="n">gdb</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">RegexpCollectionPrettyPrinter</span><span class="p">(</span><span class="s2">&#34;market&#34;</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span><span class="o">.</span><span class="n">add_printer</span><span class="p">(</span><span class="s2">&#34;Price&#34;</span><span class="p">,</span> <span class="s2">&#34;^market::Price$&#34;</span><span class="p">,</span> <span class="n">PricePrinter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="n">printer</span><span class="o">.</span><span class="n">add_printer</span><span class="p">(</span><span class="s2">&#34;Instrument&#34;</span><span class="p">,</span> <span class="s2">&#34;^market::Instrument$&#34;</span><span class="p">,</span> <span class="n">InstrumentPrinter</span><span class="p">)</span>
+</span></span><span class="line"><span class="cl">    <span class="k">return</span> <span class="n">printer</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="n">gdb</span><span class="o">.</span><span class="n">printing</span><span class="o">.</span><span class="n">register_pretty_printer</span><span class="p">(</span>
+</span></span><span class="line"><span class="cl">    <span class="n">gdb</span><span class="o">.</span><span class="n">current_objfile</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="n">build_pretty_printer</span><span class="p">(),</span>
+</span></span><span class="line"><span class="cl">    <span class="n">replace</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl"><span class="p">)</span>
+</span></span></code></pre></div><p>次に、<code>launch.json</code> の <code>setupCommands</code> にこれをソースとして読み込ませます：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="s2">&#34;setupCommands&#34;</span><span class="err">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;gdbのプリティプリンティングを有効化&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-enable-pretty-printing&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">true</span>
+</span></span><span class="line"><span class="cl">  <span class="p">},</span>
+</span></span><span class="line"><span class="cl">  <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;description&#34;</span><span class="p">:</span> <span class="s2">&#34;プロジェクトのプリティプリンターをロード&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;text&#34;</span><span class="p">:</span> <span class="s2">&#34;-interpreter-exec console \&#34;source ${workspaceFolder}/tools/gdb_printers.py\&#34;&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;ignoreFailures&#34;</span><span class="p">:</span> <span class="kc">false</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">]</span>
+</span></span></code></pre></div><p>F5 を再実行します。
+この後、デバッグウィンドウを見ると、<code>Price</code> の表示は以下に近くなるはずです：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">limit = 3600.5000
+</span></span></code></pre></div><p><code>Instrument</code> もまた、単なる配列や構造体から、よりビジネスに近いものになります：</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">IF2406 last=3578.6000
+</span></span></code></pre></div><p>ここで「近い」と言っているのは意図的です。なぜなら、プリティプリンターはコンパイラ、型名、実際のフィールドレイアウトと一致させる必要があるからです。
+もしあなたのビジネスタイプの中に <code>std::vector</code> や <code>std::array</code>、スマートポインタなどがネストされている場合、Pythonスクリプトからアクセスするフィールドはさらに深い呼び出しが必要になるかもしれません。一つのスクリプトですべてをカバーできると期待しないでください。
+しかし、考え方はしっかりしています。
+「デバッグ時に人間が見たい姿」を、独立したPythonの表示ロジックとして記述するのです。</p>
+<h2 id="launchjson-を全てだと思ってはいけない">launch.json を全てだと思ってはいけない
+</h2><p>この設定群を見ると、少なくとも3層あると感じます。
+<code>.vscode/launch.json</code> は「デバッガをどう起動するか」を担当します。
+<code>.vscode/tasks.json</code> は「デバッガを起動する前に、まずプロジェクトをビルドする」を担当します。
+<code>tools/gdb_printers.py</code> は「ブレークポイントで止まった後、変数を人間が理解できる形で表示する」を担当します。
+以前は最初の層だけを設定していました。
+動くものの、非常に素っ気ないものでした。
+本当に快適な C++ デバッグというのは、「まずターミナルでコンパイルしてから、戻ってきて F5 を押して、変数ウィンドウでフィールドの意味を頭の中で計算する」というものであってはいけないはずです。
+より快適なフローは、F5 を押すと VS Code が自動的に CMake を実行し、GDB がプロジェクトの Python printer を自動ロードし、ブレークポイントで停止した際に、デバッグウィンドウが直接ビジネス言語で表示してくれることです。
+今回 AI にプロジェクトの設定をしてもらったことで、最も価値があったのは、どれだけ C++ コードを生成したかということではありませんでした。
+むしろ、これらの古いツール間の「接着剤」の部分を補ってくれた点です。
+以前から CMake や GDB が分からないわけではありませんでした。
+ただ、その中間にあるいくつかのフック（接続部分）を設定していなかっただけなのです。</p>
+<h2 id="参考資料">参考資料
+</h2><ul>
+<li><a class="link" href="https://code.visualstudio.com/docs/cpp/config-linux">VS Code で Linux 上の C++ を使用する</a></li>
+<li><a class="link" href="https://code.visualstudio.com/docs/debugtest/tasks">VS Code: タスク経由で外部ツールと統合する</a></li>
+<li><a class="link" href="https://cmake.org/cmake/help/latest/manual/cmake.1.html">CMake cmake(1) マニュアル</a></li>
+<li><a class="link" href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Pretty-Printing.html">GDB マニュアル: プリティプリンティング</a></li>
+<li><a class="link" href="https://sourceware.org/gdb/current/onlinedocs/gdb.html/Writing-a-Pretty_002dPrinter.html">GDB マニュアル: プリティプリンタの記述</a></li>
+</ul>
+<h2 id="作成上の注記">作成上の注記
+</h2><h3 id="元のプロンプト">元のプロンプト
+</h3><blockquote>
+<p>プロンプト：$blog-writer vscode で C++ を開発する際、以前見たチュートリアルは、<code>launch.json</code> 内の gdb デバッグ情報の設定のみで、<code>preLaunchTask</code> の設定に触れていませんでした。CMake のコンパイルを自動的にトリガーできる機能があれば、これは AI が新しいプロジェクトを設定する上で非常に役立つものです。もしコードにカスタムデータ型が多く含まれていて、VS Code のデバッグウィンドウで直接表示できない場合でも、Python スクリプトを導入して前処理を行うことで、それらも表示できるようになります。上記の内容について、すべて実際のコード例を提供してください。</p>
+</blockquote>
+<h3 id="ライティングの骨子まとめ">ライティングの骨子まとめ
+</h3><ul>
+<li>メインテーマを「これまで <code>launch.json</code> の設定だけだったが、実際にはデバッグ前のビルドとデバッグ時の表示という2層の接着剤（仕組み）が欠けていた」ことに置く。</li>
+<li>ユーザーから提供されたトリガーポイントは維持する：AI が新しいプロジェクトを設定する際に、<code>preLaunchTask</code> で CMake のコンパイルが自動的にトリガーされることを発見した点。</li>
+<li>コード例は最小限の CMake プロジェクトで構成し、<code>CMakeLists.txt</code>、<code>tasks.json</code>、<code>launch.json</code>、C++ のカスタム型、および GDB Python pretty-printer を含める。</li>
+<li>事実確認は VS Code、CMake、GDB の公式ドキュメントを最優先とし、本文ではドキュメント全体を翻訳せず、このデバッグフローに関連する事実のみを残す。</li>
+<li>pretty-printer に関しては、型名、標準ライブラリの実装、フィールドレイアウトなどが Python スクリプトに影響を与える点について注意喚起を行う。プロジェクト内では自身の型に合わせて修正が必要である旨を明記する。</li>
+</ul>
+
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    </article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目次</h2>
+        <button type="button" data-article-toc-close aria-label="目次を閉じる">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔の手帳
+    </section>
+    
+    <section class="powerby">
+        
+            金融ITプログラマーのいじくり回しと日常のつぶやき <br/>
+        <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> で構築されています。 <br />
+        テーマ <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> は <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> によって設計されています。
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="トップへ戻る"
+    title="トップへ戻る"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>
