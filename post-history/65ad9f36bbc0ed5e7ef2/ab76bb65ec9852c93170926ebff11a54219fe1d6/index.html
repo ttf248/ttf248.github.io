@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
+<head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
+<title>一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</title>
+
+<link rel='canonical' href='https://ttf248.life/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/'>
+
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型">
+<meta property='og:description' content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
+<meta property='og:url' content='https://ttf248.life/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/'>
+<meta property='og:site_name' content='向叔记事簿'>
+<meta property='og:type' content='article'><meta property='article:section' content='Post-History' /><meta property='article:published_time' content='2025-11-18T22:29:25&#43;08:00'/><meta property='article:modified_time' content='2025-11-18T22:29:25&#43;08:00'/>
+<meta name="twitter:title" content="一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型">
+<meta name="twitter:description" content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
+    <link rel="shortcut icon" href="/favicon-16x16.png" />
+
+      <script async src="https://www.googletagmanager.com/gtag/js?id=G-73CVP7MPC8"></script>
+      <script>
+        var doNotTrack = false;
+        if ( true ) {
+          var dnt = (navigator.doNotTrack || window.doNotTrack || navigator.msDoNotTrack);
+          var doNotTrack = (dnt == "1" || dnt == "yes");
+        }
+        if (!doNotTrack) {
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-73CVP7MPC8');
+        }
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/","name":"一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Gemini 4"},"dateModified":"2025-11-18T22:29:25+08:00","datePublished":"2025-11-18T22:29:25+08:00","headline":"一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/"}</script><meta name="robots" content="noindex"></head>
+<body class="article-page post-history-page">
+    <script>
+        (function() {
+            const colorSchemeKey = 'StackColorScheme';
+            if(!localStorage.getItem(colorSchemeKey)){
+                localStorage.setItem(colorSchemeKey, "auto");
+            }
+        })();
+    </script><script>
+    (function() {
+        const colorSchemeKey = 'StackColorScheme';
+        const colorSchemeItem = localStorage.getItem(colorSchemeKey);
+        const supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+
+        if (colorSchemeItem == 'dark' || colorSchemeItem === 'auto' && supportDarkMode) {
+            
+
+            document.documentElement.dataset.scheme = 'dark';
+        } else {
+            document.documentElement.dataset.scheme = 'light';
+        }
+    })();
+</script>
+<header class="site-header">
+    <div class="site-header__inner" data-mobile-header>
+        <a class="site-header__brand" href="/" aria-label="向叔记事簿 首页">
+            <span class="site-header__title">向叔记事簿</span>
+            <span class="site-header__subtitle">拾光记事，岁月有痕</span>
+        </a>
+<nav class="site-header__nav" aria-label="导航">
+            <div class="site-header__nav-group" role="group" aria-label="浏览">
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <a class="site-header__nav-area" href="/learning/" aria-label="进入学习区">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 7v14"></path>
+                    <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                    <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                </svg>
+                <span>学习区</span>
+            </a>
+            
+            
+            <a class="site-header__nav-area" href="/projects/" aria-label="项目">
+                <svg class="site-header__nav-area-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                </svg>
+                <span>项目</span>
+            </a>
+            
+            <div class="site-header__source-toggle" data-source-toggle><button
+                    type="button"
+                    class="site-header__source-toggle-button"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="site-header-source-menu"
+                    aria-label="切换写作源"
+                    data-source-toggle-button>
+                    作者写作
+                    <span class="site-header__source-toggle-caret" aria-hidden="true">▾</span>
+                </button>
+                <ul class="site-header__source-toggle-menu" id="site-header-source-menu" role="menu" hidden data-source-toggle-menu>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/author/"
+                            class="site-header__source-toggle-option">
+                            作者写作
+                            
+                        </a>
+                    </li>
+                    <li role="none">
+                        <a
+                            role="menuitem"
+                            href="/writing/ai/"
+                            class="site-header__source-toggle-option">
+                            AI 写作
+                            
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <div class="site-header__tools">
+            
+                <select class="site-header__language" aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            
+            
+                <button class="site-header__theme" id="dark-mode-toggle" type="button" aria-label="切换深浅色模式">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-left" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="8" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-toggle-right" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="16" cy="12" r="2" />
+  <rect x="2" y="6" width="20" height="12" rx="6" />
+</svg>
+
+
+
+                </button>
+            
+            <button class="site-header__menu-toggle" type="button" aria-controls="mobile-navigation" aria-expanded="false" aria-label="打开导航菜单">
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+                <span aria-hidden="true"></span>
+            </button>
+        </div>
+    </div>
+
+</header>
+
+<div class="mobile-navigation" id="mobile-navigation" hidden>
+    <div class="mobile-navigation__backdrop" data-mobile-menu-close></div>
+    <nav class="mobile-navigation__panel" aria-label="导航">
+        <div class="mobile-navigation__header">
+            <span>导航</span>
+            <button type="button" class="mobile-navigation__close" data-mobile-menu-close aria-label="关闭导航菜单">×</button>
+        </div>
+        <div class="mobile-navigation__links">
+            <div class="mobile-navigation__group" role="group" aria-label="浏览">
+                <div class="mobile-navigation__group-label">浏览</div>
+                <a href="/">首页</a>
+                <a href="/archives/">归档</a>
+                <a href="/trash/">废纸篓</a>
+                <a href="/categories/">分类</a>
+                <a href="/tags/">标签</a>
+                <a href="/search/">搜索</a>
+            </div>
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="学习区">
+                <div class="mobile-navigation__group-label">学习区</div>
+                <a class="mobile-navigation__area" href="/learning/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 7v14"></path>
+                        <path d="M3 18a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H3z"></path>
+                        <path d="M21 18a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"></path>
+                    </svg>
+                    <span>打开学习区 →</span>
+                </a>
+            </div>
+            
+            
+            <div class="mobile-navigation__group mobile-navigation__group--area" role="group" aria-label="项目">
+                <div class="mobile-navigation__group-label">项目</div>
+                <a class="mobile-navigation__area" href="/projects/">
+                    <svg class="mobile-navigation__area-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    </svg>
+                    <span>项目</span>
+                </a>
+            </div>
+            
+            <div class="mobile-navigation__group" role="group" aria-label="写作">
+                <div class="mobile-navigation__group-label">写作</div>
+                <a href="/writing/author/">作者写作</a>
+                <a href="/writing/ai/">AI 写作</a>
+            </div>
+        </div>
+        
+            <label class="mobile-navigation__language">
+                <span>语言</span>
+                <select aria-label="切换语言" onchange="window.location.href = this.selectedOptions[0].value"><option value="/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/" selected>中文</option><option value="/en/">English</option><option value="/ja/">日本語</option></select>
+
+            </label>
+        
+    </nav>
+</div>
+<main class="editorial-main" id="main-content">
+    
+<div class="article-mobile-toolbar" aria-label="文章阅读工具">
+    
+    
+    
+        
+        
+            
+                
+                
+            
+        
+    
+    <a class="article-mobile-toolbar__back" href="/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/">← <span>返回当前文章</span></a>
+    <div class="article-mobile-toolbar__actions">
+        
+            <button type="button" class="article-mobile-toolbar__button" data-article-toc-toggle aria-controls="article-toc" aria-expanded="false">目录</button>
+        
+        <button type="button" class="article-mobile-toolbar__button" data-reading-settings-toggle aria-controls="article-reading-settings" aria-expanded="false">字号</button>
+    </div>
+    <div class="article-reading-settings" id="article-reading-settings" hidden>
+        <span class="article-reading-settings__label">阅读字号</span>
+        <div class="article-reading-settings__options" role="group" aria-label="阅读字号">
+            <button type="button" data-reading-size="small" aria-pressed="false">小</button>
+            <button type="button" data-reading-size="default" aria-pressed="true">标准</button>
+            <button type="button" data-reading-size="large" aria-pressed="false">大</button>
+        </div>
+    </div>
+</div>
+
+<aside class="article-toc-rail" data-article-toc-rail aria-label="目录">
+    <button type="button" class="article-toc-rail__toggle" id="article-toc-rail-toggle" data-article-toc-rail-toggle aria-controls="article-toc-rail-panel" aria-expanded="false">
+        <span class="article-toc-rail__label">目录</span>
+        <span class="article-toc-rail__progress" role="progressbar" aria-label="文章阅读进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span data-article-toc-progress></span>
+        </span>
+        <span class="article-toc-rail__progress-label" data-article-toc-progress-label>0%</span>
+    </button>
+    <section class="article-toc-rail__panel" id="article-toc-rail-panel" data-article-toc-rail-panel aria-labelledby="article-toc-rail-toggle" hidden>
+        <div class="article-toc-rail__header">
+            <span data-article-toc-current>本文目录</span>
+            <small data-article-reading-remaining data-template="预计剩余 #MINUTES 分钟">预计剩余 5 分钟</small>
+        </div>
+        <nav id="article-toc-navigation">
+  <ol>
+    <li><a href="#间隙锁到底锁的是什么">间隙锁到底锁的是什么？</a></li>
+    <li><a href="#为什么数据同步一并发就会因为间隙锁死锁">为什么数据同步一并发，就会因为间隙锁死锁？</a></li>
+    <li><a href="#mysql-为什么要设计这么麻烦的锁">MySQL 为什么要设计这么“麻烦”的锁？</a></li>
+    <li><a href="#怎么关闭间隙锁主流大厂为何偏爱-rc">怎么关闭间隙锁？主流大厂为何偏爱 RC？</a></li>
+    <li><a href="#金融与券商系统按链路拆开选不能一刀切">金融与券商系统：按链路拆开选，不能一刀切</a></li>
+    <li><a href="#线上排查与改造的实用防线">线上排查与改造的实用防线</a></li>
+  </ol>
+</nav>
+    </section>
+</aside>
+
+<article class="main-article has-lead" data-reading-minutes="5">
+    <header class="article-header">
+    <div class="article-details">
+    <div class="article-title-wrapper">
+        
+            <h1 class="article-title">一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</h1>
+        
+    
+        
+        
+    </div>
+
+    
+    
+    
+    
+    
+    
+    
+    <div class="article-meta">
+        
+        <footer class="article-time"><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-calendar-time" width="56" height="56" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <path d="M11.795 21h-6.795a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v4" />
+  <circle cx="18" cy="18" r="4" />
+  <path d="M15 3v4" />
+  <path d="M7 3v4" />
+  <path d="M3 11h16" />
+  <path d="M18 16.496v1.504l1 1" />
+</svg>
+                    <time class="article-time--published">2025年11月18日</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-clock" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path stroke="none" d="M0 0h24v24H0z"/>
+  <circle cx="12" cy="12" r="9" />
+  <polyline points="12 7 12 12 15 15" />
+</svg>
+
+
+
+                    <time class="article-time--reading">阅读时长: 8 分钟</time>
+                    
+                </span><span class="article-time__sep" aria-hidden="true">·</span><span class="article-time__item">
+                    <svg  xmlns="http://www.w3.org/2000/svg"  width="24"  height="24"  viewBox="0 0 24 24"  fill="currentColor"  class="icon icon-tabler icons-tabler-filled icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 2a5 5 0 1 1 -5 5l.005 -.217a5 5 0 0 1 4.995 -4.783z" /><path d="M14 14a5 5 0 0 1 5 5v1a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-1a5 5 0 0 1 5 -5h4z" /></svg>
+                    <span class="article-time--author">Gemini 4</span>
+                </span></footer>
+        
+
+        
+    </div>
+    
+    
+
+    
+        
+    <aside class="post-archive-notice" aria-label="历史版本">
+        <p>
+            <strong>历史版本</strong>
+            
+            版本时间
+            <time datetime="2026-11-24T19:40:57&#43;08:00">2026年11月24日 19:40</time>
+
+            <code>ab76bb65</code>
+        </p>
+        <p>
+            
+                <a href="/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/">← 返回当前文章</a>
+            
+        </p>
+        
+        <p id="post-archive-unavailable" class="post-archive-missing">这条历史链接暂无可用目标。</p>
+    </aside>
+    <details id="post-archive-versions" class="post-archive-versions">
+        <summary>历史版本 · 7</summary>
+        
+            
+    <button type="button" class="post-review-button" data-review-open hidden
+        aria-controls="post-review" aria-expanded="false">审稿对比</button>
+    <section id="post-review" class="post-review" aria-labelledby="post-review-title" hidden
+        data-viewing="ab76bb65ec9852c93170926ebff11a54219fe1d6"
+        data-unchanged="两份文章的可见内容相同。"
+        data-loading="正在读取版本…"
+        data-error="暂时无法加载版本，退出后可重新进入审稿。"
+        data-same="请选择两个不同的版本。">
+        <header class="post-review__header">
+            <h1 id="post-review-title">审稿对比</h1>
+            <button type="button" class="post-review-button" data-review-close>退出审稿</button>
+        </header>
+        <div class="post-review__controls">
+            
+                <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
+                    <select aria-labelledby="post-review-label-0">
+                        <option value="current" data-url="/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/">当前版本</option>
+                        
+                            
+                            <option value="ab76bb65ec9852c93170926ebff11a54219fe1d6" data-url="/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/">2026年11月24日 19:40 · ab76bb65</option>
+                        
+                            
+                            <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/65ad9f36bbc0ed5e7ef2/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
+                        
+                            
+                            <option value="30ee15a20d3157383dfdaed356e5aa0c6ad80737" data-url="/post-history/65ad9f36bbc0ed5e7ef2/30ee15a20d3157383dfdaed356e5aa0c6ad80737/">2026年07月25日 13:57 · 30ee15a2</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/65ad9f36bbc0ed5e7ef2/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="f8f8124d3fa9f2b675d29a4787e4624c8320e1eb" data-url="/post-history/65ad9f36bbc0ed5e7ef2/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">2026年02月28日 18:47 · f8f8124d</option>
+                        
+                            
+                            <option value="783b1372b81103d258ac1f4925c7157b845a75e0" data-url="/post-history/65ad9f36bbc0ed5e7ef2/783b1372b81103d258ac1f4925c7157b845a75e0/">2026年01月29日 22:52 · 783b1372</option>
+                        
+                            
+                            <option value="51d72a911fa7df26c38d435acd6860bdc7171694" data-url="/post-history/65ad9f36bbc0ed5e7ef2/51d72a911fa7df26c38d435acd6860bdc7171694/">2025年11月18日 22:36 · 51d72a91</option>
+                        
+                    </select>
+                </label>
+            
+                <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
+                    <select aria-labelledby="post-review-label-1">
+                        <option value="current" data-url="/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/">当前版本</option>
+                        
+                            
+                            <option value="ab76bb65ec9852c93170926ebff11a54219fe1d6" data-url="/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/">2026年11月24日 19:40 · ab76bb65</option>
+                        
+                            
+                            <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/65ad9f36bbc0ed5e7ef2/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
+                        
+                            
+                            <option value="30ee15a20d3157383dfdaed356e5aa0c6ad80737" data-url="/post-history/65ad9f36bbc0ed5e7ef2/30ee15a20d3157383dfdaed356e5aa0c6ad80737/">2026年07月25日 13:57 · 30ee15a2</option>
+                        
+                            
+                            <option value="72295f513a73ec4fcc6d84660def9db9525297a0" data-url="/post-history/65ad9f36bbc0ed5e7ef2/72295f513a73ec4fcc6d84660def9db9525297a0/">2026年07月23日 10:52 · 72295f51</option>
+                        
+                            
+                            <option value="f8f8124d3fa9f2b675d29a4787e4624c8320e1eb" data-url="/post-history/65ad9f36bbc0ed5e7ef2/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">2026年02月28日 18:47 · f8f8124d</option>
+                        
+                            
+                            <option value="783b1372b81103d258ac1f4925c7157b845a75e0" data-url="/post-history/65ad9f36bbc0ed5e7ef2/783b1372b81103d258ac1f4925c7157b845a75e0/">2026年01月29日 22:52 · 783b1372</option>
+                        
+                            
+                            <option value="51d72a911fa7df26c38d435acd6860bdc7171694" data-url="/post-history/65ad9f36bbc0ed5e7ef2/51d72a911fa7df26c38d435acd6860bdc7171694/">2025年11月18日 22:36 · 51d72a91</option>
+                        
+                    </select>
+                </label>
+            
+        </div>
+        <div class="post-review__legend">
+            <del class="post-review-inline--del">－ 删除</del>
+            <ins class="post-review-inline--ins">＋ 新增</ins>
+            <mark class="post-review-inline--format">格式或链接改动</mark>
+            <label><input type="checkbox" data-review-all> 显示全部内容</label>
+        </div>
+        <p class="post-review__status" role="status"></p>
+        <div class="post-review__diff" aria-label="版本差异" role="region"
+            data-folded-label="展开 #COUNT# 段未改动内容"></div>
+    </section><script src="/ts/post-review.48f1289f8d8aa2f39816f84588d91315a6e1856ef5c3074c6559f55aa40c4798.js" integrity="sha256-SPEon42KovOYFvhFiNkTFabhhW71wwdMZVn1WqQMR5g=" defer></script>
+
+
+        
+        
+            <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <span aria-current="page">一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型 <span class="post-archive-meta">(当前查看)</span></span>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-11-24T19:40:57&#43;08:00">2026年11月24日 19:40</time>
+
+                            <code>ab76bb65</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/65ad9f36bbc0ed5e7ef2/c016c3d078b31c7d0a508729a563502e2cdcc667/">搞懂 MySQL 间隙锁：从原理到金融级选型</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-26T22:39:23&#43;08:00">2026年07月26日 22:39</time>
+
+                            <code>c016c3d0</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/65ad9f36bbc0ed5e7ef2/30ee15a20d3157383dfdaed356e5aa0c6ad80737/">搞懂 MySQL 间隙锁：从原理到金融级选型</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-25T13:57:25&#43;08:00">2026年07月25日 13:57</time>
+
+                            <code>30ee15a2</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/65ad9f36bbc0ed5e7ef2/72295f513a73ec4fcc6d84660def9db9525297a0/">搞懂 MySQL 间隙锁：从原理到金融级选型</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-07-23T10:52:57&#43;08:00">2026年07月23日 10:52</time>
+
+                            <code>72295f51</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/65ad9f36bbc0ed5e7ef2/f8f8124d3fa9f2b675d29a4787e4624c8320e1eb/">搞懂 MySQL 间隙锁：从原理到金融级选型</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-02-28T18:47:02&#43;08:00">2026年02月28日 18:47</time>
+
+                            <code>f8f8124d</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/65ad9f36bbc0ed5e7ef2/783b1372b81103d258ac1f4925c7157b845a75e0/">搞懂 MySQL 间隙锁：从原理到金融级选型</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-01-29T22:52:12&#43;08:00">2026年01月29日 22:52</time>
+
+                            <code>783b1372</code>
+                        </span>
+                    </li>
+                
+                    <li>
+                        
+                            <a href="/post-history/65ad9f36bbc0ed5e7ef2/51d72a911fa7df26c38d435acd6860bdc7171694/">搞懂 MySQL 间隙锁：从原理到金融级选型</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2025-11-18T22:36:12&#43;08:00">2025年11月18日 22:36</time>
+
+                            <code>51d72a91</code>
+                        </span>
+                    </li>
+                
+            </ul>
+        
+    </details>
+
+    
+
+    
+    <div class="article-lead article-prose">
+        <p>系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 <strong>MySQL 的间隙锁（Gap Lock）</strong>。</p>
+<p>平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。</p>
+    </div>
+    
+</div>
+
+</header>
+
+
+    
+    <details class="article-toc" id="article-toc">
+        <summary>本文目录</summary>
+        <nav id="TableOfContents">
+  <ol>
+    <li><a href="#间隙锁到底锁的是什么">间隙锁到底锁的是什么？</a></li>
+    <li><a href="#为什么数据同步一并发就会因为间隙锁死锁">为什么数据同步一并发，就会因为间隙锁死锁？</a></li>
+    <li><a href="#mysql-为什么要设计这么麻烦的锁">MySQL 为什么要设计这么“麻烦”的锁？</a></li>
+    <li><a href="#怎么关闭间隙锁主流大厂为何偏爱-rc">怎么关闭间隙锁？主流大厂为何偏爱 RC？</a></li>
+    <li><a href="#金融与券商系统按链路拆开选不能一刀切">金融与券商系统：按链路拆开选，不能一刀切</a></li>
+    <li><a href="#线上排查与改造的实用防线">线上排查与改造的实用防线</a></li>
+  </ol>
+</nav>
+    </details>
+    
+
+    <section class="article-content">
+    
+    
+    <h2 id="间隙锁到底锁的是什么">间隙锁到底锁的是什么？
+</h2><p>在 InnoDB 默认的隔离级别 <strong>RR（Repeatable Read，可重复读）</strong> 下，行锁锁住的并不只是表里已经存在的记录。</p>
+<p>假设一张表的主键或二级索引里目前只有 <code>id = 10</code> 和 <code>id = 20</code> 两条数据，中间 <code>(10, 20)</code> 这个开区间其实是空的。如果你在 RR 模式下执行范围当前读（如 <code>WHERE id &gt; 10 AND id &lt; 20 FOR UPDATE</code>），或者对一条<strong>根本不存在的记录</strong>加锁（如 <code>WHERE id = 15 FOR UPDATE</code>），InnoDB 会把 <code>(10, 20)</code> 这段空档锁起来——这就是<strong>间隙锁（Gap Lock）</strong>。</p>
+<p>当行锁（Record Lock）与它前面的间隙锁合体，形成左开右闭区间 <code>(10, 20]</code> 时，就是常说的 <strong>Next-Key Lock（临键锁）</strong>。</p>
+<h2 id="为什么数据同步一并发就会因为间隙锁死锁">为什么数据同步一并发，就会因为间隙锁死锁？
+</h2><p>间隙锁最反直觉的规则是：<strong>间隙锁之间是相互兼容的。</strong> 两个事务可以同时拿到 <code>(10, 20)</code> 的间隙锁，互不阻塞——因为间隙锁的唯一目的是“阻止别人往这个缝隙里插入新记录”，并不阻止别人也来守着这个缝隙。</p>
+<p>但在数据同步最常见的“先查记录存不存在，不存在就插入”的逻辑里，这个兼容特性会直接制造经典的环路等待：</p>
+<pre tabindex="0"><code class="language-mermaid" data-lang="mermaid">sequenceDiagram
+    participant T1 as 事务 A
+    participant DB as InnoDB 间隙 (10,20)
+    participant T2 as 事务 B
+
+    T1-&gt;&gt;DB: 查询 id=15 FOR UPDATE（不存在）
+    Note right of DB: 获取间隙锁 (10,20)
+    T2-&gt;&gt;DB: 查询 id=15 FOR UPDATE（不存在）
+    Note right of DB: 同样获取间隙锁 (10,20)（兼容）
+    T1-&gt;&gt;DB: INSERT id=15（申请插入意向锁）
+    Note right of DB: 被 T2 间隙锁阻塞
+    T2-&gt;&gt;DB: INSERT id=15（申请插入意向锁）
+    Note right of DB: 被 T1 间隙锁阻塞，触发死锁
+</code></pre><p>低并发时，两个同步任务很难撞在同一毫秒、同一个空区间里；一旦批量同步流量上来，死锁就会成片爆发。</p>
+<h2 id="mysql-为什么要设计这么麻烦的锁">MySQL 为什么要设计这么“麻烦”的锁？
+</h2><p>既然这么容易诱发死锁，InnoDB 为什么默认在 RR 模式下开启间隙锁？核心原因有两个：</p>
+<ol>
+<li><strong>防“当前读”的幻读（Phantom Read）</strong>：普通 <code>SELECT</code>（快照读）靠 MVCC 读取历史版本，不会受新插入数据干扰；但 <code>SELECT ... FOR UPDATE</code>、<code>UPDATE</code>、<code>DELETE</code> 属于当前读，必须读最新提交的数据。如果不锁住间隙，事务 A 在同一事务内两次范围更新之间，事务 B 偷偷插进一条满足条件的新记录，事务 A 就会看到凭空多出来的“幻影行”。</li>
+<li><strong>历史上的 Statement Binlog 主从一致</strong>：早期 MySQL 主从同步默认用 Statement 格式（记录原始 SQL）。如果主库执行范围更新时不锁间隙，并发插入的新行先提交并写入 Binlog，传到从库重放时就会把新行也一并改掉，造成主从数据不一致。</li>
+</ol>
+<h2 id="怎么关闭间隙锁主流大厂为何偏爱-rc">怎么关闭间隙锁？主流大厂为何偏爱 RC？
+</h2><p>关闭间隙锁最彻底的方式，是将事务隔离级别从 <strong>RR 调整为 RC（Read Committed，读已提交）</strong>，并配合 <code>binlog_format = ROW</code>（现代 MySQL 默认项）。</p>
+<p>切到 RC 之后，会发生三个关键变化：</p>
+<ul>
+<li>InnoDB 取消了普通查询与更新中的间隙锁（仅在外键检查和唯一索引冲突校验等极少数场景保留），并发写入的死锁概率断崖式下降；</li>
+<li>扫描过程中，不符合 <code>WHERE</code> 条件的记录锁会尽快释放，而不必等到整个事务结束；</li>
+<li><code>ROW</code> 格式 Binlog 记录的是每行实际变更结果，主从同步不再依赖间隙锁保序。</li>
+</ul>
+<p>因此，国内绝大多数高并发互联网大厂的常规业务库，默认规范都是 <strong>RC + ROW Binlog</strong>——大多数短事务接口根本不需要在同一个事务里反复读取两次全量快照，用放弃“可重复读”换取高并发与低死锁，是一笔非常划算的买卖。</p>
+<h2 id="金融与券商系统按链路拆开选不能一刀切">金融与券商系统：按链路拆开选，不能一刀切
+</h2><p>但回到券商这类金融行业系统，架构选型不能简单照搬互联网的“全员 RC”，而应该按业务链路的真实一致性诉求拆开：</p>
+<div class="rich-cards rich-cards--columns-2">
+<section class="rich-card">
+    <strong class="rich-card__title">高并发交易 / 资金 / 数据同步链路</strong>
+    <ul>
+<li><strong>推荐方案</strong>：<strong>RC + ROW Binlog</strong></li>
+<li><strong>防错手段</strong>：精准主键/唯一索引 + 悲观行锁或乐观锁（CAS 版本号）+ 唯一键防重幂等。</li>
+<li><strong>原因</strong>：资金扣减和同步写入最怕死锁和并发超卖，靠精确行锁和条件更新（如 <code>balance &gt;= amount</code>）比靠间隙锁更安全、吞吐也更高。</li>
+</ul>
+
+</section>
+
+<section class="rich-card">
+    <strong class="rich-card__title">日终清算 / 对账 / 风控报表链路</strong>
+    <ul>
+<li><strong>推荐方案</strong>：<strong>RR（隔离于只读从库或独立快照库）</strong></li>
+<li><strong>防错手段</strong>：一致性快照读，与在线交易写入链路物理隔离。</li>
+<li><strong>原因</strong>：清算与对账需要在一个批次内多次汇总的结果严格一致，不能前脚算完总账、后脚拉明细时因为中途插入新流水而对不上数。</li>
+</ul>
+
+</section>
+
+</div>
+
+<h2 id="线上排查与改造的实用防线">线上排查与改造的实用防线
+</h2><p>如果你正在处理类似的数据同步死锁，在决定是否全局切换 RC 之前，有四条工程动作可以立刻落地：</p>
+<ul>
+<li><strong>消除空范围加锁</strong>：能用单条幂等语句（或先按主键路由分片，确保同一批 key 只由固定消费者顺序处理）就不要并发“先查空再插”。</li>
+<li><strong>把非数据库操作移出事务</strong>：RPC 调用、序列化、外部接口校验全部放到事务外，缩短持锁窗口。</li>
+<li><strong>核对执行计划</strong>：通过 <code>EXPLAIN</code> 确认同步 SQL 精准命中索引，防止索引失效导致锁升级为全表间隙锁。</li>
+<li><strong>加上压测与重试</strong>：高并发下的锁冲突很难靠代码审查完全看出来，上生产前最好用压测工具提前把锁竞争打出来（连接模型与压测工具选择可参考<a class="link" href="/p/wrk-vs-jmeter-deep-benchmarking/">wrk 与 JMeter 怎么选</a>），同时为幂等同步任务配置有限次数的死锁退避重试。</li>
+</ul>
+<details class="article-notes">
+    <summary>写作附记</summary>
+    <div class="article-notes__content">
+        <h3 id="原始背景与提示词">原始背景与提示词
+</h3><ul>
+<li>原始笔记：系统服务间数据同步接口数据量上去后频繁发生死锁，排查为 MySQL InnoDB 间隙锁所致。</li>
+<li>原始提示词：
+<blockquote>
+<p>mysql 间隙锁，背景、原理，如何关闭间隙锁、关闭了会有什么问题；你是资深数据库 DBA，针对我的问题进行扩展分析补充。幻读是什么？主流大厂是选择 RC 还是 RR模式？我是金融行业，券商系统，你更建议我用什么方案？整理上述问题，输出文档。</p>
+</blockquote>
+</li>
+<li>重写说明：本次按 <code>blog-writer-free v1.2.0</code> 重写，补充了间隙锁引发“查空再插”死锁的 Mermaid 时序图，并将原稿零散的问答体整合为从故障现场到金融分链路选型的连贯工程笔记。</li>
+</ul>
+    </div>
+</details>
+</section>
+
+
+    <footer class="article-footer">
+    
+    
+
+    
+</footer>
+
+
+    <link rel="modulepreload" href="/ts/mermaid-render.58919d293298f993c4fdbadb418b556bdb7aa7da40efe43198e8f2b62c874c53.js">
+    <span hidden data-mermaid-runtime="/ts/mermaid-render.58919d293298f993c4fdbadb418b556bdb7aa7da40efe43198e8f2b62c874c53.js"></span><script src="/ts/diagram-viewer.a7eaa64400118c8f22785d20d7fc2a9b736654f266014a93512e0f620811466c.js" integrity="sha256-p&#43;qmRAARjI8ieF0g1/wqm3NmVPJmAUqTUS4PYggRRmw=" defer></script>
+</article>
+
+
+<dialog class="article-toc-dialog" id="article-toc-dialog" aria-labelledby="article-toc-dialog-title">
+    <div class="article-toc-dialog__header">
+        <h2 id="article-toc-dialog-title">目录</h2>
+        <button type="button" data-article-toc-close aria-label="关闭目录">×</button>
+    </div>
+    <div class="article-toc-dialog__body" data-article-toc-slot></div>
+</dialog>
+<script src="/ts/article-tools.d95036227da00cfb356d9fdb72d0b56bb541a0cef750f21c4359d1f10bda750a.js" integrity="sha256-2VA2In2gDPs1bZ/bctC1a7VBoM73UPIcQ1nR8QvadQo=" defer></script>
+
+    <footer class="site-footer">
+    <section class="copyright">
+        &copy; 
+        
+            2019 - 
+        
+        2026 向叔记事簿
+    </section>
+    
+    <section class="powerby">
+        
+            金融IT程序员的瞎折腾、日常生活的碎碎念 <br/>
+        使用 <a href="https://gohugo.io/" target="_blank" rel="noopener">Hugo</a> 构建 <br />
+        主题 <b><a href="https://github.com/CaiJimmy/hugo-theme-stack" target="_blank" rel="noopener" data-version="3.30.0">Stack</a></b> 由 <a href="https://jimmycai.com" target="_blank" rel="noopener">Jimmy</a> 设计
+    </section>
+</footer>
+
+    
+</main><button
+    class="back-to-top"
+    type="button"
+    data-back-to-top
+    aria-label="回到顶部"
+    title="回到顶部"
+    hidden
+>
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="m5 14 7-7 7 7" />
+    </svg>
+</button>
+<script
+                src="https://cdn.jsdelivr.net/npm/node-vibrant@3.1.6/dist/vibrant.min.js"
+                integrity="sha256-awcR2jno4kI5X0zL8ex0vi2z&#43;KMkF24hUW8WePSA9HM="
+                crossorigin="anonymous"
+                
+            ></script><script type="text/javascript" src="/ts/main.1e9a3bafd846ced4c345d084b355fb8c7bae75701c338f8a1f8a82c780137826.js" defer></script>
+<script>
+    (function () {
+        const customFont = document.createElement('link');
+        customFont.href = "https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap";
+
+        customFont.type = "text/css";
+        customFont.rel = "stylesheet";
+
+        document.head.appendChild(customFont);
+    }());
+</script>
+<script src="/ts/site-shell.370f0f9d873e7bd4100e539cf3382d863a4757296c45bb52cd928cd1d7e6ffb9.js" integrity="sha256-Nw8PnYc&#43;e9QQDlOc8zgthjpHVylsRbtSzZKM0dfm/7k=" defer></script>
+</body>
+</html>

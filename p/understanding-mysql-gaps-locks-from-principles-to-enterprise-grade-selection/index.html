@@ -2,16 +2,16 @@
 <html lang="zh-cn" dir="ltr" data-theme="editorial" data-code-copy="复制代码" data-code-copied="已复制" data-code-expand="展开全部" data-code-collapse="折叠代码">
 <head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'><meta name='description' content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
-<title>一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</title>
+<title>一次数据同步死锁，把 MySQL 间隙锁踩明白了</title>
 
 <link rel='canonical' href='https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/'>
 
-<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型">
+<link rel="stylesheet" href="/scss/style.min.92469d7e33572f5f6e95473d8d5ef94f2309bd9dca3e52b125afb69862024364.css"><meta property='og:title' content="一次数据同步死锁，把 MySQL 间隙锁踩明白了">
 <meta property='og:description' content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
 <meta property='og:url' content='https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/'>
 <meta property='og:site_name' content='向叔记事簿'>
-<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:tag' content='数据库' /><meta property='article:tag' content='锁' /><meta property='article:tag' content='架构设计' /><meta property='article:published_time' content='2025-11-18T22:29:25&#43;08:00'/><meta property='article:modified_time' content='2026-11-24T19:40:57&#43;08:00'/>
-<meta name="twitter:title" content="一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型">
+<meta property='og:type' content='article'><meta property='article:section' content='Post' /><meta property='article:tag' content='mysql' /><meta property='article:tag' content='数据库' /><meta property='article:tag' content='锁' /><meta property='article:tag' content='架构设计' /><meta property='article:published_time' content='2025-11-18T22:29:25&#43;08:00'/><meta property='article:modified_time' content='2026-11-26T18:30:43&#43;08:00'/>
+<meta name="twitter:title" content="一次数据同步死锁，把 MySQL 间隙锁踩明白了">
 <meta name="twitter:description" content="系统服务之间的数据同步近期做了一轮改动，接口流量一上去就开始频繁报死锁。同事拉出 InnoDB 日志排查，发现罪魁祸首不是常见的行锁加锁顺序不一致，而是 MySQL 的间隙锁（Gap Lock）。\n平时业务里直接写 MySQL 调优的场景不算多，借着这次线上排查，把间隙锁的底层原理、主流大厂为什么普遍切到 RC 模式，以及放到我们金融/券商系统里到底该怎么选型，一次性理顺。\n">
     <link rel="shortcut icon" href="/favicon-16x16.png" />
 
@@ -28,7 +28,7 @@
           gtag('js', new Date());
           gtag('config', 'G-73CVP7MPC8');
         }
-      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/","name":"一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Gemini 4"},"dateModified":"2026-11-24T19:40:57+08:00","datePublished":"2025-11-18T22:29:25+08:00","headline":"一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/"}</script></head>
+      </script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://ttf248.life/","name":"向叔记事簿","position":1},{"@type":"ListItem","item":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/","name":"一次数据同步死锁，把 MySQL 间隙锁踩明白了","position":2}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"Gemini 4"},"dateModified":"2026-11-26T18:30:43+08:00","datePublished":"2025-11-18T22:29:25+08:00","headline":"一次数据同步死锁，把 MySQL 间隙锁踩明白了","inLanguage":"zh-cn","mainEntityOfPage":"https://ttf248.life/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/"}</script></head>
 <body class="
     article-page">
     <script>
@@ -264,7 +264,7 @@
     <div class="article-details">
     <div class="article-title-wrapper">
         
-            <h1 class="article-title">一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</h1>
+            <h1 class="article-title">一次数据同步死锁，把 MySQL 间隙锁踩明白了</h1>
         
     
         
@@ -355,7 +355,7 @@
     
         
     <details id="post-archive-versions" class="post-archive-versions">
-        <summary>历史版本 · 6</summary>
+        <summary>历史版本 · 7</summary>
         
             
     <button type="button" class="post-review-button" data-review-open hidden
@@ -375,6 +375,9 @@
                 <label class="post-review__choice"><span id="post-review-label-0">对比基准</span>
                     <select aria-labelledby="post-review-label-0">
                         <option value="current" data-url="/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/">当前版本</option>
+                        
+                            
+                            <option value="ab76bb65ec9852c93170926ebff11a54219fe1d6" data-url="/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/">2026年11月24日 19:40 · ab76bb65</option>
                         
                             
                             <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/65ad9f36bbc0ed5e7ef2/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
@@ -400,6 +403,9 @@
                 <label class="post-review__choice"><span id="post-review-label-1">目标版本</span>
                     <select aria-labelledby="post-review-label-1">
                         <option value="current" data-url="/p/understanding-mysql-gaps-locks-from-principles-to-enterprise-grade-selection/">当前版本</option>
+                        
+                            
+                            <option value="ab76bb65ec9852c93170926ebff11a54219fe1d6" data-url="/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/">2026年11月24日 19:40 · ab76bb65</option>
                         
                             
                             <option value="c016c3d078b31c7d0a508729a563502e2cdcc667" data-url="/post-history/65ad9f36bbc0ed5e7ef2/c016c3d078b31c7d0a508729a563502e2cdcc667/">2026年07月26日 22:39 · c016c3d0</option>
@@ -438,6 +444,17 @@
         
         
             <ul class="post-archive-list">
+                
+                    <li>
+                        
+                            <a href="/post-history/65ad9f36bbc0ed5e7ef2/ab76bb65ec9852c93170926ebff11a54219fe1d6/">一次数据同步死锁之后：彻底搞懂 MySQL 间隙锁与金融系统隔离级别选型</a>
+                        
+                        <span class="post-archive-meta">
+                            <time datetime="2026-11-24T19:40:57&#43;08:00">2026年11月24日 19:40</time>
+
+                            <code>ab76bb65</code>
+                        </span>
+                    </li>
                 
                     <li>
                         
